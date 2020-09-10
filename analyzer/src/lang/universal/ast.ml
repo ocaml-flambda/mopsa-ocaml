@@ -1027,6 +1027,8 @@ let rec expr_to_const e : constant option =
 let expr_to_z (e:expr) : Z.t option =
   match expr_to_const e with
   | Some (C_int n) -> Some n
+  | Some (C_bool true) -> Some Z.one
+  | Some (C_bool false) -> Some Z.zero
   | _ -> None
 
 module Addr =

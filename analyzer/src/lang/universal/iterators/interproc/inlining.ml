@@ -85,7 +85,7 @@ struct
     | E_call({ekind = E_function (User_defined f)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Cases.empty_singleton flow |> OptionExt.return
+      then Cases.empty flow |> OptionExt.return
       else
 
       let params, locals, body, post = init_fun_params f args range man flow in
@@ -96,7 +96,7 @@ struct
       Some (
         let post' = post >>% inline f params locals body ret range man in
         (* FIXME: we keep logs intra-procedural for the moment *)
-        Cases.clear_log post'
+        Cases.set_log empty_log post'
       )
 
     | _ -> None

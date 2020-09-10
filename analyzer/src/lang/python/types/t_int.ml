@@ -133,7 +133,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,  _))}, _)}, [e1; e2], []), _
       when is_compare_op_fun "int" f ->
       bind_list [e1; e2] (man.eval  ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_partitioning a = a.addr_partitioning in
           match addr_partitioning @@ fst @@ object_of_expr e1, addr_partitioning @@ fst @@ object_of_expr e2 with
@@ -160,7 +160,7 @@ struct
               ~felse:(fun false_flow ->
                   Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
                   man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow >>%
-                  Eval.empty_singleton)
+                  Eval.empty)
               man flow
         )
       |>  OptionExt.return
@@ -168,7 +168,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], []), _
       when is_arith_binop_fun "int" f ->
       bind_list [e1; e2] (man.eval ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
           let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
           assume
             (mk_py_isinstance_builtin e1 "int" range)
@@ -183,7 +183,7 @@ struct
                            (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py None) range) range)
                            man true_flow
                            ~fthen:(fun flow ->
-                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty_singleton
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty
                            )
                            ~felse:(fun flow ->
                              let casted_e1 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e1) range in
@@ -207,7 +207,7 @@ struct
                          if is_arith_div_fun "int" f then
                            assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py None) range) range) man flow
                              ~fthen:(fun flow ->
-                               man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty_singleton
+                               man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty
                              )
                              ~felse:res
                          else res flow
@@ -221,7 +221,7 @@ struct
             ~felse:(fun false_flow ->
                 Format.fprintf Format.str_formatter "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1;
                 man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) false_flow >>%
-                Eval.empty_singleton)
+                Eval.empty)
             man flow
         )
       |>  OptionExt.return
@@ -277,7 +277,7 @@ struct
             man.eval  (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
           ~felse:(fun flow ->
-            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty_singleton)
+            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty)
         ) |> OptionExt.return
     | _ -> None
 

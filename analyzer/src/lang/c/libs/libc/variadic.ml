@@ -151,7 +151,7 @@ struct
         ) (Post.return flow) vars
     end >>% fun flow ->
     pop_unnamed_args flow |>
-    Cases.return ret
+    Cases.case ret
 
 
   (* Create a counter variable for a va_list *)
@@ -187,7 +187,7 @@ struct
           )
         ~felse:(fun eflow ->
             raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range man flow eflow |>
-            Cases.empty_singleton
+            Cases.empty
           )
         ~route:numeric
         man flow
@@ -244,12 +244,12 @@ struct
             ) itv
           in
 
-          Eval.join_list evl ~empty:(fun () -> Eval.empty_singleton flow)
+          Eval.join_list evl ~empty:(fun () -> Eval.empty flow)
         )
       ~felse:(fun eflow ->
           (* Raise an alarm since no next argument can be fetched by va_arg *)
           let flow' = raise_c_insufficient_variadic_args ap valc unnamed range man flow eflow in
-          Eval.empty_singleton flow'
+          Eval.empty flow'
         )
       ~route:numeric
       man flow

@@ -243,7 +243,7 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedOperator -> exec (mk_remove_var var stmt.srange) man ctx (a,bnd)
+        with ImpreciseExpression -> exec (mk_forget_var var stmt.srange) man ctx (a,bnd)
            | UnsupportedExpression -> None
       end
 
@@ -284,51 +284,33 @@ struct
         let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
-        let join_list l = List.fold_left
-            (Apron.Abstract1.join ApronManager.man)
-            (Apron.Abstract1.bottom ApronManager.man env)
-            l
-        in
-        let meet_list l = tcons_array_of_tcons_list env l |>
-                          Apron.Abstract1.meet_tcons_array ApronManager.man a
-        in
-
         try
           let dnf, a, bnd, l = bexp_to_apron e (a,bnd) [] in
-          let a' = Dnf.apply_list
-            (fun (op,e1,typ1,e2,typ2) ->
-               let typ =
-
-                 let is_integer = function
-                   | T_int | T_bool -> true
-                   | _ -> false
+          let a' =
+            Dnf.reduce_conjunction
+              (fun conj ->
+                 let tcons_list =
+                   List.map
+                     (fun (op,e1,typ1,e2,typ2) ->
+                        let typ =
+                          if is_float_type typ1 || is_float_type typ2 then Apron.Texpr1.Real else
+                          if is_int_type typ1 && is_int_type typ2 then Apron.Texpr1.Int
+                          else Exceptions.panic_at (srange stmt)
+                              "Unsupported case (%a, %a) in stmt @[%a@]"
+                              pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                        in
+                        let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+                        let diff_texpr = Apron.Texpr1.of_expr env diff in
+                        Apron.Tcons1.make diff_texpr op
+                     ) conj
                  in
-
-                 let is_float = function
-                   | T_float _ -> true
-                   | _ -> false
-                 in
-
-                 if is_float typ1 || is_float typ2
-                 then Apron.Texpr1.Real
-
-                 else if is_integer typ1 && is_integer typ2
-                 then Apron.Texpr1.Int
-
-                 else
-                   Exceptions.panic_at (srange stmt)
-                     "Unsupported case (%a, %a) in stmt @[%a@]"
-                     pp_typ typ1 pp_typ typ2 pp_stmt stmt
-               in
-               let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
-               let diff_texpr = Apron.Texpr1.of_expr env diff in
-               Apron.Tcons1.make diff_texpr op
-            )
-            join_list meet_list dnf |>
-                   remove_tmp l
+                 tcons_array_of_tcons_list env tcons_list |>
+                 Apron.Abstract1.meet_tcons_array ApronManager.man a
+              ) ~join:(Apron.Abstract1.join ApronManager.man) dnf |>
+            remove_tmp l
           in
           Some (a', bnd)
-        with UnsupportedOperator -> Some (a,bnd)
+        with ImpreciseExpression -> Some (a,bnd)
            | UnsupportedExpression -> None
       end
 
@@ -361,7 +343,7 @@ struct
         Apron.Abstract1.bound_texpr ApronManager.man abs e |>
         Values.Intervals.Integer.Value.of_apron |>
         OptionExt.return
-      with UnsupportedOperator -> Some (Values.Intervals.Integer.Value.top)
+      with ImpreciseExpression -> Some (Values.Intervals.Integer.Value.top)
          | UnsupportedExpression -> None
 
 

@@ -113,7 +113,7 @@ struct
     | E_call({ekind = E_function (User_defined func)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Cases.empty_singleton flow |> OptionExt.return
+      then Cases.empty flow |> OptionExt.return
       else
 
       let in_flow = flow in
@@ -125,39 +125,45 @@ struct
            let ret = Common.mk_return_var exp in
                        (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
           inline func params locals body (Some ret) range man in_flow_cur |>
-          bind_full (fun oeval_res out_flow log cleaners ->
+          bind (fun oeval_case out_flow ->
               debug "in bind@\n";
-              match oeval_res with
-              | None ->
+              match oeval_case with
+              | NotHandled -> assert false
+
+              | Empty ->
                 let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                 (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                 let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                let flow = store_signature func.fun_uniq_name in_flow_cur None out_flow cleaners in
-                Cases.return oeval_res (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
+                let flow = store_signature func.fun_uniq_name in_flow_cur None out_flow [] in
+                Cases.case oeval_case (Flow.join man.lattice in_flow_other flow)
 
-              | Some eval_res ->
+              | Result(eval_res,log,cleaners) ->
                 (* we have to perform a full bind in order to add
                    in_flow_other to the flow even in the case of an
                    empty eval *)
                 man.eval eval_res out_flow |>
-                Cases.bind (fun oeval_res out_flow ->
-                    match oeval_res with
-                    | None ->
-                      Eval.empty_singleton (Flow.join man.lattice in_flow_other out_flow)
-                    | Some eval_res ->
-                      debug "eval_res = %a@\ncleaners = %a@\n" pp_expr eval_res pp_stmt (mk_block cleaners range);
+                Cases.bind (fun oeval_case out_flow ->
+                    match oeval_case with
+                    | NotHandled -> assert false
+
+                    | Empty ->
+                      Eval.empty (Flow.join man.lattice in_flow_other out_flow)
+
+                    | Result(eval_res,_,_) ->
                       let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
                       (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
                       let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                      let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow cleaners in
-                      Cases.return (Some eval_res) (Flow.join man.lattice in_flow_other flow) ~log ~cleaners:cleaners
+                      let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow (StmtSet.elements cleaners) in
+                      Cases.return eval_res (Flow.join man.lattice in_flow_other flow)
                   )
             )
 
         | Some (_, oout_expr, out_flow, cleaners) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
           debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_orig_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
-          Cases.return oout_expr (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
+          match oout_expr with
+          | None -> Cases.empty (Flow.join man.lattice in_flow_other out_flow)
+          | Some e -> Cases.singleton e (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
       end
       |> OptionExt.return
 

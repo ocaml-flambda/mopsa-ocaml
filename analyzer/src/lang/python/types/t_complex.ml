@@ -56,7 +56,7 @@ module Domain =
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, args, []) ->
-        man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty_singleton |> OptionExt.return
+        man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty |> OptionExt.return
 
       | _ -> None
 

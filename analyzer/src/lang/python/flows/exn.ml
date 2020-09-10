@@ -123,16 +123,18 @@ module Domain =
       | S_py_raise(Some exp) ->
         debug "Raising %a@\n" pp_expr exp;
         (man.eval   exp flow |>
-         bind_full (fun exp flow log cleaners ->
-             match exp with
-             | None -> Cases.return None flow ~log ~cleaners
-             | Some exp ->
+         bind (fun case flow ->
+             match case with
+             | Empty -> Cases.empty flow
+             | NotHandled -> assert false
+             | Result(exp,_,cleaners) ->
              assume
                (mk_py_isinstance_builtin exp "BaseException" range)
                man
                ~fthen:(fun true_flow ->
                    debug "True flow, exp is %a@\n" pp_expr exp;
-                   man.exec (mk_block cleaners range) true_flow >>% fun true_flow ->
+                   (* FIXME: remove cleaners after executing them *)
+                   man.exec (mk_block (StmtSet.elements cleaners) range) true_flow >>% fun true_flow ->
                    let cur = Flow.get T_cur man.lattice true_flow in
                    debug "asking...@\ntrue_flow = %a" (Flow.print man.lattice.print) true_flow;
                    let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
@@ -152,7 +154,7 @@ module Domain =
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
-                   Post.return flow' ~log)
+                   Post.return flow')
                ~felse:(fun false_flow ->
                    assume
                      (* isclass obj <=> isinstance(obj, type) *)
@@ -160,10 +162,10 @@ module Domain =
                      man
                      ~fthen:(fun true_flow ->
                          man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
-                         >>% Post.return ~log)
+                         >>% Post.return)
                      ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
-                         >>% Post.return ~log)
+                         >>% Post.return)
                      false_flow
                  )
                flow
@@ -207,7 +209,7 @@ module Domain =
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
                   man.eval   e flow |>
-                  bind_some (fun e flow ->
+                  bind_result (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
                         assume
@@ -266,7 +268,7 @@ module Domain =
               let flow = Flow.set T_cur env man.lattice flow0 in
               let flow' =
                 man.eval   e flow |>
-                bind_some (fun e flow ->
+                bind_result (fun e flow ->
                     match ekind e with
                     | E_py_object obj ->
                       assume

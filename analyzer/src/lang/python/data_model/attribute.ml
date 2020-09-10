@@ -44,7 +44,7 @@ module Domain =
         | [] ->
            let msg = Format.asprintf "'%s' object has no attribute '%s'" c attr in
            man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
-             Eval.empty_singleton
+             Eval.empty
         | cls::tl ->
            if is_builtin_attribute cls attr then
              Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
@@ -107,7 +107,7 @@ module Domain =
                    let rese = mk_py_object (find_builtin_attribute oexp attr) range in
                    Eval.singleton rese flow
                  else
-                   Eval.empty_singleton flow
+                   Eval.empty flow
                else
                  man.eval   (mk_py_type exp range) flow >>$
  (fun class_of_exp flow ->
@@ -124,7 +124,7 @@ module Domain =
                      search_mro flow mro >>$
  (fun getattribute flow ->
                          bind_list [exp; c_attr] man.eval flow |>
-                         bind_some (fun ee flow ->
+                         bind_result (fun ee flow ->
                              let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
                              assume (mk_py_hasattr exp "__getattr__" range) man flow
                                ~fthen:(fun flow ->
@@ -132,10 +132,10 @@ module Domain =
                                        | Alarms.T_py_exception _ -> true
                                        | _ -> false) flow in
                                    man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
-                                   bind_opt (fun oattr flow ->
+                                   bind_opt (fun case flow ->
                                        Some
-                                         (match oattr with
-                                          | None ->
+                                         (match case with
+                                          | Empty ->
                                              (* exn, let's call
                                                 getattr, and change
                                                 exn flow into cur *)
@@ -147,7 +147,8 @@ module Domain =
                                                 | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
                                             let flow = Flow.join man.lattice flow_exn_before flow in
                                             man.eval   (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
-                                          | Some attr -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
+                                          | Result (attr,_,_) -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
+                                          | NotHandled -> assert false
                                          )
                                      )
                                    |> OptionExt.none_to_exn

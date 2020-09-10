@@ -208,7 +208,7 @@ struct
     (* S⟦ v = e ⟧ *)
     | S_assign(({ekind = E_var (v, mode)} as evar), e) when is_py_exp e ->
        man.eval e flow |>
-         bind_some
+         bind_result
            (fun e flow ->
              match ekind e with
              | E_py_undefined true ->
@@ -251,7 +251,7 @@ struct
        (* then handle E_py_annot in typing, to perform an allocation? *)
        (* what about non builtins? *)
        man.eval e flow |>
-         bind_some (fun e flow -> match ekind e with
+         bind_result (fun e flow -> match ekind e with
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
@@ -288,7 +288,7 @@ struct
 
     | S_assume e when is_py_exp e ->
        man.eval e flow |>
-         bind_some (fun expr flow ->
+         bind_result (fun expr flow ->
              match ekind expr with
              | E_constant (C_top (T_py (Some Bool)))
                | E_constant (C_bool true)
@@ -461,8 +461,8 @@ struct
     | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
        flow |> Post.return |> OptionExt.return
 
-    | S_invalidate ({ekind = E_addr a} as e)
-    | S_remove ({ekind = E_addr a} as e) ->
+    | S_invalidate {ekind = E_addr a}
+    | S_remove {ekind = E_addr a} ->
        let cur = get_env T_cur man flow in
        let ncur = AMap.map (ASet.remove (Def a)) cur in
        let flow = set_env T_cur ncur man flow in
@@ -529,13 +529,13 @@ struct
               debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow);
               let msg = Format.asprintf "name '%a' is not defined" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow) in
-              Eval.empty_singleton flow :: acc, Flow.get_ctx flow
+              Eval.empty flow :: acc, Flow.get_ctx flow
 
             | Undef_local ->
               debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow) in
-              Eval.empty_singleton flow :: acc, Flow.get_ctx flow
+              Eval.empty flow :: acc, Flow.get_ctx flow
 
             | Def addr ->
               (* first, let's clean numerical/string variables from other addrs *)
@@ -578,7 +578,7 @@ struct
 
           ) aset ([], Flow.get_ctx flow) in
         let evals = List.map (Cases.set_ctx annot) evals in
-        evals |> Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow)
+        evals |> Eval.join_list ~empty:(fun () -> Eval.empty flow)
         |> OptionExt.return
       else if is_builtin_var v then
         let () = debug "is it a builtin?" in
@@ -586,10 +586,10 @@ struct
         Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
       else if is_bottom cur then
         let () = debug "cur to bottom, empty singleton" in
-        Eval.empty_singleton flow |> OptionExt.return
+        Eval.empty flow |> OptionExt.return
       else
         let () = debug "not a builtin..." in
-        Eval.empty_singleton flow |>
+        Eval.empty flow |>
         OptionExt.return
 
     (* todo: should be moved to zone system? useless? *)
@@ -634,7 +634,7 @@ struct
 
     | E_binop(O_py_is, e1, e2) ->
       bind_list [e1;e2] (man.eval  ) flow |>
-      bind_some (fun evals flow ->
+      bind_result (fun evals flow ->
           let e1, e2 = match evals with [e1;e2] -> e1, e2 | _ -> assert false in
           begin match ekind e1, ekind e2 with
             | E_py_object (a1, _), E_py_object (a2, _) when

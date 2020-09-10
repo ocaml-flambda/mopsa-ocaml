@@ -132,7 +132,7 @@ struct
     let evl = man.eval exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Cases.print_some (fun fmt e flow ->
+      (Cases.print_result (fun fmt e flow ->
            let itv = man.ask (mk_int_interval_query e) flow in
            pp_int_interval fmt itv
          )
@@ -143,7 +143,7 @@ struct
     let evl = man.eval exp flow in
     Format.fprintf fmt "%s = %a"
       display
-      (Cases.print_some (fun fmt e flow ->
+      (Cases.print_result (fun fmt e flow ->
            let itv = man.ask (mk_float_interval_query e) flow in
            pp_float_interval fmt itv
          )
@@ -155,13 +155,13 @@ struct
     let evl = resolve_pointer exp man flow in
     Format.fprintf fmt "%s ⇝ %a"
       display
-      (Cases.print_some (fun fmt pt flow ->
+      (Cases.print_result (fun fmt pt flow ->
            match pt with
            | P_block(base,offset,mode) ->
              let evl = man.eval offset flow in
              Format.fprintf fmt "&(%a%a)"
                pp_base base
-               (Cases.print_some (fun fmt e flow ->
+               (Cases.print_result (fun fmt e flow ->
                     let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                     Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
                   )

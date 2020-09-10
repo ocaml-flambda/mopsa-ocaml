@@ -126,40 +126,6 @@ struct
 
   let id = D_nonrel (module Value)
 
-  let widen uctx a1 a2 =
-    let open Bot_top in
-    if a1 == a2 then a1 else
-    match a1, a2 with
-      | BOT, x | x, BOT -> x
-      | TOP, x | x, TOP -> TOP
-      | Nbt m1, Nbt m2 ->
-        Nbt (
-          MapExtPoly.map2zo
-            (fun _ v1 -> v1)
-            (fun _ v2 -> v2)
-            (fun var v1 v2 ->
-               let w = Value.widen v1 v2 in
-               (* In order to apply the bounds constraints of variable [var] on
-                  result [w], we need to ensure that both [v1] and [v2] are
-                  within these bounds. Otherwise, applying directly the
-                  constraints makes the widening unsound (the operands are
-                  not included in the result).
-               *)
-               match find_var_bounds_ctx_opt var uctx with
-               | None -> w
-               | Some bounds ->
-                 match Value.constant var.vtyp bounds with
-                 | None -> w
-                 | Some vv ->
-                   if Value.subset v1 vv && Value.subset v2 vv
-                   then Value.meet w vv
-                   else w
-            )
-            m1 m2
-        )
-
-
-
   let name = "framework.abstraction.combiners.value.nonrel"
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -181,7 +147,7 @@ struct
 
 
   (* Constrain the value of a variable with its bounds *)
-  let add_bound_constraints ctx var v =
+  let meet_with_bound_constraints ctx var v =
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
@@ -189,9 +155,28 @@ struct
       | None    -> v
       | Some vv -> Value.meet v vv
 
+  let widen uctx a1 a2 =
+    let open Bot_top in
+    if a1 == a2 then a1 else
+      match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        Nbt (
+          MapExtPoly.map2zo
+            (fun _ v1 -> v1)
+            (fun _ v2 -> v2)
+            (fun var v1 v2 ->
+               let w = Value.widen v1 v2 in
+               (* Apply the bounds constraints*)
+               meet_with_bound_constraints uctx var w
+            )
+            m1 m2
+        )
+
 
   let add ctx var v a =
-    let vv = add_bound_constraints ctx var v in
+    let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
 
 

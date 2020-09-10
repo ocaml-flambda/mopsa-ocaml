@@ -90,14 +90,14 @@ struct
                           ~felse:(fun false_flow ->
                             let msg = Format.asprintf "iter() returned non-iterator of type '%a'" pp_addr_kind (akind @@ fst @@ object_of_expr iter) in
                             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                              Eval.empty_singleton)
+                              Eval.empty)
                           man flow
                       )
                   )
                 ~felse:(fun false_flow ->
                     let msg = Format.asprintf "'%a' object is not iterable" pp_addr_kind (akind @@ fst cls) in
                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                    Eval.empty_singleton)
+                    Eval.empty)
                 man flow
             )
         )
@@ -125,14 +125,14 @@ struct
                           ~felse:(fun false_flow ->
                               let msg = Format.asprintf "'%a' object cannot be interpreted as an integer" pp_addr_kind (akind @@ fst @@ object_of_expr len) in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                              Eval.empty_singleton)
+                              Eval.empty)
                           man flow
                       )
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "object of type '%a' has no len()" pp_addr_kind (akind @@ fst cls) in
                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                    Eval.empty_singleton)
+                    Eval.empty)
                 man flow
             )
         )
@@ -155,7 +155,7 @@ struct
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls) in
                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                    Eval.empty_singleton)
+                    Eval.empty)
                 man flow
             )
         )
@@ -164,7 +164,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("input", _))}, _)}, args, [])  ->
        let tyerror = fun flow ->
          let msg = Format.asprintf "input expected at most 1 arguments, got %d" (List.length args) in
-         man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton in
+         man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty in
        if List.length args <= 1 then
         man.eval   (mk_py_top T_string range) flow |> OptionExt.return
       else
@@ -252,15 +252,15 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("print", _))}, _)}, objs, [])  ->
       bind_list objs (man.eval  ) flow |>
-      bind_some (fun eobj flow -> man.eval (mk_py_none range) flow)
+      bind_result (fun eobj flow -> man.eval (mk_py_none range) flow)
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hash", _))}, _)}, args, []) ->
       let tyerror = fun flow ->
         let msg = Format.asprintf "hash() takes exactly one argument (%d given)" (List.length args) in
-        man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton in
+        man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty in
       Cases.bind_list args man.eval flow |>
-      Cases.bind_some (fun eargs flow ->
+      Cases.bind_result (fun eargs flow ->
           if List.length eargs <> 1 then tyerror flow else
             let el = List.hd eargs in
             man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow
@@ -278,7 +278,7 @@ struct
                   (fun repro flow ->
                     assume (mk_py_isinstance_builtin repro "str" range) man flow
                       ~fthen:(Eval.singleton repro)
-                      ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow >>% Eval.empty_singleton)
+                      ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow >>% Eval.empty)
                   )
               )
             ~felse:(
@@ -332,10 +332,10 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("abs", _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
+      bind_result (fun eargs flow ->
           if List.length eargs <> 1 then
             let msg = Format.asprintf "abs() takes exactly one argument (%d given)" (List.length args) in
-            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton
+            man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty
           else
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
@@ -354,7 +354,7 @@ struct
                     ~felse:(fun flow ->
                       let msg = Format.asprintf "bad operand type for abs()" in  (* FIXME *)
                         man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                        Eval.empty_singleton
+                        Eval.empty
                       )
                 )
         )
@@ -370,9 +370,9 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("divmod", _))}, _)}, args, []) ->
       (* FIXME: error messages etc *)
-      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty_singleton in
+      let tyerror = fun flow -> man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty in
       bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
+      bind_result (fun eargs flow ->
           if List.length args <> 2 then tyerror flow else
             let argl, argr = match eargs with l::r::[] -> l, r | _ -> assert false in
             assume (mk_py_isinstance_builtin argl "int" range) man flow

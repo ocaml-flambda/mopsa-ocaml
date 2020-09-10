@@ -27,12 +27,17 @@ open Ast.Stmt
 open Ast.Expr
 open Cases
 open Semantic
+open Log
+
 
 type 'a eval = ('a,expr) cases
 
-val singleton : ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val return : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val singleton : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
-val empty_singleton : ?bottom:bool -> 'a flow -> 'a eval
+val empty : 'a flow -> 'a eval
+
+val not_handled : 'a flow -> 'a eval
 
 val join : 'a eval -> 'a eval -> 'a eval
 
@@ -45,5 +50,3 @@ val meet_list : empty:(unit -> 'a eval) -> 'a eval list -> 'a eval
 val print : Format.formatter -> 'a eval -> unit
 
 val remove_duplicates : 'a lattice -> 'a eval -> 'a eval
-
-val apply : (expr -> 'a flow -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a eval -> 'b

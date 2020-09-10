@@ -272,12 +272,14 @@ struct
     match query with
     | Q_strings_powerset e ->
       man.eval e flow |>
-      Cases.apply
-        (fun oe flow ->
+      Cases.reduce_result
+        (fun e flow ->
            let cur = get_env T_cur man flow in
-           Nonrel.eval (OptionExt.none_to_exn oe) cur |> OptionExt.lift snd
-
-        ) (OptionExt.lift2 StringPower.join) (OptionExt.lift2 StringPower.meet)
+           Nonrel.eval e cur |> OptionExt.lift snd
+        )
+        ~join:(OptionExt.lift2 StringPower.join)
+        ~meet:(OptionExt.lift2 StringPower.meet)
+        ~bottom:(Some StringPower.bottom)
 
     | _ ->
        let uctx = Flow.get_unit_ctx flow in

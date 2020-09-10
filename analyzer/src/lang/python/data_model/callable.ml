@@ -58,7 +58,7 @@ module Domain =
                  let msg = Format.asprintf "object is not callable" in
                  let stmt = Utils.mk_builtin_raise_msg "TypeError" msg range in
                  man.exec stmt flow >>%
-                 Eval.empty_singleton
+                 Eval.empty
 
                (* Calls on other kinds of addresses is handled by other domains *)
                | E_py_object ({addr_kind = A_py_class _}, _)

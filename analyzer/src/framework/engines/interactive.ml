@@ -300,6 +300,9 @@ struct
     | Debug of string
     (** Set debug channels *)
 
+    | Save of string
+    (** Save the environment in a file *)
+
 
   (** Information sub-commands *)
   and info_command =
@@ -323,13 +326,14 @@ struct
     | Env         -> Format.pp_print_string fmt "env"
     | Where       -> Format.pp_print_string fmt "where"
     | LoadHook h  -> Format.fprintf fmt "hook %s" h
-    | UnloadHook h -> Format.fprintf fmt "unload %s" h
-    | Info Alarms -> Format.fprintf fmt "info alarms"
+    | UnloadHook h     -> Format.fprintf fmt "unload %s" h
+    | Info Alarms      -> Format.fprintf fmt "info alarms"
     | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
-    | Info Tokens -> Format.fprintf fmt "info tokens"
-    | Info Variables -> Format.fprintf fmt "info variables"
+    | Info Tokens      -> Format.fprintf fmt "info tokens"
+    | Info Variables   -> Format.fprintf fmt "info variables"
     | Backtrace   -> Format.fprintf fmt "backtrace"
     | Debug ch    -> Format.fprintf fmt "debug %s" ch
+    | Save file   -> Format.fprintf fmt "save %s" file
 
 
   (** Print help message *)
@@ -355,6 +359,7 @@ struct
     printf "  i[info] b[reakpoints] print the list of breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
     printf "  i[info] v[ariables]   print the list of variables@.";
+    printf "  save <file>           save the abstract state in a file@.";
     printf "  help                  print this message@.";
     ()
 
@@ -412,6 +417,8 @@ struct
       | ["unload" | "u"; hook] -> UnloadHook hook
 
       | ["debug"  | "d"; channel] -> Debug channel
+
+      | ["save"; file] -> Save file
 
       | _ ->
         printf "Unknown command %s@." l;
@@ -801,20 +808,32 @@ struct
       Debug.set_channels channel;
       interact action flow
 
+    | Save file ->
+      let ch = open_out file in
+      let file_fmt = formatter_of_out_channel ch in
+      Format.kasprintf (fun str ->
+          Format.fprintf file_fmt "%s%!" str
+        )  "%a" (Flow.print man.lattice.print) flow;
+      close_out ch;
+      interact action flow
+
 
   (** Interact with the user input or apply the action *)
   and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
-    on_pre_action action flow;
-    let ret =
-      if is_interaction_point action then (
-        pp_action flow std_formatter action;
-        interact action flow
-      ) else
-        apply_action action flow
-    in
-    on_post_action action;
-    ret
+    try
+      on_pre_action action flow;
+      let ret =
+        if is_interaction_point action then (
+          pp_action flow std_formatter action;
+          interact action flow
+        ) else
+          apply_action action flow
+      in
+      on_post_action action;
+      ret
+    with Sys.Break ->
+      interact action flow
 
 
   and init prog =

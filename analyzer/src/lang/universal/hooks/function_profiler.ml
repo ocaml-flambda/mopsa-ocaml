@@ -32,9 +32,9 @@ struct
   (** {2 Hook header} *)
   (** *************** *)
 
-  let name = "profiler"
+  let name = "function_profiler"
 
-  let debug fmt = Debug.debug ~channel:"profiler" fmt
+  let debug fmt = Debug.debug ~channel:"function_profiler" fmt
 
 
   (** {2 Command-line options} *)
@@ -63,7 +63,7 @@ struct
       default = "ms";
     }
 
-      
+
 
   (** {2 Timing records} *)
   (** ****************** *)
@@ -113,7 +113,7 @@ struct
     (* Decrease by 1 the current depth to take into account the first
        hidden %program call, added by init but not present in the call
        stack *)
-    let cur_depth = List.length !cur.callstack - 1 in 
+    let cur_depth = List.length !cur.callstack - 1 in
     if depth = cur_depth then () else
     if depth = cur_depth + 1 then call_detected (callstack_top cs) else
     if depth = cur_depth - 1 then return_detected ()
@@ -152,7 +152,7 @@ struct
     (* For each function compute:
        - The total time
        - The self time: time spent in statements of the function
-       - The number of times the function was called 
+       - The number of times the function was called
     *)
     let total,self,times,_,longest_fname_length = Queue.fold (fun (total,self,times,last,longest_fname_length) timing ->
         let fname = List.hd timing.callstack in
@@ -160,7 +160,7 @@ struct
         let self = FunStat.add fname (timing.time +. try FunStat.find fname self with Not_found -> 0.) self in
         let total = List.fold_left (fun total f ->
             FunStat.add f (timing.time +. try FunStat.find f total with Not_found -> 0.) total
-          ) total timing.callstack 
+          ) total timing.callstack
         in
         let times =
           if List.length last < List.length timing.callstack then
@@ -178,7 +178,7 @@ struct
                    )
     in
     let open Format in
-    printf "Profiling:@.";
+    printf "Functions profiling:@.";
     List.iter (fun (fname, total) ->
         printf "%s%s   %.4fs(total)   %.4fs(self)   x%d@."
           fname
@@ -189,7 +189,7 @@ struct
         ;
       ) sorted
 
-  
+
 
   (** {2 Events handlers} *)
   (** ******************* *)
@@ -204,9 +204,9 @@ struct
     observe_callstack (Flow.get_callstack flow) stmt.srange
 
   let on_after_exec route stmt man flow post = ()
-    
+
   let on_before_eval route exp man flow = ()
-    
+
   let on_after_eval route exp man flow eval =
     observe_callstack (Cases.get_ctx eval |> Context.find_unit Context.callstack_ctx_key) exp.erange
 

@@ -45,12 +45,12 @@ struct
     match ekind exp with
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.join" as f, _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
-      bind_some
+      bind_result
         (fun eargs flow ->
            if List.length eargs <> 2 then
              let msg = Format.asprintf "%s: too %s arguments: %d given, %d expected" f (if List.length eargs < 2 then "few" else "many") (List.length args) 2 in
              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-             Eval.empty_singleton
+             Eval.empty
            else
              let self, iterable = match eargs with a :: b :: [] -> a, b | _ -> assert false in
              assume (mk_py_isinstance_builtin self "str" range) man flow
@@ -62,7 +62,7 @@ struct
                            ~fthen:(man.eval (mk_py_top T_string range))
                            ~felse:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
-                               Eval.empty_singleton
+                               Eval.empty
                              )
                        )
                      ~felse:(fun flow ->
@@ -76,19 +76,19 @@ struct
                                  ~fthen:(man.eval (mk_py_top T_string range))
                                  ~felse:(fun flow ->
                                      man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
-                                     Eval.empty_singleton
+                                     Eval.empty
                                    )
                              )
                            ~felse:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "TypeError" "can only join an iterable" range) flow >>%
-                               Eval.empty_singleton
+                               Eval.empty
                              )
                        )
                  )
                ~felse:(fun flow ->
                  let msg = Format.asprintf "descriptor 'join' requires a 'str' object but received a '%a'" pp_expr self in
                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                   Eval.empty_singleton
+                   Eval.empty
                  )
         )
       |> OptionExt.return

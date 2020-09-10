@@ -436,16 +436,16 @@ struct
             if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
               man.eval (mk_var (mk_addr_attr iaddr "args" (T_py None)) range) flow |>
               (* FIXME *)
-              Eval.apply (fun etuple flow ->
+              Cases.reduce_result (fun etuple flow ->
                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                   (* FIXME *)
                    let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
                   if Universal.Strings.Powerset.Value.is_top pset then "T"
                   else Universal.Strings.Powerset.StringPower.choose pset
                 )
-                (fun _ _ -> assert false)
-                (fun _ _ -> assert false)
-                ""
+                ~join:(fun _ _ -> assert false)
+                ~meet:(fun _ _ -> assert false)
+                ~bottom:""
             else
               ""
           in

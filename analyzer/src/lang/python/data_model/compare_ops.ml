@@ -51,7 +51,7 @@ module Domain = struct
         mk_py_isinstance x not_implemented_type range in
 
       bind_list [e1; e2] (man.eval   ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
       let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
       let op_fun, rop_fun =
@@ -83,7 +83,7 @@ module Domain = struct
           | _ ->
             Format.fprintf Format.str_formatter "'%s' not supported between instances of '%a' and '%a'" op_fun pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2);
             man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.flush_str_formatter ()) range) flow >>%
-            Eval.empty_singleton
+            Eval.empty
             in
         let check_reverse flow =
           if not checked_reverse then

@@ -52,7 +52,7 @@ module Domain =
            mk_py_isinstance x not_implemented_type range in
 
          bind_list [e1; e2] (man.eval  ) flow |>
-           bind_some
+           bind_result
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                let op_fun = binop_to_fun op in
@@ -69,7 +69,7 @@ module Domain =
                            let typerr flow =
                              let msg = Format.asprintf "unsupported operand type(s) for '%a': '%a' and '%a'" pp_operator op pp_addr_kind (akind @@ fst cls1) pp_addr_kind (akind @@ fst cls2) in
                              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                             Eval.empty_singleton in
+                             Eval.empty in
                            let call_radd man ocondtocheck flow ~felseradd =
                              let hasradd = Utils.mk_object_hasattr cls2 rop_fun range in
                              assume
@@ -132,7 +132,7 @@ module Domain =
                        ~felse:(fun false_flow ->
                          let msg = Format.asprintf "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls) in
                          man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                         Eval.empty_singleton
+                         Eval.empty
                        )
                        man flow
                    )

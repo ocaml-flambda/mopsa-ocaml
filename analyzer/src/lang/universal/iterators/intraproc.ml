@@ -127,7 +127,7 @@ struct
                       ) |>
                       (* Execute the cleaners of the evaluation here *)
                       exec_cleaners man >>%
-        man.exec s1
+                      man.exec s1
       in
       (* Propagate the flow-insensitive context to the other branch *)
       let then_ctx = Cases.get_ctx then_post in
@@ -137,7 +137,7 @@ struct
                       ) |>
                       (* Execute the cleaners of the evaluation here *)
                       exec_cleaners man >>%
-        man.exec s2
+                      man.exec s2
       in
       Post.join then_post else_post |>
       OptionExt.return

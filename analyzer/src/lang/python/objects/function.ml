@@ -97,7 +97,7 @@ module Domain =
                man.eval   inst flow >>$
                  (fun inst flow ->
                      eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
-                       bind_some (fun addr flow ->
+                       bind_result (fun addr flow ->
                            let obj = (addr, None) in
                            Eval.singleton (mk_py_object obj range) flow
                          )
@@ -121,7 +121,7 @@ module Domain =
               assume (mk_py_isinstance instance typeofinst range) man flow
                 ~fthen:(fun flow ->
                   eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
-                  bind_some (fun addr flow ->
+                  bind_result (fun addr flow ->
                       let obj = (addr, None) in
                       Eval.singleton (mk_py_object obj range) flow)
                 )
@@ -129,7 +129,7 @@ module Domain =
             )
           ~felse:(fun flow ->
               eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
-              bind_some (fun addr flow ->
+              bind_result (fun addr flow ->
                   let obj = (addr, None) in
                   Eval.singleton (mk_py_object obj range) flow)
             )
@@ -141,7 +141,7 @@ module Domain =
           ~fthen:(man.eval   descr)
           ~felse:(fun flow ->
               eval_alloc man (A_py_method (object_of_expr descr, instance, "builtin_function_or_method")) range flow |>
-              bind_some (fun addr flow ->
+              bind_result (fun addr flow ->
                   let obj = (addr, None) in
                   Eval.singleton (mk_py_object obj range) flow)
             )
@@ -245,7 +245,7 @@ module Domain =
             let missing = List.length nondefault_args - List.length pyfundec.py_func_parameters in
             let msg = Format.asprintf "%s() missing %d required positional argument%s" pyfundec.py_func_var.vname missing (if missing > 1 then "s" else "") in
             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
-            Eval.empty_singleton
+            Eval.empty
           )
         else
         if List.length args > (List.length pyfundec.py_func_parameters) then
@@ -253,7 +253,7 @@ module Domain =
             debug "Too many arguments!@\n";
             let msg = Format.asprintf "%s() takes %d positional arguments but %d were given" pyfundec.py_func_var.vname (List.length pyfundec.py_func_parameters) (List.length args) in
             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
-            Eval.empty_singleton
+            Eval.empty
           )
         else
           (
@@ -301,7 +301,7 @@ module Domain =
                 debug "The number of arguments is not good@\n";
                 let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg exp.erange) flow >>%
-                Eval.empty_singleton
+                Eval.empty
               )
             else
               (* Initialize local variables to undefined value and give the call to {!Universal} *)
@@ -367,7 +367,7 @@ module Domain =
          in
          debug "creating function object %a" pp_addr_kind (A_py_function kind);
          eval_alloc man (A_py_function kind) stmt.srange flow |>
-         bind_some (fun addr flow ->
+         bind_result (fun addr flow ->
              let obj = (addr, None) in
              if Libs.Py_mopsa.is_unsupported_fundec func || Libs.Py_mopsa.is_builtin_fundec func then
                add_builtin_function obj ();

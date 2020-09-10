@@ -47,12 +47,12 @@ module Domain = struct
     | S_py_aug_assign(x, op, e) ->
        let x0 = x in
        bind_list [e; x] (man.eval   ) flow |>
-       bind_some (fun el flow ->
+       bind_result (fun el flow ->
              let e, x = match el with [e; x] -> e, x | _ -> assert false in
 
              let op_fun = Operators.binop_to_incr_fun op in
              man.eval     (mk_py_type x range) flow |>
-             bind_some (fun cls flow ->
+             bind_result (fun cls flow ->
                    let cls = object_of_expr cls in
                    assume
                      (Utils.mk_object_hasattr cls op_fun range)

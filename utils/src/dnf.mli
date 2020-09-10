@@ -29,55 +29,61 @@ val singleton : 'a -> 'a t
 val mk_true : 'a t
 
 val mk_false : 'a t
-  
+
+val is_true : 'a t -> bool
+
+val is_false : 'a t -> bool
+
+val is_empty : 'a t -> bool
+
 val mk_and : 'a t -> 'a t -> 'a t
-  
 
 val mk_or : 'a t -> 'a t -> 'a t
 
-
 val mk_neg : ('a -> 'a t) -> 'a t -> 'a t
-
 
 val map : ('a -> 'b) -> 'a t -> 'b t
 
+val map_conjunction : ('a list -> 'b list) -> 'a t -> 'b t
+
+val map_disjunction : ('a list -> 'b list) -> 'a t -> 'b t
 
 val iter : ('a -> unit) -> 'a t -> unit
 
+val reduce : ('a -> 'b) -> join:('b -> 'b -> 'b) -> meet:('b -> 'b -> 'b) -> 'a t -> 'b
 
-val apply : ('a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'a t -> 'b
+val fold_reduce : ('a -> 'b -> 'a * 'c) -> join:('c -> 'c -> 'c) -> meet:('c -> 'c -> 'c) -> 'a -> 'b t -> 'a * 'c
 
+val reduce_conjunction : ('a list -> 'b) -> join:('b -> 'b -> 'b) -> 'a t -> 'b
 
-val apply_list : ('a -> 'b) -> ('c list -> 'd) -> ('b list -> 'c) -> 'a t -> 'd
+val fold_reduce_conjunction : ('a -> 'b list -> 'a * 'c) -> join:('c -> 'c -> 'c) -> 'a -> 'b t -> 'a * 'c
 
+val reduce_disjunction : ('a list -> 'b) -> meet:('b -> 'b -> 'b) -> 'a t -> 'b
+
+val fold_reduce_disjunction : ('a -> 'b list -> 'a * 'c) -> meet:('c -> 'c -> 'c) -> 'a -> 'b t -> 'a * 'c
 
 val bind : ('a -> 'b t) -> 'a t -> 'b t
 
+val fold_bind : ('a -> 'b -> 'a * 'c t) -> 'a -> 'b t -> 'a * 'c t
 
-val fold : ('b -> 'a -> 'b) -> ('b -> 'b -> 'b) -> ('b -> 'b -> 'b) -> 'b -> 'a t -> 'b
+val bind_conjunction : ('a list -> 'b t) -> 'a t -> 'b t
 
+val fold_bind_conjunction : ('a -> 'b list -> 'a * 'c t) -> 'a -> 'b t -> 'a * 'c t
 
-val map_fold : ('c -> 'a -> 'b * 'c) -> 'c -> 'a t -> 'b t * 'c
+val bind_disjunction : ('a list -> 'b t) -> 'a t -> 'b t
 
+val fold_bind_disjunction : ('a -> 'b list -> 'a * 'c t) -> 'a -> 'b t -> 'a * 'c t
 
-val fold_apply : ('b -> 'a -> 'b * 'c) -> ('c -> 'c -> 'c) -> ('c -> 'c -> 'c) -> 'b -> 'a t -> 'b * 'c
+val fold : ('b -> 'a -> 'b) -> 'b -> 'a t -> 'b
 
+val partition : ('a -> bool) -> 'a t -> 'a t option * 'a t option
 
 val choose :'a t -> 'a option
-
 
 val to_list : 'a t -> 'a list list
 
 val from_list : 'a list list -> 'a t
 
-
 val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-
-
-val merge : ('a -> 'b -> 'a t option * 'b t option) -> 'a t -> 'b t -> 'a t option * 'b t option
-
-
-val merge_fold  : ('c -> 'a -> 'b -> 'a t option * 'b t option * 'c) -> 'c -> 'a t -> 'b t -> 'a t option * 'b t option * 'c
-
 
 val cardinal : 'a t -> int

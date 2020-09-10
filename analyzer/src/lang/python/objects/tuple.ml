@@ -146,11 +146,11 @@ struct
                man.eval   (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
              else
                man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-               Eval.empty_singleton
+               Eval.empty
            with Nonconstantinteger ->
              Eval.join_list ~empty:(fun () -> assert false)
                ((man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-                 Eval.empty_singleton)
+                 Eval.empty)
                 :: (List.map (fun var -> man.eval   (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
         )
       |> OptionExt.return
@@ -190,7 +190,7 @@ struct
                                    (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow >>%
                    man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range)
                 | _ ->
-                   man.exec   (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton
+                   man.exec   (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty
               )
         )
       |> OptionExt.return

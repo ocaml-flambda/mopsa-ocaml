@@ -156,7 +156,7 @@ module Domain =
              man.eval (mk_py_true exp.erange) flow
              |> OptionExt.return
            with BottomFound ->
-             Eval.empty_singleton flow
+             Eval.empty flow
              |> OptionExt.return
          end
 
@@ -185,7 +185,7 @@ module Domain =
                         Flow.set T_cur cur man.lattice
              in
              Eval.singleton (mk_py_true exp.erange) flow |> OptionExt.return
-           with BottomFound -> Eval.empty_singleton flow |> OptionExt.return
+           with BottomFound -> Eval.empty flow |> OptionExt.return
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->

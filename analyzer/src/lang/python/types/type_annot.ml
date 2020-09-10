@@ -172,7 +172,7 @@ struct
       let exception Invalid_sig in
       (* FIXME: handle decorators... *)
       bind_list args man.eval flow |>
-      bind_some (fun args flow ->
+      bind_result (fun args flow ->
           let sigs = List.filter (fun sign ->
               let ndefaults  = List.fold_left (fun count el -> if el then count + 1 else count) 0 sign.py_funcs_defaults in
               debug "filter %a at range %a -> [%d; %d]; |args| = %d, |kwargs| = %d" pp_py_func_sig sign pp_range range (List.length sign.py_funcs_types_in - ndefaults) (List.length sign.py_funcs_types_in) (List.length args) (List.length kwargs);
@@ -282,7 +282,7 @@ struct
           let msg = Format.asprintf "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
           Eval.join_list ~empty:(
             fun () ->
-              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton)
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
                     let is_noreturn =
@@ -301,7 +301,7 @@ struct
                       else
                         let raised_exn = List.map (fun exn ->
                             man.exec (mk_stmt (S_py_raise (Some exn)) range) flow >>%
-                            Eval.empty_singleton
+                            Eval.empty
                           ) sign.py_funcs_exceptions in
                         let () = debug "raised_exn %d" (List.length sign.py_funcs_exceptions) in
                         if is_noreturn then
@@ -313,7 +313,7 @@ struct
                     with Invalid_sig ->
                       (acc, remaining_flow)
                   ) ([], flow) sigs) in
-             (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining >>% Eval.empty_singleton) :: evals)
+             (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining >>% Eval.empty) :: evals)
         )
       |> OptionExt.return
 
@@ -492,7 +492,7 @@ struct
 
         | E_py_index_subscript (e1, e2) ->
           man.eval   e1 flow |>
-          bind_some (fun e1 flow ->
+          bind_result (fun e1 flow ->
               man.eval   {exp with ekind = E_py_annot {e with ekind = E_py_index_subscript(e1, e2)}} flow
             )
           |> OptionExt.return
@@ -503,7 +503,7 @@ struct
           let tycur = TVMap.find (Global s) cur in
           if ESet.cardinal tycur = 0 then
             Flow.bottom_from flow
-            |> Eval.empty_singleton
+            |> Eval.empty
             |> OptionExt.return
           else
             let () = assert (ESet.cardinal tycur = 1) in
@@ -519,7 +519,7 @@ struct
             begin match ESet.cardinal tycur with
               | 0 ->
                 Flow.bottom_from flow |>
-                Eval.empty_singleton
+                Eval.empty
               | _ ->
                 assert (ESet.cardinal tycur = 1);
                 let ty = ESet.choose tycur in
@@ -538,7 +538,7 @@ struct
           begin match ESet.cardinal tycur with
           | 0 ->
             Flow.bottom_from flow |>
-            Eval.empty_singleton
+            Eval.empty
           | _ ->
             Eval.join_list
               ~empty:(fun () -> assert false)
@@ -590,8 +590,8 @@ struct
                   ~fthen:(fun flow ->
                       man.eval (mk_py_true range) flow)
                   ~felse:(fun flow ->
-                      Eval.empty_singleton (Flow.bottom_from flow))
-              | _ -> Eval.empty_singleton (Flow.bottom_from flow)
+                      Eval.empty (Flow.bottom_from flow))
+              | _ -> Eval.empty (Flow.bottom_from flow)
             )
           |> OptionExt.return
 
@@ -615,7 +615,7 @@ struct
                     man.eval   (mk_expr ~etyp:(T_py None) (E_py_check_annot (mk_var (mk_addr_attr ee_addr "typ" (T_py None)) range, i)) range) flow
                   )
                 ~felse:(fun flow ->
-                    Eval.empty_singleton (Flow.bottom_from flow))
+                    Eval.empty (Flow.bottom_from flow))
             )
           |> OptionExt.return
 
@@ -641,7 +641,7 @@ struct
 
         | E_py_index_subscript (e1, e2) ->
           man.eval   e1 flow |>
-          bind_some (fun e1 flow ->
+          bind_result (fun e1 flow ->
               man.eval   ({exp with ekind = E_py_check_annot (e, {annot with ekind = E_py_index_subscript (e1, e2)})}) flow
             )
           |> OptionExt.return

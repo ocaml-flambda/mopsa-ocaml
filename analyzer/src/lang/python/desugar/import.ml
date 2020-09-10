@@ -304,7 +304,7 @@ module Domain =
                 ) ([], []) c.py_cls_bases in
               let bases, abases = List.rev bases, List.rev abases in
               let r = bind_list bases man.eval flow |>
-                        bind_some (fun ebases flow ->
+                        bind_result (fun ebases flow ->
                           (* FIXME: won't work with Generic[T] I guess *)
                           let obases = match ebases with
                             | [] -> [find_builtin "object"]
@@ -332,7 +332,7 @@ module Domain =
                           let addr = {addr with addr_kind = A_py_class (C_annot newc, mro)} in
                           debug "add_typed %a" pp_addr addr;
                           let () = add_typed (addr, None) in
-                          Cases.return (Some ()) flow
+                          Cases.return () flow
                         )
               in
               let flow = post_to_flow man r in

@@ -139,14 +139,6 @@ let check_nested_calls f cs =
 
 (** Initialize function parameters *)
 let init_fun_params f args range man flow =
-  (* Clear all return flows *)
-  let flow = Flow.filter (fun tk env ->
-      match tk with
-      | T_return _ -> false
-      | _ -> true
-    ) flow
-  in
-
   (* Update the call stack *)
   let flow = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow in
 
@@ -176,7 +168,7 @@ let init_fun_params f args range man flow =
          in the callee body. We need a way to rewrite the ranges in
          arg! *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
-          mk_assign (mk_var param f.fun_range) arg f.fun_range :: 
+          mk_assign (mk_var param f.fun_range) arg f.fun_range ::
           mk_add_var param f.fun_range :: acc
         ) [] (List.combine fun_parameters args) in
 
@@ -216,51 +208,62 @@ let exec_fun_body f body ret range man flow =
       (try Some (Context.find_unit return_key (Flow.get_ctx flow)) with Not_found -> None),
       Flow.set_ctx (Context.add_unit return_key ret (Flow.get_ctx flow)) flow in
 
+  (* Clear all return flows *)
+  let flow2 = Flow.filter (fun tk env ->
+      match tk with
+      | T_return _ -> false
+      | _ -> true
+    ) flow1
+  in
 
   (* Execute the body of the function *)
-  man.exec body flow1 >>% fun flow2 -> 
-
-  (* Copy the new context and alarms from flow2 to original flow flow1 *)
-  let flow3 = Flow.copy_ctx flow2 flow1 |> Flow.copy_alarms flow2 in
-
-  (* Cut the T_cur flow *)
-  let flow3 = Flow.remove T_cur flow3 in
+  let post2 = man.exec body flow2 in
 
   (* Restore return and callstack contexts *)
-  let flow4 = match oldreturn with
-    | None -> flow3
-    | Some ret -> Flow.set_ctx
-                    (Context.add_unit return_key ret (Flow.get_ctx flow3)) flow3 in
+  let post3 = match oldreturn with
+    | None -> post2
+    | Some ret ->
+      Cases.set_ctx
+        (Context.add_unit return_key ret (Cases.get_ctx post2)) post2 in
 
   (* Restore call stack *)
-  let _,flow5 = Flow.pop_callstack flow4 in
+  let _,cs = Cases.get_callstack post3 |>
+             Callstack.pop_callstack in
+  let post4 = Cases.set_callstack cs post3 in
 
-  (* Retrieve non-cur/return flows *)
-  let flow6 =
+  post4 >>% fun flow3 ->
+
+  (* Copy the new context and alarms from flow3 to original flow flow1 *)
+  let flow4 = Flow.copy_ctx flow3 flow1 |> Flow.copy_alarms flow3 in
+
+  (* Cut the T_cur flow *)
+  let flow4 = Flow.remove T_cur flow4 in
+
+  (* Retrieve non-cur/return flows in flow3 and put them in flow4 *)
+  let flow5 =
     Flow.fold
       (fun acc tk env ->
          match tk with
-         | T_cur      -> acc
-         | T_return _ -> acc
-         | _          -> Flow.add tk env man.lattice acc
+         | T_cur | T_return _ -> acc
+         | _                  -> Flow.add tk env man.lattice acc
       )
-      flow5 flow2
+      flow4 flow3
   in
-  
-  (* Separate different return flows into separate post-states *)
+
+  (* Create a separate post-state for each return flow in flow3 *)
   let postl =
     Flow.fold (fun acc tk env ->
         match tk with
         | T_cur | T_return _ ->
-          let flow = Flow.set T_cur env man.lattice flow6 in
+          let flow = Flow.set T_cur env man.lattice flow5 in
           Post.return flow :: acc
 
         | _ -> acc
       )
-      [] flow2
+      [] flow3
   in
 
-  Cases.join_list postl ~empty:(fun () -> Post.return flow6)
+  Cases.join_list postl ~empty:(fun () -> Post.return flow5)
 
 
 (** Inline a function call *)

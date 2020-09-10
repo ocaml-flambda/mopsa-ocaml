@@ -176,7 +176,7 @@ module Domain =
  (fun stro flow ->
                       assume (mk_py_isinstance_builtin stro "str" range) man flow
                         ~fthen:(Eval.singleton stro)
-                        ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "TypeError" "__str__ returned non-string" range) flow >>% Eval.empty_singleton)
+                        ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "TypeError" "__str__ returned non-string" range) flow >>% Eval.empty)
                     )
                 )
               ~felse:(man.eval   (mk_py_call (mk_py_object (find_builtin "repr") range) [obj] range))
@@ -188,7 +188,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "str" f ->
         bind_list [e1; e2] (man.eval   ) flow |>
-        bind_some (fun el flow ->
+        bind_result (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             assume
               (mk_py_isinstance_builtin e1 "str" range)
@@ -213,7 +213,7 @@ module Domain =
               ~felse:(fun false_flow ->
                 let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                  Eval.empty_singleton )
+                  Eval.empty )
               man flow
           )
         |>  OptionExt.return
@@ -221,7 +221,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_str_binop_fun f ->
         bind_list [e1; e2] (man.eval   ) flow |>
-        bind_some (fun el flow ->
+        bind_result (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             assume
               (mk_py_isinstance_builtin e1 "str" range)
@@ -248,7 +248,7 @@ module Domain =
               ~felse:(fun false_flow ->
                 let msg = Format.asprintf "descriptor '%s' requires a 'str' object but received '%a'" f pp_expr e1 in
                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                  Eval.empty_singleton)
+                  Eval.empty)
               man flow
           )
         |>  OptionExt.return
@@ -278,8 +278,8 @@ module Domain =
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
              let res = man.eval (mk_py_top T_string range) flow in
-             let tyerror = tyerror_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx res tyerror :: res :: [])
+             let tyerror = tyerror_f |> Eval.empty in
+             Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
         |> OptionExt.return
 
@@ -290,8 +290,8 @@ module Domain =
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
              let res = man.eval (mk_py_top T_string range) flow in
-             let tyerror = tyerror_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx res tyerror :: res :: [])
+             let tyerror = tyerror_f |> Eval.empty in
+             Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
         |> OptionExt.return
 
@@ -329,8 +329,8 @@ module Domain =
              let stopiteration_f = post_to_flow man (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow) in
              let flow = Flow.copy_ctx stopiteration_f flow in
              let els = man.eval (mk_py_top T_string range) flow in
-             let stopiteration = stopiteration_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx els stopiteration :: els :: [])
+             let stopiteration = stopiteration_f |> Eval.empty in
+             Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx els stopiteration :: els :: [])
           )
         |> OptionExt.return
 
@@ -352,7 +352,7 @@ module Domain =
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%
-                Eval.empty_singleton
+                Eval.empty
               )
           )
         |> OptionExt.return
@@ -370,7 +370,7 @@ module Domain =
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%
-                  Eval.empty_singleton)
+                  Eval.empty)
           )
         |> OptionExt.return
 
@@ -395,8 +395,8 @@ module Domain =
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
              let res = man.eval (mk_py_top T_string range) flow in
-             let tyerror = tyerror_f |> Eval.empty_singleton in
-             Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx res tyerror :: res :: [])
+             let tyerror = tyerror_f |> Eval.empty in
+             Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
         |> OptionExt.return
 
@@ -406,7 +406,7 @@ module Domain =
           (fun eargs flow ->
              Eval.join
                (man.eval   (mk_py_top T_int range) flow)
-               (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow >>% Eval.empty_singleton)
+               (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow >>% Eval.empty)
           )
         |> OptionExt.return
 
