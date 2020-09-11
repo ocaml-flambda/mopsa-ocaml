@@ -89,7 +89,7 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: uctx -> t -> t -> t
+  val widen: 'a ctx -> t -> t -> t
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
@@ -112,10 +112,10 @@ sig
   val init : program -> t
   (** Initial abstract element *)
 
-  val exec : stmt -> ('a,t) simplified_man -> uctx -> t -> t option
+  val exec : stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   (** Computation of post-conditions *)
 
-  val ask : ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
+  val ask : ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
   (** Handler of queries *)
 
 

@@ -61,8 +61,8 @@ sig
   val meet: t -> t -> t
   (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
 
-  val widen: t -> t -> t
-  (** [widen a1 a2] computes an upper bound of [a1] and [a2] that
+  val widen: 'a ctx -> t -> t -> t
+  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
 
@@ -81,10 +81,10 @@ type 'a lattice = {
   bottom:    'a;
   top:       'a;
   is_bottom: 'a -> bool;
-  subset:    uctx -> 'a -> 'a -> bool;
-  join:      uctx -> 'a -> 'a -> 'a;
-  meet:      uctx -> 'a -> 'a -> 'a;
-  widen:     uctx -> 'a -> 'a -> 'a;
+  subset:    'a ctx -> 'a -> 'a -> bool;
+  join:      'a ctx -> 'a -> 'a -> 'a;
+  meet:      'a ctx -> 'a -> 'a -> 'a;
+  widen:     'a ctx -> 'a -> 'a -> 'a;
   merge:     'a -> 'a * log -> 'a * log -> 'a;
   print:     Format.formatter -> 'a -> unit;
 }

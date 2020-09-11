@@ -318,6 +318,35 @@ and fold_map_stmt
       in
       (x3,builder {exprs;stmts})
 
+let rec exists_expr fe fs e =
+  fe e || (
+    let parts,_ = structure_of_expr e in
+    List.exists (exists_expr fe fs) parts.exprs ||
+    List.exists (exists_stmt fe fs) parts.stmts
+  )
+
+and exists_stmt fe fs s =
+  fs s || (
+    let parts,_ = structure_of_stmt s in
+    List.exists (exists_expr fe fs) parts.exprs ||
+    List.exists (exists_stmt fe fs) parts.stmts
+  )
+
+
+let rec for_all_expr fe fs e =
+  fe e && (
+    let parts,_ = structure_of_expr e in
+    List.for_all (for_all_expr fe fs) parts.exprs &&
+    List.for_all (for_all_stmt fe fs) parts.stmts
+  )
+
+and for_all_stmt fe fs s =
+  fs s && (
+    let parts,_ = structure_of_stmt s in
+    List.for_all (for_all_expr fe fs) parts.exprs ||
+    List.for_all (for_all_stmt fe fs) parts.stmts
+  )
+
 
 let rec exists_expr fe fs e =
   fe e || (

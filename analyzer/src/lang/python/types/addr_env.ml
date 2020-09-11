@@ -109,7 +109,7 @@ struct
         | PyAddr.Def _ -> false
         | _ -> true
 
-      let widen = join
+      let widen ctx = join
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
@@ -126,7 +126,7 @@ struct
 
   let join = AMap.join
   let meet = AMap.meet
-  let widen uctx = AMap.widen
+  let widen = AMap.widen
 
   let alarms = []
 

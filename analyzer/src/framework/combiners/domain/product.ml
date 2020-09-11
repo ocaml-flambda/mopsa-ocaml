@@ -159,7 +159,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_unit_ctx flow) a b))
+           (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_ctx flow) a b))
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 end
@@ -183,9 +183,7 @@ struct
 
   (** Merge the conflicts of two flows using logs *)
   let merge_flows ~merge_alarms (man:('a,'t) man) pre (flow1,log1) (flow2,log2) =
-    let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
-              Context.get_unit
-    in
+    let ctx = most_recent_ctx (Flow.get_ctx flow1) (Flow.get_ctx flow2) in
     Flow.map2zo
       (fun _ a1 -> man.lattice.bottom)
       (fun _ a2 -> man.lattice.bottom)
@@ -339,7 +337,7 @@ struct
     match pointwise with
     | []               -> default
     | None::tl         -> get_pointwise_ctx ~default tl
-    | Some cases :: tl -> Context.get_most_recent
+    | Some cases :: tl -> most_recent_ctx
                             (Cases.get_ctx cases)
                             (get_pointwise_ctx ~default tl)
 

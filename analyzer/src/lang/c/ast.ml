@@ -411,23 +411,22 @@ type prog_kind +=
   | C_program of c_program
 
 
+module CProgramKey = GenContextKey(struct
+    type 'a t = c_program
+    let print pp fmt prog = Format.fprintf fmt "C program"
+  end)
+
 
 (** Flow-insensitive context to keep the analyzed C program *)
-let c_program_ctx =
-  let module K = Context.GenUnitKey(struct
-      type t = c_program
-      let print fmt prog = Format.fprintf fmt "C program"
-    end)
-  in
-  K.key
+let c_program_ctx = CProgramKey.key
 
 (** Set the C program in the flow *)
 let set_c_program prog flow =
-  Flow.set_ctx (Flow.get_ctx flow |> Context.add_unit c_program_ctx prog) flow
+  Flow.set_ctx (Flow.get_ctx flow |> add_ctx c_program_ctx prog) flow
 
 (** Get the C program from the flow *)
 let get_c_program flow =
-  Flow.get_ctx flow |> Context.find_unit c_program_ctx
+  Flow.get_ctx flow |> find_ctx c_program_ctx
 
 
 (*==========================================================================*)

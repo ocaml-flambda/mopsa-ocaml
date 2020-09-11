@@ -19,99 +19,116 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Flow-insensitive context *)
+(** Context - Storage for flow-insensitive information
 
-open Callstack
+    The context is a heterogeneous key-value map that stores non-semantical
+    information, such as a description of the program being currently
+    analyzed, the callstack, etc.
 
-(****************************************************************************)
-(**                          {2 Unit contexts}                              *)
-(****************************************************************************)
+    For instance, to create a new kind of entries for storing strings, first
+    generate a new context key:
+    {[
+      module K = GenContextKey
+          (struct
+            type 'a t = string
+            let print pp fmt s = fprintf fmt "string: %s" s
+          end)
+      let string_key = K.key
+    ]}
+    Then, given a context ['a ctx], you can add/remove elements as follows:
+    {[
+      let ctx'  = add_ctx string_key "a" ctx in
+      let ctx'' = remove_ctx string_key ctx'
+    ]}
 
-type _ ukey
+    Note that the context can contain the abstract state.
+    For instance, to store a cache of input/output states for each function,
+    you can do:
+    {[
+      module K = GenContextKey
+          (struct
+            type 'a t = (string*'a flow*'a post) list
+            let print pp fmt cache =
+              fprintf fmt "functions I/O cache:@,  @[<v>%a@]"
+                (pp_print_list
+                  ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+                  (fun (f,input,output) ->
+                     fprintf "%s:@, input:@[%a]@, output:@[%a@]"
+                       f
+                       (Flow.print pp) input
+                       (Post.print pp) output
+                  )
+                ) cache
+          end)
+      let cache_key = K.key
+    ]}
+*)
 
-type uctx
+open Eq
 
-module GenUnitKey
-    (V:sig
-       type t
-       val print : Format.formatter -> t -> unit
-     end)
-  :
-  sig
-    val key : V.t ukey
-  end
+type ('a,_) ctx_key = ..
+(** Key to access an element in the context *)
 
-val ufind :'v ukey -> uctx -> 'v
+type 'a ctx
+(** The context *)
 
-val uempty : uctx
+val empty_ctx : 'a ctx
+(** Empty context *)
 
-val uadd :'v ukey -> 'v -> uctx -> uctx
+val singleton_ctx : ('a,'v) ctx_key -> 'v -> 'a ctx
+(** Context with one element *)
 
-val umem : 'v ukey -> uctx -> bool
+val mem_ctx : ('a,'v) ctx_key -> 'a ctx -> bool
+(** [mem_ctx k ctx] returns [true] when an element at key [k] is in
+    the context [ctx]. *)
 
-val uremove : 'v ukey -> uctx -> uctx
+val find_ctx : ('a,'v) ctx_key -> 'a ctx -> 'v
+(** [find_ctx k ctx] returns the element at key [k] in the context [ctx].
+    Raises [Not_found] if no element is found. *)
 
-val uprint : Format.formatter -> uctx -> unit
+val find_ctx_opt : ('a,'v) ctx_key -> 'a ctx -> 'v option
+(** [find_ctx k ctx] returns the element of the key [k] in the context [ctx].
+    Returns [None] if no element is found. *)
 
+val add_ctx : ('a,'v) ctx_key -> 'v -> 'a ctx -> 'a ctx
+(** [add_ctx k v ctx] add element [v] at key [k] in the context [ctx].
+    The previous element is overwritten if present.*)
 
-(****************************************************************************)
-(**                     {2 Polymorphic contexts}                            *)
-(****************************************************************************)
+val remove_ctx : ('a,'v) ctx_key -> 'a ctx -> 'a ctx
+(** [add_ctx k v ctx] removes the element at key [k] in the context [ctx].
+    If key [k] was not in [ctx], [ctx] is returned unchanged. *)
 
-type ('a, _) pkey
+val most_recent_ctx : 'a ctx -> 'a ctx -> 'a ctx
+(** Get the most recent context between two *)
 
-type 'a pctx
+val pp_ctx : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a ctx -> unit
+(** Print a context *)
 
-module GenPolyKey
-    (V:sig
+(** Pool registered keys *)
+type ctx_pool = {
+  ctx_pool_equal: 'a 'v 'w. ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
+  ctx_pool_print: 'a 'v. (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+}
+
+(** Registration information for a new key *)
+type ctx_info = {
+  ctx_equal : 'a 'v 'w. ctx_pool -> ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
+  ctx_print   : 'a 'v. ctx_pool -> (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+}
+
+val register_ctx : ctx_info -> unit
+(** Register a new key *)
+
+(** Generate a new key *)
+module GenContextKey
+    (Value:sig
        type 'a t
        val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
      end)
   :
   sig
-    val key : ('a,'a V.t) pkey
-    val init : 'a pctx
-end
+    val key : ('a,'a Value.t) ctx_key
+  end
 
-
-(****************************************************************************)
-(**                            {2 Contexts}                                 *)
-(****************************************************************************)
-
-
-
-type 'a ctx
-
-val empty : 'a ctx
-
-val get_unit : 'a ctx -> uctx
-
-val set_unit : uctx -> 'a ctx -> 'a ctx
-
-val find_unit : 'v ukey -> 'a ctx -> 'v
-
-val find_poly : ('a,'v) pkey ->'a ctx -> 'v
-
-val mem_unit : 'v ukey -> 'a ctx -> bool
-
-val mem_poly : ('a,'v) pkey -> 'a ctx -> bool
-
-val add_unit : 'v ukey -> 'v -> 'a ctx -> 'a ctx
-
-val add_poly : ('a,'v) pkey -> 'v -> 'a ctx -> 'a ctx
-
-val remove_unit : 'v ukey -> 'a ctx -> 'a ctx
-
-val remove_poly : ('a,'v) pkey -> 'a ctx -> 'a ctx
-
-val init_poly : 'a pctx -> 'a ctx -> 'a ctx
-
-val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a ctx -> unit
-
-val get_most_recent : 'a ctx -> 'a ctx -> 'a ctx
-
-
-(** {2 Callstack context} *)
-(** ********************* *)
-
-val callstack_ctx_key : callstack ukey
+val callstack_ctx_key : ('a,Callstack.callstack) ctx_key
+(** Key for storing the callstack *)

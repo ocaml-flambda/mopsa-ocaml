@@ -80,9 +80,9 @@ struct
     if v1 == w1 && v2 == w2 then v else
     apply2 First.meet Second.meet v w
 
-  let widen ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
+  let widen ctx ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 First.widen Second.widen v w
+    apply2 (First.widen ctx) (Second.widen ctx) v w
 
   let print fmt ((a,b):t) : unit =
     Format.fprintf fmt "(%a, %a)" First.print a Second.print b

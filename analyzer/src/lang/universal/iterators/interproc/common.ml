@@ -100,17 +100,15 @@ let mk_return_var call =
 (** {2 Contexts to keep return variable} *)
 (** =================================== *)
 
-let return_key =
-  let module K = Context.GenUnitKey(
-    struct
-      type t = var
-      let print fmt v =
-        Format.fprintf fmt "Return var: %a" pp_var v
-    end
-    )
-  in
-  K.key
+module ReturnKey = GenContextKey(
+  struct
+    type 'a t = var
+    let print pp fmt v =
+      Format.fprintf fmt "Return var: %a" pp_var v
+  end
+  )
 
+let return_key = ReturnKey.key
 
 let get_last_call_site flow =
   let cs = Flow.get_callstack flow in
@@ -205,8 +203,8 @@ let exec_fun_body f body ret range man flow =
     match ret with
     | None -> None, flow
     | Some ret ->
-      (try Some (Context.find_unit return_key (Flow.get_ctx flow)) with Not_found -> None),
-      Flow.set_ctx (Context.add_unit return_key ret (Flow.get_ctx flow)) flow in
+      (try Some (find_ctx return_key (Flow.get_ctx flow)) with Not_found -> None),
+      Flow.set_ctx (add_ctx return_key ret (Flow.get_ctx flow)) flow in
 
   (* Clear all return flows *)
   let flow2 = Flow.filter (fun tk env ->
@@ -224,7 +222,7 @@ let exec_fun_body f body ret range man flow =
     | None -> post2
     | Some ret ->
       Cases.set_ctx
-        (Context.add_unit return_key ret (Cases.get_ctx post2)) post2 in
+        (add_ctx return_key ret (Cases.get_ctx post2)) post2 in
 
   (* Restore call stack *)
   let _,cs = Cases.get_callstack post3 |>

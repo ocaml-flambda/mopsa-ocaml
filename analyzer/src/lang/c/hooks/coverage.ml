@@ -205,7 +205,7 @@ struct
 
   let init ctx =
     (* Initialize coverage table *)
-    let prog = Context.find_unit c_program_ctx ctx in
+    let prog = find_ctx c_program_ctx ctx in
     init_cov prog.c_functions
 
 

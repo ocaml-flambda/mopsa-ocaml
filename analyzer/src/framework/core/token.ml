@@ -47,6 +47,9 @@ let register_token (info:token TypeExt.info) =
   TypeExt.register info token_compare_chain token_print_chain
 
 
+open Context
+
+
 module TokenMap =
 struct
 
@@ -124,7 +127,7 @@ struct
     | [] -> bottom
     | hd :: tl -> List.fold_left (meet lattice ctx) hd tl
 
-  let widen (lattice: 'a lattice) (ctx: Context.uctx) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
+  let widen (lattice: 'a lattice) (ctx: 'a ctx) (tmap1: 'a t) (tmap2: 'a t) : 'a t =
     top_lift2
       (Map.map2zo
          (fun _ v1 -> v1)

@@ -39,10 +39,10 @@ module type HOOK =
 sig
   val name : string
   val init : 'a ctx -> 'a ctx
-  val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx
+  val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx option
+  val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
+  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
+  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
   val on_finish : ('a,'a) man -> 'a flow -> unit
 end
 
@@ -68,19 +68,19 @@ struct
 
   let on_before_exec route stmt man flow =
     Hook.on_before_exec route stmt man flow;
-    Flow.get_ctx flow
+    None
 
   let on_after_exec route stmt man flow post =
     Hook.on_after_exec route stmt man flow post;
-    Cases.get_ctx post
+    None
 
   let on_before_eval route stmt man flow =
     Hook.on_before_eval route stmt man flow;
-    Flow.get_ctx flow
+    None
 
   let on_after_eval route stmt man flow eval =
     Hook.on_after_eval route stmt man flow eval;
-    Cases.get_ctx eval
+    None
 
   let on_finish = Hook.on_finish
 
@@ -163,39 +163,57 @@ let deactivate_hook name man flow =
 
 (** Fire [on_before_exec] event *)
 let on_before_exec route stmt man flow =
-  Hashtbl.fold (fun name hook ctx ->
-      let flow = Flow.set_ctx ctx flow in
+  Hashtbl.fold (fun name hook acc ->
+      let flow =
+        match acc with
+        | None -> flow
+        | Some ctx -> Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      H.on_before_exec route stmt man flow
-    ) active_hooks (Flow.get_ctx flow)
-
-
+      match H.on_before_exec route stmt man flow with
+      | None -> acc
+      | x -> x
+    ) active_hooks None
 
 (** Fire [on_after_exec] event *)
 let on_after_exec route stmt man flow post =
-  Hashtbl.fold (fun name hook ctx ->
-      let post = Cases.set_ctx ctx post in
+  Hashtbl.fold (fun name hook acc ->
+      let post =
+        match acc with
+        | None -> post
+        | Some ctx -> Cases.set_ctx ctx post in
       let module H = (val hook : HOOK) in
-      H.on_after_exec route stmt man flow post
-    ) active_hooks (Cases.get_ctx post)
+      match H.on_after_exec route stmt man flow post with
+      | None -> acc
+      | x -> x
+    ) active_hooks None
 
 
 (** Fire [on_before_eval] event *)
 let on_before_eval route exp man flow =
-  Hashtbl.fold (fun name hook ctx ->
-      let flow = Flow.set_ctx ctx flow in
+  Hashtbl.fold (fun name hook acc ->
+      let flow =
+        match acc with
+        | None -> flow
+        | Some ctx -> Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      H.on_before_eval route exp man flow
-    ) active_hooks (Flow.get_ctx flow)
+      match H.on_before_eval route exp man flow with
+      | None -> acc
+      | x -> x
+    ) active_hooks None
 
 
 (** Fire [on_after_eval] event *)
-let on_after_eval route exp man flow eval =
-  Hashtbl.fold (fun name hook ctx ->
-      let eval = Cases.set_ctx ctx eval in
+let on_after_eval route exp man flow evl =
+  Hashtbl.fold (fun name hook acc ->
+      let evl =
+        match acc with
+        | None -> evl
+        | Some ctx -> Cases.set_ctx ctx evl in
       let module H = (val hook : HOOK) in
-      H.on_after_eval route exp man flow eval
-    ) active_hooks (Cases.get_ctx eval)
+      match H.on_after_eval route exp man flow evl with
+      | None -> acc
+      | x -> x
+    ) active_hooks None
 
 
 let on_finish man flow =

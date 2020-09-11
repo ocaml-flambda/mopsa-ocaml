@@ -214,7 +214,7 @@ struct
     | Var { vkind = V_cvar {cvar_scope = Variable_parameter f}; vtyp }
       when is_c_scalar_type vtyp
       ->
-      let cs = Context.ufind Context.callstack_ctx_key ctx in
+      let cs = find_ctx Context.callstack_ctx_key ctx in
       if is_empty_callstack cs
       then [Locals f.c_func_unique_name]
       else
@@ -227,7 +227,7 @@ struct
 
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
-      let cs = Context.ufind Context.callstack_ctx_key ctx in
+      let cs = find_ctx Context.callstack_ctx_key ctx in
       if is_empty_callstack cs
       then []
       else

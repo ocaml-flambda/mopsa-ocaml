@@ -204,7 +204,7 @@ let set_pair_snd man = (fun a2 a -> let old = man.get a in if a2 == snd old then
 
 let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   (* Create a singleton flow with the given environment *)
-  let flow = Flow.singleton Context.(set_unit ctx empty) T_cur a in
+  let flow = Flow.singleton ctx T_cur a in
   (* Execute the statement *)
   let flow' = f flow |> post_to_flow man in
   Flow.get T_cur man.lattice flow'

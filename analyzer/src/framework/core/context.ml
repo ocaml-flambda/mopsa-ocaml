@@ -23,345 +23,158 @@
 
 open Eq
 
+type ('a,_) ctx_key = ..
 
-(****************************************************************************)
-(**                          {2 Unit contexts}                              *)
-(****************************************************************************)
-
-(** Key of a unit context value *)
-type _ ukey = ..
-
-(** Descriptor of a unit context key *)
-type 'v udesc = {
-  eq : 'vv. 'vv ukey -> ('vv, 'v) eq option;
-  print : Format.formatter -> 'v -> unit;
-}
-
-(** Pool of unit context descriptors *)
-type upool =
-  | [] : upool
-  | (::) : 'v udesc * upool -> upool
-
-let upool : upool ref = ref []
-
-
-let register_udesc udesc =
-  upool := udesc :: !upool
-
-
-(** Generate a unit (stateless) key *)
-module GenUnitKey(V:sig
-    type t
-    val print : Format.formatter -> t -> unit
-  end)
-=
-struct
-
-  type _ ukey += UKey : V.t ukey
-
-  let key = UKey
-
-  let eq : type v. v ukey -> (v, V.t) eq option =
-    function
-    | UKey -> Some Eq
-    | _ -> None
-
-  let () =
-    register_udesc {
-      eq = eq;
-      print = V.print;
-    }
-
-end
-
-
-type uctx =
-  | [] : uctx
-  | (::) : ('v ukey * 'v) * uctx -> uctx
-
-
-let find_udesc (k: 'v ukey) () : 'v udesc =
-  let rec iter : type v. v ukey -> upool -> v udesc =
-    fun k -> function
-      | [] -> raise Not_found
-      | hd :: tl ->
-        match hd.eq k with
-        | Some Eq -> hd
-        | None -> iter k tl
-  in
-  iter k !upool
-
-let ufind (k: 'v ukey) (uctx:uctx) : 'v =
-  let udesc = find_udesc k () in
-  let rec iter : type v. v ukey -> v udesc -> uctx -> v =
-    fun k udesc -> function
-      | [] -> raise Not_found
-      | (k',v) :: tl ->
-        match udesc.eq k' with
-        | Some Eq -> v
-        | None -> iter k udesc tl
-  in
-  iter k udesc uctx
-
-let uempty : uctx = []
-
-let uadd (k:'v ukey) (v:'v) (uctx:uctx) : uctx =
-  let rec iter : type v. v ukey -> v -> v udesc -> uctx -> uctx =
-    fun k v udesc -> function
-      | [] -> [(k, v)]
-      | hd :: tl ->
-        let (k', _) = hd in
-        match udesc.eq k' with
-        | Some Eq -> (k, v) :: tl
-        | None -> hd :: (iter k v udesc tl)
-  in
-  iter k v (find_udesc k ()) uctx
-
-
-let umem (k:'v ukey) (uctx:uctx) : bool =
-  let rec iter : type v. v ukey -> v udesc -> uctx -> bool =
-    fun k udesc -> function
-      | [] -> false
-      | hd :: tl ->
-        let (k', _) = hd in
-        match udesc.eq k' with
-        | Some Eq -> true
-        | None -> iter k udesc tl
-  in
-  iter k (find_udesc k ()) uctx
-
-
-let uremove (k:'v ukey) (uctx:uctx) : uctx =
-  let rec iter : type v. v ukey -> v udesc -> uctx -> uctx =
-    fun k udesc -> function
-      | [] -> []
-      | hd :: tl ->
-        let (k', _) = hd in
-        match udesc.eq k' with
-        | Some Eq -> tl
-        | None -> hd :: iter k udesc tl
-  in
-  iter k (find_udesc k ()) uctx
-
-
-let uprint fmt uctx =
-  let rec iter fmt uctx =
-    match uctx with
-    | [] -> ()
-    | [(k,v)] ->
-      let udesc = find_udesc k () in
-      Format.fprintf fmt "%a" udesc.print v
-    | (k,v) :: tl ->
-      let udesc = find_udesc k () in
-      Format.fprintf fmt "%a@\n%a" udesc.print v iter tl
-  in
-  iter fmt uctx
-
-
-
-(****************************************************************************)
-(**                       {2 Polymorphic contexts}                          *)
-(****************************************************************************)
-
-
-(** Key of a polymorphic context value *)
-type ('a, _) pkey = ..
-
-
-(** Descriptor of a polymorphic context key *)
-type ('a, 'v) pdesc = {
-  eq : 'vv. ('a, 'vv) pkey -> ('vv, 'v) eq option;
-  print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'v -> unit;
-}
-
-type 'a pctx =
-  | [] : 'a pctx
-  | (::) : (('a,'v) pdesc * 'v option) * 'a pctx -> 'a pctx
-
-let pempty : 'a pctx = []
-
-let pfind (k: ('a, 'v) pkey) (pctx: 'a pctx) : 'v =
-  let rec iter : type v. ('a, v) pkey -> 'a pctx -> v =
-    fun k -> function
-      | [] -> raise Not_found
-      | (desc,v) :: tl ->
-        match desc.eq k with
-        | None -> iter k tl
-        | Some Eq ->
-          match v with
-          | Some vv -> vv
-          | None -> raise Not_found
-  in
-  iter k pctx
-
-let padd (k:('a,'v) pkey) (v:'v) (pctx:'a pctx) : 'a pctx =
-  let rec iter : type v. ('a,v) pkey -> v -> 'a pctx -> 'a pctx =
-    fun k v -> function
-      | [] -> raise Not_found
-      | hd :: tl ->
-        let (desc, _) = hd in
-        match desc.eq k with
-        | Some Eq -> (desc, Some v) :: tl
-        | None -> hd :: (iter k v tl)
-  in
-  iter k v pctx
-
-
-let pmem (k:('a,'v) pkey) (pctx:'a pctx) : bool =
-  let rec iter : type v. ('a,v) pkey -> 'a pctx -> bool =
-    fun k -> function
-      | [] -> false
-      | hd :: tl ->
-        let (desc, v) = hd in
-        match desc.eq k with
-        | None -> iter k tl
-        | Some Eq ->
-          match v with
-          | None -> false
-          | Some _ -> true
-  in
-  iter k pctx
-
-
-let premove (k:('a,'v) pkey) (pctx:'a pctx) : 'a pctx =
-  let rec iter : type v. ('a,v) pkey -> 'a pctx -> 'a pctx =
-    fun k -> function
-      | [] -> []
-      | hd :: tl ->
-        let (desc, _) = hd in
-        match desc.eq k with
-        | Some Eq -> (desc, None) :: tl
-        | None -> hd :: iter k tl
-  in
-  iter k pctx
-
-let pconcat (pctx:'a pctx) (pctx':'a pctx) : 'a pctx =
-  let rec iter = function
-    | [] -> pctx'
-    | hd :: tl ->
-    hd :: iter tl
-  in
-  iter pctx
-
-
-let pprint lprint fmt pctx =
-  let rec iter fmt pctx =
-    match pctx with
-    | [] -> ()
-    | (_, None) :: tl -> iter fmt tl
-    | [(desc, Some v)] -> Format.fprintf fmt "%a" (desc.print lprint) v
-    | (desc, Some v) :: tl -> Format.fprintf fmt "%a@\n%a" (desc.print lprint) v iter tl
-  in
-  iter fmt pctx
-
-
-(****************************************************************************)
-(**                            {2 Contexts}                                 *)
-(****************************************************************************)
+type 'a ctx_list =
+  | Empty
+  | Cons : (('a,'v) ctx_key * 'v * 'a ctx_list) -> 'a ctx_list
 
 type 'a ctx = {
-  ctx_unit : uctx;
-  ctx_poly : 'a pctx;
-  ctx_timestamp : int;
+  list: 'a ctx_list;
+  timestamp : int;
+}
+
+type ctx_pool = {
+  ctx_pool_equal: 'a 'v 'w. ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
+  ctx_pool_print: 'a 'v. (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+}
+
+let pool = ref {
+  ctx_pool_equal = (fun _ _ -> None);
+  ctx_pool_print = (fun pp fmt key v -> raise Not_found);
 }
 
 let counter = ref 0
 
-let next_counter () =
+let next list =
   incr counter;
-  !counter
+  { list; timestamp = !counter }
 
-(** Generate a polymorphic (stateless) key *)
-module GenPolyKey(V:sig
-    type 'a t
-    val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-  end)
+let empty_ctx = { list = Empty; timestamp = 0 }
+
+let singleton_ctx_list k v = Cons(k,v,Empty)
+
+let singleton_ctx k v = next (singleton_ctx_list k v)
+
+let rec mem_ctx_list : type v.('a,v) ctx_key -> 'a ctx_list -> bool =
+  fun k -> function
+  | Empty -> false
+  | Cons(k',_,tl) ->
+    match !pool.ctx_pool_equal k k' with
+    | None    -> mem_ctx_list k tl
+    | Some Eq -> true
+
+let mem_ctx k ctx = mem_ctx_list k ctx.list
+
+let rec find_ctx_list_opt : type v.('a,v) ctx_key -> 'a ctx_list -> v option =
+  fun k -> function
+    | Empty -> None
+    | Cons(k',v,tl) ->
+      match !pool.ctx_pool_equal k k' with
+      | None    -> find_ctx_list_opt k tl
+      | Some Eq -> Some v
+
+let find_ctx_opt k ctx = find_ctx_list_opt k ctx.list
+
+let find_ctx k ctx =
+  match find_ctx_opt k ctx with
+  | None   -> raise Not_found
+  | Some v -> v
+
+let rec add_ctx_list : type v.('a,v) ctx_key -> v -> 'a ctx_list -> 'a ctx_list =
+  fun k v -> function
+  | Empty -> singleton_ctx_list k v
+  | Cons(k',v',tl) ->
+    match !pool.ctx_pool_equal k k' with
+    | None    -> Cons(k',v',add_ctx_list k v tl)
+    | Some Eq -> Cons(k,v,tl)
+
+let add_ctx k v ctx = next (add_ctx_list k v ctx.list)
+
+let rec remove_ctx_list : type v. ('a,v) ctx_key -> 'a ctx_list -> 'a ctx_list =
+  fun k -> function
+  | Empty -> Empty
+  | Cons(k',v',tl) ->
+    match !pool.ctx_pool_equal k k' with
+    | None    -> Cons(k',v',remove_ctx_list k tl)
+    | Some Eq -> tl
+
+let remove_ctx k ctx = next (remove_ctx_list k ctx.list)
+
+let most_recent_ctx ctx1 ctx2 =
+  if ctx1.timestamp >= ctx2.timestamp then ctx1 else ctx2
+
+let pp_ctx pp fmt ctx =
+  let rec iter = function
+    | Empty -> []
+    | Cons(k,v,tl) ->
+      (fun fmt -> !pool.ctx_pool_print pp fmt k v) :: iter tl
+  in
+  let fl = iter ctx.list in
+  Format.(fprintf fmt "@[<v>%a@]"
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+               (fun fmt f -> f fmt)
+            ) fl
+         )
+
+type ctx_info = {
+  ctx_equal : 'a 'v 'w. ctx_pool -> ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
+  ctx_print : 'a 'v. ctx_pool -> (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+}
+
+
+let register_ctx info =
+  let old_pool = !pool in
+  pool := {
+    ctx_pool_equal =
+      (fun (type a v w) (k1:(a,v) ctx_key) (k2:(a,w) ctx_key) ->
+         info.ctx_equal old_pool k1 k2);
+    ctx_pool_print =
+      (fun (type a v) pp fmt (k:(a,v) ctx_key) (v:v) ->
+         info.ctx_print old_pool pp fmt k v)
+  }
+
+module GenContextKey
+    (Value:sig
+       type 'a t
+       val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+     end)
+  : sig
+    val key : ('a,'a Value.t) ctx_key
+  end
 =
 struct
-
-  type ('a,_) pkey += PKey : ('a, 'a V.t) pkey
-
-  let key = PKey
-
-  let eq : type a v. (a,v) pkey -> (v, a V.t) eq option =
-    function
-    | PKey -> Some Eq
-    | _ -> None
-
-  let init =
-    let desc = {
-      eq = eq;
-      print = V.print;
+  type ('a,_) ctx_key += MyKey : ('a,'a Value.t) ctx_key
+  let key = MyKey
+  let () =
+    register_ctx {
+      ctx_equal = (
+        let f: type a v w. ctx_pool -> (a,v) ctx_key -> (a,w) ctx_key -> (v,w) eq option =
+          fun pool k1 k2 ->
+            match k1, k2 with
+            | MyKey, MyKey -> Some Eq
+            | _            -> pool.ctx_pool_equal k1 k2
+        in f
+      );
+      ctx_print = (
+        let f : type a v. ctx_pool -> (Format.formatter -> a -> unit) -> Format.formatter -> (a,v) ctx_key -> v -> unit =
+          fun pool pp fmt k v ->
+            match k with
+            | MyKey -> Value.print pp fmt v
+            | _     -> pool.ctx_pool_print pp fmt k v
+        in f
+      )
     }
-    in
-    [(desc,None)]
 
 end
 
+open Callstack
 
-let empty : 'a ctx = {
-  ctx_unit = uempty;
-  ctx_poly = pempty;
-  ctx_timestamp = 0
-}
+module CallstackKey = GenContextKey
+    (struct
+      type 'a t = callstack
+      let print pp fmt cs = pp_callstack fmt cs
+    end)
 
-let unit ctx = ctx.ctx_unit
-
-let find_unit (k: 'v ukey) (ctx:'a ctx) : 'v =
-  ufind k ctx.ctx_unit
-
-let find_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'v =
-  pfind k ctx.ctx_poly
-
-let mem_unit (k: 'v ukey) (ctx:'a ctx) : bool =
-  umem k ctx.ctx_unit
-
-let mem_poly (k: ('a,'v) pkey) (ctx:'a ctx) : bool =
-  pmem k ctx.ctx_poly
-
-let add_unit (k: 'v ukey) (v:'v) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_unit = uadd k v ctx.ctx_unit; ctx_timestamp = next_counter () }
-
-let add_poly (k: ('a,'v) pkey) (v:'v) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_poly = padd k v ctx.ctx_poly; ctx_timestamp = next_counter () }
-
-let remove_unit (k: 'v ukey) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_unit = uremove k ctx.ctx_unit; ctx_timestamp = next_counter () }
-
-let remove_poly (k: ('a,'v) pkey) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_poly = premove k ctx.ctx_poly; ctx_timestamp = next_counter () }
-
-let init_poly (pctx:'a pctx) (ctx:'a ctx) : 'a ctx =
-  { ctx with ctx_poly = pconcat ctx.ctx_poly pctx }
-
-let print lprinter fmt ctx =
-  Format.fprintf fmt "%a@\n%a@\ntimestamp: %d"
-    uprint ctx.ctx_unit
-    (pprint lprinter) ctx.ctx_poly
-    ctx.ctx_timestamp
-
-let get_unit ctx = ctx.ctx_unit
-
-let set_unit unit ctx = { ctx with ctx_unit = unit; ctx_timestamp = next_counter () }
-
-let get_most_recent ctx1 ctx2 =
-  if ctx1.ctx_timestamp < ctx2.ctx_timestamp
-  then ctx2
-  else ctx1
-
-
-
-(** {2 Callstack context} *)
-(** ********************* *)
-
-let callstack_ctx_key =
-  let open Callstack in
-  let module K = GenUnitKey(
-    struct
-      type t = callstack
-      let print fmt cs =
-        Format.fprintf fmt "Callstack:@,%a" pp_callstack cs
-    end
-    )
-  in
-  K.key
+let callstack_ctx_key = CallstackKey.key

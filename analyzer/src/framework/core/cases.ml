@@ -78,7 +78,7 @@ let copy_ctx src dst =
 
 let get_most_recent_ctx cases =
   Dnf.fold
-    (fun acc (case,flow) -> Context.get_most_recent acc (Flow.get_ctx flow))
+    (fun acc (case,flow) -> most_recent_ctx acc (Flow.get_ctx flow))
     (get_ctx cases) cases
 
 let normalize_ctx cases =
@@ -87,12 +87,12 @@ let normalize_ctx cases =
 
 let get_callstack r =
   get_ctx r |>
-  Context.find_unit Context.callstack_ctx_key
+  find_ctx Context.callstack_ctx_key
 
 let set_callstack cs r =
   set_ctx (
     get_ctx r |>
-    Context.add_unit Context.callstack_ctx_key cs
+    add_ctx Context.callstack_ctx_key cs
   ) r
 
 let get_case_cleaners (case:'r case) : StmtSet.t =

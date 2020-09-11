@@ -30,8 +30,8 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
-  val exec : domain list -> stmt -> ('a,t) simplified_man -> uctx -> t -> t option
-  val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> uctx -> t -> 'r option
+  val exec : domain list -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
+  val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
 end
 
 
@@ -91,7 +91,7 @@ struct
          Post.return flow |>
          OptionExt.return
        else
-         f stmt (simplified_man man flow) (Flow.get_unit_ctx flow) a |>
+         f stmt (simplified_man man flow) (Flow.get_ctx flow) a |>
          OptionExt.lift @@ fun a' ->
          set_env T_cur a' man flow |>
          Post.return |>
@@ -107,7 +107,7 @@ struct
   let ask domains =
     let f = D.ask domains in
     (fun query man flow ->
-       f query (simplified_man man flow) (Flow.get_unit_ctx flow) (get_env T_cur man flow)
+       f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow)
     )
 
 end
