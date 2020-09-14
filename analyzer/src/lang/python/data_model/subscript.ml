@@ -44,7 +44,7 @@ struct
     match ekind exp with
     | E_py_index_subscript(obj, index) ->
       bind_list [obj; index] (man.eval  ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
           let eobj, eindex = match el with [obj; index] -> obj, index | _ -> assert false in
 
           man.eval   (mk_py_type eobj range) flow >>$
@@ -60,7 +60,7 @@ struct
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                    Eval.empty_singleton
+                    Eval.empty
                   )
             )
         )
@@ -68,7 +68,7 @@ struct
 
     | E_py_slice_subscript(obj, start, stop, step) ->
       bind_list [obj; start; stop; step] (man.eval  ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
           let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
           man.eval   (mk_py_type eobj range) flow >>$
  (fun cls flow ->
@@ -85,7 +85,7 @@ struct
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                    Eval.empty_singleton
+                    Eval.empty
                   )
             )
         )
@@ -99,11 +99,11 @@ struct
     match skind stmt with
     | S_assign({ekind = E_py_index_subscript(obj, index)}, exp) ->
       bind_list [exp; obj; index] (man.eval  ) flow |>
-      bind_some
+      bind_result
         (fun el flow ->
            let exp, eobj, eindex = match el with [exp; obj; index] -> exp, obj, index | _ -> assert false in
            man.eval   (mk_py_type eobj range) flow |>
-           bind_some (fun cls flow ->
+           bind_result (fun cls flow ->
                assume
                  (Utils.mk_hasattr cls "__setitem__" range)
                  man flow
@@ -122,16 +122,16 @@ struct
 
     | S_assign({ekind = E_py_slice_subscript (obj, start, stop, step)}, exp) ->
       bind_list [exp; obj; start; stop; step] (man.eval   ) flow |>
-      bind_some (fun el flow ->
+      bind_result (fun el flow ->
           let exp, eobj, start, stop, step = match el with [exp; obj; start; stop; step] -> exp, obj, start, stop, step | _ -> assert false in
           man.eval   (mk_py_type eobj range) flow |>
-          bind_some (fun cls flow ->
+          bind_result (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__setitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
                     man.eval   (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
-                    bind_some (fun slice flow ->
+                    bind_result (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; slice; exp] range in
                         man.exec {stmt with skind = S_expression(exp')} flow >>% Post.return
                       )

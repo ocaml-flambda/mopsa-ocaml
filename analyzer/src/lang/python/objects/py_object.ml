@@ -69,11 +69,11 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__", _))}, _)}, args, kwargs)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__", _))}, _)}, args, kwargs) ->
       bind_list args (man.eval   ) flow |>
-      bind_some (fun args flow ->
+      bind_result (fun args flow ->
           match args with
           | [] ->
             debug "Error during creation of a new instance@\n";
-            man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty_singleton
+            man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty
           | cls :: tl ->
             let c = fst @@ object_of_expr cls in
             man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
@@ -125,7 +125,7 @@ struct
                       | None, None ->
                          let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
                         man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
-                        Eval.empty_singleton
+                        Eval.empty
                     )
                   range mro_ptype flow
               )
@@ -204,7 +204,7 @@ struct
                    | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
                    | _ -> assert false) in
                 man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
-                Eval.empty_singleton)
+                Eval.empty)
               )
             range mro flow
         )

@@ -62,7 +62,7 @@ struct
 
   let scalar = Semantic "C/Scalar"
   let numeric = Semantic "U/Numeric"
-  
+
   let alarms = []
 
   (** {2 Auxiliary variables} *)
@@ -178,7 +178,7 @@ struct
     | P_null
     | P_invalid
     | P_block ({ base_valid = false }, _, _) ->
-      Cases.empty_singleton flow
+      Cases.empty flow
 
     | P_block (base, offset, mode) ->
       Cases.singleton (Some (base, offset, mode)) flow
@@ -187,6 +187,17 @@ struct
       Cases.singleton None flow
 
     | P_fun _ -> assert false
+
+
+  let rec is_scalar_base base =
+    match base with
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+      is_scalar_base base
+
+    | { base_kind = Var v; base_valid = true } -> is_c_scalar_type v.vtyp
+
+    | _ -> false
+
 
   (** Predicate defining interesting bases for which the domain will
       track the sentinel position.
@@ -353,7 +364,7 @@ struct
         (* FIXME: check if sentinel exists *)
         man.exec ~route:scalar (mk_fold_var sentinel1 sentinel2 range) flow
 
-  
+
   (** Forget the value of auxiliary variables of a base *)
   let forget e range man flow =
     let ptr = mk_c_address_of e range in
@@ -524,6 +535,7 @@ struct
     match bo with
     | None -> Post.return flow
     | Some (base,offset,mode) ->
+      if is_scalar_base base then Cases.not_handled flow else
       if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
         Post.return flow
       else
@@ -588,9 +600,8 @@ struct
     assume ~route:numeric
       (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
       ~fthen:(fun flow ->
-          if not (is_interesting_base base)
-          then Eval.singleton (mk_top typ range) flow
-
+          if is_scalar_base base then Cases.not_handled flow else
+          if not (is_interesting_base base) then Eval.singleton (mk_top typ range) flow
           else
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
@@ -638,7 +649,7 @@ struct
         )
       ~felse:(fun flow ->
           (* Unsafe case *)
-          Eval.empty_singleton flow
+          Eval.empty flow
         ) man flow
 
 
@@ -650,6 +661,7 @@ struct
     match bo with
     | None -> Eval.singleton (mk_top ctype range) flow
     | Some (base,offset,mode) ->
+      if is_scalar_base base then Cases.not_handled flow else
       if is_interesting_base base && is_c_pointer_type ctype
       then
         man.eval ~route:scalar offset flow >>$ fun offset flow ->

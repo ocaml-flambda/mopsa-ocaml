@@ -108,3 +108,22 @@ int max(int x, int y) {
 void test_nested_call() {
   _mopsa_assert(max(1, max(2, 3)) == 3);
 }
+
+
+/* Test of a call with a previous return */
+/* ************************************** */
+
+int ff() {
+  if (_mopsa_rand_int()) {
+    return 1;
+  }
+  int x = max(2,3);
+  return x;
+}
+
+void test_call_with_previous_return() {
+  int a;
+  a = ff();
+  _mopsa_assert_exists(a == 1);
+  _mopsa_assert_exists(a == 3);
+}

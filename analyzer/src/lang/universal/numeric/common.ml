@@ -194,7 +194,7 @@ let eval_num_cond cond man flow : bool option =
   match interval_of_num_expr cond man flow with
   | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
   | _ -> None
-  
+
 
 (** Optimized assume function that uses intervals to check a
     condition or falls back to classic assume *)
@@ -204,3 +204,41 @@ let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
   | Some true  -> fthen flow
   | Some false -> felse flow
   | None       -> assume cond ~fthen ~felse man ~route flow
+
+
+(** {2 Widening thresholds} *)
+(** *********************** *)
+
+open Framework.Combiners.Value.Nonrel
+
+module K = GenContextKey
+    (struct
+      type 'a t = SetExt.ZSet.t
+      let print pp fmt s =
+        Format.fprintf fmt "widening thresholds: @[%a@]"
+          (SetExt.ZSet.fprint
+             SetExtSig.{
+               print_empty = "∅";
+               print_begin = "{";
+               print_sep = ", ";
+               print_end = "}";
+             }
+             Z.pp_print
+          ) s
+    end)
+
+(** Key for accessing widening thresholds *)
+let widening_thresholds_ctx_key = K.key
+
+(** Add a constant to the widening thresholds of a variable *)
+let add_widening_threshold var n ctx =
+  let thresholds =
+    try find_var_ctx var widening_thresholds_ctx_key ctx
+    with Not_found -> SetExt.ZSet.empty
+  in
+  add_var_ctx var widening_thresholds_ctx_key
+    (SetExt.ZSet.add n thresholds) ctx
+
+(** Remove all widening thresholds of a variable *)
+let remove_widening_thresholds var ctx =
+  remove_var_ctx var widening_thresholds_ctx_key ctx

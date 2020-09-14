@@ -83,7 +83,7 @@ module Domain =
                                 ~felse:(fun flow ->
                                   let msg = Format.asprintf "float() argument must be a string or a number, not '%a'" pp_expr el in
                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                                    Eval.empty_singleton)
+                                    Eval.empty)
                                 man flow)
                           man flow
                       )
@@ -95,7 +95,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
         when is_compare_op_fun "float" f ->
         bind_list [e1; e2] (man.eval  ) flow |>
-        bind_some (fun el flow ->
+        bind_result (fun el flow ->
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             assume (mk_py_isinstance_builtin e1 "float" range) man flow
               ~fthen:(fun flow ->
@@ -130,7 +130,7 @@ module Domain =
                 )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
-                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty_singleton)
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
           )
         |>  OptionExt.return
 
@@ -138,7 +138,7 @@ module Domain =
            when is_arith_binop_fun "float" f ->
          (* FIXME: negative powers, 0 ** -1 *)
          bind_list [e1; e2] (man.eval  ) flow |>
-           bind_some (fun el flow ->
+           bind_result (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
                assume
                  (mk_py_isinstance_builtin e1 "float" range) man flow
@@ -155,7 +155,7 @@ module Domain =
                          assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py (Some (Float F_DOUBLE))) range) range)
                            man flow
                            ~fthen:(fun flow ->
-                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty_singleton
+                             man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty
                            )
                            ~felse:res
                        else
@@ -177,7 +177,7 @@ module Domain =
                                    assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py (Some (Float F_DOUBLE))) range) range)
                                      man flow
                                      ~fthen:(fun flow ->
-                                       man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty_singleton
+                                       man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty
                                      )
                                      ~felse:res
                                  else res flow
@@ -191,7 +191,7 @@ module Domain =
                  ~felse:(fun false_flow ->
                    let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
                    man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                   Eval.empty_singleton)
+                   Eval.empty)
              )
          |>  OptionExt.return
 

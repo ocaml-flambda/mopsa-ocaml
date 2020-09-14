@@ -57,17 +57,17 @@ sig
 
   val is_top : 'a lattice -> 'a t -> bool
 
-  val subset : 'a lattice -> uctx -> 'a t -> 'a t -> bool
+  val subset : 'a lattice -> 'a ctx -> 'a t -> 'a t -> bool
 
-  val join : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
+  val join : 'a lattice -> 'a ctx -> 'a t -> 'a t -> 'a t
 
-  val join_list : 'a lattice -> uctx -> 'a t list -> 'a t
+  val join_list : 'a lattice -> 'a ctx -> 'a t list -> 'a t
 
-  val meet : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
+  val meet : 'a lattice -> 'a ctx -> 'a t -> 'a t -> 'a t
 
-  val meet_list : 'a lattice -> uctx -> 'a t list -> 'a t
+  val meet_list : 'a lattice -> 'a ctx -> 'a t list -> 'a t
 
-  val widen : 'a lattice -> uctx -> 'a t -> 'a t -> 'a t
+  val widen : 'a lattice -> 'a ctx -> 'a t -> 'a t -> 'a t
 
   val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 

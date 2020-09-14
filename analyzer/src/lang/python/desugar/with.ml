@@ -45,8 +45,8 @@ module Domain =
          let srange = stmt.srange in
          let erange = context.erange in
          (* Evaluate the context *)
-         man.eval context flow |>
-         bind_some_opt @@ fun econtext flow ->
+         man.eval context flow >>$?
+         fun econtext flow ->
 
          (* Enter the context *)
          man.eval (mk_py_type econtext econtext.erange) flow >>$? fun cls flow ->

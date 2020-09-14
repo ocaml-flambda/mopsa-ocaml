@@ -176,8 +176,8 @@ struct
                    let var_els = var_of_eobj set_eobj in
                    let els = man.eval (mk_var var_els ~mode:(Some WEAK) range) flow in
                    let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
-                   Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
+                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+                   Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
                  )
            )
        |> OptionExt.return
@@ -209,7 +209,7 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_set_of", _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
+      bind_result (fun eargs flow ->
           let set, set_v = match eargs with [d;e] -> d,e | _ -> assert false in
           assume (mk_py_isinstance_builtin set "set" range) man flow
             ~fthen:(fun flow ->

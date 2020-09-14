@@ -77,22 +77,22 @@ let check_instances ?(arguments_after_check=0) funname man flow range exprs inst
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-          Eval.empty_singleton
+          Eval.empty
     | e::es, i::is ->
       assume (Addr.mk_py_isinstance_builtin e i range) man flow
         ~fthen:(aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance of '%s', but found %a at argument #%d" funname i pp_expr e pos in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-            Eval.empty_singleton
+            Eval.empty
           )
     | [], _ ->
        let msg = Format.asprintf "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
        man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-         Eval.empty_singleton
+         Eval.empty
   in
   Cases.bind_list exprs man.eval flow |>
-  Cases.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
+  Cases.bind_result (fun exprs flow -> aux 1 exprs exprs instances flow)
 
 let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs instances processing =
   (* FIXME: error messages *)
@@ -105,7 +105,7 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-          Eval.empty_singleton
+          Eval.empty
     | e::es, i::is ->
       let mk_onecond = fun i -> Addr.mk_py_isinstance_builtin e i range in
       let cond = List.fold_left (fun acc el ->
@@ -120,15 +120,15 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
               pp_expr e
               pos in
             man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-              Eval.empty_singleton
+              Eval.empty
           )
     | _ ->
        let msg = Format.asprintf "%s: too few arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
       man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-      Eval.empty_singleton
+      Eval.empty
   in
   Cases.bind_list exprs man.eval flow |>
-  Cases.bind_some (fun exprs flow -> aux 1 exprs exprs instances flow)
+  Cases.bind_result (fun exprs flow -> aux 1 exprs exprs instances flow)
 
 let strip_object (e:expr) =
   let ekind = match ekind e with
@@ -148,7 +148,7 @@ let new_wrapper man range flow newcls argcls ~fthennew =
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s.__new__(%a): %a is not a subtype of int" newcls pp_expr argcls pp_expr ecls in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
-            Eval.empty_singleton)
+            Eval.empty)
     )
   |> OptionExt.return
 

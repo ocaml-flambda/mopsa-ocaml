@@ -296,7 +296,7 @@ struct
                man flow
              ~fthen:(fun flow ->
                man.eval   (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range) flow |>
-                 (* add_cleaners is ugly, but a bind_some is incorrect
+                 (* add_cleaners is ugly, but a bind_result is incorrect
                     (the return of eval will be something like <<int
                     :: start + index * step>>. If we update index
                     afterwards, it will change the value in the return
@@ -305,7 +305,7 @@ struct
                )
              ~felse:(fun flow ->
                    man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>%
-                   Eval.empty_singleton
+                   Eval.empty
                )
         )
       |> OptionExt.return

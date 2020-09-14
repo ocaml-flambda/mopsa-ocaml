@@ -76,7 +76,7 @@ module Domain =
       in
       let stmt = mk_block [assign_iterable; stmt_itera] range in
       man.exec stmt flow >>%
-      exec_stmt_on_all_flows (mk_remove_var tmp range) man >>%
+      exec_cleaner (mk_remove_var tmp range) man >>%
       Post.return |>
       OptionExt.return
 

@@ -188,11 +188,11 @@ struct
       let buf = mk_var (find_variable ("_"^name^"_fun_buf") prog.c_globals) range in
       let nb_itv =
         let evl = man.eval nb flow in
-        Cases.fold_some
-          (fun nb flow acc ->
+        Cases.fold_result
+          (fun acc nb flow ->
              man.ask (mk_int_interval_query nb) flow |>
              I.join_bot acc
-          ) evl Bot.BOT
+          ) Bot.BOT evl
       in
       match nb_itv with
       | Bot.BOT ->
@@ -550,11 +550,11 @@ struct
       (* Get the direct value of an integer expression *)
       and int_value e =
         let evl = man.eval e flow in
-        let itv = Cases.fold_some
-            (fun ee flow acc ->
+        let itv = Cases.fold_result
+            (fun acc ee flow ->
               let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
               I.join_bot itv acc
-            ) evl Bot.BOT
+            ) Bot.BOT evl
         in
         match itv with
         | Bot.BOT -> None
@@ -564,11 +564,11 @@ struct
       (* Get the direct value of a float expression *)
       and float_value e =
         let evl = man.eval e flow in
-        let itv = Cases.fold_some
-            (fun ee flow acc ->
+        let itv = Cases.fold_result
+            (fun acc ee flow ->
                let itv = man.ask (mk_float_interval_query ee) flow in
                ItvUtils.FloatItvNan.join itv acc
-            ) evl ItvUtils.FloatItvNan.bot
+            ) ItvUtils.FloatItvNan.bot evl
         in
         if ItvUtils.FloatItvNan.is_bot itv then None
         else Some ItvUtils.FloatItvNan.(to_string dfl_fmt itv)
@@ -582,8 +582,8 @@ struct
       (* Get the direct value a pointer expression *)
       and pointer_value e =
         let evl = resolve_pointer e man flow in
-        let l = Cases.fold_some
-            (fun pt flow acc ->
+        let l = Cases.fold_result
+            (fun acc pt flow ->
                match pt with
                | P_null -> "NULL" :: acc
                | P_invalid -> "INVALID" :: acc
@@ -596,7 +596,7 @@ struct
                  end
                | P_fun f -> f.c_func_org_name :: acc
                | P_top -> "⊤" :: acc
-            ) evl []
+            ) [] evl
         in
         match l with
         | [x] -> Some x
@@ -653,8 +653,8 @@ struct
       and pointer_sub_value v e =
         if is_c_pointer_type e.etyp && is_c_void_type (under_pointer_type e.etyp) then None else
         let evl = resolve_pointer e man flow in
-        let l = Cases.fold_some
-            (fun pt flow acc ->
+        let l = Cases.fold_result
+            (fun acc pt flow ->
                match pt with
                | P_block (base,offset,_) ->
                  let vv = "*" ^ v in
@@ -663,7 +663,7 @@ struct
                    | x -> [Named_sub_value [vv,x]]
                  end
                | _ -> acc
-            ) evl []
+            ) [] evl
         in
         match l with
         | [] -> None

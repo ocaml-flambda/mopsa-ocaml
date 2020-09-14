@@ -36,7 +36,7 @@ struct
     if not @@ List.exists (fun e -> is_c_pointer_type e.etyp) results then None
     else
     match results with
-      | [] -> Some (Eval.empty_singleton flow)
+      | [] -> Some (Eval.empty flow)
       | [e] -> Some (Eval.singleton e flow)
       | hd::tl ->
         (* Iterate over the list of result expressions and accumulate the most precise one *)

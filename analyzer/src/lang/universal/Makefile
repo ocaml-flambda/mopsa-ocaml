@@ -36,7 +36,7 @@ lang.universal.numeric.relational = apron_manager binding apron_transformer \
 lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
 lang.universal.packing = static
 lang.universal.partitioning = merge_after_stmt
-lang.universal.hooks = logs progress profiler gctest
+lang.universal.hooks = logs progress function_profiler loop_profiler gctest constant_widening_thresholds
 
 
 # MOPSA

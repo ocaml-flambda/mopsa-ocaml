@@ -128,7 +128,7 @@ module Domain =
              | E_py_object _ -> false
              | _ -> true ->
                 man.eval iterable flow
-                |> bind_some
+                |> bind_result
                      (fun iterable flow -> man.exec {stmt with skind = S_py_for(target, iterable, body, orelse)} flow >>% Post.return)
                 |> OptionExt.return
 

@@ -608,19 +608,19 @@ struct
     match pt with
     | P_null ->
       raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_invalid ->
       raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block (base, offset, mode) ->
       Cases.singleton (Some (base, offset, mode)) flow
@@ -700,7 +700,7 @@ struct
               let region = Region (base, l, u ,step) in
               man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
               if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-              then Cases.empty_singleton flow
+              then Cases.empty flow
               else Cases.singleton region flow
             else
               (* few cases -> iterate fully over [l, u] *)
@@ -716,12 +716,12 @@ struct
                     Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
               in
               let evals = aux l in
-              Cases.join_list ~empty:(fun () -> Cases.empty_singleton flow) evals
+              Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
 
           )
         ~felse:(fun eflow ->
             let flow = raise_c_out_bound_alarm base size offset typ range man flow eflow in
-            Cases.empty_singleton flow
+            Cases.empty flow
           )
         man flow
 
@@ -1107,7 +1107,12 @@ struct
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
     let evl = man.eval offset flow in
-    Cases.apply_some (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow) Itv.join Itv.meet Itv.bottom evl
+    Cases.reduce_result
+      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
+      ~join:Itv.join
+      ~meet:Itv.meet
+      ~bottom:Itv.bottom
+      evl
 
 
   (** Forget the value of an lval *)

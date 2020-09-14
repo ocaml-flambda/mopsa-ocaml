@@ -212,7 +212,7 @@ struct
     | E_alloc_addr(addr_kind, STRONG) ->
       let pool = get_env T_cur man flow in
 
-      let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_unit_ctx flow) in
+      let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_callstack flow) in
 
       if not (Pool.mem recent_addr pool) then
         (* first allocation at this site: just add the address to the pool and return it *)
@@ -220,7 +220,7 @@ struct
         Eval.singleton (mk_addr recent_addr range) |>
         OptionExt.return
       else
-        let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
+        let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_callstack flow) in
         if not (Pool.mem old_addr pool) then
           (* old address not present: rename the existing recent as old and return the new recent *)
           map_env T_cur (Pool.add old_addr) man flow |>
@@ -235,7 +235,7 @@ struct
 
     | E_alloc_addr(addr_kind, WEAK) ->
       let pool = get_env T_cur man flow in
-      let weak_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_unit_ctx flow) in
+      let weak_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_callstack flow) in
 
       let flow' =
         if Pool.mem weak_addr pool then

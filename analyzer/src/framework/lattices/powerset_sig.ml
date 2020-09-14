@@ -38,7 +38,7 @@ sig
   val union : t -> t -> t
   val inter : t -> t -> t
   val diff : t -> t -> t
-  val widen : t -> t -> t
+  val widen : 'a Core.Context.ctx -> t -> t -> t
   val print : Format.formatter -> t -> unit
   val add : Set.elt -> t -> t
   val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a

@@ -63,7 +63,7 @@ module Domain =
               py_func_ret_var = mk_range_attr_var range ("ret "^lname) (T_py None);
             } in
         eval_alloc man (A_py_function fun_addr) range flow |>
-        bind_some (fun addr flow ->
+        bind_result (fun addr flow ->
             Eval.singleton (mk_py_object (addr, None) range) flow)
         |> OptionExt.return
 

@@ -39,19 +39,13 @@ end
 include Alarm
 module Alarm = Alarm
 
+include Context
 module Context = Context
-type uctx = Context.uctx
-type 'a ctx = 'a Context.ctx
 
 module Cases = Cases
 
+type 'r case = 'r Cases.case
 type ('a,'r) cases = ('a,'r) Cases.cases
-
-let bind_full = Cases.bind_full
-let (>>*) = Cases.(>>*)
-
-let bind_full_opt = Cases.bind_full_opt
-let (>>*?) = Cases.(>>*?)
 
 let bind = Cases.bind
 let (>>=) = Cases.(>>=)
@@ -59,10 +53,10 @@ let (>>=) = Cases.(>>=)
 let bind_opt = Cases.bind_opt
 let (>>=?) = Cases.(>>=?)
 
-let bind_some = Cases.bind_some
+let bind_result = Cases.bind_result
 let (>>$) = Cases.(>>$)
 
-let bind_some_opt = Cases.bind_some_opt
+let bind_result_opt = Cases.bind_result_opt
 let (>>$?) = Cases.(>>$?)
 
 let bind_list = Cases.bind_list

@@ -52,29 +52,27 @@ let () =
       );
     }
 
-let mk_addr_range addr_kind addr_mode range uctx =
+let mk_addr_range addr_kind addr_mode range cs =
   { addr_kind;
     addr_mode;
     addr_partitioning = G_range range }
 
-let mk_addr_stack_range addr_kind addr_mode range uctx =
-  let cs = Context.ufind Context.callstack_ctx_key uctx in
+let mk_addr_stack_range addr_kind addr_mode range cs =
   { addr_kind;
     addr_mode;
     addr_partitioning = G_stack_range (cs, range) }
 
-let mk_addr_stack addr_kind addr_mode range uctx =
-  let cs = Context.ufind Context.callstack_ctx_key uctx in
+let mk_addr_stack addr_kind addr_mode range cs =
   { addr_kind;
     addr_mode;
     addr_partitioning = G_stack cs }
 
-let mk_addr_all addr_kind addr_mode range uctx  =
+let mk_addr_all addr_kind addr_mode range cs  =
   { addr_kind; addr_mode; addr_partitioning = G_all }
 
-let mk_addr_chain : (addr_kind -> mode -> range -> Context.uctx -> addr) ref =
+let mk_addr_chain : (addr_kind -> mode -> range -> callstack -> addr) ref =
   ref (fun ak _ _ _ -> assert false)
-let mk_addr ak m r uctx = !mk_addr_chain ak m r uctx
+let mk_addr ak m r cs = !mk_addr_chain ak m r cs
 let register_mk_addr f = mk_addr_chain := f !mk_addr_chain
 
 let register_option (opt: string ref) (domain_name: string) (key: string) (descr: string) f =

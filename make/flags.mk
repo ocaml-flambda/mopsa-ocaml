@@ -37,7 +37,7 @@ define generate_ml_flags =
 
  OCAMLFLAGS_$(1) = \
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \
-	$$(INCLUDES_$(1)) $$(if $$(filter $$(PACK_$(1)),.), -c $(1) ,-for-pack $$(PACK_$(1)) -c $(1))
+	$$(INCLUDES_$(1)) $$(if $$(filter $$(PACK_$(1)),.), -c $(1) ,-for-pack $$(PACK_$(1)) -c $(1)) -linkall
  OCAMLFLAGS_$$(CMO_$(1)) = $$(OCAMLFLAGS_$(1))
  OCAMLFLAGS_$$(CMX_$(1)) = $$(OCAMLFLAGS_$(1))
 
@@ -66,7 +66,7 @@ define generate_mli_flags =
 
  OCAMLFLAGS_$(1) = \
 	$$(patsubst $$(SRC)%,$$(BUILD)%,$$(INCLUDES_$(1))) \
-	-c $(1)
+	-c $(1) -linkall
  OCAMLFLAGS_$$(CMI_$(1)) = $$(OCAMLFLAGS_$(1))
 
  ML_$$(BASE_$(1)).mli.dep = $(1)

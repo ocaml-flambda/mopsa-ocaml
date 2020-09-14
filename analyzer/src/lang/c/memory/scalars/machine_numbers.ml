@@ -182,7 +182,7 @@ struct
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
-      if Itv.is_bottom itv then Eval.empty_singleton flow else
+      if Itv.is_bottom itv then Eval.empty flow else
       if Itv.subset itv ritv then Eval.singleton nexp flow else
         let nexp' = wrap_expr nexp (rmin, rmax) range in
         let flow' =
@@ -226,7 +226,7 @@ struct
         )
       ~felse:(fun fflow ->
           let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
-          Eval.empty_singleton flow
+          Eval.empty flow
         )
       ~route:numeric man flow
 
@@ -251,7 +251,7 @@ struct
         )
       ~felse:(fun fflow ->
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
-          Eval.empty_singleton flow'
+          Eval.empty flow'
         )
       ~route:numeric man flow
 
@@ -501,14 +501,6 @@ struct
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
-      Post.bind (fun flow ->
-          if is_c_int_type v.etyp then
-            let vv = match ekind vv with E_var (vv,_) -> vv | _ -> assert false in
-            Framework.Combiners.Value.Nonrel.remove_var_bounds_flow vv flow |>
-            Post.return
-          else
-            Post.return flow
-        ) |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))

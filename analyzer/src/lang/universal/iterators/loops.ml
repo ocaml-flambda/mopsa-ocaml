@@ -205,7 +205,7 @@ struct
       let print fmt (cs, r) = Format.fprintf fmt "[%a, %a]" pp_range r pp_callstack cs end)
 
   (** Cache of the last fixpoints at loop heads *)
-  module LastFixpointCtx = Context.GenPolyKey(
+  module LastFixpointCtx = GenContextKey(
     struct
         type 'a t = 'a flow LoopHeadMap.t
         let print (l: Format.formatter -> 'a -> unit) fmt ctx = Format.fprintf fmt "Lfp cache context: %a"
@@ -220,7 +220,7 @@ struct
   (** Search the last fixpoint attached to a loop *)
   let search_last_fixpoint (srange, scs) man flow =
     try
-      let m = Context.find_poly LastFixpointCtx.key (Flow.get_ctx flow) in
+      let m = find_ctx LastFixpointCtx.key (Flow.get_ctx flow) in
       let mf = LoopHeadMap.filter (fun (cs, range) _ ->
                    compare_callstack cs scs = 0 &&
                      compare_range srange range = 0
@@ -236,7 +236,7 @@ struct
   let store_fixpoint man flow (range, cs) =
     let old_lfp_ctx =
       try
-        let r = Context.find_poly LastFixpointCtx.key (Flow.get_ctx flow) in
+        let r = find_ctx LastFixpointCtx.key (Flow.get_ctx flow) in
         if LoopHeadMap.cardinal r > 5 then
           LoopHeadMap.remove_min_binding r
         else r
@@ -249,7 +249,7 @@ struct
     in
     Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range pp_callstack cs (Flow.print man.lattice.print) stripped_flow;
     let lfp_ctx = LoopHeadMap.add (cs, range) stripped_flow old_lfp_ctx in
-    Flow.set_ctx (Context.add_poly LastFixpointCtx.key lfp_ctx (Flow.get_ctx flow)) flow
+    Flow.set_ctx (add_ctx LastFixpointCtx.key lfp_ctx (Flow.get_ctx flow)) flow
 
   let join_w_old_lfp man flow range =
     debug "searching in cache";
@@ -266,13 +266,13 @@ struct
   let merge_cur_and_continue man flow =
     let cur = Flow.get T_cur man.lattice flow in
     let cont = Flow.get T_continue man.lattice flow in
-    let ctx = Flow.get_unit_ctx flow in
+    let ctx = Flow.get_ctx flow in
     Flow.set T_cur (man.lattice.join ctx cur cont) man.lattice flow |>
     Flow.remove T_continue
 
 
   let init prog man flow =
-    Flow.map_ctx (Context.init_poly LastFixpointCtx.init) flow
+    Flow.map_ctx (add_ctx LastFixpointCtx.key LoopHeadMap.empty) flow
 
 
   let rec lfp count delay cond body man flow_init flow =
@@ -286,7 +286,7 @@ struct
     in
     let cur = Flow.get T_cur man.lattice flow in
     let cur' = Flow.get T_cur man.lattice flow' in
-    let is_sub = man.lattice.subset (Flow.get_unit_ctx flow') cur' cur in
+    let is_sub = man.lattice.subset (Flow.get_ctx flow') cur' cur in
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
@@ -303,7 +303,7 @@ struct
         Flow.join man.lattice flow_init |>
         Post.return
     else if delay = 0 then
-      let wcur = man.lattice.widen (Flow.get_unit_ctx flow') cur cur' in
+      let wcur = man.lattice.widen (Flow.get_ctx flow') cur cur' in
       let wflow = Flow.set T_cur wcur man.lattice flow' in
       let () = debug
           "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"

@@ -53,57 +53,82 @@ let () =
   }
 
 
+(** {2 Variable context} *)
+(** ******************** *)
+
+module K = GenContextKey(struct
+    type 'a t = 'a ctx VarMap.t
+    let print pp fmt m =
+      Format.fprintf fmt "variables contexts:@, @[<v>%a@]"
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt (v,c) -> Format.fprintf fmt "%a: %a" pp_var v (pp_ctx pp) c)
+        ) (VarMap.bindings m)
+  end)
+
+let var_ctx_key = K.key
+
+let add_var_ctx var k v ctx =
+  let map = try find_ctx var_ctx_key ctx with Not_found -> VarMap.empty in
+  let vctx = try VarMap.find var map with Not_found -> empty_ctx in
+  add_ctx var_ctx_key (VarMap.add var (add_ctx k v vctx) map) ctx
+
+let find_var_ctx_opt var k ctx =
+  match find_ctx_opt var_ctx_key ctx with
+  | None     -> None
+  | Some map ->
+    match VarMap.find_opt var map with
+    | None      -> None
+    | Some vctx -> find_ctx_opt k vctx
+
+let find_var_ctx var k ctx =
+  match find_var_ctx_opt var k ctx with
+  | None   -> raise Not_found
+  | Some v -> v
+
+let remove_var_ctx var k ctx =
+  try
+    let map = find_ctx var_ctx_key ctx in
+    let vctx = VarMap.find var map in
+    add_ctx var_ctx_key (VarMap.add var (remove_ctx k vctx) map) ctx
+  with Not_found ->
+    ctx
+
+
 (** {2 Variable bounds} *)
 (** ******************* *)
 
-(** Context for saving invariants of variables bounds *)
-let var_bounds_ctx =
-  let module K = Context.GenUnitKey(struct
-      type t = constant VarMap.t
-      let print fmt m =
-        Format.fprintf fmt "variables bounds: %a"
-          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-             (fun fmt (v,b) -> Format.fprintf fmt "%a: %a" pp_var v pp_constant b)
-          ) (VarMap.bindings m)
-    end)
-  in
-  K.key
+module VarBoundsKey = GenContextKey(struct
+    type 'a t = constant
+    let print pp fmt c =
+      Format.fprintf fmt "bounds: %a" pp_constant c
+  end)
 
+(** Context for saving the bounds of a variable *)
+let var_bounds_ctx = VarBoundsKey.key
 
 (** Add the bounds of a variable to context *)
-let add_var_bounds_ctx v b uctx =
-  let m = try Context.ufind var_bounds_ctx uctx with Not_found -> VarMap.empty in
-  Context.uadd var_bounds_ctx (VarMap.add v b m) uctx
-
+let add_var_bounds_ctx v b ctx =
+  add_var_ctx v var_bounds_ctx b ctx
 
 (** Add the bounds of a variable to flow *)
 let add_var_bounds_flow v b flow =
-  let ctx = add_var_bounds_ctx v b (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
-
+  let ctx = add_var_bounds_ctx v b (Flow.get_ctx flow) in
+  Flow.set_ctx ctx flow
 
 (** Remove the bounds of a variable from context *)
 let remove_var_bounds_ctx v ctx =
-  try
-    let m = Context.ufind var_bounds_ctx ctx in
-    let mm = VarMap.remove v m in
-    Context.uadd var_bounds_ctx mm ctx
-  with Not_found -> ctx
-
+  remove_var_ctx v var_bounds_ctx ctx
 
 (** Remove the bounds of a variable from flow *)
 let remove_var_bounds_flow v flow =
-  let ctx = remove_var_bounds_ctx v (Flow.get_unit_ctx flow) in
-  Flow.set_unit_ctx ctx flow
+  let ctx = remove_var_bounds_ctx v (Flow.get_ctx flow) in
+  Flow.set_ctx ctx flow
 
 
 (** Find the bounds of a variable in context *)
-let find_var_bounds_ctx_opt v uctx =
-  try
-    let m = Context.ufind var_bounds_ctx uctx in
-    try Some (VarMap.find v m)
-    with Not_found -> None
-  with Not_found -> None
+let find_var_bounds_ctx_opt v ctx =
+  find_var_ctx_opt v var_bounds_ctx ctx
 
 
 (** {2 Non-relational domain} *)
@@ -126,40 +151,6 @@ struct
 
   let id = D_nonrel (module Value)
 
-  let widen uctx a1 a2 =
-    let open Bot_top in
-    if a1 == a2 then a1 else
-    match a1, a2 with
-      | BOT, x | x, BOT -> x
-      | TOP, x | x, TOP -> TOP
-      | Nbt m1, Nbt m2 ->
-        Nbt (
-          MapExtPoly.map2zo
-            (fun _ v1 -> v1)
-            (fun _ v2 -> v2)
-            (fun var v1 v2 ->
-               let w = Value.widen v1 v2 in
-               (* In order to apply the bounds constraints of variable [var] on
-                  result [w], we need to ensure that both [v1] and [v2] are
-                  within these bounds. Otherwise, applying directly the
-                  constraints makes the widening unsound (the operands are
-                  not included in the result).
-               *)
-               match find_var_bounds_ctx_opt var uctx with
-               | None -> w
-               | Some bounds ->
-                 match Value.constant var.vtyp bounds with
-                 | None -> w
-                 | Some vv ->
-                   if Value.subset v1 vv && Value.subset v2 vv
-                   then Value.meet w vv
-                   else w
-            )
-            m1 m2
-        )
-
-
-
   let name = "framework.abstraction.combiners.value.nonrel"
 
   let debug fmt = Debug.debug ~channel:name fmt
@@ -181,7 +172,7 @@ struct
 
 
   (* Constrain the value of a variable with its bounds *)
-  let add_bound_constraints ctx var v =
+  let meet_with_bound_constraints ctx var v =
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
@@ -189,9 +180,36 @@ struct
       | None    -> v
       | Some vv -> Value.meet v vv
 
+  let widen ctx a1 a2 =
+    let open Bot_top in
+    if a1 == a2 then a1 else
+      match a1, a2 with
+      | BOT, x | x, BOT -> x
+      | TOP, x | x, TOP -> TOP
+      | Nbt m1, Nbt m2 ->
+        Nbt (
+          MapExtPoly.map2zo
+            (fun _ v1 -> v1)
+            (fun _ v2 -> v2)
+            (fun var v1 v2 ->
+               let vctx =
+                 match find_ctx_opt var_ctx_key ctx with
+                 | None   -> empty_ctx
+                 | Some map ->
+                   match Core.Ast.Var.VarMap.find_opt var map with
+                   | None   -> empty_ctx
+                   | Some c -> c
+               in
+               let w = Value.widen vctx v1 v2 in
+               (* Apply the bounds constraints*)
+               meet_with_bound_constraints ctx var w
+            )
+            m1 m2
+        )
+
 
   let add ctx var v a =
-    let vv = add_bound_constraints ctx var v in
+    let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
 
 

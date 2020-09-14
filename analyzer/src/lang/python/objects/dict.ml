@@ -195,12 +195,12 @@ struct
            let var_k, var_v = extract_vars (List.hd args) in
 
            let keyerror_f = man.exec (Utils.mk_builtin_raise "KeyError" range) flow |> post_to_flow man in
-           let keyerror = Eval.empty_singleton keyerror_f in
+           let keyerror = Eval.empty keyerror_f in
 
            let flow = Flow.copy_ctx keyerror_f flow in
            let evals = man.eval   (mk_var var_v range) flow in
 
-           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (evals :: Cases.copy_ctx evals keyerror :: [])
+           Eval.join_list ~empty:(fun () -> Eval.empty flow) (evals :: Cases.copy_ctx evals keyerror :: [])
         )
       |> OptionExt.return
 
@@ -231,9 +231,9 @@ struct
 
            let flow = Flow.set_ctx (Cases.get_ctx eval_r) flow in
 
-           let empty = man.exec (Utils.mk_builtin_raise "KeyError" range) flow >>% Eval.empty_singleton in
+           let empty = man.exec (Utils.mk_builtin_raise "KeyError" range) flow >>% Eval.empty in
 
-           Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) ( empty ::  Cases.copy_ctx empty eval_r :: [])
+           Eval.join_list ~empty:(fun () -> Eval.empty flow) ( empty ::  Cases.copy_ctx empty eval_r :: [])
         )
       |> OptionExt.return
 
@@ -327,8 +327,8 @@ struct
                 let els = man.eval (mk_var var_k ~mode:(Some WEAK) range) flow in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
-                Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
+                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+                Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
               )
         )
       |> OptionExt.return
@@ -342,8 +342,8 @@ struct
                 let els = man.eval (mk_var var_v ~mode:(Some WEAK) range) flow in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
-                Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
+                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+                Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
               )
         )
       |> OptionExt.return
@@ -357,15 +357,15 @@ struct
                 let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
                                                          mk_var var_v ~mode:(Some WEAK) range]) range) flow in
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty_singleton in
-                Eval.join_list ~empty:(fun () -> Eval.empty_singleton flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
+                let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+                Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
               )
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_dict_of", _))}, _)}, args, []) ->
       bind_list args man.eval flow |>
-      bind_some (fun eargs flow ->
+      bind_result (fun eargs flow ->
           let dict, type_k, type_v = match eargs with [d;e;f] -> d,e,f | _ -> assert false in
           assume (mk_py_isinstance_builtin dict "dict" range) man flow
             ~fthen:(fun flow ->

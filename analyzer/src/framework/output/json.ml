@@ -131,6 +131,8 @@ let report ?(flow=None) man alarms time files out : unit =
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
+      "mopsa_version", `String Version.version;
+      "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
       "alarms", `List (render_alarms alarms);
       "warnings", `List (List.map render_warning (get_warnings ()));
@@ -153,6 +155,8 @@ let panic ~btrace exn files time out =
   let assoc =
     [ "success", `Bool false;
       "time", `Float time;
+      "mopsa_version", `String Version.version;
+      "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
       "exception", `String error;
       "backtrace", `String btrace; ]
@@ -182,6 +186,7 @@ let help (args:arg list) out =
               | ArgExt.Clear _ -> "clear"
               | ArgExt.Unit _ -> "unit"
               | ArgExt.Unit_delayed _ -> "unit"
+              | ArgExt.Unit_exit _ -> "unit"
               | ArgExt.String _ -> "string"
               | ArgExt.Set_string _ -> "string"
               | ArgExt.String_list _ -> "string list"

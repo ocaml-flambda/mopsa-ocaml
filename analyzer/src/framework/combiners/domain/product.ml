@@ -159,7 +159,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_unit_ctx flow) a b))
+           (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_ctx flow) a b))
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 end
@@ -183,9 +183,7 @@ struct
 
   (** Merge the conflicts of two flows using logs *)
   let merge_flows ~merge_alarms (man:('a,'t) man) pre (flow1,log1) (flow2,log2) =
-    let ctx = Context.get_most_recent (Flow.get_ctx flow1) (Flow.get_ctx flow2) |>
-              Context.get_unit
-    in
+    let ctx = most_recent_ctx (Flow.get_ctx flow1) (Flow.get_ctx flow2) in
     Flow.map2zo
       (fun _ a1 -> man.lattice.bottom)
       (fun _ a2 -> man.lattice.bottom)
@@ -213,53 +211,77 @@ struct
       2. When two domains change (independently) the state of a shared sub-abstraction.
       In this case, we use logs to merge the two diverging states.
   *)
-  let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option option list) cases =
-    let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option option list) cases =
+  let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option list) cases =
+    let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option list) cases =
       fun id man pointwise alarms ->
         match pointwise, id, alarms with
         (* Last domain returned no answer *)
         | [None], C_pair(_, s, _), _ ->
-          Cases.singleton [None] pre
+          Cases.return [None] pre
 
         (* Last domain returned an answer *)
         | [Some r], C_pair(_, s, _), _ ->
-          r >>= fun rr flow ->
-          Cases.singleton [Some rr] flow
+          r >>= fun case flow ->
+          begin match case with
+            | Result(res,_,_) -> Cases.return [Some res] flow
+            | Empty           -> Cases.empty flow
+            | NotHandled      -> Cases.return [None] flow
+          end
 
         (* One domain returned no answer *)
         | None :: tl, C_pair(_,s,pid), _::tlalarms ->
           aux pid (snd_pair_man man) tl tlalarms >>$ fun after flow ->
-          Cases.singleton (None :: after) flow
+          Cases.return (None :: after) flow
 
         (* One domain returned an answer.
            Here we need to merge this answer with the answers of the next domains *)
         | Some r :: tl, C_pair(_,s,pid), hdalarms::tlalarms ->
           (* Compute the answer of the next domains *)
-          aux pid (snd_pair_man man) tl tlalarms |>
-          Cases.bind_full @@ fun after after_flow after_log after_cleaners ->
-          r |> Cases.bind_full @@ fun rr flow log cleaners ->
-          let after = after |> OptionExt.none_to_exn in
-          (* Merge only when the next domains provided some answers *)
-          if after |> List.exists (function Some _ -> true | None -> false) then
-            (* Resolve the first conflict situation:
-               put the post-state of the current domain in the answer of the next domains *)
-            let fst_pair_man = fst_pair_man man in
-            let after_flow = Flow.set T_cur (
-                let cur = Flow.get T_cur man.lattice flow in
-                let after_cur = Flow.get T_cur man.lattice after_flow in
-                fst_pair_man.set (fst_pair_man.get cur) after_cur
-              ) man.lattice after_flow
-            in
-            (* Resolve the second conflict situation:
-               merge the post-states of any shared sub-abstraction *)
-            let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
-            let log = Log.meet_log log after_log in
-            let cleaners = Cases.concat_cleaners cleaners after_cleaners in
-            Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
-          else
-            (* Next domains returned no answer, so no merging *)
-            Cases.return (Some (Some rr :: after)) flow ~cleaners ~log
+          aux pid (snd_pair_man man) tl tlalarms >>= fun after_case after_flow ->
+          (* Compute the answer of this domain *)
+          r >>= fun case flow ->
+          (* Now combine the two answers *)
+          begin match case, after_case with
+            (* If at least one answer is empty, all the conjunction is empty *)
+            | Empty, _ | _, Empty ->
+              (* FIXME: we compute the union of alarms to remain
+                 sound. To be more precise, we need to know which
+                 alarms were raised by a given domain. 
+              *)
+              let alarms = AlarmSet.union (Flow.get_alarms flow) (Flow.get_alarms after_flow) in
+              let flow = Flow.set_alarms alarms flow in
+              let after_flow = Flow.set_alarms alarms flow in
+              Cases.empty (Flow.meet man.lattice flow after_flow)
 
+            (* NotHandled is transformed to None *)
+            | NotHandled, Result(after_res,_,_) ->
+              Cases.return (None :: after_res) after_flow
+
+            (* Both domains replied, so merge the results *)
+            | Result (res,log,cleaners), Result(after_res,after_log,after_cleaners) ->
+              (* Merge only when the next domains provided some answers *)
+              if after_res |> List.exists (function Some _ -> true | None -> false) then
+                (* Resolve the first conflict situation:
+                   put the post-state of the current domain in the answer of the next domains *)
+                let fst_pair_man = fst_pair_man man in
+                let after_flow = Flow.set T_cur (
+                    let cur = Flow.get T_cur man.lattice flow in
+                    let after_cur = Flow.get T_cur man.lattice after_flow in
+                    fst_pair_man.set (fst_pair_man.get cur) after_cur
+                  ) man.lattice after_flow
+                in
+                (* Resolve the second conflict situation:
+                   merge the post-states of any shared sub-abstraction *)
+                let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
+                let log = Log.meet_log log after_log in
+                let cleaners = StmtSet.union cleaners after_cleaners in
+                Cases.case (Result (Some res :: after_res, log, cleaners)) flow
+              else
+                (* Next domains returned no answer, so no merging *)
+                Cases.case (Result (Some res :: after_res, log, cleaners)) flow
+
+            | _ -> assert false
+          end
 
         | _ -> assert false
     in
@@ -268,13 +290,29 @@ struct
 
 
   (** Merge the conflicts emerging from the same domain.
-      This kind of conflicts arises when a same domain produces a conjunction of
-      post-states.  Since these conjunctions are from the same domain, there is
+      This kind of conflicts arises when the same domain produces a conjunction of
+      post-states. Since these conjunctions are from the same domain, there is
       no need to merge its local state; we just merge any shared sub-abstraction.
   *)
   let merge_intra_conflicts man pre (r:('a,'r) cases) : ('a,'r) cases =
-    Cases.map_fold_conjunctions (fun (flow1,log1) (flow2,log2) ->
-        merge_flows ~merge_alarms:AlarmSet.inter man pre (flow1,log1) (flow2,log2)
+    Cases.map_conjunction
+      (fun conj ->
+         let rec iter = function
+           | [] -> assert false
+           | [case,flow] -> Cases.get_case_log case, Cases.get_case_cleaners case, flow
+           | (case,flow)::tl ->
+             let log',cleaners',flow' = iter tl in
+             let log,cleaners = Cases.get_case_log case, Cases.get_case_cleaners case in
+             let flow'' = Flow.merge man.lattice ~merge_alarms:AlarmSet.inter pre (flow,log) (flow',log') in
+             meet_log log log', StmtSet.union cleaners cleaners', flow''
+         in
+         let log,cleaners,flow = iter conj in
+         List.map
+           (fun (case,_) ->
+              let case = Cases.set_case_log log case |>
+                         Cases.set_case_cleaners cleaners in
+              case,flow
+           ) conj
       ) r
 
 
@@ -299,7 +337,7 @@ struct
     match pointwise with
     | []               -> default
     | None::tl         -> get_pointwise_ctx ~default tl
-    | Some cases :: tl -> Context.get_most_recent
+    | Some cases :: tl -> most_recent_ctx
                             (Cases.get_ctx cases)
                             (get_pointwise_ctx ~default tl)
 
@@ -321,16 +359,49 @@ struct
     else None
 
 
-  (** Replace missing pointwise results by calling the successor domain *)
-  let add_missing_pointwise_results fsuccessor arg pointwise flow =
-    (* Call the successor domain only when there are missing results *)
-    if List.for_all (function Some _ -> true | None -> false) pointwise then
-      pointwise
-    else
-      let flow = Flow.set_ctx (get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow)) flow in
-      let res = fsuccessor arg flow in
-      List.map (function None -> Some res | x -> x) pointwise |>
-      set_pointwise_ctx (Cases.get_ctx res)
+  (** Replace missing pointwise results by calling the successor
+      domain. Missing results are functions returning [None] or
+      [NotHandled] cases. *)
+  let add_missing_pointwise_results fsuccessor arg pointwise man flow =
+    (* Separate handled and not-handled cases *)
+    let handled_pointwise, not_handled =
+      List.fold_left
+        (fun (acc1,acc2) -> function
+           | None   -> (None,true)::acc1,acc2
+           | Some r ->
+             let h,nh = Cases.partition (fun c _ -> match c with NotHandled -> false | _ -> true) r in
+             let acc1' = (h,(if nh = None then false else true))::acc1 in
+             let acc2' = OptionExt.neutral2 Cases.join nh acc2 in
+             acc1',acc2'
+        ) ([],None) pointwise
+    in
+    let handled_pointwise = List.rev handled_pointwise in
+    let not_handled =
+      if List.exists (function None -> true | _ -> false) pointwise
+      then
+        OptionExt.neutral2 Cases.join not_handled (Some (Cases.not_handled flow))
+      else
+        not_handled
+    in
+    match not_handled with
+    | None -> pointwise
+    | Some cases -> 
+      (* Merge all cases in one before calling successor domain *)
+      let successor_res =
+        Cases.remove_duplicates compare man.lattice cases >>= fun _ flow ->
+        fsuccessor arg flow
+      in
+      (* Put successor's result back in the pointwise results *)
+      let pointwise' =
+        List.map
+          (fun (r,has_not_handled_cases) ->
+             match r with
+             | None -> Some successor_res
+             | Some rr when not has_not_handled_cases -> Some rr
+             | Some rr -> Some (Cases.join rr successor_res)
+          ) handled_pointwise
+      in
+      set_pointwise_ctx (Cases.get_ctx successor_res) pointwise'
 
 
 
@@ -344,10 +415,8 @@ struct
 
 
   (** Simplify a pointwise post-state by changing lists of unit into unit *)
-  let simplify_pointwise_post (pointwise:('a,unit option option list) cases) : 'a post =
-    pointwise |> Cases.bind @@ fun r flow ->
-    let rr = r |> OptionExt.lift (fun rr -> ()) in
-    Cases.return rr flow
+  let simplify_pointwise_post (pointwise:('a,unit option list) cases) : 'a post =
+    Cases.map_result (fun _ -> ()) pointwise
 
 
   (** Apply reduction rules on a post-conditions *)
@@ -372,7 +441,7 @@ struct
     (fun stmt man flow ->
        apply_pointwise f stmt man flow |>
        OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise flow |>
+       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
        merge_inter_conflicts man flow |>
        simplify_pointwise_post |>
        merge_intra_conflicts man flow |>
@@ -389,18 +458,14 @@ struct
 
 
   (** Apply reduction rules on a pointwise evaluation *)
-  let reduce_pointwise_eval exp man input (pointwise:('a, expr option option list) cases) : 'a eval =
+  let reduce_pointwise_eval exp man input (pointwise:('a, expr option list) cases) : 'a eval =
     pointwise >>$ fun el flow ->
-    (* An empty result in a conjunction [el] makes the whole result empty *)
-    if List.exists (function Some None -> true | _ -> false) el then
-      Eval.empty_singleton flow
-    else
-    (* Otherwise, keep only cases with non-empty results and remove duplicates *)
-    let el' = List.filter (function Some (Some _) -> true | _ -> false) el |>
-              List.map (function Some (Some e) -> e | _ -> assert false) |>
+    (* Keep only cases with non-empty results and remove duplicates *)
+    let el' = List.filter (function Some _ -> true | _ -> false) el |>
+              List.map (function Some e -> e | _ -> assert false) |>
               List.sort_uniq compare_expr
     in
-    if el' = [] then Eval.empty_singleton flow
+    if el' = [] then Eval.empty flow
     else
       let rman = eval_reduction_man man in
       let rec iter = function
@@ -409,7 +474,7 @@ struct
              each conjunction.
              THE CHOICE IS ARBITRARY!
           *)
-          Eval.singleton (List.hd el') flow
+          Eval.return (List.hd el') flow
 
         | rule::tl ->
           let module R = (val rule : EVAL_REDUCTION) in
@@ -426,7 +491,7 @@ struct
     (fun exp man flow ->
        apply_pointwise f exp man flow |>
        OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise flow |>
+       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
        merge_inter_conflicts man flow |>
        reduce_pointwise_eval exp man flow |>
        Eval.remove_duplicates man.lattice |>

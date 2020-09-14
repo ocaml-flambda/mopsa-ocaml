@@ -99,7 +99,7 @@ module Domain =
       (* E⟦ e1 in e2 ⟧ *)
       | E_binop(O_py_in, e1, e2) ->
          bind_list [e1; e2] man.eval flow |>
-         bind_some_opt (fun el flow ->
+         bind_result_opt (fun el flow ->
              let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
 
              man.eval (mk_py_type e2 range) flow >>$
@@ -139,7 +139,7 @@ module Domain =
                                ~felse:(fun false_flow ->
                                  let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
                                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                                 Eval.empty_singleton
+                                 Eval.empty
                                )
                                man false_flow
                            )

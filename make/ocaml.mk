@@ -96,7 +96,8 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@echo -e "$(CMXMSG)	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND) ocamlopt -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@
 
-%.cmo:
+# ensure that cmx is compliled before cmo
+%.cmo: %.cmx
 	@mkdir -p $(@D)
 	@echo -e "$(CMOMSG)	$(ML_$@)"
 	$(QUIET)$(OCAMLFIND) ocamlc -package "$(PKGS)" $(OCAMLFLAGS) $(OCAMLFLAGS_$@) -o $@

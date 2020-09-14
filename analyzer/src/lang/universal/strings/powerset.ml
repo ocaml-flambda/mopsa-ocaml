@@ -186,8 +186,8 @@ struct
     match skind stmt with
     | S_assign (_, e) | S_remove e | S_add e | S_rename (e, _) | S_forget e | S_expand(e, _) | S_fold(e, _) | S_project (e::_) when etyp e = T_string ->
        let cur = get_env T_cur man flow in
-       let uctx = Flow.get_unit_ctx flow in
-       let ocur = Nonrel.exec stmt man uctx cur in
+       let ctx = Flow.get_ctx flow in
+       let ocur = Nonrel.exec stmt man ctx cur in
        Option.bind ocur (fun cur ->
            let flow = set_env T_cur cur man flow in
            OptionExt.return @@ Post.return flow
@@ -195,8 +195,8 @@ struct
 
     | S_assume e when etyp e = T_bool ->
        let cur = get_env T_cur man flow in
-       let uctx = Flow.get_unit_ctx flow in
-       let ocur = Nonrel.exec stmt man uctx cur in
+       let ctx = Flow.get_ctx flow in
+       let ocur = Nonrel.exec stmt man ctx cur in
        Option.bind ocur (fun cur ->
            let flow = set_env T_cur cur man flow in
            OptionExt.return @@ Post.return flow
@@ -272,17 +272,19 @@ struct
     match query with
     | Q_strings_powerset e ->
       man.eval e flow |>
-      Cases.apply
-        (fun oe flow ->
+      Cases.reduce_result
+        (fun e flow ->
            let cur = get_env T_cur man flow in
-           Nonrel.eval (OptionExt.none_to_exn oe) cur |> OptionExt.lift snd
-
-        ) (OptionExt.lift2 StringPower.join) (OptionExt.lift2 StringPower.meet)
+           Nonrel.eval e cur |> OptionExt.lift snd
+        )
+        ~join:(OptionExt.lift2 StringPower.join)
+        ~meet:(OptionExt.lift2 StringPower.meet)
+        ~bottom:(Some StringPower.bottom)
 
     | _ ->
-       let uctx = Flow.get_unit_ctx flow in
+       let ctx = Flow.get_ctx flow in
        let cur = get_env T_cur man flow in
-       Nonrel.ask query man uctx cur
+       Nonrel.ask query man ctx cur
 
 end
 

@@ -122,7 +122,7 @@ struct
         let opost = ExecCache.find (semantic,stmt,tmap,alarms) exec_cache in
         OptionExt.lift (fun post ->
             Cases.set_ctx (
-              Context.get_most_recent (Cases.get_ctx post) (Flow.get_ctx flow)
+              Context.most_recent_ctx (Cases.get_ctx post) (Flow.get_ctx flow)
             ) post
           ) opost
       with Not_found ->
@@ -155,7 +155,7 @@ struct
         let alarms = Flow.get_alarms flow in
         let evls = EvalCache.find (route,exp,tmap,alarms) eval_cache in
         OptionExt.lift (fun evl ->
-            let ctx = Context.get_most_recent (Cases.get_ctx evl) (Flow.get_ctx flow) in
+            let ctx = Context.most_recent_ctx (Cases.get_ctx evl) (Flow.get_ctx flow) in
             Cases.set_ctx ctx evl
           ) evls
       with Not_found ->

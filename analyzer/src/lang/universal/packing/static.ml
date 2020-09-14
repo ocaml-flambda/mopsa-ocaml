@@ -63,7 +63,7 @@ sig
   val init : program -> unit
   (** Initialization of the strategy *)
 
-  val packs_of_var : uctx -> var -> pack list
+  val packs_of_var : 'a ctx -> var -> pack list
   (** Return the packs containing a dimension (a variable) *)
 
 end

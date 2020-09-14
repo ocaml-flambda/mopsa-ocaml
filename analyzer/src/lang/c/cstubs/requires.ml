@@ -64,19 +64,19 @@ struct
     match pt with
     | P_null ->
       raise_c_null_deref_alarm ptr ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_invalid ->
       raise_c_invalid_deref_alarm ptr ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_use_after_free_alarm ptr r ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
       raise_c_dangling_deref_alarm ptr v r ~range man flow |>
-      Cases.empty_singleton
+      Cases.empty
 
     | P_top ->
       let cond = mk_stub_builtin_call VALID_PTR ptr ~etyp:u8 range in

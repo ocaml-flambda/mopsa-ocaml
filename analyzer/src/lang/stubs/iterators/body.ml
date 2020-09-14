@@ -262,11 +262,11 @@ struct
 
   let eval_quantified_formula cond_to_stmt f man flow =
     to_prenex_formula f man flow |>
-    Cases.apply_some
+    Cases.reduce_result
       (fun (quants,cond) flow -> eval_prenex_formula cond_to_stmt quants cond f.range man flow)
-      (Flow.join man.lattice)
-      (Flow.meet man.lattice)
-      (Flow.remove T_cur flow)
+      ~join:(Flow.join man.lattice)
+      ~meet:(Flow.meet man.lattice)
+      ~bottom:(Flow.remove T_cur flow)
 
   let rec eval_formula
       (cond_to_stmt: expr -> range -> stmt)
@@ -397,10 +397,11 @@ struct
           (fun acc (l,u) -> log_and acc (le l u assigns.range) assigns.range)
           (le l u assigns.range) tl
       in
-      assume_flow cond
-        ~fthen:(fun flow -> man.exec stmt flow |> post_to_flow man)
-        ~felse:(fun flow -> flow)
-        man flow
+      assume cond
+        ~fthen:(fun flow -> man.exec stmt flow)
+        ~felse:(fun flow -> Post.return flow)
+        man flow |>
+      post_to_flow man
 
 
 

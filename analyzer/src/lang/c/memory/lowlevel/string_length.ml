@@ -139,7 +139,7 @@ struct
     | P_null
     | P_invalid
     | P_block ({ base_valid = false }, _, _) ->
-      Cases.empty_singleton flow
+      Cases.empty flow
 
     | P_block (base, offset, mode) ->
       Cases.singleton (Some (base, offset, mode)) flow
@@ -157,6 +157,15 @@ struct
 
   let is_interesting_resource = function
     | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" | "arg" -> true
+    | _ -> false
+
+  let rec is_scalar_base base =
+    match base with
+    | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
+      is_scalar_base base
+
+    | { base_kind = Var v; base_valid = true } -> is_c_scalar_type v.vtyp
+
     | _ -> false
 
   let rec is_interesting_base base =
@@ -201,6 +210,9 @@ struct
 
   (** 𝕊⟦ add(base); ⟧ *)
   let exec_add_base base range man flow =
+    (* For scalar variables, return NotHandled to let the underlying C/Scalar semantics handle them *)
+    if is_scalar_base base then Cases.not_handled flow else
+    (* For non-scalar bases but yet not interesting, we just do nothing *)
     if not (is_interesting_base base) then Post.return flow
     else match base.base_kind with
       | String _ ->
@@ -222,6 +234,7 @@ struct
 
   (** 𝕊⟦ remove(base); ⟧ *)
   let exec_remove_base base range man flow =
+    if is_scalar_base base then Cases.not_handled flow else
     if not (is_interesting_base base) then Post.return flow
     else match base.base_kind with
       | String _ ->
@@ -234,6 +247,7 @@ struct
 
   (** 𝕊⟦ rename(base1,base2); ⟧ *)
   let exec_rename_base base1 base2 range man flow =
+    if is_scalar_base base1 then Cases.not_handled flow else
     if not (is_interesting_base base1) then Post.return flow else
     if not (is_interesting_base base2) then panic_at range "rename %a -> %a not supported" pp_base base1 pp_base base2
     else
@@ -244,6 +258,7 @@ struct
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
   let exec_expand_base base1 bases range man flow =
+    if is_scalar_base base1 then Cases.not_handled flow else
     if not (is_interesting_base base1) then
       List.fold_left
         (fun acc b -> Post.bind (exec_add_base b range man) acc)
@@ -265,6 +280,7 @@ struct
 
   (** Fold the length variable of a base *)
   let exec_fold_bases base bases range man flow =
+    if is_scalar_base base then Cases.not_handled flow else
     if not (is_interesting_base base) then
       Post.return flow
     else
@@ -292,6 +308,7 @@ struct
     match bo with
     | None -> Post.return flow
     | Some (base,boffset,mode) ->
+      if is_scalar_base base then Cases.not_handled flow else
       if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
         Post.return flow
       else
@@ -312,6 +329,7 @@ struct
     match bo with
     | None -> Post.return flow
     | Some (base,boffset,mode) ->
+    if is_scalar_base base then Cases.not_handled flow else
     if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
       Post.return flow
     else
@@ -330,6 +348,7 @@ struct
   (** 𝕊⟦ type v; ⟧ *)
   let exec_declare_variable v scope range man flow =
     let base = mk_var_base v in
+    if is_scalar_base base then Cases.not_handled flow else
     if not (is_interesting_base base)
     then Post.return flow
     else exec_add_base base range man flow
@@ -342,6 +361,9 @@ struct
     match bo with
     | None -> Post.return flow
     | Some (base,boffset,mode) ->
+      (* Scalar variables are handled by C/Scalar semantics *)
+      if is_scalar_base base then Cases.not_handled flow else
+      (* For non-interesting bases, we do nothing since their content is always evaluated to ⊤ *)
       if not (is_interesting_base base) || not (is_c_int_type lval.etyp) then
         Post.return flow
       else
@@ -454,7 +476,6 @@ struct
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
-
   (** 𝔼⟦ *(str + offset) ⟧ *)
   let eval_string_literal_char str t boffset range man flow =
     let char_size = sizeof_type t in
@@ -473,7 +494,7 @@ struct
            (* itv should be included in [0,length-1] *)
            let max = I.of_z Z.zero (Z.pred length) in
            begin match I.meet_bot itv (Bot.Nb max) with
-             | Bot.BOT -> Eval.empty_singleton flow
+             | Bot.BOT -> Eval.empty flow
              | Bot.Nb itv' ->
                (* Get the interval of possible chars *)
                let indexes = I.to_list itv' in
@@ -505,8 +526,9 @@ struct
     match bo with
     | None -> man.eval (mk_top ctype range) flow
     | Some (base,offset,mode) ->
+      if is_scalar_base base then Eval.not_handled flow else
       if not (is_interesting_base base) || not (is_c_int_type ctype) then
-        man.eval (mk_top ctype range) flow
+         man.eval (mk_top ctype range) flow
       else
         match base.base_kind with
         | String (str,_,t) when equal_int_types t ctype ->
@@ -540,7 +562,7 @@ struct
       (* for wide characters, we only know that offset < len(str) *)
       man.exec (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
 
-  
+
   let assume_ne base boffset mode etype n range man flow =
     (* FIXME TODO *)
     Post.return flow
@@ -589,7 +611,7 @@ struct
     let char_size = sizeof_type ctype in
     if char_size <> Z.of_int elem_size then Post.return flow else
     (** Get symbolic bounds of the offset *)
-    let quants = [(FORALL,i,S_interval(a,b))] in  
+    let quants = [(FORALL,i,S_interval(a,b))] in
     match Common.Quantified_offset.bound_div boffset char_size quants man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
@@ -617,11 +639,11 @@ struct
       (fun flow ->
          match c_expr_to_z n with
          | Some n when Z.(n = zero) -> Post.return flow
-         | Some n -> Cases.empty_singleton flow
+         | Some n -> Cases.empty flow
          | None ->
            assume (eq n zero range)
              ~fthen:(fun flow -> Post.return flow)
-             ~felse:(fun flow -> Cases.empty_singleton flow)
+             ~felse:(fun flow -> Cases.empty flow)
              man flow
       );
 
@@ -630,9 +652,9 @@ struct
       *)
       [ le min (pred length range) range;
         le length max range ],
-      (fun flow -> Cases.empty_singleton flow);
+      (fun flow -> Cases.empty flow);
 
-      (*     min       max    length   
+      (*     min       max    length
          |----|nnnnnnnnn|-------0------>
       *)
       [ le max (pred length range) range ],
@@ -646,7 +668,7 @@ struct
   let assume_forall_ne_zero i a b base boffset ctype mode range man flow =
     (** Get symbolic bounds of the offset *)
     let char_size = sizeof_type ctype in
-    let quants = [(FORALL,i,S_interval(a,b))] in  
+    let quants = [(FORALL,i,S_interval(a,b))] in
     match Common.Quantified_offset.bound_div boffset char_size quants man flow with
     | Top.TOP -> Post.return flow
     | Top.Nt (min,max) ->
@@ -678,7 +700,7 @@ struct
            |------|------0--------|------>
         *)
         [ mk_in length min max range ],
-        (fun flow -> Cases.empty_singleton flow);
+        (fun flow -> Cases.empty flow);
 
         (*       length   min    max
            |------0--------|------|------>
@@ -700,7 +722,7 @@ struct
         ~fthen:(fun flow -> assume_forall_ne_zero i a b base boffset ctype mode range man flow)
         ~felse:(fun flow -> Post.return flow)
         man flow
-    
+
 
   (** 𝕊⟦ ∀i ∈ [a,b] :*(p + i) == *(q + i) ⟧ *)
   (* FIXME: this transfer function is sound only when the offset is an
@@ -711,7 +733,7 @@ struct
     else
 
       (* Get symbolic bounds of quantified offsets *)
-      let quants = [(FORALL,i,S_interval(a,b))] in  
+      let quants = [(FORALL,i,S_interval(a,b))] in
       match
         Common.Quantified_offset.bound_div boffset1 (Z.of_int elem_size) quants man flow,
         Common.Quantified_offset.bound_div boffset2 (Z.of_int elem_size) quants man flow
@@ -755,10 +777,10 @@ struct
             (fun flow -> Post.return flow);
 
             [ log_and before1 cover2 range ],
-            (fun flow -> Cases.empty_singleton flow);
+            (fun flow -> Cases.empty flow);
 
             [ log_and cover1 before2 range ],
-            (fun flow -> Cases.empty_singleton flow);
+            (fun flow -> Cases.empty flow);
 
             [ log_and cover1 cover2 range ],
             (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:numeric flow);

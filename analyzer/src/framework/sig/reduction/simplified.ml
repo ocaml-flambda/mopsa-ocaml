@@ -29,7 +29,7 @@ type ('a,'b) simplified_reduction_man = {
   set_env : 't. 't id -> 't -> 'b -> 'b;
   get_value : 't. 't id -> var -> 'b -> 't;
   set_value : 't. 't id -> var -> 't -> 'b -> 'b;
-  ask : 'r. ('a,'r) query -> uctx -> 'b -> 'r;
+  ask : 'r. ('a,'r) query -> 'a ctx -> 'b -> 'r;
 }
 
 
@@ -38,7 +38,7 @@ type ('a,'b) simplified_reduction_man = {
 module type SIMPLIFIED_REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> ('a,'b) simplified_reduction_man -> uctx -> 'b -> 'b -> 'b
+  val reduce : stmt -> ('a,'b) simplified_reduction_man -> 'a ctx -> 'b -> 'b -> 'b
 end
 
 

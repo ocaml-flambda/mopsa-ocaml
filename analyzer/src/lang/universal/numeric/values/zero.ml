@@ -76,7 +76,7 @@ struct
     | NON_ZERO, NON_ZERO -> NON_ZERO
     | ZERO, NON_ZERO | NON_ZERO, ZERO -> BOT
 
-  let widen (a1:t) (a2:t) : t = join a1 a2
+  let widen ctx (a1:t) (a2:t) : t = join a1 a2
 
   let print fmt (a:t) =
     match a with

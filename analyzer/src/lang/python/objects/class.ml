@@ -88,7 +88,7 @@ struct
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                              Eval.empty_singleton
+                              Eval.empty
                             )
                             man flow
                   ))
@@ -107,7 +107,7 @@ struct
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
       bind_list cls.py_cls_bases (man.eval  ) flow |>
-      bind_some (fun bases flow ->
+      bind_result (fun bases flow ->
           let bases' =
             match bases with
             | [] -> [find_builtin "object"]
@@ -134,7 +134,7 @@ struct
                 mro;
 
               eval_alloc man (A_py_class (C_user cls, mro)) stmt.srange flow |>
-              bind_some (fun addr flow ->
+              bind_result (fun addr flow ->
                   let obj = (addr, None) in
                   man.exec (mk_assign (mk_var cls.py_cls_var range) (mk_py_object obj range) range) flow >>% fun flow ->
                   debug "Body of class is %a@\n" pp_stmt cls.py_cls_body;

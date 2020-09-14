@@ -126,6 +126,28 @@ struct
     | _ -> assert false
 
 
+  (** Evaluate arguments containing function calls *)
+  let rec eval_calls_in_args args man flow =
+    match args with
+    | [] -> Cases.singleton [] flow
+    | arg::tl ->
+      if Visitor.exists_expr
+          (fun e -> match ekind e with E_call _ -> true | _ -> false)
+          (fun s -> false) arg
+      then
+        (* Evaluating arguments may result in disjunctions.
+           To avoid calling the function several times, we assign the call
+           to a temporary variable *)
+        let tmp = mk_range_attr_var arg.erange "arg" arg.etyp in
+        man.exec (mk_add_var tmp arg.erange) flow >>%
+        man.exec (mk_assign (mk_var tmp arg.erange) arg arg.erange) >>%
+        eval_calls_in_args tl man >>$ fun tl flow ->
+        Cases.singleton (mk_var tmp arg.erange :: tl) ~cleaners:[mk_remove_var tmp arg.erange] flow
+      else
+        eval_calls_in_args tl man flow >>$ fun tl flow ->
+        Cases.singleton (arg::tl) flow
+
+
   (** Eval a function call *)
   let eval_call fundec args range man flow =
     if fundec.c_func_org_name = "__builtin_alloca" then
@@ -142,8 +164,8 @@ struct
       let caller_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur empty man flow in
       let ret =
-        (* Evaluate arguments *)
-        bind_list args man.eval flow >>$ fun args flow ->
+        (* Process arguments by evaluating function calls *)
+        eval_calls_in_args args man flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
         if is_recursive_call fundec flow then (
           Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
@@ -155,6 +177,7 @@ struct
         else
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+           debug "call function %a" (Flow.print man.lattice.print) flow;
           let open Universal.Ast in
           let ret_var = mktmp ~typ:fundec.c_func_return () in
           let fundec' = {

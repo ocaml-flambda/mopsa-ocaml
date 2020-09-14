@@ -49,7 +49,7 @@ struct
   let init prog man (flow: 'a flow) =
     Flow.set_ctx (
       Flow.get_ctx flow |>
-      Context.add_unit Context.callstack_ctx_key empty_callstack
+      add_ctx Context.callstack_ctx_key empty_callstack
     ) flow
 
   (** Computation of post-conditions *)
@@ -59,7 +59,7 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let ret = Context.find_unit return_key (Flow.get_ctx flow) in
+      let ret = find_ctx return_key (Flow.get_ctx flow) in
       man.exec (mk_add_var ret range) flow >>%? fun flow ->
       man.exec (mk_assign (mk_var ret range) e range) flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
@@ -85,7 +85,7 @@ struct
     | E_call({ekind = E_function (User_defined f)}, args) ->
 
       if man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
-      then Cases.empty_singleton flow |> OptionExt.return
+      then Cases.empty flow |> OptionExt.return
       else
 
       let params, locals, body, post = init_fun_params f args range man flow in
@@ -96,7 +96,7 @@ struct
       Some (
         let post' = post >>% inline f params locals body ret range man in
         (* FIXME: we keep logs intra-procedural for the moment *)
-        Cases.clear_log post'
+        Cases.set_log empty_log post'
       )
 
     | _ -> None

@@ -159,7 +159,7 @@ struct
 
 
   exception UnsupportedExpression (* Raised when an expression is not part of the concrete semantics *)
-  exception UnsupportedOperator   (* Raised when an operator is not implemented in Apron *)
+  exception ImpreciseExpression   (* Raised when Apron doesn't have a precise transfer function for the expression *)
 
   let binop_to_apron = function
     | O_plus  -> Apron.Texpr1.Add
@@ -167,7 +167,7 @@ struct
     | O_mult  -> Apron.Texpr1.Mul
     | O_div   -> Apron.Texpr1.Div
     | O_mod   -> Apron.Texpr1.Mod
-    | _ -> raise UnsupportedOperator
+    | _ -> raise ImpreciseExpression
 
   let typ_to_apron = function
     | T_bool -> Apron.Texpr1.Int
@@ -199,27 +199,11 @@ struct
 
   let rec exp_to_apron exp (abs,bnd) l =
     match ekind exp with
-    | E_constant C_top T_bool ->
-      Apron.Texpr1.Cst (Apron.Coeff.Interval (Apron.Interval.of_int 0 1)),
-      abs, bnd, l
-
-    | E_constant C_top t ->
-      Apron.Texpr1.Cst (Apron.Coeff.Interval Apron.Interval.top),
-      abs, bnd, l
-  
-    | E_constant(C_int_interval (a,b)) ->
-      Apron.Texpr1.Cst(
-        Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string a)
-          (Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string b)
-      ), abs, bnd, l
-
-    | E_constant(C_float_interval (a,b)) ->
-      Apron.Texpr1.Cst(
-        Apron.Coeff.i_of_scalar
-          (Apron.Scalar.of_float a)
-          (Apron.Scalar.of_float b)
-      ), abs, bnd, l
+    | E_constant C_top _
+    | E_constant C_int_interval _
+    | E_constant C_float_interval _
+    | E_unop (O_wrap _, _) ->
+      raise ImpreciseExpression
 
     | E_constant(C_bool true) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 1)),
@@ -275,9 +259,6 @@ struct
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
       let typ' = typ_to_apron exp.etyp in
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
-
-    | E_unop(O_wrap(g, d), e) ->
-      exp_to_apron (mk_z_interval g d e.erange) (abs,bnd) l
 
     | _ ->
       Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
