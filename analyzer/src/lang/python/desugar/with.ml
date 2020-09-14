@@ -45,15 +45,17 @@ module Domain =
          let srange = stmt.srange in
          let erange = context.erange in
          (* Evaluate the context *)
-         man.eval context flow |>
-         bind_result_opt @@ fun econtext flow ->
+         man.eval context flow >>$?
+         fun econtext flow ->
 
          (* Enter the context *)
-         man.eval (mk_py_type econtext econtext.erange) flow |>
-         bind_result_opt @@ fun cls flow ->
+         man.eval (mk_py_type econtext econtext.erange) flow >>$? fun cls flow ->
 
          let cls = object_of_expr cls in
-         let eenter = mk_py_call (mk_py_object_attr cls "__enter__" erange) [econtext] erange in
+         man.eval (mk_py_object_attr cls "__enter__" erange) flow >>$? fun enter flow ->
+         man.eval (mk_py_object_attr cls "__exit__" erange) flow >>$? fun exit flow ->
+
+         let eenter = mk_py_call enter [econtext] erange in
          let flow =
            match target with
            | None -> man.exec (mk_stmt (S_expression eenter) srange)  flow
@@ -63,7 +65,7 @@ module Domain =
          (* Execute body *)
          let tmpexn = mktmp ~typ:(T_py None) () in
          let tmpret = mktmp ~typ:(T_py None) () in
-         let eexit e1 e2 e3 = mk_py_call (mk_py_object_attr cls "__exit__" erange) [econtext; e1; e2; e3] erange in
+         let eexit e1 e2 e3 = mk_py_call exit [econtext; e1; e2; e3] erange in
          let stmt =
            mk_try
              (mk_block [

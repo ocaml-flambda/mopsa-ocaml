@@ -51,7 +51,7 @@ struct
       debug "class call  %a@\n@\n" pp_expr exp;
       (* FIXME: this is actually type.__call__(cls) *)
       (* Call __new__ and __init__ *)
-      let rec bind args vars (flow: 'a post) f =
+      let rec bind count args vars (flow: 'a post) f =
         match args with
         | [] ->
            f (List.rev vars) flow
@@ -60,9 +60,9 @@ struct
            man.eval hd >>$
              (fun ehd flow ->
                  let cs = Flow.get_callstack flow in
-                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "%a%xd" pp_expr ecls (Hashtbl.hash_param 30 100 cs)) (T_py None) in
-                 bind tl (tmp::vars) (man.exec   (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
-      bind args [] (Post.return flow)
+                 let tmp = mk_range_attr_var hd.erange (Format.asprintf "#%d%a%xd" count pp_expr ecls (Hashtbl.hash_param 30 100 cs)) (T_py None) in
+                 bind (count+1) tl (tmp::vars) (man.exec   (mk_assign (mk_var tmp hd.erange) ehd range) flow) f) in
+      bind 0 args [] (Post.return flow)
         (fun vars flow ->
           let tmps = List.map (fun v ->
                          match vkind v with
