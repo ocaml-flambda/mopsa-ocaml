@@ -175,6 +175,50 @@ struct
          let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
          flow |> Post.return |> OptionExt.return
 
+    | S_project vs when List.for_all (fun e -> match ekind e with E_var _ -> true | _ -> false) vs ->
+       (* Some other domains may create variables depending on vs.
+          We first query them using Q_variables_linked_to before doing the real projection *)
+       let vars = List.fold_left (fun acc v ->
+                      debug "asking for variables linked to %a" pp_expr v;
+                      let acc = VarSet.add (match ekind v with E_var (v, _) -> v | _ -> assert false) acc in
+                      VarSet.union acc (man.ask (Q_variables_linked_to v) flow)
+                    ) VarSet.empty vs in
+       let cur = get_env T_cur man flow in
+       let addrs = VarSet.fold (fun var acc ->
+                       match find_opt var cur with
+                       | None -> acc
+                       | Some aset -> ASet.join acc aset) vars ASet.empty in
+       (* FIXME: heap is not cleaned, is that normal? *)
+       (* FIXME: cleaning strings+int/float doesn't work. Should they be in product? *)
+       (* FIXME: issue with class and function declarations... *)
+       let ncur = VarSet.fold (fun var ncur ->
+                      match var.vtyp with
+                      | T_py _ ->
+                         begin match find_opt var cur with
+                         | None -> ncur
+                         | Some aset -> add var aset ncur
+                         end
+                      | _ -> ncur
+                    ) vars empty in
+       let project_addrs = ASet.fold (fun pya acc -> match pya with
+                                                     | Def a -> mk_addr a range :: acc
+                                                     | _ -> acc) addrs [] in
+       let project_num = VarSet.filter (fun v -> match v.vtyp with
+                                                 | T_int | T_float _ -> true
+                                                 | _ -> false) vars in
+       debug "project_num = %a" (VarSet.fprint SetExt.printer_default pp_var) project_num;
+       let project_str = VarSet.filter (fun v -> match v.vtyp with
+                                                 | T_string -> true
+                                                 | _ -> false) vars in
+       debug "project_str = %a" (VarSet.fprint SetExt.printer_default pp_var) project_str;
+       flow |>
+         man.exec (mk_project project_addrs range)  |> post_to_flow man |>
+         man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_num) range) |> post_to_flow man |>
+         man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_str) range) |> post_to_flow man |>
+         set_env T_cur ncur man |>
+         Post.return |>
+         OptionExt.return
+
     | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when is_py_exp vl && var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
        let cur = get_env T_cur man flow in
        begin match AMap.find_opt w cur with
@@ -674,6 +718,32 @@ struct
                                       | _ -> acc) aset Universal.Heap.Recency.Pool.empty
          |> OptionExt.return
 
+
+      | Q_variables_linked_to ({ekind = E_var(v, _)} as e) ->
+         let cur = get_env T_cur man flow in
+         let acc = VarSet.add v VarSet.empty in
+         begin match AMap.find_opt v cur with
+         | None ->
+            Some acc
+         | Some aset ->
+             let r =
+               ASet.fold
+                 (fun pyaddr acc ->
+                   match pyaddr with
+                   | Def a ->
+                      debug "asking for %a" pp_addr a;
+                      VarSet.union acc (man.ask (Q_variables_linked_to (mk_addr a e.erange)) flow)
+                   | _ -> acc) aset VarSet.empty in
+
+             let check_baddr a  = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
+             let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
+             let float = check_baddr addr_float in
+             let str = check_baddr addr_strings in
+             let r = if intb then VarSet.add (Utils.change_var_type T_int v) r else r in
+             let r = if float then VarSet.add (Utils.change_var_type (T_float F_DOUBLE) v) r else r in
+             let r = if str then VarSet.add (Utils.change_var_type T_string v) r else r in
+             Some (VarSet.union acc r)
+         end
 
       | Framework.Engines.Interactive.Q_debug_variable_value var ->
          let open Framework.Engines.Interactive in

@@ -28,7 +28,7 @@ open Addr
 open Universal.Ast
 
 module Domain =
-  struct
+   struct
 
     include GenStatelessDomainId(struct
         let name = "python.data_model.callable"

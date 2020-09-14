@@ -156,7 +156,7 @@ struct
       debug "Skipping list.__new__, list.__init__ for now@\n";
 
       let addr_list = mk_alloc_addr A_py_list range in
-      man.eval   addr_list flow >>$
+      man.eval addr_list flow >>$
         (fun eaddr_list flow ->
             let addr_list = addr_of_expr eaddr_list in
             let els_var = var_of_addr addr_list in
@@ -1123,6 +1123,15 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
+    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr)} as e) ->
+       let range = erange e in
+       let content_var = var_of_addr addr in
+       let length_var = length_var_of_addr addr in
+       man.ask (Q_variables_linked_to (mk_var content_var range)) flow |>
+         VarSet.add length_var |>
+         VarSet.add content_var |>
+         OptionExt.return
+
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
        let open Framework.Engines.Interactive in
        let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in

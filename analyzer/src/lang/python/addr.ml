@@ -145,7 +145,7 @@ let print_functions fmt _ =
 
 
 let add_builtin_function obj () =
-  debug "added builtin function %s" (object_name obj);
+  debug "added builtin function %a" pp_addr (fst obj);
   Hashtbl.add functions (object_name obj) obj
 
 let add_typed obj =
