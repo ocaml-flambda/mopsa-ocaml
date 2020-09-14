@@ -212,9 +212,12 @@ struct
                                                  | _ -> false) vars in
        debug "project_str = %a" (VarSet.fprint SetExt.printer_default pp_var) project_str;
        flow |>
-         man.exec (mk_project project_addrs range)  |> post_to_flow man |>
-         man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_num) range) |> post_to_flow man |>
-         man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_str) range) |> post_to_flow man |>
+         (if List.length project_addrs = 0 then fun x -> Post.return x
+          else man.exec (mk_project project_addrs range))  |> post_to_flow man |>
+         (if VarSet.is_empty project_num then fun x -> Post.return x
+          else man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_num) range)) |> post_to_flow man |>
+         (if VarSet.is_empty project_str then fun x -> Post.return x
+          else man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_str) range)) |> post_to_flow man |>
          set_env T_cur ncur man |>
          Post.return |>
          OptionExt.return
