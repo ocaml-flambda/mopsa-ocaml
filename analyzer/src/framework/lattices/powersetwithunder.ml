@@ -99,7 +99,7 @@ struct
   let fold_o (f : Elt.t -> 'a -> 'a) (s : t) (init : 'a) : 'a =
     bot_to_exn s |> (fun (l, _) -> Set.fold f l init)
 
-  let fold_uo f s init = fold_o f s (fold_u f s init) (* FIXME: double iteration on underapproximated elements *)
+  (* let fold_uo f s init = fold_o f s (fold_u f s init) (\* FIXME: double iteration on underapproximated elements *\) *)
 
   open Format
   let print fmt (su:t) =
