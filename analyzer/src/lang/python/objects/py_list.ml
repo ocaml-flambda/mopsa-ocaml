@@ -813,17 +813,19 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("enumerate.__next__", _))}, _)}, [iterator], []) ->
        (* FIXME: new py_iterator + values *)
       man.eval   iterator flow >>$
- (fun iterator flow ->
-            man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
- (fun list_eobj flow ->
-                  let var_els = var_of_eobj list_eobj in
-                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range;
-                                                           mk_var var_els range]) range) flow in
-                  let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                  let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
-                  Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
-                )
-          )
+        (fun iterator flow ->
+          man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
+            (fun list_eobj flow ->
+              let var_els = var_of_eobj list_eobj in
+              let els = Utils.mk_positive_integer man flow range
+                          (fun posint flow ->
+                            man.eval (mk_expr ~etyp:(T_py None)
+                                        (E_py_tuple [posint; mk_var var_els range])
+                                        range) flow ) in
+              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+              Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
+            )
+        )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("zip.__new__" as f, _))}, _)}, args, []) ->
