@@ -286,6 +286,8 @@ let from_list (l: 'a list list) : 'a t = l
 
 let print pp fmt (dnf:'a t) =
   let open Format in
+  if is_true dnf then pp_print_string fmt "true" else
+  if is_false dnf then pp_print_string fmt "false" else
   let l = to_list dnf in
   fprintf fmt "@[<hv 2>%a@]"
   (pp_print_list
