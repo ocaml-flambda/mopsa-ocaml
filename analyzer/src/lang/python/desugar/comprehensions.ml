@@ -38,7 +38,7 @@ module Domain =
         let name = "python.desugar.comprehensions"
       end)
 
-    let alarms = []
+    let checks = []
 
     let unfold_comprehension expr comprehensions base append range =
          let tmp_acc = mk_range_attr_var range "tmp_acc" (T_py None) in

@@ -66,7 +66,7 @@ struct
       let name = "c.iterators.goto"
     end)
 
-  let alarms = []
+  let checks = []
 
   (** Initialization *)
   (** ============== *)

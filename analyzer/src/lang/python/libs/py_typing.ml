@@ -34,7 +34,7 @@ module Domain =
         let name = "python.libs.typing"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init prog man flow =
       flow

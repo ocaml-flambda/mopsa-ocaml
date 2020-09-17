@@ -64,27 +64,26 @@ let render_callstack cs  =
   `List (List.map render_call cs)
 
 let aggregate_alarms alarms =
-  (* Iterate first on the alarm classes *)
-  let cls_map = index_alarm_set_by_class alarms in
-  ClassMap.fold
-    (fun cls alarms acc ->
-       (* Then iterate on the location ranges within each class *)
-       let range_map = index_alarm_set_by_range alarms in
-       RangeMap.fold
-         (fun range alarms acc ->
-            let csl = AlarmSet.elements alarms |>
-                      List.map get_alarm_callstack in
-            (cls,range,csl) :: acc
-         ) range_map acc
-    ) cls_map []
+  RangeMap.fold
+    (fun range checks acc ->
+       CheckMap.fold
+         (fun check diag acc ->
+            match diag with
+            | Safe | Unreachable -> acc
+            | Error alarms | Warning alarms ->
+              let csl = AlarmSet.elements alarms |>
+                        List.map callstack_of_alarm in
+              (range,check,csl) :: acc
+         ) checks acc
+    ) alarms.alarms []
 
-let render_alarm_class alarm =
-  let title = Format.asprintf "%a" pp_alarm_class alarm in
+let render_check check =
+  let title = Format.asprintf "%a" pp_check check in
   `String title
 
-let render_alarm (cls,range,csl) =
+let render_alarm (range,check,csl) =
   `Assoc [
-    "title", render_alarm_class cls;
+    "title", render_check check;
     "range", render_range range;
     "callstacks", `List (List.map render_callstack csl);
   ]
@@ -198,9 +197,9 @@ let list_domains (domains:string list) out =
   in
   print out json
 
-let list_alarms alarms out =
+let list_checks checks out =
   let json = `List (
-      List.map render_alarm_class alarms
+      List.map render_check checks
     )
   in
   print out json

@@ -35,7 +35,7 @@ module Domain =
                 let name = "python.types.dummy_numeric"
               end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

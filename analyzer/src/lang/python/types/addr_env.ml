@@ -128,7 +128,7 @@ struct
   let meet = AMap.meet
   let widen = AMap.widen
 
-  let alarms = []
+  let checks = []
 
   let merge _ _ _ = assert false
 

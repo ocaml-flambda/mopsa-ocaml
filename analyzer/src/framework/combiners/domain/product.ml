@@ -27,13 +27,14 @@ open Sig.Reduction.Exec
 open Sig.Reduction.Eval
 open Sig.Combiner.Stacked
 open Common
+open Location
 
 
 (** Signature of a pool of domains with pointwise transfer functions *)
 module type POOL =
 sig
   include STACKED_COMBINER
-  val alarms : alarm_class list list
+  val checks : check list list
   val members : domain list list
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list
   val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list
@@ -51,7 +52,7 @@ struct
   let members = []
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
-  let alarms = [[]]
+  let checks = [[]]
   let bottom = ()
   let top = ()
   let is_bottom _ = false
@@ -77,7 +78,7 @@ struct
   let members = DomainSet.elements S.domains :: P.members
   let semantics = SemanticSet.union S.semantics P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
-  let alarms = S.alarms :: P.alarms
+  let checks = S.checks :: P.checks
   let name = S.name ^ " ∧ " ^ P.name
 
   let print fmt (s,p) =
@@ -176,29 +177,35 @@ struct
 
   include Pool
 
-  let alarms = List.flatten Pool.alarms
+  let checks = List.flatten Pool.checks
+
 
   (** {2 Merging functions} *)
   (** ********************* *)
 
-  (** Merge the conflicts of two flows using logs *)
-  let merge_flows ~merge_alarms (man:('a,'t) man) pre (flow1,log1) (flow2,log2) =
-    let ctx = most_recent_ctx (Flow.get_ctx flow1) (Flow.get_ctx flow2) in
-    Flow.map2zo
-      (fun _ a1 -> man.lattice.bottom)
-      (fun _ a2 -> man.lattice.bottom)
-      (fun tk a1 a2 ->
-         match tk with
-         (* Logs concern only cur environments *)
-         | T_cur ->
-           (* Merge the cur environments *)
-           let p = Flow.get T_cur man.lattice pre in
-           man.lattice.merge p (a1,log1) (a2,log2)
-
-         (* For the other tokens, compute the meet of the environments *)
-         | _ -> man.lattice.meet ctx a1 a2
-      ) merge_alarms flow1 flow2
-
+  (* Combine the alarms of reported by the two functions *)
+  let merge_alarms checks1 checks2 alarms1 alarms2 =
+    map2zo_alarms_report
+      (fun range check diag1 ->
+         (* Check performed only in the left flow.
+            Verify if it's part of the checks that the right flow should
+            perform also *)
+         if not (List.mem check checks2) then
+           (* This is fine! The second domain is not responsible for this
+              check, so add it to the result *)
+           diag1
+         else
+           (* The analysis is unsound! *)
+           Exceptions.panic "%a: check %a is unsound" pp_relative_range range pp_check check
+      )
+      (fun range check diag2 ->
+         if not (List.mem check checks1) then
+           diag2
+         else
+           Exceptions.panic "%a: check %a is unsound" pp_relative_range range pp_check check
+      )
+      (fun range check diag1 diag2 -> meet_diagnosis diag1 diag2)
+      alarms1 alarms2
 
 
   (** Merge the conflicts between distinct domains.
@@ -212,9 +219,9 @@ struct
       In this case, we use logs to merge the two diverging states.
   *)
   let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option list) cases =
-    let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> alarm_class list list -> ('a,'r option list) cases =
-      fun id man pointwise alarms ->
-        match pointwise, id, alarms with
+    let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> check list list -> ('a,'r option list) cases =
+      fun id man pointwise checks ->
+        match pointwise, id, checks with
         (* Last domain returned no answer *)
         | [None], C_pair(_, s, _), _ ->
           Cases.return [None] pre
@@ -229,15 +236,15 @@ struct
           end
 
         (* One domain returned no answer *)
-        | None :: tl, C_pair(_,s,pid), _::tlalarms ->
-          aux pid (snd_pair_man man) tl tlalarms >>$ fun after flow ->
+        | None :: tl, C_pair(_,s,pid), _::tlchecks ->
+          aux pid (snd_pair_man man) tl tlchecks >>$ fun after flow ->
           Cases.return (None :: after) flow
 
         (* One domain returned an answer.
            Here we need to merge this answer with the answers of the next domains *)
-        | Some r :: tl, C_pair(_,s,pid), hdalarms::tlalarms ->
+        | Some r :: tl, C_pair(_,s,pid), hdchecks::tlchecks ->
           (* Compute the answer of the next domains *)
-          aux pid (snd_pair_man man) tl tlalarms >>= fun after_case after_flow ->
+          aux pid (snd_pair_man man) tl tlchecks >>= fun after_case after_flow ->
           (* Compute the answer of this domain *)
           r >>= fun case flow ->
           (* Now combine the two answers *)
@@ -248,7 +255,7 @@ struct
                  sound. To be more precise, we need to know which
                  alarms were raised by a given domain. 
               *)
-              let alarms = AlarmSet.union (Flow.get_alarms flow) (Flow.get_alarms after_flow) in
+              let alarms = merge_alarms hdchecks (List.flatten tlchecks) (Flow.get_alarms flow) (Flow.get_alarms after_flow) in
               let flow = Flow.set_alarms alarms flow in
               let after_flow = Flow.set_alarms alarms flow in
               Cases.empty (Flow.meet man.lattice flow after_flow)
@@ -272,7 +279,7 @@ struct
                 in
                 (* Resolve the second conflict situation:
                    merge the post-states of any shared sub-abstraction *)
-                let flow = merge_flows ~merge_alarms:AlarmSet.union man pre (flow,log) (after_flow,after_log) in
+                let flow = Flow.merge ~merge_alarms:(merge_alarms hdchecks (List.flatten tlchecks)) man.lattice pre (flow,log) (after_flow,after_log) in
                 let log = Log.meet_log log after_log in
                 let cleaners = StmtSet.union cleaners after_cleaners in
                 Cases.case (Result (Some res :: after_res, log, cleaners)) flow
@@ -285,7 +292,7 @@ struct
 
         | _ -> assert false
     in
-    aux Pool.id man pointwise Pool.alarms
+    aux Pool.id man pointwise Pool.checks
 
 
 
@@ -303,7 +310,7 @@ struct
            | (case,flow)::tl ->
              let log',cleaners',flow' = iter tl in
              let log,cleaners = Cases.get_case_log case, Cases.get_case_cleaners case in
-             let flow'' = Flow.merge man.lattice ~merge_alarms:AlarmSet.inter pre (flow,log) (flow',log') in
+             let flow'' = Flow.merge man.lattice ~merge_alarms:meet_alarms_report pre (flow,log) (flow',log') in
              meet_log log log', StmtSet.union cleaners cleaners', flow''
          in
          let log,cleaners,flow = iter conj in

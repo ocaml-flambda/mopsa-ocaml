@@ -90,36 +90,38 @@ let () =
 
 
 (* Analysis alarms *)
-type alarm_class   += A_assert_fail
-type alarm_message += A_assert_fail_msg of expr (** condition *)
+type check      += CHK_ASSERT_FAIL
+type alarm_kind += A_assert_fail of expr (** condition *)
 
 
 let () =
-  register_alarm_class (fun next fmt -> function
-      | A_assert_fail -> Format.fprintf fmt "Assertion fail"
+  register_check (fun next fmt -> function
+      | CHK_ASSERT_FAIL -> Format.fprintf fmt "Assertion failure"
       | a -> next fmt a
     );
-  register_alarm_message {
-    classifier = (fun next -> function
-        | A_assert_fail_msg _ -> A_assert_fail
+  register_alarm {
+    check = (fun next -> function
+        | A_assert_fail _ -> CHK_ASSERT_FAIL
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_assert_fail_msg(c1), A_assert_fail_msg(c2) -> compare_expr c1 c2
+        | A_assert_fail(c1), A_assert_fail(c2) -> compare_expr c1 c2
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
-        | A_assert_fail_msg(cond) -> Format.fprintf fmt "Assertion '%a' violated" (Debug.bold pp_expr) cond
+        | A_assert_fail(cond) ->
+          Format.fprintf fmt "Assertion '%a' violated" (Debug.bold pp_expr) cond
         | a -> next fmt a
       );
+    join = (fun next a1 a2 -> next a1 a2)
   };
   ()
 
 
 let raise_assert_fail ?(force=false) cond man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_assert_fail_msg cond) cs cond.erange in
+  let alarm = mk_alarm (A_assert_fail cond) cs cond.erange in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
 
 
@@ -137,7 +139,7 @@ struct
   let summary fmt = Debug.debug ~channel:"unittest" fmt
 
 
-  let alarms = []
+  let checks = [CHK_ASSERT_FAIL]
 
   (* Initialization *)
   (* ============== *)

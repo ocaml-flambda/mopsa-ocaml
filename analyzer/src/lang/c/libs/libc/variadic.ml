@@ -46,8 +46,8 @@ struct
 
   let numeric = Semantic "U/Numeric"
 
-  let alarms = [ A_c_out_of_bound;
-                 A_c_insufficient_variadic_args ]
+  let checks = [ CHK_C_OUT_OF_BOUND;
+                 CHK_C_INSUFFICIENT_VARIADIC_ARGS ]
 
   (** Flow-insensitive annotations *)
   (** ============================ *)

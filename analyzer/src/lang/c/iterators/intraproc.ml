@@ -43,7 +43,7 @@ struct
 
   let dependencies = []
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization *)

@@ -48,7 +48,7 @@ struct
 
   let dependencies = []
 
-  let alarms = []
+  let checks = []
 
   (** {2 Initialization procedure} *)
   (** ============================ *)

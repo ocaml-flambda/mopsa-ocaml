@@ -43,9 +43,9 @@ struct
 
   let numeric = Semantic "U/Numeric"
 
-  let alarms = [ A_c_integer_overflow;
-                 A_c_divide_by_zero;
-                 A_c_invalid_shift ]
+  let checks = [ CHK_C_INTEGER_OVERFLOW;
+                 CHK_C_DIVIDE_BY_ZERO;
+                 CHK_C_INVALID_SHIFT ]
 
   (** Command-line options *)
   (** ==================== *)

@@ -46,7 +46,7 @@ module Domain =
         let name = "python.libs.mopsa"
       end)
 
-    let alarms = []
+    let checks = []
 
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)

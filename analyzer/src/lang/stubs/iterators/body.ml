@@ -38,7 +38,7 @@ struct
       let name = "stubs.iterators.body"
     end)
 
-  let alarms = []
+  let checks = [CHK_STUB_ALARM]
 
 
   (** Initialization of environments *)
@@ -126,56 +126,6 @@ struct
           mk_not (mk_stub_resource_mem e res f.range) f.range
         )
       ) f.range
-
-
-  let combine_alarms op flow1 flow2 flow range =
-    let alarms1 = Flow.get_alarms flow1 in
-    let alarms2 = Flow.get_alarms flow2 in
-    let alarms = Flow.get_alarms flow in
-    let diff1 = AlarmSet.diff alarms1 alarms in
-    let diff2 = AlarmSet.diff alarms2 alarms in
-    let is_requires_alarm a =
-      match get_alarm_class a with
-      | A_stub_invalid_requires -> true
-      | _ -> false in
-    let get_requires_condition a =
-      match get_alarm_message a with
-      | A_stub_invalid_requires_condition cond -> cond
-      | _ -> assert false in
-    let combine_requires_alarms op =
-      let requires1,diff1' = AlarmSet.partition is_requires_alarm diff1 in
-      let requires2,diff2' = AlarmSet.partition is_requires_alarm diff2 in
-      let f = match op with
-        | AND -> mk_log_and
-        | OR -> mk_log_or
-        | IMPLIES -> assert false in
-      if AlarmSet.is_empty requires1 || AlarmSet.is_empty requires2 then
-        AlarmSet.union diff1 diff2
-      else
-        AlarmSet.fold
-          (fun a1 acc ->
-             let cond1 = get_requires_condition a1 in
-             let a = AlarmSet.map (fun a2 ->
-                 let cond2 = get_requires_condition a2 in
-                 mk_alarm (A_stub_invalid_requires_condition (f cond1 cond2 range)) (get_alarm_callstack a1) (get_alarm_range a1)
-               ) requires2 in
-             AlarmSet.union a acc
-          ) requires1 (AlarmSet.union diff1' diff2') in
-    match op with
-    | AND ->
-      if AlarmSet.is_empty diff1 && AlarmSet.is_empty diff2 then
-        alarms
-      else
-        AlarmSet.union (combine_requires_alarms AND) alarms
-
-    | OR ->
-      if AlarmSet.is_empty diff1 || AlarmSet.is_empty diff2 then
-        alarms
-      else
-        AlarmSet.union (combine_requires_alarms OR) alarms
-
-    | IMPLIES ->
-      assert false
 
 
   (** Translate a formula into prenex normal form *)
@@ -283,15 +233,15 @@ struct
     | F_binop (AND, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
       let flow2 = eval_formula cond_to_stmt f2 range man (Flow.set_alarms (Flow.get_alarms flow) flow1) in
-      let alarms = combine_alarms AND flow1 flow2 flow range in
+      (* FIXME: combine alarms in a smarter way*)
+      let alarms = join_alarms_report (Flow.get_alarms flow1) (Flow.get_alarms flow2) in
       Flow.set_alarms alarms flow2
 
     | F_binop (OR, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
       let flow2 = eval_formula cond_to_stmt f2 range man flow in
-      let alarms = combine_alarms OR flow1 flow2 flow range in
-      Flow.join man.lattice flow1 flow2 |>
-      Flow.set_alarms alarms
+      (* FIXME: combine alarms in a smarter way*)
+      Flow.join man.lattice flow1 flow2
 
     | F_binop (IMPLIES, f1, f2) ->
       let nf1 = eval_formula mk_assume (negate_formula f1) range man flow in

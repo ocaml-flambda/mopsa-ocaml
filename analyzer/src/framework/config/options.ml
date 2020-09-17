@@ -227,14 +227,14 @@ let () =
 (** List of alarms *)
 let () =
   register_builtin_option {
-    key = "-alarms";
+    key = "-checks";
     category = "Help";
-    doc = " list the alarms captured by the selected configuration";
+    doc = " list the checks performed by selected configuration";
     spec = ArgExt.Unit_delayed (fun () ->
         let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
         let domain = Abstraction.Builder.from_json abstraction.domain in
         let module Domain = (val domain) in
-        Output.Factory.list_alarms Domain.alarms
+        Output.Factory.list_checks Domain.checks
       );
     default = "";
   }

@@ -35,7 +35,7 @@ module Domain = struct
       let name = "python.data_model.aug_assign"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
   let eval _ _ _ = None

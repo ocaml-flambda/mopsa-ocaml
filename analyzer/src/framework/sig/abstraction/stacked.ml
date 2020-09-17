@@ -44,8 +44,8 @@ sig
   val name : string
   (** Name of the domain *)
 
-  val alarms : alarm_class list
-  (** List of alarms detected by the domain *)
+  val checks : check list
+  (** List of checks performed by the domain *)
 
   val bottom: t
   (** Least abstract element of the lattice. *)

@@ -33,7 +33,7 @@ module Domain =
         let name = "python.desugar.if"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

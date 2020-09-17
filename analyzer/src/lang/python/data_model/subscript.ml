@@ -34,7 +34,7 @@ struct
       let name = "python.data_model.subscript"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
 

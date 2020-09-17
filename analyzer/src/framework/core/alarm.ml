@@ -25,40 +25,77 @@ open Callstack
 open Format
 
 
-(** {1 Alarm categories} *)
-(** ******************** *)
+(** {1 Checks} *)
+(** ********** *)
 
-type alarm_category = ..
+type check = ..
 
-let alarm_category_print_chain : alarm_category TypeExt.print_chain =
-  TypeExt.mk_print_chain (fun _ _ -> Exceptions.panic "Print of unregistered alarm category")
+let check_print_chain : check TypeExt.print_chain =
+  TypeExt.mk_print_chain (fun _ _ -> Exceptions.panic "Print of unregistered check")
 
-let pp_alarm_category fmt c =
-  TypeExt.print alarm_category_print_chain fmt c
+let pp_check fmt c =
+  TypeExt.print check_print_chain fmt c
 
-let register_alarm_category f =
-  TypeExt.register_print f alarm_category_print_chain
+let register_check f =
+  TypeExt.register_print f check_print_chain
 
 
 (** {1 Alarms} *)
 (** ********** *)
 
-type alarm = ..
+type alarm_kind = ..
 
-let alarm_compare_chain : alarm TypeExt.compare_chain =
-  TypeExt.mk_compare_chain compare
+type alarm_kind += A_instance of check
 
-let alarm_print_chain : alarm TypeExt.print_chain =
-  TypeExt.mk_print_chain (fun _ _ -> Exceptions.panic "Print of unregistered alarm")
+type alarm = {
+  alarm_kind      : alarm_kind;
+  alarm_range     : range;
+  alarm_callstack : callstack;
+}
 
-let alarm_category_chain : (alarm -> alarm_category) ref =
-  ref (fun _ -> Exceptions.panic "Category of unregistered alarm")
+let mk_alarm kind callstack range =
+  { alarm_kind      = kind;
+    alarm_range     = range;
+    alarm_callstack = callstack }
 
-let compare_alarm a1 a2 =
+let alarm_compare_chain : alarm_kind TypeExt.compare_chain =
+  TypeExt.mk_compare_chain
+    (fun a1 a2 ->
+       match a1,a2 with
+       | A_instance chk1, A_instance chk2 -> compare chk1 chk2
+       | _ -> compare a1 a2)
+
+let alarm_print_chain : alarm_kind TypeExt.print_chain =
+  TypeExt.mk_print_chain
+    (fun fmt -> function
+       | A_instance chk -> pp_check fmt chk
+       | _ -> Exceptions.panic "Print of unregistered alarm")
+
+let alarm_check_chain : (alarm_kind -> check) ref =
+  ref (function
+      | A_instance chk -> chk
+      | _ -> Exceptions.panic "Check of unregistered alarm")
+
+let alarm_join_chain : (alarm_kind -> alarm_kind -> alarm_kind option) ref =
+  ref (fun a1 a2 -> None)
+
+let compare_alarm_kind a1 a2 =
   TypeExt.compare alarm_compare_chain a1 a2
 
+let pp_alarm_kind fmt a =
+  TypeExt.print alarm_print_chain fmt a
+
+let join_alarm_kind a1 a2 =
+  !alarm_join_chain a1 a2
+
+let compare_alarm a1 a2 =
+  Compare.triple
+    compare_alarm_kind compare_callstack compare_range
+    (a1.alarm_kind,a1.alarm_callstack,a1.alarm_range)
+    (a2.alarm_kind,a2.alarm_callstack,a2.alarm_range)
+
 let pp_alarm fmt a =
-  TypeExt.print fmt a
+  pp_alarm_kind fmt a.alarm_kind
 
 let register_alarm_compare f =
   TypeExt.register_compare f alarm_compare_chain
@@ -66,33 +103,36 @@ let register_alarm_compare f =
 let register_alarm_pp f =
   TypeExt.register_print f alarm_print_chain
 
-let register_alarm_category f =
-  alarm_category_chain := f !alarm_category_chain
+let register_alarm_check f =
+  alarm_check_chain := f !alarm_check_chain
+
+let register_alarm_join f =
+  alarm_join_chain := f !alarm_join_chain
 
 type alarm_info = {
-  category : (alarm -> alarm_category) -> alarm -> alarm_category;
-  compare : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  print : (formatter -> alarm -> unit) -> formatter -> alarm -> unit;
+  check : (alarm_kind -> check) -> alarm_kind -> check;
+  compare : (alarm_kind -> alarm_kind -> int) -> alarm_kind -> alarm_kind -> int;
+  print : (formatter -> alarm_kind -> unit) -> formatter -> alarm_kind -> unit;
+  join : (alarm_kind -> alarm_kind -> alarm_kind option) -> alarm_kind -> alarm_kind -> alarm_kind option;
 }
 
 let register_alarm info =
-  register_alarm_category info.category;
+  register_alarm_check info.check;
   register_alarm_pp info.print;
-  register_alarm_compare info.compare
+  register_alarm_compare info.compare;
+  register_alarm_join info.join
 
 
-let category_of_alarm a =
-  !alarm_category_chain a
+let check_of_alarm a =
+  !alarm_check_chain a.alarm_kind
 
-let compare_alarm a1 a2 =
-  TypeExt.compare alarm_compare_chain a1 a2
+let range_of_alarm a = a.alarm_range
 
-let pp_alarm fmt a =
-  TypeExt.print alarm_print_chain fmt a
+let callstack_of_alarm a = a.alarm_callstack
 
 
-(** {1 Diagnosis} *)
-(** ************* *)
+(** {1 Check diagnosis} *)
+(** ******************* *)
 
 module AlarmSet = SetExt.Make(struct type t = alarm let compare = compare_alarm end)
 
@@ -163,74 +203,11 @@ let meet_diagnosis diag1 diag2 =
   | Safe, Safe                       -> Safe
   | Error _, Safe    | Safe, Error _ -> Unreachable
 
-
-(** {1 Range report} *)
-(** **************** *)
-
-module AlarmCategoryMap = MapExt.Make(struct type t = alarm_category let compare = compare end)
-
-module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
-
-type 'a range_report = {
-  range_alarms     : diagnosis AlarmCategoryMap.t;
-  range_env        : 'a option;
-  range_callstacks : CallstackSet.t;
-}
-
-let pp_range_report pp fmt r =
-  fprintf fmt "@[<v>%a%a@,callstack: @[<v>%a@]@]"
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-       (fun fmt (alarm_cat,diag) ->
-          fprintf fmt "@[<hv>%a:@,%a@]"
-            pp_alarm_category alarm_cat
-            pp_diagnosis diag
-       )
-    ) (AlarmCategoryMap.bindings r.range_alarms)
-    (fun fmt -> function None -> () | Some env -> fprintf fmt "@,env: @[%a@]" pp env) r.range_env
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,or@,")
-       pp_callstack
-    ) (CallstackSet.elements r.range_callstacks)
-
-let subseset_range_report lattice ctx r1 r2 =
-  (r1 == r2)
-  || ( ( r1.range_alarms == r2.range_alarms
-         || AlarmCategoryMap.for_all2zo
-           (fun _ diag1 -> subset_diagnosis diag1 Unreachable)
-           (fun _ diag2 -> true)
-           (fun _ diag1 diag2 -> subset_diagnosis diag1 diag2)
-           r1.range_alarms r2.range_alarms )
-       && (match r1.range_env, r2.range_env with
-           | None,None -> true
-           | Some e1, Some e2 -> lattice.subset ctx e1 e2
-           | _ -> assert false)
-       && CallstackSet.subset r1.range_callstacks r2.range_callstacks )
-
-
-let join_range_report lattice ctx r1 r2 =
-  if r1 == r2 then r1 else
-  let range_alarms =
-    AlarmCategoryMap.map2zo
-      (fun _ diag1 -> raise UnsoundDiagnosis)
-      (fun _ diag2 -> raise UnsoundDiagnosis)
-      (fun _ diag1 diag2 -> join_diagnosis diag1 diag2)
-      r1.range_alarms r2.range_alarms
-  in
-  let range_env = OptionExt.lift2 (lattice.join ctx) r1.range_env r2.range_env in
-  let range_callstacks = CallstackSet.union r1.range_callstacks r2.range_callstacks in
-  { range_alarms; range_env; range_callstacks }
-
-let meet_range_report lattice ctx r1 r2 =
-  if r1 == r2 then r1 else
-  let range_alarms =
-    AlarmCategoryMap.map2zo
-      (fun _ diag1 -> raise UnsoundDiagnosis)
-      (fun _ diag2 -> raise UnsoundDiagnosis)
-      (fun _ diag1 diag2 -> meet_diagnosis diag1 diag2)
-      r1.range_alarms r2.range_alarms
-  in
-  let range_env = OptionExt.lift2 (lattice.meet ctx) r1.range_env r2.range_env in
-  let range_callstacks = CallstackSet.inter r1.range_callstacks r2.range_callstacks in
-  { range_alarms; range_env; range_callstacks }
+let add_alarm_to_diagnosis alarm = function
+  | Error a -> Error (AlarmSet.add alarm a)
+  | Warning a -> Warning (AlarmSet.add alarm a)
+  | Safe -> Warning (AlarmSet.singleton alarm)
+  | Unreachable -> Error (AlarmSet.singleton alarm)
 
 
 (** {1 Soundness hypothesis} *)
@@ -272,71 +249,172 @@ let compare_hypothesis h1 h2 =
     (h2.hypothesis_scope, h2.hypothesis_kind)
 
 
-(** {1 Analysis report} *)
-(** ******************* *)
+(** {1 Alarms report} *)
+(** ***************** *)
 
 module RangeMap = MapExt.Make(struct type t = range let compare = compare_range end)
 
-type 'a report = {
-  report_map      : 'a range_report RangeMap.t;
-  report_soundness : hypothesis Dnf.t;
+module CheckMap = MapExt.Make(struct type t = check let compare = compare end)
+
+module HypothesisSet = SetExt.Make(struct type t = hypothesis let compare = compare_hypothesis end)
+
+type alarms_report = {
+  alarms    : diagnosis CheckMap.t RangeMap.t;
+  soundness : HypothesisSet.t;
 }
 
-let pp_report pp fmt r =
-  fprintf fmt "@[<v>soundness: @[<v>%a@]@,%a@]"
-    (Dnf.print pp_hypothesis) r.report_soundness
+let empty_alarms_report = {
+  alarms = RangeMap.empty;
+  soundness = HypothesisSet.empty;
+}
+
+let is_empty_alarms_report r =
+  RangeMap.is_empty r.alarms
+
+let singleton_alarms_report alarm =
+  let diag = Error (AlarmSet.singleton alarm) in
+  let check = check_of_alarm alarm in
+  { alarms = RangeMap.singleton alarm.alarm_range (CheckMap.singleton check diag);
+    soundness = HypothesisSet.empty; }
+
+let pp_alarms_report fmt r =
+  fprintf fmt "@[<v>soundness hypotheis: @[<v>%a@]@,%a@]"
+    (HypothesisSet.fprint
+       SetExtSig.{ print_empty = "∅";
+                   print_begin = "";
+                   print_sep   = "@,";
+                   print_end   = ""; }
+       pp_hypothesis
+    ) r.soundness
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-       (fun fmt (range,rr) ->
-          fprintf fmt "@[<v2>%a:@,@[%a@]@]"
-            pp_relative_range range
-            (pp_range_report pp) rr
+       (fun fmt (range,checks) ->
+          pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            (fun fmt (check,diag) ->
+               fprintf fmt "@[<v2>%a:@,@[%a@]@]"
+                 pp_relative_range range
+                 pp_diagnosis diag
+            ) fmt (CheckMap.bindings checks)
        )
-    ) (RangeMap.bindings r.report_map)
+    ) (RangeMap.bindings r.alarms)
 
-let subset_report lattice ctx r1 r2 =
+let subset_alarms_report r1 r2 =
   (r1 == r2)
-  || (r1.report_soundness == r2.report_soundness
-      && (r1.report_map == r2.report_map
+  || (HypothesisSet.equal r1.soundness r2.soundness
+      && (r1.alarms == r2.alarms
           || (RangeMap.for_all2zo
-                (fun _ rr1 -> false)
-                (fun _ rr2 -> true)
-                (fun _ rr1 rr2 -> subseset_range_report lattice ctx rr1 rr2)
-                r1.report_map r2.report_map)))
+                (fun _ checks1 -> false)
+                (fun _ checks2 -> true)
+                (fun _ checks1 checks2 ->
+                   CheckMap.for_all2zo
+                     (fun _ diag1 -> diag1 == Unreachable)
+                     (fun _ diag2 -> true)
+                     (fun _ diag1 diag2 -> subset_diagnosis diag1 diag2)
+                     checks1 checks2
+                )
+                r1.alarms r2.alarms)))
 
-let join_report lattice ctx r1 r2 =
+let join_alarms_report r1 r2 =
   if r1 == r2 then r1 else
-  if subset_report lattice ctx r1 r2 then r2 else
-  if subset_report lattice ctx r2 r1 then r1
+  if subset_alarms_report r1 r2 then r2 else
+  if subset_alarms_report r2 r1 then r1
   else
-    { report_map =
+    { soundness = HypothesisSet.union r1.soundness r2.soundness;
+      alarms =
         RangeMap.map2zo
-          (fun _ rr1 -> rr1)
-          (fun _ rr2 -> rr2)
-          (fun _ rr1 rr2 -> join_range_report lattice ctx rr1 rr2)
-          r1.report_map r2.report_map;
-      report_soundness = Dnf.mk_or r1.report_soundness r2.report_soundness; }
+          (fun _ checks1 -> checks1)
+          (fun _ checks2 -> checks2)
+          (fun _ checks1 checks2 ->
+             CheckMap.map2zo
+               (fun _ diag1 -> diag1)
+               (fun _ diag2 -> diag2)
+               (fun _ diag1 diag2 -> join_diagnosis diag1 diag2)
+               checks1 checks2
+          )
+          r1.alarms r2.alarms; }
 
-let meet_report lattice ctx r1 r2 =
+let meet_alarms_report r1 r2 =
   if r1 == r2 then r1 else
-  if subset_report lattice ctx r1 r2 then r2 else
-  if subset_report lattice ctx r2 r1 then r1
+  if subset_alarms_report r1 r2 then r1 else
+  if subset_alarms_report r2 r1 then r2
   else
-    { report_map =
-        RangeMap.map2zo
-          (fun _ rr1 -> rr1)
-          (fun _ rr2 -> rr2)
-          (fun _ rr1 rr2 -> join_range_report lattice ctx rr1 rr2)
-          r1.report_map r2.report_map;
-      report_soundness = Dnf.mk_or r1.report_soundness r2.report_soundness; }
+    { soundness = HypothesisSet.union r1.soundness r2.soundness;
+      alarms =
+        RangeMap.fold2zo
+          (fun range _ acc -> RangeMap.remove range acc)
+          (fun range _ acc -> RangeMap.remove range acc)
+          (fun range checks1 checks2 acc ->
+             let checks =
+               CheckMap.fold2zo
+                 (fun check diag1 acc -> CheckMap.remove check acc)
+                 (fun check diag2 acc -> CheckMap.remove check acc)
+                 (fun check diag1 diag2 acc -> CheckMap.add check (meet_diagnosis diag1 diag2) acc)
+                 checks1 checks2 checks1 in
+             RangeMap.add range checks acc
+          )
+          r1.alarms r2.alarms r1.alarms }
 
 let count_alarms r =
   RangeMap.fold
-    (fun range rr acc ->
-       AlarmCategoryMap.fold
-         (fun alarm_category diag (errors,warnings) ->
+    (fun range checks acc ->
+       CheckMap.fold
+         (fun check diag (errors,warnings) ->
             match diag with
             | Error _ -> errors + 1, warnings
             | Warning _ -> errors, warnings + 1
             | Safe | Unreachable -> errors, warnings
-         ) rr.range_alarms acc
-    ) r.report_map (0,0)
+         ) checks acc
+    ) r.alarms (0,0)
+
+let add_alarm_to_report alarm r =
+  let check = check_of_alarm alarm in
+  let checks = try RangeMap.find alarm.alarm_range r.alarms with Not_found -> CheckMap.empty in
+  let diag = try CheckMap.find check checks with Not_found -> Unreachable in
+  let diag' = add_alarm_to_diagnosis alarm diag in
+  { r with alarms = RangeMap.add alarm.alarm_range (CheckMap.add check diag' checks) r.alarms }
+
+let map2zo_alarms_report f1 f2 f r1 r2 =
+  { soundness = HypothesisSet.union r1.soundness r2.soundness;
+    alarms = RangeMap.map2zo
+        (fun range -> CheckMap.mapi (f1 range))
+        (fun range -> CheckMap.mapi (f2 range))
+        (fun range ->
+           CheckMap.map2zo
+             (f1 range)
+             (f2 range)
+             (f range)
+        )
+        r1.alarms r2.alarms }
+
+let fold2zo_alarms_report f1 f2 f r1 r2 init =
+  RangeMap.fold2zo
+    (fun range checks1 acc -> CheckMap.fold (f1 range) checks1 acc)
+    (fun range checks2 acc -> CheckMap.fold (f2 range) checks2 acc)
+    (fun range checks1 checks2 acc ->
+       CheckMap.fold2zo
+         (fun check diag1 acc -> f1 range check diag1 acc)
+         (fun check diag2 acc -> f2 range check diag2 acc)
+         (fun check diag1 diag2 acc -> f range check diag1 diag2 acc)
+         checks1 checks2 acc
+    )
+    r1.alarms r2.alarms init
+
+let alarms_report_to_set r =
+  RangeMap.fold
+    (fun range checks acc -> CheckMap.fold (fun check diag acc -> AlarmSet.union acc (get_alarms_of_diagnosis diag)) checks acc)
+    r.alarms AlarmSet.empty
+
+let group_alarms_set_by_range s =
+  AlarmSet.fold
+    (fun a acc ->
+       let range = a.alarm_range in
+       let s = try RangeMap.find range acc |> AlarmSet.add a with Not_found -> AlarmSet.singleton a in
+       RangeMap.add range s acc
+    ) s RangeMap.empty
+
+let group_alarms_set_by_check s =
+  AlarmSet.fold
+    (fun a acc ->
+       let check = check_of_alarm a in
+       let s = try CheckMap.find check acc |> AlarmSet.add a with Not_found -> AlarmSet.singleton a in
+       CheckMap.add check s acc
+    ) s CheckMap.empty

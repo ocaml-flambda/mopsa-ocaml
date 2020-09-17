@@ -33,7 +33,7 @@ module Domain =
         let name = "python.types.t_complex"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

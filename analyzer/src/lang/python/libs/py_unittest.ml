@@ -36,7 +36,7 @@ module Domain =
         let name = "python.libs.unittest"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

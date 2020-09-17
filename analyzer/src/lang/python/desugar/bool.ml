@@ -34,7 +34,7 @@ module Domain =
         let name = "python.desugar.bool"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

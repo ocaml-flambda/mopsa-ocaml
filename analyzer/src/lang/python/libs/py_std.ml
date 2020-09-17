@@ -35,7 +35,7 @@ struct
       let name = "python.libs.stdlib"
     end)
 
-  let alarms = []
+  let checks = []
 
   type stub_signature = {in_args: string list;
                          out_type: Mopsa.typ}

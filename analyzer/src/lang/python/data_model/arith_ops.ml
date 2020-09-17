@@ -36,7 +36,7 @@ module Domain =
         let name = "python.data_model.arith_ops"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

@@ -38,7 +38,7 @@ struct
       let name = "python.program"
     end)
 
-  let alarms = []
+  let checks = [Alarms.CHK_PY_UNCAUGHT_EXCEPTION]
 
   let init prog man flow =
     match prog.prog_kind with
@@ -123,7 +123,7 @@ struct
     Post.return @@ Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, k) ->
-          let a = Alarms.A_py_uncaught_exception_msg (e,s) in
+          let a = Alarms.A_py_uncaught_exception (e,s) in
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->

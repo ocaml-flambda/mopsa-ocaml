@@ -52,7 +52,7 @@ module Domain =
         default = "";
       }
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
     let eval _ _ _ = None

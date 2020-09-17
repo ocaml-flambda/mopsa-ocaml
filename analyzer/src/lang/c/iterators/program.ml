@@ -84,7 +84,7 @@ struct
     }
 
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization of environments *)

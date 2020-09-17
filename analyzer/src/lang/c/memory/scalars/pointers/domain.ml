@@ -61,12 +61,12 @@ struct
   let scalar  = Semantic "C/Scalar"
   let numeric = Semantic "U/Numeric"
 
-  let alarms = [ A_c_invalid_pointer_compare;
-                 A_c_invalid_pointer_sub;
-                 A_c_null_deref;
-                 A_c_dangling_pointer_deref;
-                 A_c_invalid_deref;
-                 A_c_use_after_free ]
+  let checks = [ CHK_C_INVALID_POINTER_COMPARE;
+                 CHK_C_INVALID_POINTER_SUB;
+                 CHK_C_NULL_DEREF;
+                 CHK_C_DANGLING_POINTER_DEREF;
+                 CHK_C_INVALID_DEREF;
+                 CHK_C_USE_AFTER_FREE ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)

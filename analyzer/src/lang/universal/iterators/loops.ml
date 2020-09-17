@@ -188,7 +188,7 @@ struct
       let name = name
     end)
 
-  let alarms = []
+  let checks = []
 
   (** {3 Cache of last fixpoint} *)
   (** ************************** *)
@@ -290,7 +290,7 @@ struct
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
-      if AlarmSet.subset (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
+      if subset_alarms_report (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
         Post.return flow'
       else
         let () = debug "decreasing iteration" in

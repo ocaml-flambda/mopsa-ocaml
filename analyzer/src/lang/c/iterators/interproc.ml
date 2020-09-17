@@ -53,7 +53,7 @@ struct
       let name = "c.iterators.interproc"
     end)
 
-  let alarms = []
+  let checks = []
 
 
   (** {2 Lattice operators} *)

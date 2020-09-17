@@ -33,7 +33,7 @@ struct
       let name = "python.types.t_int"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
 

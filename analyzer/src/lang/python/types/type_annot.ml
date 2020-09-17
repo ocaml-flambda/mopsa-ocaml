@@ -59,7 +59,7 @@ struct
       let name = "python.types.type_annot"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init prog man flow =
     set_env T_cur empty man flow

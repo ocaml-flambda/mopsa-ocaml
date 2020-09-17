@@ -28,6 +28,7 @@ open Manager
 open Ast.Expr
 open Ast.Stmt
 open Route
+open Alarm
 
 let debug fmt = Debug.debug ~channel:"framework.core.cache" fmt
 
@@ -101,7 +102,7 @@ struct
 
   module ExecCache = Queue(
     struct
-      type t = route * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      type t = route * stmt * Domain.t Token.TokenMap.t * Alarm.alarms_report
       let equal (route1,stmt1,tmap1,alarms1) (route2,stmt2,tmap2,alarms2) =
         compare_route route1 route2 = 0 &&
         stmt1 == stmt2 &&
@@ -136,7 +137,7 @@ struct
 
   module EvalCache = Queue(
     struct
-      type t = route * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
+      type t = route * expr * Domain.t Token.TokenMap.t * Alarm.alarms_report
       let equal (route1,exp1,tmap1,alarms1) (route2,exp2,tmap2,alarms2) =
         compare_route route1 route2 = 0 &&
         exp1 == exp2 &&

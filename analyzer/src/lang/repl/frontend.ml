@@ -302,7 +302,7 @@ module Domain = struct
 
   let dependencies = []
 
-  let alarms = []
+  let checks = []
 
   let init prog man flow = flow
 

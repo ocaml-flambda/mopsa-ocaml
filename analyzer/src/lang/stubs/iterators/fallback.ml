@@ -32,7 +32,8 @@ module Domain =
 struct
 
   include GenStatelessDomainId(struct let name = "stubs.iterators.fallback" end)
-  let alarms = []
+
+  let checks = []
 
   let init prog man flow = flow
   let ask query man flow = None

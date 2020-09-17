@@ -375,10 +375,10 @@ struct
 
   let scalar = Semantic "C/Scalar"
 
-  let alarms = [ A_c_out_of_bound;
-                 A_c_null_deref;
-                 A_c_use_after_free;
-                 A_c_invalid_deref ]
+  let checks = [ CHK_C_OUT_OF_BOUND;
+                 CHK_C_NULL_DEREF;
+                 CHK_C_USE_AFTER_FREE;
+                 CHK_C_INVALID_DEREF ]
 
 
   (** {2 Command-line options} *)

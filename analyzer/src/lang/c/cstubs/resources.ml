@@ -44,7 +44,7 @@ struct
 
   let dependencies= []
 
-  let alarms = [Common.Alarms.A_c_double_free]
+  let checks = [CHK_C_DOUBLE_FREE]
 
   (** Initialization of environments *)
   (** ============================== *)

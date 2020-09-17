@@ -47,7 +47,7 @@ struct
 
   let lowlevel = Semantic "C/Lowlevel"
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization of environments *)

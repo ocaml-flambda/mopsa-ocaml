@@ -41,12 +41,12 @@ struct
     end)
 
 
-  let alarms = [
-    A_c_insufficient_format_args;
-    A_c_null_deref;
-    A_c_invalid_deref;
-    A_c_use_after_free;
-    A_c_invalid_format_arg_type
+  let checks = [
+    CHK_C_INSUFFICIENT_FORMAT_ARGS;
+    CHK_C_NULL_DEREF;
+    CHK_C_INVALID_DEREF;
+    CHK_C_USE_AFTER_FREE;
+    CHK_C_INVALID_FORMAT_ARG_TYPE
   ]
 
   (** {2 Transfer functions} *)

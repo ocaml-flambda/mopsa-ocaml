@@ -40,7 +40,7 @@ struct
       let name = "c.libs.compiler"
     end)
 
-  let alarms = []
+  let checks = []
   
   (** {2 Transfer functions} *)
   (** ====================== *)

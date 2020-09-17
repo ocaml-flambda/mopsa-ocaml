@@ -26,41 +26,63 @@ open Callstack
 open Format
 
 
-(** {1 Alarm categories} *)
-(** ******************** *)
+(** {1 Checks} *)
+(** ********** *)
 
-type alarm_category = ..
+type check = ..
 
-val pp_alarm_category : Format.formatter -> alarm_category -> unit
+val pp_check : Format.formatter -> check -> unit
 
-val register_alarm_category : ((formatter -> alarm_category -> unit) -> formatter -> alarm_category -> unit) -> unit
+val register_check : ((formatter -> check -> unit) -> formatter -> check -> unit) -> unit
 
 
 (** {1 Alarms} *)
 (** ********** *)
 
-type alarm = ..
+type alarm_kind = ..
 
-val category_of_alarm : alarm -> alarm_category
+type alarm_kind += A_instance of check
+
+type alarm = {
+  alarm_kind      : alarm_kind;
+  alarm_range     : range;
+  alarm_callstack : callstack;
+}
+
+val mk_alarm : alarm_kind -> callstack -> range -> alarm
+
+val check_of_alarm : alarm -> check
+
+val range_of_alarm : alarm -> range
+
+val callstack_of_alarm : alarm -> callstack
 
 val compare_alarm : alarm -> alarm -> int
 
 val pp_alarm : Format.formatter -> alarm -> unit
 
-val register_alarm_compare : ((alarm -> alarm -> int) -> alarm -> alarm -> int) -> unit
+val compare_alarm_kind : alarm_kind -> alarm_kind -> int
 
-val register_alarm_pp : ((formatter -> alarm -> unit) -> formatter -> alarm -> unit) -> unit
+val pp_alarm_kind : Format.formatter -> alarm_kind -> unit
 
-val register_alarm_category : ((alarm -> alarm_category) -> alarm -> alarm_category) -> unit
+val join_alarm_kind : alarm_kind -> alarm_kind -> alarm_kind option
+
+val register_alarm_compare : ((alarm_kind -> alarm_kind -> int) -> alarm_kind -> alarm_kind -> int) -> unit
+
+val register_alarm_pp : ((formatter -> alarm_kind -> unit) -> formatter -> alarm_kind -> unit) -> unit
+
+val register_alarm_check : ((alarm_kind -> check) -> alarm_kind -> check) -> unit
+
+val register_alarm_join : ((alarm_kind -> alarm_kind -> alarm_kind option) -> alarm_kind -> alarm_kind -> alarm_kind option) -> unit
 
 type alarm_info = {
-  category : (alarm -> alarm_category) -> alarm -> alarm_category;
-  compare  : (alarm -> alarm -> int) -> alarm -> alarm -> int;
-  print    : (formatter -> alarm -> unit) -> formatter -> alarm -> unit;
+  check   : (alarm_kind -> check) -> alarm_kind -> check;
+  compare : (alarm_kind -> alarm_kind -> int) -> alarm_kind -> alarm_kind -> int;
+  print   : (formatter -> alarm_kind -> unit) -> formatter -> alarm_kind -> unit;
+  join    : (alarm_kind -> alarm_kind -> alarm_kind option) -> alarm_kind -> alarm_kind -> alarm_kind option;
 }
 
 val register_alarm : alarm_info -> unit
-
 
 (** {1 Diagnosis} *)
 (** ************* *)
@@ -81,25 +103,7 @@ val join_diagnosis : diagnosis -> diagnosis -> diagnosis
 
 val meet_diagnosis : diagnosis -> diagnosis -> diagnosis
 
-
-(** {1 Range report} *)
-(** **************** *)
-
-module AlarmCategoryMap : MapExtSig.S with type key = alarm_category
-
-module CallstackSet : SetExtSig.S with type elt = callstack
-
-type 'a range_report = {
-  range_alarms     : diagnosis AlarmCategoryMap.t;
-  range_env        : 'a option;
-  range_callstacks : CallstackSet.t;
-}
-
-val pp_range_report : (formatter -> 'a -> unit) -> formatter -> 'a range_report -> unit
-
-val join_range_report : 'a lattice -> 'a ctx -> 'a range_report -> 'a range_report -> 'a range_report
-
-val meet_range_report : 'a lattice -> 'a ctx -> 'a range_report -> 'a range_report -> 'a range_report
+val add_alarm_to_diagnosis : alarm -> diagnosis -> diagnosis
 
 
 (** {1 Soundness hypothesis} *)
@@ -128,18 +132,47 @@ val compare_hypothesis : hypothesis -> hypothesis -> int
 
 module RangeMap : MapExtSig.S with type key = range
 
-type 'a report = {
-  report_map       : 'a range_report RangeMap.t;
-  report_soundness : hypothesis Dnf.t;
+module CheckMap : MapExtSig.S with type key = check
+
+module HypothesisSet : SetExtSig.S with type elt = hypothesis
+
+type alarms_report = {
+  alarms    : diagnosis CheckMap.t RangeMap.t;
+  soundness : HypothesisSet.t;
 }
 
-val pp_report : (formatter -> 'a -> unit) -> Format.formatter -> 'a report -> unit
+val empty_alarms_report : alarms_report
 
-val subset_report : 'a lattice -> 'a ctx -> 'a report -> 'a report -> bool
+val is_empty_alarms_report : alarms_report -> bool
 
-val join_report : 'a lattice -> 'a ctx -> 'a report -> 'a report -> 'a report
+val pp_alarms_report : Format.formatter -> alarms_report -> unit
 
-val meet_report : 'a lattice -> 'a ctx -> 'a report -> 'a report -> 'a report
+val subset_alarms_report : alarms_report -> alarms_report -> bool
 
-val count_alarms : 'a report -> int * int
+val join_alarms_report : alarms_report -> alarms_report -> alarms_report
 
+val meet_alarms_report : alarms_report -> alarms_report -> alarms_report
+
+val count_alarms : alarms_report -> int * int
+
+val singleton_alarms_report : alarm -> alarms_report
+
+val add_alarm_to_report : alarm -> alarms_report -> alarms_report
+
+val map2zo_alarms_report :
+  (range -> check -> diagnosis -> diagnosis) ->
+  (range -> check -> diagnosis -> diagnosis) ->
+  (range -> check -> diagnosis -> diagnosis -> diagnosis) ->
+  alarms_report -> alarms_report -> alarms_report
+
+val fold2zo_alarms_report :
+  (range -> check -> diagnosis -> 'b -> 'b) ->
+  (range -> check -> diagnosis -> 'b -> 'b) ->
+  (range -> check -> diagnosis -> diagnosis -> 'b -> 'b) ->
+  alarms_report -> alarms_report -> 'b -> 'b
+
+val alarms_report_to_set : alarms_report -> AlarmSet.t
+
+val group_alarms_set_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
+
+val group_alarms_set_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t

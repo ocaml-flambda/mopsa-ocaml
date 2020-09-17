@@ -37,7 +37,7 @@ module Domain =
         let name = "python.libs.math"
       end)
 
-    let alarms = []
+    let checks = []
 
     type stub_signature = {in_args: string list;
                            out_type: Mopsa.typ}
