@@ -33,7 +33,7 @@ struct
 
   include GenStatelessDomainId(struct let name = "stubs.iterators.fallback" end)
 
-  let checks = []
+  let checks = [CHK_STUB_INVALID_REQUIRES]
 
   let init prog man flow = flow
   let ask query man flow = None

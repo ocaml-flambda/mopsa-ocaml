@@ -269,7 +269,12 @@ let empty_alarms_report = {
 }
 
 let is_empty_alarms_report r =
-  RangeMap.is_empty r.alarms
+  RangeMap.for_all
+    (fun range checks ->
+       CheckMap.for_all (fun check -> function
+           | Safe | Unreachable  -> true
+           | Error _ | Warning _ -> false) checks
+    ) r.alarms
 
 let singleton_alarms_report alarm =
   let diag = Error (AlarmSet.singleton alarm) in
@@ -418,3 +423,42 @@ let group_alarms_set_by_check s =
        let s = try CheckMap.find check acc |> AlarmSet.add a with Not_found -> AlarmSet.singleton a in
        CheckMap.add check s acc
     ) s CheckMap.empty
+
+let find_diagnosis range check report =
+  try
+    RangeMap.find range report.alarms |>
+    CheckMap.find check
+  with Not_found ->
+    Unreachable
+
+let find_alarms range check report =
+  find_diagnosis range check report |>
+  get_alarms_of_diagnosis
+
+let set_diagnosis range check diag report =
+  let checks = try RangeMap.find range report.alarms with Not_found -> CheckMap.empty in
+  let old_diag = try CheckMap.find check checks with Not_found -> Unreachable in
+  if old_diag == diag then report
+  else { report with alarms = RangeMap.add range (CheckMap.add check diag checks) report.alarms }
+
+let exists_diagnosis f report =
+  RangeMap.exists
+    (fun range -> CheckMap.exists (f range))
+    report.alarms
+
+let forall_diagnosis f report =
+  RangeMap.exists
+    (fun range -> CheckMap.exists (f range))
+    report.alarms
+
+let filter_alarms_report f report =
+  let alarms =
+    RangeMap.fold
+      (fun range checks acc ->
+         let checks' = CheckMap.filter (f range) checks in
+         if checks == checks' then acc else
+         if CheckMap.is_empty checks' then RangeMap.remove range acc
+         else RangeMap.add range checks' acc)
+      report.alarms report.alarms
+  in
+  if alarms = report.alarms then report else { report with alarms }

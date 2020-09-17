@@ -176,3 +176,15 @@ val alarms_report_to_set : alarms_report -> AlarmSet.t
 val group_alarms_set_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
 
 val group_alarms_set_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t
+
+val find_diagnosis : range -> check -> alarms_report -> diagnosis
+
+val find_alarms : range -> check -> alarms_report -> AlarmSet.t
+
+val set_diagnosis : range -> check -> diagnosis -> alarms_report -> alarms_report
+
+val exists_diagnosis : (range -> check -> diagnosis -> bool) -> alarms_report -> bool
+
+val forall_diagnosis : (range -> check -> diagnosis -> bool) -> alarms_report -> bool
+
+val filter_alarms_report : (range -> check -> diagnosis -> bool) -> alarms_report -> alarms_report

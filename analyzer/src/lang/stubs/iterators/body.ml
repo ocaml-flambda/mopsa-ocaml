@@ -231,16 +231,51 @@ struct
       man.exec (cond_to_stmt e range) flow |> post_to_flow man 
 
     | F_binop (AND, f1, f2) ->
-      let flow1 = eval_formula cond_to_stmt f1 range man flow in
-      let flow2 = eval_formula cond_to_stmt f2 range man (Flow.set_alarms (Flow.get_alarms flow) flow1) in
-      (* FIXME: combine alarms in a smarter way*)
-      let alarms = join_alarms_report (Flow.get_alarms flow1) (Flow.get_alarms flow2) in
-      Flow.set_alarms alarms flow2
+      (* FIXME: when evaluating `requires: e1 and e2;`, two alarms
+         maybe generated (at location of `e1` and `e2` resp.).
+         These alarms should be merged into a single one. *)
+      eval_formula cond_to_stmt f1 range man flow |>
+      eval_formula cond_to_stmt f2 range man
 
     | F_binop (OR, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
       let flow2 = eval_formula cond_to_stmt f2 range man flow in
-      (* FIXME: combine alarms in a smarter way*)
+      (* Combine alarms of flow1 and flow2, so that if `f1` is invalid
+         but `f2` is valid, the alarm attached to `f1` is removed *)
+      let new_alarms1 =
+        fold2zo_alarms_report
+          (fun range check diag acc ->
+             match diag with
+             | Error _ ->  (range,check)::acc
+             | _ -> acc)
+          (fun _ _ _ acc -> acc)
+          (fun _ _ _ _ acc -> acc)
+          (Flow.get_alarms flow1) (Flow.get_alarms flow) [] in
+      let new_alarms2 =
+        fold2zo_alarms_report
+          (fun range check diag acc ->
+             match diag with
+             | Error _ -> (range,check)::acc
+             | _ -> acc)
+          (fun _ _ _ acc -> acc)
+          (fun _ _ _ _ acc -> acc)
+          (Flow.get_alarms flow2) (Flow.get_alarms flow) [] in
+      let flow1,flow2 =
+        match new_alarms1,new_alarms2 with
+        | [],[] -> flow1,flow2
+        | l,[] ->
+          let alarms =
+            List.fold_left
+              (fun acc (range,check) -> set_diagnosis range check Unreachable acc)
+              (Flow.get_alarms flow1) l in
+          Flow.set_alarms alarms flow1, flow2
+        | [],l ->
+          let alarms =
+            List.fold_left
+              (fun acc (range,check) -> set_diagnosis range check Unreachable acc)
+              (Flow.get_alarms flow2) l in
+          flow1, Flow.set_alarms alarms flow2
+        | _,_ -> flow1,flow2 in
       Flow.join man.lattice flow1 flow2
 
     | F_binop (IMPLIES, f1, f2) ->
