@@ -757,18 +757,18 @@ struct
       interact action flow
 
     | Info Alarms ->
-      let alarms = Flow.get_alarms flow in
+      let report = Flow.get_report flow in
       begin
-        if Alarm.is_empty_alarms_report alarms then
+        if Alarm.is_safe_report report then
           printf "No alarm@."
         else (
-          let errors,warnings = Alarm.count_alarms alarms in
+          let errors,warnings = Alarm.count_alarms report in
           let nb = errors+warnings in
           printf "%d alarm%a found:@." nb Debug.plurial_int nb;
-          Alarm.alarms_report_to_set alarms |>
-          Alarm.group_alarms_set_by_check |>
+          Alarm.alarms_of_report report |>
+          Alarm.group_alarms_by_check |>
           Alarm.CheckMap.iter (fun check ss ->
-              let range_map = Alarm.group_alarms_set_by_range ss in
+              let range_map = Alarm.group_alarms_by_range ss in
               let sub_total = Alarm.RangeMap.cardinal range_map in
               printf "  %a: %d@." Alarm.pp_check check sub_total
             )

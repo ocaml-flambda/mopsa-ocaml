@@ -126,9 +126,9 @@ let highlight_range fmt range =
     | _ -> ()
 
 
-let pp_alarm_message out range check diag alarm_kinds callstacks =
+let pp_alarm_message out diag alarm_kinds callstacks =
   (* Print the alarm instance *)
-  let file_name = get_range_relative_file range in
+  let file_name = get_range_relative_file diag.diag_range in
   let fun_name = match CallstackSet.elements callstacks with
     | (c::_) :: _ -> c.call_fun_orig_name
     | _ -> "<>"
@@ -136,12 +136,12 @@ let pp_alarm_message out range check diag alarm_kinds callstacks =
   print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
     (Debug.bold pp_print_string) file_name
     (Debug.bold pp_print_string) fun_name
-    (Debug.bold pp_relative_range) range
-    (fun fmt -> function Error _   -> Debug.color "magenta" pp_check fmt check
-                       | Warning _ -> Debug.color "yellow" pp_check fmt check
+    (Debug.bold pp_relative_range) diag.diag_range
+    (fun fmt -> function Error   -> Debug.color "magenta" pp_check fmt diag.diag_check
+                       | Warning -> Debug.color "yellow" pp_check fmt diag.diag_check
                        | _ -> assert false
-    ) diag
-    highlight_range range
+    ) diag.diag_status
+    highlight_range diag.diag_range
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) alarm_kinds
     (fun fmt callstacks ->
        if not !opt_show_callstacks then ()
@@ -165,7 +165,7 @@ let pp_alarm_message out range check diag alarm_kinds callstacks =
     ) callstacks
 
 
-let report ?(flow=None) man alarms time files out =
+let report ?(flow=None) man rep time files out =
   if Soundness.is_sound ()
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
   else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
@@ -180,7 +180,7 @@ let report ?(flow=None) man alarms time files out =
   in
 
   let () =
-    if is_empty_alarms_report alarms
+    if is_safe_report rep
     then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
     else
       let check_total, total =
@@ -188,16 +188,16 @@ let report ?(flow=None) man alarms time files out =
           (fun range checks acc ->
              CheckMap.fold
                (fun check diag (check_total, total) ->
-                  match diag with
+                  match diag.diag_status with
                   | Safe | Unreachable -> check_total, total
-                  | Error aset | Warning aset ->
+                  | Error | Warning ->
                     (* Get the set of alarms kinds and callstacks *)
                     let kinds,callstacks =
-                      AlarmSet.fold 
+                      AlarmSet.fold
                         (fun a (kinds,callstacks) ->
                            AlarmKindSet.add a.alarm_kind kinds,
                            CallstackSet.add a.alarm_callstack callstacks)
-                        aset (AlarmKindSet.empty,CallstackSet.empty) in
+                        diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
                     (* Join alarm kinds *)
                     let rec iter = function
                       | [] -> []
@@ -216,11 +216,11 @@ let report ?(flow=None) man alarms time files out =
                           aa',tl'
                     in
                     let kinds' = iter (AlarmKindSet.elements kinds) in
-                    pp_alarm_message out range check diag kinds' callstacks;
+                    pp_alarm_message out diag kinds' callstacks;
                     CheckMap.add check (try 1 + CheckMap.find check check_total with Not_found -> 1) check_total,
                     total + 1
                ) checks acc
-          ) alarms.alarms (CheckMap.empty,0)
+          ) rep.report_diagnostics (CheckMap.empty,0)
       in
       (* Print alarms summary *)
       print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@.@."

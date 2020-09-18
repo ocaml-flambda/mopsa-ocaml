@@ -102,7 +102,7 @@ struct
     Flow.map_ctx (add_ctx Fctx.key StringMap.empty)
 
   let split_cur_from_others man flow =
-    let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) in
+    let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow) in
     let flow_cur = Flow.set T_cur (Flow.get T_cur man.lattice flow) man.lattice bot in
     let flow_other = Flow.remove T_cur flow in
     flow_cur, flow_other

@@ -42,12 +42,12 @@ let opt_silent = ref false
 
 (* Print collected alarms in the desired output format *)
 let report man flow time files =
-  let alarms = Core.Flow.get_alarms flow in
-  let return_v = if !opt_silent || is_empty_alarms_report alarms then 0 else 1 in
+  let report = Core.Flow.get_report flow in
+  let return_v = if !opt_silent || is_safe_report report then 0 else 1 in
   let lf = if !opt_display_lastflow then Some flow else None in
   let _ = match !opt_format with
-    | F_text -> Text.report ~flow:lf man alarms time files !opt_file
-    | F_json -> Json.report man alarms time files !opt_file in
+    | F_text -> Text.report ~flow:lf man report time files !opt_file
+    | F_json -> Json.report man report time files !opt_file in
   return_v
 
 let panic ~btrace exn time files =

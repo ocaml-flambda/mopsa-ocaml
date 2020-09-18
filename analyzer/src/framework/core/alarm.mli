@@ -45,6 +45,7 @@ type alarm_kind += A_instance of check
 
 type alarm = {
   alarm_kind      : alarm_kind;
+  alarm_check     : check;
   alarm_range     : range;
   alarm_callstack : callstack;
 }
@@ -84,40 +85,52 @@ type alarm_info = {
 
 val register_alarm : alarm_info -> unit
 
-(** {1 Diagnosis} *)
-(** ************* *)
+
+(** {1 Diagnostic} *)
+(** ************** *)
 
 module AlarmSet : SetExtSig.S with type elt = alarm
 
-type diagnosis =
+type diagnostic_status =
+  | Warning
   | Safe
-  | Error       of AlarmSet.t
-  | Warning     of AlarmSet.t
+  | Error
   | Unreachable
 
-val pp_diagnosis : Format.formatter -> diagnosis -> unit
+type diagnostic = {
+  diag_range : range;
+  diag_check : check;
+  diag_status : diagnostic_status;
+  diag_alarms : AlarmSet.t;
+}
 
-val subset_diagnosis : diagnosis -> diagnosis -> bool
+val mk_diagnostic : range -> check -> diagnostic_status -> AlarmSet.t -> diagnostic
 
-val join_diagnosis : diagnosis -> diagnosis -> diagnosis
+val pp_diagnostic : Format.formatter -> diagnostic -> unit
 
-val meet_diagnosis : diagnosis -> diagnosis -> diagnosis
+val subset_diagnostic : diagnostic -> diagnostic -> bool
 
-val add_alarm_to_diagnosis : alarm -> diagnosis -> diagnosis
+val join_diagnostic : diagnostic -> diagnostic -> diagnostic
+
+val meet_diagnostic : diagnostic -> diagnostic -> diagnostic
+
+val add_alarm_to_diagnostic : alarm -> diagnostic -> diagnostic
+
+val compare_diagnostic : diagnostic -> diagnostic -> int
 
 
 (** {1 Soundness hypothesis} *)
 (** ************************ *)
 
 type hypothesis_scope =
-  | Hypothesis_global
-  | Hypothesis_local of range
+  | Hypo_global
+  | Hypo_local of range
 
 type hypothesis_kind = ..
 
 type hypothesis = {
-  hypothesis_scope : hypothesis_scope;
-  hypothesis_kind  : hypothesis_kind;
+  hypo_scope : hypothesis_scope;
+  hypo_kind  : hypothesis_kind;
 }
 
 val register_hypothesis : hypothesis_kind TypeExt.info -> unit
@@ -136,55 +149,61 @@ module CheckMap : MapExtSig.S with type key = check
 
 module HypothesisSet : SetExtSig.S with type elt = hypothesis
 
-type alarms_report = {
-  alarms    : diagnosis CheckMap.t RangeMap.t;
-  soundness : HypothesisSet.t;
+type report = {
+  report_diagnostics : diagnostic CheckMap.t RangeMap.t;
+  report_soundness : HypothesisSet.t;
 }
 
-val empty_alarms_report : alarms_report
+val empty_report : report
 
-val is_empty_alarms_report : alarms_report -> bool
+val is_empty_report : report -> bool
 
-val pp_alarms_report : Format.formatter -> alarms_report -> unit
+val is_safe_report : report -> bool
 
-val subset_alarms_report : alarms_report -> alarms_report -> bool
+val is_sound_report : report -> bool
 
-val join_alarms_report : alarms_report -> alarms_report -> alarms_report
+val pp_report : Format.formatter -> report -> unit
 
-val meet_alarms_report : alarms_report -> alarms_report -> alarms_report
+val subset_report : report -> report -> bool
 
-val count_alarms : alarms_report -> int * int
+val join_report : report -> report -> report
 
-val singleton_alarms_report : alarm -> alarms_report
+val meet_report : report -> report -> report
 
-val add_alarm_to_report : alarm -> alarms_report -> alarms_report
+val filter_report : (diagnostic -> bool) -> report -> report
 
-val map2zo_alarms_report :
-  (range -> check -> diagnosis -> diagnosis) ->
-  (range -> check -> diagnosis -> diagnosis) ->
-  (range -> check -> diagnosis -> diagnosis -> diagnosis) ->
-  alarms_report -> alarms_report -> alarms_report
+val singleton_report : alarm -> report
 
-val fold2zo_alarms_report :
-  (range -> check -> diagnosis -> 'b -> 'b) ->
-  (range -> check -> diagnosis -> 'b -> 'b) ->
-  (range -> check -> diagnosis -> diagnosis -> 'b -> 'b) ->
-  alarms_report -> alarms_report -> 'b -> 'b
+val add_alarm : alarm -> report -> report
 
-val alarms_report_to_set : alarms_report -> AlarmSet.t
+val set_diagnostic : diagnostic -> report -> report
 
-val group_alarms_set_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
+val add_diagnostic : diagnostic -> report -> report
 
-val group_alarms_set_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t
+val remove_diagnostic : range -> check -> report -> report
 
-val find_diagnosis : range -> check -> alarms_report -> diagnosis
+val find_diagnostic : range -> check -> report -> diagnostic
 
-val find_alarms : range -> check -> alarms_report -> AlarmSet.t
+val alarms_of_report : report -> AlarmSet.t
 
-val set_diagnosis : range -> check -> diagnosis -> alarms_report -> alarms_report
+val exists_report : (diagnostic -> bool) -> report -> bool
 
-val exists_diagnosis : (range -> check -> diagnosis -> bool) -> alarms_report -> bool
+val forall_report : (diagnostic -> bool) -> report -> bool
 
-val forall_diagnosis : (range -> check -> diagnosis -> bool) -> alarms_report -> bool
+val count_alarms : report -> int * int
 
-val filter_alarms_report : (range -> check -> diagnosis -> bool) -> alarms_report -> alarms_report
+val map2zo_report :
+  (diagnostic -> diagnostic) ->
+  (diagnostic -> diagnostic) ->
+  (diagnostic -> diagnostic -> diagnostic) ->
+  report -> report -> report
+
+val fold2zo_report :
+  (diagnostic -> 'b -> 'b) ->
+  (diagnostic -> 'b -> 'b) ->
+  (diagnostic -> diagnostic -> 'b -> 'b) ->
+  report -> report -> 'b -> 'b
+
+val group_alarms_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
+
+val group_alarms_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t

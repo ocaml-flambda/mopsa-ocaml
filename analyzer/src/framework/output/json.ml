@@ -63,19 +63,19 @@ let render_call (c:callsite)  =
 let render_callstack cs  =
   `List (List.map render_call cs)
 
-let aggregate_alarms alarms =
+let aggregate_alarms report =
   RangeMap.fold
     (fun range checks acc ->
        CheckMap.fold
          (fun check diag acc ->
-            match diag with
+            match diag.diag_status with
             | Safe | Unreachable -> acc
-            | Error alarms | Warning alarms ->
-              let csl = AlarmSet.elements alarms |>
+            | Error | Warning ->
+              let csl = AlarmSet.elements diag.diag_alarms |>
                         List.map callstack_of_alarm in
               (range,check,csl) :: acc
          ) checks acc
-    ) alarms.alarms []
+    ) report.report_diagnostics []
 
 let render_check check =
   let title = Format.asprintf "%a" pp_check check in
@@ -100,7 +100,7 @@ let render_warning w  =
       "message", `String w.warn_message;
       "range", render_range r;
     ]
-    
+
 
 let render_var var  =
   `String var.vname
@@ -115,14 +115,14 @@ let render_env (var,value)  =
   ]
 
 
-let report ?(flow=None) man alarms time files out : unit =
+let report ?(flow=None) man rep time files out : unit =
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (aggregate_alarms alarms |> List.map render_alarm);
+      "alarms", `List (aggregate_alarms rep |> List.map render_alarm);
       "warnings", `List (List.map render_warning (get_warnings ()));
     ]
   in

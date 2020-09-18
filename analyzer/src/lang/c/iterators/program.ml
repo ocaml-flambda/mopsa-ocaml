@@ -319,9 +319,9 @@ struct
 
   (** Initialize argc and argv with symbolic arguments *)
   let call_main_with_symbolic_args main lo hi functions man flow =
-    (* FIXME: functions call_main_* main generate false alarms. Since
+    (* FIXME: functions call_main_* may generate false alarms. Since
        we are sure they are safe, we can remove these alarms *)
-    let alarms = Flow.get_alarms flow in
+    let report = Flow.get_report flow in
 
     let range = main.c_func_name_range in
 
@@ -406,8 +406,8 @@ struct
     let last = mk_c_subscript_access argv argc range in
     man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
 
-    (* Put the initial alarm set *)
-    let flow = Flow.set_alarms alarms flow in
+    (* Put the initial alarms report *)
+    let flow = Flow.set_report report flow in
 
     exec_entry_body main man flow
 

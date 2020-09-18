@@ -36,6 +36,8 @@ let check_print_chain : check TypeExt.print_chain =
 let pp_check fmt c =
   TypeExt.print check_print_chain fmt c
 
+let compare_check = compare
+
 let register_check f =
   TypeExt.register_print f check_print_chain
 
@@ -49,14 +51,10 @@ type alarm_kind += A_instance of check
 
 type alarm = {
   alarm_kind      : alarm_kind;
+  alarm_check     : check;
   alarm_range     : range;
   alarm_callstack : callstack;
 }
-
-let mk_alarm kind callstack range =
-  { alarm_kind      = kind;
-    alarm_range     = range;
-    alarm_callstack = callstack }
 
 let alarm_compare_chain : alarm_kind TypeExt.compare_chain =
   TypeExt.mk_compare_chain
@@ -89,10 +87,10 @@ let join_alarm_kind a1 a2 =
   !alarm_join_chain a1 a2
 
 let compare_alarm a1 a2 =
-  Compare.triple
-    compare_alarm_kind compare_callstack compare_range
-    (a1.alarm_kind,a1.alarm_callstack,a1.alarm_range)
-    (a2.alarm_kind,a2.alarm_callstack,a2.alarm_range)
+  Compare.quadruple
+    compare_alarm_kind compare_callstack compare_range compare_check
+    (a1.alarm_kind,a1.alarm_callstack,a1.alarm_range,a1.alarm_check)
+    (a2.alarm_kind,a2.alarm_callstack,a2.alarm_range,a2.alarm_check)
 
 let pp_alarm fmt a =
   pp_alarm_kind fmt a.alarm_kind
@@ -122,17 +120,21 @@ let register_alarm info =
   register_alarm_compare info.compare;
   register_alarm_join info.join
 
-
-let check_of_alarm a =
-  !alarm_check_chain a.alarm_kind
+let check_of_alarm a = a.alarm_check
 
 let range_of_alarm a = a.alarm_range
 
 let callstack_of_alarm a = a.alarm_callstack
 
+let mk_alarm kind callstack range =
+  { alarm_kind      = kind;
+    alarm_check     = !alarm_check_chain kind;
+    alarm_range     = range;
+    alarm_callstack = callstack }
 
-(** {1 Check diagnosis} *)
-(** ******************* *)
+
+(** {1 Diagnostic} *)
+(** ************** *)
 
 module AlarmSet = SetExt.Make(struct type t = alarm let compare = compare_alarm end)
 
@@ -146,82 +148,130 @@ let pp_alarm_set fmt a =
          pp_alarm
       ) l
 
-type diagnosis =
+type diagnostic_status =
+  | Warning
   | Safe
-  | Error       of AlarmSet.t
-  | Warning     of AlarmSet.t
+  | Error
   | Unreachable
 
-let get_alarms_of_diagnosis = function
-  | Safe | Unreachable -> AlarmSet.empty
-  | Error a | Warning a -> a
+type diagnostic = {
+  diag_range : range;
+  diag_check : check;
+  diag_status : diagnostic_status;
+  diag_alarms : AlarmSet.t;
+}
 
-let set_alarms_of_diagnosis a = function
-  | Safe | Unreachable as x -> x
-  | Error _                 -> Error a
-  | Warning _               -> Warning a
+let mk_diagnostic range check status alarms =
+  if status == Unreachable || status == Safe then
+    assert(AlarmSet.is_empty alarms);
+  { diag_range = range;
+    diag_check = check;
+    diag_status = status;
+    diag_alarms = alarms; }
 
-exception UnsoundDiagnosis
-
-let pp_diagnosis fmt = function
-  | Safe        -> pp_print_string fmt "safe"
-  | Error a     -> fprintf fmt "error: %a" pp_alarm_set a
-  | Warning a   -> fprintf fmt "warning: %a" pp_alarm_set a
+let pp_diagnostic_status fmt = function
+  | Warning   -> pp_print_string fmt "warning"
+  | Safe      -> pp_print_string fmt "safe"
+  | Error     -> pp_print_string fmt "error"
   | Unreachable -> pp_print_string fmt "unreachable"
 
-let subset_diagnosis diag1 diag2 =
-  if diag1 == diag2 then true else
-  match diag1, diag2 with
+let pp_diagnostic fmt d =
+  match d.diag_status with
+  | Safe | Unreachable ->
+    pp_diagnostic_status fmt d.diag_status
+  | Error | Warning ->
+    fprintf fmt "%a: %a"
+      pp_diagnostic_status d.diag_status
+      pp_alarm_set d.diag_alarms
+
+let subset_diagnostic_status s1 s2 =
+  if s1 == s2 then true else
+  match s1,s2 with
   | Unreachable, _ -> true
   | _, Unreachable -> false
-  | _, Warning a   -> AlarmSet.subset (get_alarms_of_diagnosis diag1) a
-  | Warning _, _   -> false
-  | Error a1, Error a2 -> AlarmSet.subset a1 a2
+  | _, Warning     -> true
+  | Warning, _     -> false
+  | Error, Error   -> true
   | Safe, Safe     -> true
-  | Error _,Safe     -> false
-  | Safe,Error _     -> false
+  | Error,Safe     -> false
+  | Safe,Error     -> false
 
-let join_diagnosis diag1 diag2 =
-  if diag1 == diag2 then diag1 else
-  if subset_diagnosis diag1 diag2 then diag2 else
-  if subset_diagnosis diag2 diag1 then diag1 else
-  match diag1,diag2 with
+
+let subset_diagnostic d1 d2 =
+  if d1 == d2 then true else
+  subset_diagnostic_status d1.diag_status d2.diag_status
+  && AlarmSet.subset d1.diag_alarms d2.diag_alarms
+
+let join_diagnostic_status s1 s2 =
+  if s1 == s2 then s1 else
+  match s1,s2 with
   | Unreachable, x | x, Unreachable  -> x
-  | Warning a, x     | x, Warning a  -> Warning (AlarmSet.union a (get_alarms_of_diagnosis x))
-  | Error a1, Error a2               -> Error (AlarmSet.union a1 a2)
+  | Warning, x     | x, Warning      -> Warning
+  | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
-  | Error a, Safe    | Safe, Error a -> Warning a
+  | Error, Safe    | Safe, Error     -> Warning
 
-let meet_diagnosis diag1 diag2 =
-  if diag1 == diag2 then diag1 else
-  if subset_diagnosis diag1 diag2 then diag1 else
-  if subset_diagnosis diag2 diag1 then diag2 else
-  match diag1,diag2 with
+
+let join_diagnostic d1 d2 =
+  if d1 == d2 then d1 else
+  if subset_diagnostic d1 d2 then d2 else
+  if subset_diagnostic d2 d1 then d1
+  else (
+    assert(compare_range d1.diag_range d2.diag_range = 0);
+    assert(compare_check d1.diag_check d2.diag_check = 0);
+    { diag_range = d1.diag_range;
+      diag_check = d1.diag_check;
+      diag_status = join_diagnostic_status d1.diag_status d2.diag_status;
+      diag_alarms = AlarmSet.union d1.diag_alarms d2.diag_alarms; }
+  )
+
+let meet_diagnostic_status s1 s2 =
+  if s1 == s2 then s1 else
+  match s1,s2 with
   | Unreachable, _ | _, Unreachable  -> Unreachable
-  | Warning a, x     | x, Warning a  -> set_alarms_of_diagnosis (AlarmSet.inter a (get_alarms_of_diagnosis x)) x
-  | Error a1, Error a2               -> Error (AlarmSet.inter a1 a2)
+  | Warning, x     | x, Warning      -> x
+  | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
-  | Error _, Safe    | Safe, Error _ -> Unreachable
+  | Error, Safe    | Safe, Error -> Unreachable
 
-let add_alarm_to_diagnosis alarm = function
-  | Error a -> Error (AlarmSet.add alarm a)
-  | Warning a -> Warning (AlarmSet.add alarm a)
-  | Safe -> Warning (AlarmSet.singleton alarm)
-  | Unreachable -> Error (AlarmSet.singleton alarm)
+let meet_diagnostic d1 d2 =
+  if d1 == d2 then d1 else
+  if subset_diagnostic d1 d2 then d1 else
+  if subset_diagnostic d2 d1 then d2
+  else (
+    assert(compare_range d1.diag_range d2.diag_range = 0);
+    assert(compare_check d1.diag_check d2.diag_check = 0);
+    { diag_range = d1.diag_range;
+      diag_check = d1.diag_check;
+      diag_status = meet_diagnostic_status d1.diag_status d2.diag_status;
+      diag_alarms = AlarmSet.inter d1.diag_alarms d2.diag_alarms; }
+  )
 
+let add_alarm_to_diagnostic a d =
+  match d.diag_status with
+  | Error       -> { d with diag_alarms = AlarmSet.add a d.diag_alarms }
+  | Warning     -> { d with diag_alarms = AlarmSet.add a d.diag_alarms }
+  | Safe        -> { d with diag_status = Error; diag_alarms = AlarmSet.singleton a }
+  | Unreachable -> { d with diag_status = Error; diag_alarms = AlarmSet.singleton a }
+
+let compare_diagnostic d1 d2 =
+  Compare.quadruple
+    compare_range compare_check compare AlarmSet.compare
+    (d1.diag_range,d1.diag_check,d1.diag_status,d1.diag_alarms)
+    (d2.diag_range,d2.diag_check,d2.diag_status,d2.diag_alarms)
 
 (** {1 Soundness hypothesis} *)
 (** ************************ *)
 
 type hypothesis_scope =
-  | Hypothesis_global
-  | Hypothesis_local of range
+  | Hypo_global
+  | Hypo_local of range
 
 type hypothesis_kind = ..
 
 type hypothesis = {
-  hypothesis_scope : hypothesis_scope;
-  hypothesis_kind  : hypothesis_kind;
+  hypo_scope : hypothesis_scope;
+  hypo_kind  : hypothesis_kind;
 }
 
 let hypothesis_compare_chain : hypothesis_kind TypeExt.compare_chain = TypeExt.mk_compare_chain compare
@@ -233,20 +283,20 @@ let register_hypothesis info =
   TypeExt.register info hypothesis_compare_chain hypothesis_print_chain
 
 let pp_hypothesis fmt h =
-  match h.hypothesis_scope with
-  | Hypothesis_global      -> TypeExt.print hypothesis_print_chain fmt h.hypothesis_kind
-  | Hypothesis_local range -> fprintf fmt "%a: %a" pp_relative_range range (TypeExt.print hypothesis_print_chain) h.hypothesis_kind
+  match h.hypo_scope with
+  | Hypo_global      -> TypeExt.print hypothesis_print_chain fmt h.hypo_kind
+  | Hypo_local range -> fprintf fmt "%a: %a" pp_relative_range range (TypeExt.print hypothesis_print_chain) h.hypo_kind
 
 let compare_hypothesis h1 h2 =
   Compare.pair
     (fun scope1 scope2 ->
        match scope1, scope2 with
-       | Hypothesis_global, Hypothesis_global     -> 0
-       | Hypothesis_local r1, Hypothesis_local r2 -> compare_range r1 r2
+       | Hypo_global, Hypo_global     -> 0
+       | Hypo_local r1, Hypo_local r2 -> compare_range r1 r2
        | _ -> compare scope1 scope2 )
     (TypeExt.compare hypothesis_compare_chain)
-    (h1.hypothesis_scope, h1.hypothesis_kind)
-    (h2.hypothesis_scope, h2.hypothesis_kind)
+    (h1.hypo_scope, h1.hypo_kind)
+    (h2.hypo_scope, h2.hypo_kind)
 
 
 (** {1 Alarms report} *)
@@ -258,31 +308,39 @@ module CheckMap = MapExt.Make(struct type t = check let compare = compare end)
 
 module HypothesisSet = SetExt.Make(struct type t = hypothesis let compare = compare_hypothesis end)
 
-type alarms_report = {
-  alarms    : diagnosis CheckMap.t RangeMap.t;
-  soundness : HypothesisSet.t;
+type report = {
+  report_diagnostics : diagnostic CheckMap.t RangeMap.t;
+  report_soundness   : HypothesisSet.t;
 }
 
-let empty_alarms_report = {
-  alarms = RangeMap.empty;
-  soundness = HypothesisSet.empty;
+let empty_report = {
+  report_diagnostics = RangeMap.empty;
+  report_soundness = HypothesisSet.empty;
 }
 
-let is_empty_alarms_report r =
+let is_empty_report r = RangeMap.is_empty r.report_diagnostics
+
+let is_safe_report r =
   RangeMap.for_all
     (fun range checks ->
-       CheckMap.for_all (fun check -> function
-           | Safe | Unreachable  -> true
-           | Error _ | Warning _ -> false) checks
-    ) r.alarms
+       CheckMap.for_all
+         (fun check diag ->
+            match diag.diag_status with
+            | Safe  | Unreachable  -> true
+            | Error | Warning      -> false
+         ) checks
+    ) r.report_diagnostics
 
-let singleton_alarms_report alarm =
-  let diag = Error (AlarmSet.singleton alarm) in
+let is_sound_report r =
+  HypothesisSet.is_empty r.report_soundness
+
+let singleton_report alarm =
+  let diag = mk_diagnostic alarm.alarm_range (check_of_alarm alarm) Error (AlarmSet.singleton alarm) in
   let check = check_of_alarm alarm in
-  { alarms = RangeMap.singleton alarm.alarm_range (CheckMap.singleton check diag);
-    soundness = HypothesisSet.empty; }
+  { report_diagnostics = RangeMap.singleton alarm.alarm_range (CheckMap.singleton check diag);
+    report_soundness = HypothesisSet.empty; }
 
-let pp_alarms_report fmt r =
+let pp_report fmt r =
   fprintf fmt "@[<v>soundness hypotheis: @[<v>%a@]@,%a@]"
     (HypothesisSet.fprint
        SetExtSig.{ print_empty = "∅";
@@ -290,41 +348,41 @@ let pp_alarms_report fmt r =
                    print_sep   = "@,";
                    print_end   = ""; }
        pp_hypothesis
-    ) r.soundness
+    ) r.report_soundness
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (range,checks) ->
           pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
             (fun fmt (check,diag) ->
                fprintf fmt "@[<v2>%a:@,@[%a@]@]"
                  pp_relative_range range
-                 pp_diagnosis diag
+                 pp_diagnostic diag
             ) fmt (CheckMap.bindings checks)
        )
-    ) (RangeMap.bindings r.alarms)
+    ) (RangeMap.bindings r.report_diagnostics)
 
-let subset_alarms_report r1 r2 =
+let subset_report r1 r2 =
   (r1 == r2)
-  || (HypothesisSet.equal r1.soundness r2.soundness
-      && (r1.alarms == r2.alarms
+  || (HypothesisSet.equal r1.report_soundness r2.report_soundness
+      && (r1.report_diagnostics == r2.report_diagnostics
           || (RangeMap.for_all2zo
                 (fun _ checks1 -> false)
                 (fun _ checks2 -> true)
                 (fun _ checks1 checks2 ->
                    CheckMap.for_all2zo
-                     (fun _ diag1 -> diag1 == Unreachable)
+                     (fun _ diag1 -> diag1.diag_status == Unreachable)
                      (fun _ diag2 -> true)
-                     (fun _ diag1 diag2 -> subset_diagnosis diag1 diag2)
+                     (fun _ diag1 diag2 -> subset_diagnostic diag1 diag2)
                      checks1 checks2
                 )
-                r1.alarms r2.alarms)))
+                r1.report_diagnostics r2.report_diagnostics)))
 
-let join_alarms_report r1 r2 =
+let join_report r1 r2 =
   if r1 == r2 then r1 else
-  if subset_alarms_report r1 r2 then r2 else
-  if subset_alarms_report r2 r1 then r1
+  if subset_report r1 r2 then r2 else
+  if subset_report r2 r1 then r1
   else
-    { soundness = HypothesisSet.union r1.soundness r2.soundness;
-      alarms =
+    { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+      report_diagnostics =
         RangeMap.map2zo
           (fun _ checks1 -> checks1)
           (fun _ checks2 -> checks2)
@@ -332,18 +390,18 @@ let join_alarms_report r1 r2 =
              CheckMap.map2zo
                (fun _ diag1 -> diag1)
                (fun _ diag2 -> diag2)
-               (fun _ diag1 diag2 -> join_diagnosis diag1 diag2)
+               (fun _ diag1 diag2 -> join_diagnostic diag1 diag2)
                checks1 checks2
           )
-          r1.alarms r2.alarms; }
+          r1.report_diagnostics r2.report_diagnostics; }
 
-let meet_alarms_report r1 r2 =
+let meet_report r1 r2 =
   if r1 == r2 then r1 else
-  if subset_alarms_report r1 r2 then r1 else
-  if subset_alarms_report r2 r1 then r2
+  if subset_report r1 r2 then r1 else
+  if subset_report r2 r1 then r2
   else
-    { soundness = HypothesisSet.union r1.soundness r2.soundness;
-      alarms =
+    { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+      report_diagnostics =
         RangeMap.fold2zo
           (fun range _ acc -> RangeMap.remove range acc)
           (fun range _ acc -> RangeMap.remove range acc)
@@ -352,63 +410,60 @@ let meet_alarms_report r1 r2 =
                CheckMap.fold2zo
                  (fun check diag1 acc -> CheckMap.remove check acc)
                  (fun check diag2 acc -> CheckMap.remove check acc)
-                 (fun check diag1 diag2 acc -> CheckMap.add check (meet_diagnosis diag1 diag2) acc)
+                 (fun check diag1 diag2 acc -> CheckMap.add check (meet_diagnostic diag1 diag2) acc)
                  checks1 checks2 checks1 in
              RangeMap.add range checks acc
           )
-          r1.alarms r2.alarms r1.alarms }
+          r1.report_diagnostics r2.report_diagnostics r1.report_diagnostics }
 
 let count_alarms r =
   RangeMap.fold
     (fun range checks acc ->
        CheckMap.fold
          (fun check diag (errors,warnings) ->
-            match diag with
-            | Error _ -> errors + 1, warnings
-            | Warning _ -> errors, warnings + 1
+            match diag.diag_status with
+            | Error              -> errors + 1, warnings
+            | Warning            -> errors, warnings + 1
             | Safe | Unreachable -> errors, warnings
          ) checks acc
-    ) r.alarms (0,0)
+    ) r.report_diagnostics (0,0)
 
-let add_alarm_to_report alarm r =
-  let check = check_of_alarm alarm in
-  let checks = try RangeMap.find alarm.alarm_range r.alarms with Not_found -> CheckMap.empty in
-  let diag = try CheckMap.find check checks with Not_found -> Unreachable in
-  let diag' = add_alarm_to_diagnosis alarm diag in
-  { r with alarms = RangeMap.add alarm.alarm_range (CheckMap.add check diag' checks) r.alarms }
+let add_alarm alarm r =
+  let check = alarm.alarm_check in
+  let range = alarm.alarm_range in
+  let checks = try RangeMap.find range r.report_diagnostics with Not_found -> CheckMap.empty in
+  let diag = try CheckMap.find check checks with Not_found -> mk_diagnostic range check Unreachable AlarmSet.empty in
+  let diag' = add_alarm_to_diagnostic alarm diag in
+  { r with report_diagnostics = RangeMap.add alarm.alarm_range (CheckMap.add check diag' checks) r.report_diagnostics }
 
-let map2zo_alarms_report f1 f2 f r1 r2 =
-  { soundness = HypothesisSet.union r1.soundness r2.soundness;
-    alarms = RangeMap.map2zo
-        (fun range -> CheckMap.mapi (f1 range))
-        (fun range -> CheckMap.mapi (f2 range))
-        (fun range ->
-           CheckMap.map2zo
-             (f1 range)
-             (f2 range)
-             (f range)
-        )
-        r1.alarms r2.alarms }
+let map2zo_report f1 f2 f r1 r2 =
+  { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+    report_diagnostics =
+      RangeMap.map2zo
+        (fun range -> CheckMap.map f1)
+        (fun range -> CheckMap.map f2)
+        (fun range -> CheckMap.map2zo (fun _ -> f1) (fun _ -> f2) (fun _ -> f))
+        r1.report_diagnostics r2.report_diagnostics }
 
-let fold2zo_alarms_report f1 f2 f r1 r2 init =
+let fold2zo_report f1 f2 f r1 r2 init =
   RangeMap.fold2zo
-    (fun range checks1 acc -> CheckMap.fold (f1 range) checks1 acc)
-    (fun range checks2 acc -> CheckMap.fold (f2 range) checks2 acc)
+    (fun range checks1 acc -> CheckMap.fold (fun check -> f1) checks1 acc)
+    (fun range checks2 acc -> CheckMap.fold (fun check -> f2) checks2 acc)
     (fun range checks1 checks2 acc ->
        CheckMap.fold2zo
-         (fun check diag1 acc -> f1 range check diag1 acc)
-         (fun check diag2 acc -> f2 range check diag2 acc)
-         (fun check diag1 diag2 acc -> f range check diag1 diag2 acc)
+         (fun check diag1 acc -> f1 diag1 acc)
+         (fun check diag2 acc -> f2 diag2 acc)
+         (fun check diag1 diag2 acc -> f diag1 diag2 acc)
          checks1 checks2 acc
     )
-    r1.alarms r2.alarms init
+    r1.report_diagnostics r2.report_diagnostics init
 
-let alarms_report_to_set r =
+let alarms_of_report r =
   RangeMap.fold
-    (fun range checks acc -> CheckMap.fold (fun check diag acc -> AlarmSet.union acc (get_alarms_of_diagnosis diag)) checks acc)
-    r.alarms AlarmSet.empty
+    (fun range checks acc -> CheckMap.fold (fun check diag acc -> AlarmSet.union acc diag.diag_alarms) checks acc)
+    r.report_diagnostics AlarmSet.empty
 
-let group_alarms_set_by_range s =
+let group_alarms_by_range s =
   AlarmSet.fold
     (fun a acc ->
        let range = a.alarm_range in
@@ -416,7 +471,7 @@ let group_alarms_set_by_range s =
        RangeMap.add range s acc
     ) s RangeMap.empty
 
-let group_alarms_set_by_check s =
+let group_alarms_by_check s =
   AlarmSet.fold
     (fun a acc ->
        let check = check_of_alarm a in
@@ -424,41 +479,53 @@ let group_alarms_set_by_check s =
        CheckMap.add check s acc
     ) s CheckMap.empty
 
-let find_diagnosis range check report =
+let find_diagnostic range check report =
   try
-    RangeMap.find range report.alarms |>
+    RangeMap.find range report.report_diagnostics |>
     CheckMap.find check
   with Not_found ->
-    Unreachable
+    mk_diagnostic range check Unreachable AlarmSet.empty
 
-let find_alarms range check report =
-  find_diagnosis range check report |>
-  get_alarms_of_diagnosis
-
-let set_diagnosis range check diag report =
-  let checks = try RangeMap.find range report.alarms with Not_found -> CheckMap.empty in
-  let old_diag = try CheckMap.find check checks with Not_found -> Unreachable in
+let set_diagnostic diag report =
+  let checks = try RangeMap.find diag.diag_range report.report_diagnostics with Not_found -> CheckMap.empty in
+  let old_diag = try CheckMap.find diag.diag_check checks with Not_found -> mk_diagnostic diag.diag_range diag.diag_check Unreachable AlarmSet.empty in
   if old_diag == diag then report
-  else { report with alarms = RangeMap.add range (CheckMap.add check diag checks) report.alarms }
+  else { report with report_diagnostics = RangeMap.add diag.diag_range (CheckMap.add diag.diag_check diag checks) report.report_diagnostics }
 
-let exists_diagnosis f report =
+let add_diagnostic diag report =
+  let checks = try RangeMap.find diag.diag_range report.report_diagnostics with Not_found -> CheckMap.empty in
+  let old_diag = try CheckMap.find diag.diag_check checks with Not_found -> mk_diagnostic diag.diag_range diag.diag_check Unreachable AlarmSet.empty in
+  let diag' = join_diagnostic diag old_diag in
+  if old_diag == diag' then report
+  else { report with report_diagnostics = RangeMap.add diag.diag_range (CheckMap.add diag.diag_check diag' checks) report.report_diagnostics }
+
+let remove_diagnostic range check report =
+  try
+    let checks = RangeMap.find range report.report_diagnostics in
+    let checks' = CheckMap.remove check checks in
+    if checks == checks' then report
+    else { report with report_diagnostics = RangeMap.add range checks' report.report_diagnostics }
+  with Not_found ->
+    report
+
+let exists_report f report =
   RangeMap.exists
-    (fun range -> CheckMap.exists (f range))
-    report.alarms
+    (fun range -> CheckMap.exists (fun _ diag -> f diag))
+    report.report_diagnostics
 
-let forall_diagnosis f report =
+let forall_report f report =
   RangeMap.exists
-    (fun range -> CheckMap.exists (f range))
-    report.alarms
+    (fun range -> CheckMap.exists (fun _ diag -> f diag))
+    report.report_diagnostics
 
-let filter_alarms_report f report =
-  let alarms =
+let filter_report f report =
+  let diags =
     RangeMap.fold
       (fun range checks acc ->
-         let checks' = CheckMap.filter (f range) checks in
+         let checks' = CheckMap.filter (fun _ diag -> f diag) checks in
          if checks == checks' then acc else
          if CheckMap.is_empty checks' then RangeMap.remove range acc
          else RangeMap.add range checks' acc)
-      report.alarms report.alarms
+      report.report_diagnostics report.report_diagnostics
   in
-  if alarms = report.alarms then report else { report with alarms }
+  if diags = report.report_diagnostics then report else { report with report_diagnostics = diags }

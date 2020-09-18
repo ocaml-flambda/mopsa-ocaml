@@ -183,29 +183,29 @@ struct
   (** {2 Merging functions} *)
   (** ********************* *)
 
-  (* Combine the alarms of reported by the two functions *)
-  let merge_alarms checks1 checks2 alarms1 alarms2 =
-    map2zo_alarms_report
-      (fun range check diag1 ->
+  (* Combine the reports of the two functions *)
+  let merge_report checks1 checks2 report1 report2 =
+    map2zo_report
+      (fun diag1 ->
          (* Check performed only in the left flow.
             Verify if it's part of the checks that the right flow should
             perform also *)
-         if not (List.mem check checks2) then
+         if not (List.mem diag1.diag_check checks2) then
            (* This is fine! The second domain is not responsible for this
               check, so add it to the result *)
            diag1
          else
            (* The analysis is unsound! *)
-           Exceptions.panic "%a: check %a is unsound" pp_relative_range range pp_check check
+           Exceptions.panic "%a: check %a is unsound" pp_relative_range diag1.diag_range pp_check diag1.diag_check
       )
-      (fun range check diag2 ->
-         if not (List.mem check checks1) then
+      (fun diag2 ->
+         if not (List.mem diag2.diag_check checks1) then
            diag2
          else
-           Exceptions.panic "%a: check %a is unsound" pp_relative_range range pp_check check
+           Exceptions.panic "%a: check %a is unsound" pp_relative_range diag2.diag_range pp_check diag2.diag_check
       )
-      (fun range check diag1 diag2 -> meet_diagnosis diag1 diag2)
-      alarms1 alarms2
+      (fun diag1 diag2 -> meet_diagnostic diag1 diag2)
+      report1 report2
 
 
   (** Merge the conflicts between distinct domains.
@@ -251,13 +251,9 @@ struct
           begin match case, after_case with
             (* If at least one answer is empty, all the conjunction is empty *)
             | Empty, _ | _, Empty ->
-              (* FIXME: we compute the union of alarms to remain
-                 sound. To be more precise, we need to know which
-                 alarms were raised by a given domain. 
-              *)
-              let alarms = merge_alarms hdchecks (List.flatten tlchecks) (Flow.get_alarms flow) (Flow.get_alarms after_flow) in
-              let flow = Flow.set_alarms alarms flow in
-              let after_flow = Flow.set_alarms alarms flow in
+              let report = merge_report hdchecks (List.flatten tlchecks) (Flow.get_report flow) (Flow.get_report after_flow) in
+              let flow = Flow.set_report report flow in
+              let after_flow = Flow.set_report report flow in
               Cases.empty (Flow.meet man.lattice flow after_flow)
 
             (* NotHandled is transformed to None *)
@@ -279,7 +275,7 @@ struct
                 in
                 (* Resolve the second conflict situation:
                    merge the post-states of any shared sub-abstraction *)
-                let flow = Flow.merge ~merge_alarms:(merge_alarms hdchecks (List.flatten tlchecks)) man.lattice pre (flow,log) (after_flow,after_log) in
+                let flow = Flow.merge ~merge_report:(merge_report hdchecks (List.flatten tlchecks)) man.lattice pre (flow,log) (after_flow,after_log) in
                 let log = Log.meet_log log after_log in
                 let cleaners = StmtSet.union cleaners after_cleaners in
                 Cases.case (Result (Some res :: after_res, log, cleaners)) flow
@@ -310,7 +306,7 @@ struct
            | (case,flow)::tl ->
              let log',cleaners',flow' = iter tl in
              let log,cleaners = Cases.get_case_log case, Cases.get_case_cleaners case in
-             let flow'' = Flow.merge man.lattice ~merge_alarms:meet_alarms_report pre (flow,log) (flow',log') in
+             let flow'' = Flow.merge man.lattice ~merge_report:meet_report pre (flow,log) (flow',log') in
              meet_log log log', StmtSet.union cleaners cleaners', flow''
          in
          let log,cleaners,flow = iter conj in

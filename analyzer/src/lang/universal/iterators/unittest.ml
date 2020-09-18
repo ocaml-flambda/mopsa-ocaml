@@ -156,7 +156,7 @@ struct
       | _ -> List.filter (fun (t, _) -> List.mem t !unittest_filter) tests
     in
     let ctx = Flow.get_ctx flow in
-    let alarms = Flow.get_alarms flow in
+    let report = Flow.get_report flow in
     List.fold_left (fun acc (name, test) ->
         debug "Executing %s" name;
         (* Fold the context *)
@@ -165,7 +165,7 @@ struct
         let flow1 = man.exec test flow |> post_to_flow man in
         Flow.join man.lattice acc flow1
       )
-      (Flow.bottom ctx alarms)
+      (Flow.bottom ctx report)
       tests
 
   let rec exec stmt man flow  =

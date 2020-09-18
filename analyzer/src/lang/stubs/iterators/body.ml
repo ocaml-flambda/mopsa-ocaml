@@ -240,41 +240,50 @@ struct
     | F_binop (OR, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
       let flow2 = eval_formula cond_to_stmt f2 range man flow in
-      (* Combine alarms of flow1 and flow2, so that if `f1` is invalid
-         but `f2` is valid, the alarm attached to `f1` is removed *)
-      let new_alarms1 =
-        fold2zo_alarms_report
-          (fun range check diag acc ->
-             match diag with
-             | Error _ ->  (range,check)::acc
+      (* Since this is a disjunction, we can remove alarms raised by one flow
+         if the other one is safe *)
+      (* First, get the alarms raised by each flow *)
+      let new_errors1 =
+        fold2zo_report
+          (fun diag acc ->
+             match diag.diag_status with
+             | Error ->  diag::acc
              | _ -> acc)
-          (fun _ _ _ acc -> acc)
-          (fun _ _ _ _ acc -> acc)
-          (Flow.get_alarms flow1) (Flow.get_alarms flow) [] in
-      let new_alarms2 =
-        fold2zo_alarms_report
-          (fun range check diag acc ->
-             match diag with
-             | Error _ -> (range,check)::acc
+          (fun _ acc -> acc)
+          (fun _ _ acc -> acc)
+          (Flow.get_report flow1) (Flow.get_report flow) [] in
+      let new_errors2 =
+        fold2zo_report
+          (fun diag acc ->
+             match diag.diag_status with
+             | Error -> diag::acc
              | _ -> acc)
-          (fun _ _ _ acc -> acc)
-          (fun _ _ _ _ acc -> acc)
-          (Flow.get_alarms flow2) (Flow.get_alarms flow) [] in
+          (fun _ acc -> acc)
+          (fun _ _ acc -> acc)
+          (Flow.get_report flow2) (Flow.get_report flow) [] in
       let flow1,flow2 =
-        match new_alarms1,new_alarms2 with
+        match new_errors1,new_errors2 with
         | [],[] -> flow1,flow2
         | l,[] ->
-          let alarms =
+          (* Here, flow1 raised alarms while flow2 is safe. So, mark the checks
+             as unreachable *)
+          let report =
             List.fold_left
-              (fun acc (range,check) -> set_diagnosis range check Unreachable acc)
-              (Flow.get_alarms flow1) l in
-          Flow.set_alarms alarms flow1, flow2
+              (fun acc diag ->
+                 let diag' = { diag with diag_status = Unreachable;
+                                         diag_alarms = AlarmSet.empty } in
+                 set_diagnostic diag' acc)
+              (Flow.get_report flow1) l in
+          Flow.set_report report flow1, flow2
         | [],l ->
-          let alarms =
+          let report =
             List.fold_left
-              (fun acc (range,check) -> set_diagnosis range check Unreachable acc)
-              (Flow.get_alarms flow2) l in
-          flow1, Flow.set_alarms alarms flow2
+              (fun acc diag ->
+                 let diag' = { diag with diag_status = Unreachable;
+                                         diag_alarms = AlarmSet.empty } in
+                 set_diagnostic diag' acc)
+              (Flow.get_report flow2) l in
+          flow1, Flow.set_report report flow2
         | _,_ -> flow1,flow2 in
       Flow.join man.lattice flow1 flow2
 

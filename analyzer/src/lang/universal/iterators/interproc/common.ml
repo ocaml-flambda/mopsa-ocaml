@@ -231,8 +231,8 @@ let exec_fun_body f body ret range man flow =
 
   post4 >>% fun flow3 ->
 
-  (* Copy the new context and alarms from flow3 to original flow flow1 *)
-  let flow4 = Flow.copy_ctx flow3 flow1 |> Flow.copy_alarms flow3 in
+  (* Copy the new context and report from flow3 to original flow flow1 *)
+  let flow4 = Flow.copy_ctx flow3 flow1 |> Flow.copy_report flow3 in
 
   (* Cut the T_cur flow *)
   let flow4 = Flow.remove T_cur flow4 in

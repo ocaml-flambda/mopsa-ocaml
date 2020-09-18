@@ -35,28 +35,28 @@ open Callstack
 type 'a flow = {
   tmap : 'a TokenMap.t;
   ctx : 'a ctx;
-  alarms: alarms_report;
+  report: report;
 }
 (** A flow is a flow map augmented with an context *)
 
 
-let bottom ctx alarms : 'a flow = {
+let bottom ctx report : 'a flow = {
   tmap = TokenMap.bottom;
   ctx;
-  alarms;
+  report;
 }
 
 
 let top ctx : 'a flow = {
   tmap = TokenMap.top;
   ctx;
-  alarms = empty_alarms_report;
+  report = empty_report;
 }
 
 let singleton (ctx:'a Context.ctx) (tk:token) (env:'a) : 'a flow = {
   tmap = TokenMap.singleton tk env;
   ctx;
-  alarms = empty_alarms_report;
+  report = empty_report;
 }
 
 let is_bottom (lattice: 'a lattice) (flow: 'a flow) : bool =
@@ -66,7 +66,7 @@ let is_top (lattice: 'a lattice) (flow: 'a flow) : bool =
   TokenMap.is_top lattice flow.tmap
 
 let is_empty (flow:'a flow) : bool =
-  TokenMap.is_empty flow.tmap && is_empty_alarms_report flow.alarms
+  TokenMap.is_empty flow.tmap && is_empty_report flow.report
 
 let subset (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : bool =
   let ctx = most_recent_ctx flow1.ctx flow2.ctx in
@@ -77,7 +77,7 @@ let join (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   {
     tmap = TokenMap.join lattice ctx flow1.tmap flow2.tmap;
     ctx;
-    alarms = join_alarms_report flow1.alarms flow2.alarms;
+    report = join_report flow1.report flow2.report;
   }
 
 let join_list lattice ~empty l =
@@ -92,7 +92,7 @@ let join_list lattice ~empty l =
     {
       tmap = TokenMap.join_list lattice ctx (List.map (function {tmap} -> tmap) l);
       ctx;
-      alarms = List.fold_left (fun acc {alarms} -> join_alarms_report alarms acc) hd.alarms tl;
+      report = List.fold_left (fun acc {report} -> join_report report acc) hd.report tl;
     }
 
 let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -100,7 +100,7 @@ let meet (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   {
     tmap = TokenMap.meet lattice ctx flow1.tmap flow2.tmap;
     ctx;
-    alarms = meet_alarms_report flow1.alarms flow2.alarms;
+    report = meet_report flow1.report flow2.report;
   }
 
 let meet_list lattice ~empty l =
@@ -115,7 +115,7 @@ let meet_list lattice ~empty l =
     {
       tmap = TokenMap.meet_list lattice ctx (List.map (function {tmap} -> tmap) l);
       ctx;
-      alarms = List.fold_left (fun acc {alarms} -> meet_alarms_report alarms acc) hd.alarms tl;
+      report = List.fold_left (fun acc {report} -> meet_report report acc) hd.report tl;
     }
 
 let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
@@ -123,7 +123,7 @@ let widen (lattice: 'a lattice) (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
     {
       tmap = TokenMap.widen lattice ctx flow1.tmap flow2.tmap;
       ctx;
-      alarms = join_alarms_report flow1.alarms flow2.alarms;
+      report = join_report flow1.report flow2.report;
     }
 
 
@@ -138,18 +138,18 @@ let copy_ctx flow1 flow2 =
   let ctx = get_ctx flow1 in
   set_ctx ctx flow2
 
-let get_alarms flow = flow.alarms
+let get_report flow = flow.report
 
-let set_alarms alarms flow = if alarms == flow.alarms then flow else { flow with alarms }
+let set_report report flow = if report == flow.report then flow else { flow with report }
 
-let copy_alarms src dst = set_alarms (join_alarms_report src.alarms dst.alarms) dst
+let copy_report src dst = set_report (join_report src.report dst.report) dst
 
-let remove_alarms flow = { flow with alarms = empty_alarms_report }
+let remove_report flow = { flow with report = empty_report }
 
-let create ctx alarms tmap = {
+let create ctx report tmap = {
   tmap;
   ctx;
-  alarms;
+  report;
 }
 
 let get_callstack flow =
@@ -176,13 +176,13 @@ let pop_callstack flow =
   hd, set_callstack cs flow
 
 let bottom_from flow : 'a flow =
-  bottom (get_ctx flow) (get_alarms flow)
+  bottom (get_ctx flow) (get_report flow)
 
 
 let print (pp: Format.formatter -> 'a -> unit) fmt flow =
   Format.fprintf fmt "@[%a@\n|alarms| = %d@]"
     (TokenMap.print pp) flow.tmap
-    (let errors,warnings = count_alarms flow.alarms in errors + warnings)
+    (let errors,warnings = count_alarms flow.report in errors + warnings)
 
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
@@ -199,7 +199,7 @@ let copy (tk1:token) (tk2:token) (lattice:'a lattice) (flow1:'a flow) (flow2:'a 
   {
     tmap = TokenMap.copy tk1 tk2 lattice flow1.tmap flow2.tmap;
     ctx;
-    alarms = flow2.alarms;
+    report = flow2.report;
   }
 
 let add (tk: token) (a: 'a) (lattice: 'a lattice) (flow: 'a flow) : 'a flow =
@@ -235,16 +235,16 @@ let map2zo
     (f1: token -> 'a -> 'a)
     (f2: token -> 'a -> 'a)
     (f: token -> 'a -> 'a -> 'a)
-    (falarm: alarms_report -> alarms_report -> alarms_report)
+    (falarm: report -> report -> report)
     (flow1: 'a flow) (flow2: 'a flow) : 'a flow =
   let ctx = most_recent_ctx flow1.ctx flow2.ctx in
   {
     tmap = TokenMap.map2zo f1 f2 f flow1.tmap flow2.tmap;
     ctx;
-    alarms = falarm flow1.alarms flow2.alarms;
+    report = falarm flow1.report flow2.report;
   }
 
-let merge lattice ~merge_alarms pre (flow1,log1) (flow2,log2) =
+let merge lattice ~merge_report pre (flow1,log1) (flow2,log2) =
   let ctx = most_recent_ctx (get_ctx flow1) (get_ctx flow2) in
   map2zo
     (fun _ a1 -> lattice.bottom)
@@ -259,7 +259,7 @@ let merge lattice ~merge_alarms pre (flow1,log1) (flow2,log2) =
 
        (* For the other tokens, compute the meet of the environments *)
        | _ -> lattice.meet ctx a1 a2
-    ) merge_alarms flow1 flow2
+    ) merge_report flow1 flow2
 
 let get_token_map flow = flow.tmap
 
@@ -268,7 +268,7 @@ let add_alarm ?(force=false) alarm lattice flow =
   if not force
   && lattice.is_bottom cur
   then flow
-  else { flow with alarms = add_alarm_to_report alarm flow.alarms }
+  else { flow with report = Alarm.add_alarm alarm flow.report }
 
 let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
   let flow = add_alarm ~force alarm lattice flow in
