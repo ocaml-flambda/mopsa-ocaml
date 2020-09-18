@@ -85,19 +85,25 @@ let eval_format_string wide format range man flow =
         man flow
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when wide ->
-    Soundness.warn_at range "unsupported format string: wide string expected";
-    Cases.empty flow
+    Flow.add_local_assumption
+      Soundness.A_ignore_unsupported_format_string
+      range flow |>
+    Cases.empty
 
   | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when not wide ->
-    Soundness.warn_at range "unsupported format string: non-wide string expected";
-    Cases.empty flow
+    Flow.add_local_assumption
+      Soundness.A_ignore_unsupported_format_string
+      range flow |>
+    Cases.empty
 
   | P_block _ ->
     Cases.singleton None flow
 
   | _ ->
-    Soundness.warn_at range "unsupported format string";
-    Cases.singleton None flow
+    Flow.add_local_assumption
+      Soundness.A_ignore_unsupported_format_string
+      range flow |>
+    Cases.singleton None
 
 
 (** Parse a format according to parser *)

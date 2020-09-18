@@ -686,7 +686,11 @@ struct
       Post.return flow
 
     | P_top ->
-      Soundness.warn_at range "ignoring assignment to ⊤ pointer %a" pp_expr ptr;
+      let flow =
+        Flow.add_local_assumption
+          (Soundness.A_ignore_modification_undetermined_pointer ptr)
+          range flow
+      in
       Post.return flow
 
     | P_fun _ ->

@@ -531,7 +531,9 @@ struct
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_var (v, _)}::types, []) ->
           let cur = get_env T_cur man flow in
           let tycur = try TVMap.find (Class v) cur with Not_found ->
-            let () = Soundness.warn_at range "cheating in type annots" in ESet.of_list types in
+            (* FIXME: add assumption for:
+               let () = Soundness.warn_at range "cheating in type annots" in
+            *) ESet.of_list types in
           debug "tycur = %a@\n" ESet.print tycur;
           begin match ESet.cardinal tycur with
           | 0 ->
@@ -596,8 +598,13 @@ struct
         | E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, {ekind = E_py_tuple [args; out]}) when get_orig_vname c.py_cls_a_var = "Callable" ->
           assume (mk_py_hasattr e "__call__" range) man flow
             ~fthen:(fun flow ->
-                Soundness.warn_at range "Callable type annotation partially supported";
-                  man.eval (mk_py_true range) flow
+                let flow =
+                  Flow.add_local_assumption
+                    (A_ignore_unsupported_expr e)
+                    range flow
+                in
+                (* Soundness.warn_at range "Callable type annotation partially supported"; *)
+                man.eval (mk_py_true range) flow
               )
             ~felse:(man.eval (mk_py_false range))
           |> OptionExt.return

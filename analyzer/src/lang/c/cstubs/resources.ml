@@ -71,9 +71,11 @@ struct
       Post.return flow
 
     | P_top ->
-      Soundness.warn_at range
-        "ignoring free statement because of undetermined resource pointer"
-      ;
+      let flow =
+        Flow.add_local_assumption
+          (Soundness.A_ignore_modification_undetermined_pointer p)
+          range flow
+      in
       Post.return flow
 
 

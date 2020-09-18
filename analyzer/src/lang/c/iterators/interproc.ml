@@ -168,7 +168,11 @@ struct
         eval_calls_in_args args man flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
         if is_recursive_call fundec flow then (
-          Soundness.warn_at range "ignoring recursive call of function %s in %a" fundec.c_func_org_name pp_range range;
+          let flow =
+            Flow.add_local_assumption
+              (Universal.Soundness.A_ignore_recursion_side_effect fundec.c_func_org_name)
+              range flow
+          in
           if is_c_void_type fundec.c_func_return then
             Eval.singleton (mk_unit range) flow
           else
@@ -209,7 +213,11 @@ struct
           man.eval exp' flow
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
-          Soundness.warn_at range "ignoring side effects of calling undefined function %s" c_func_org_name;
+          let flow =
+            Flow.add_local_assumption
+              (Soundness.A_ignore_undefined_function c_func_org_name)
+              range flow
+          in
           if is_c_void_type c_func_return then
             Eval.singleton (mk_unit range) flow
           else
@@ -255,10 +263,11 @@ struct
           OptionExt.return
 
         | _ ->
-          Soundness.warn_at exp.erange
-            "ignoring side-effect of undetermined function pointer %a"
-            pp_expr f
-          ;
+          let flow =
+            Flow.add_local_assumption
+              (Soundness.A_ignore_undetermined_function_pointer f)
+              exp.erange flow
+          in
           if is_c_void_type exp.etyp then
             Eval.singleton (mk_unit exp.erange) flow |>
             OptionExt.return

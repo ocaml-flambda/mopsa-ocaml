@@ -683,14 +683,9 @@ struct
                 | Some size -> Z.sub size elm
                 | None ->
                   (* We are in trouble: the size is not bounded!
-                     So we assume that it does not exceed the range of unsigned long, usually used for size_t
+                     So we assume that it does not exceed the range of unsigned long long
                   *)
-                  let _, uuu = rangeof ul in
-                  Soundness.warn_at range
-                    "size of %a is unbounded and is assumed to %a"
-                    pp_base base
-                    Z.pp_print uuu
-                  ;
+                  let _, uuu = rangeof ull in
                   Z.sub uuu elm
             in
 
@@ -961,10 +956,11 @@ struct
     expand ptr range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      Soundness.warn_at range "ignoring assignment to ⊤ pointer %a = %a;"
-        pp_expr lval
-        pp_expr e
-      ;
+      let flow =
+        Flow.add_local_assumption
+          (Soundness.A_ignore_modification_undetermined_pointer ptr)
+          range flow
+      in
       Post.return flow
 
     | Cell ({ base },_) when is_base_readonly base ->

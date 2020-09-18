@@ -112,8 +112,10 @@ struct
     parse_input_format format range man flow >>$ fun placeholders flow ->
     match placeholders with
     | None ->
-      Soundness.warn_at range "unsupported fscanf format string";
-      Post.return flow
+      Flow.add_local_assumption
+        Soundness.A_ignore_unsupported_format_string
+        range flow |>
+      Post.return
 
     | Some placeholders ->
       let nb_required = List.length placeholders in

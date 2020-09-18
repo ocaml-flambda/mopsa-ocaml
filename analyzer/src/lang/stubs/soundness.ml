@@ -19,56 +19,22 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Soundness warnings *)
+(** Soundness assumptions *)
 
-open Location
+open Mopsa
 
-type warning = {
-  warn_range   : range option;
-  warn_message : string;
-}
+type assumption_kind += A_stub_soundness_message of string
 
-let pp_warning fmt w =
-  match w.warn_range with
-  | None   -> Format.fprintf fmt "%s" w.warn_message
-  | Some r -> Format.fprintf fmt "%a: %s" pp_range r w.warn_message 
-
-
-let compare_warning w1 w2 =
-  Compare.compose [
-    (fun () -> OptionExt.compare compare_range w1.warn_range w2.warn_range);
-    (fun () -> compare w1.warn_message w2.warn_message);
-  ]
-
-module Warnings = Set.Make(struct
-    type t = warning
-    let compare = compare_warning
-  end)
-
-let warnings = ref Warnings.empty
-
-let is_sound () = Warnings.is_empty !warnings
-
-let get_warnings () = Warnings.elements !warnings
-
-let warn fmt =
-  Format.kasprintf (fun msg ->
-      Exceptions.warn "%s" msg;
-      let w = {
-        warn_range = None;
-        warn_message = msg;
-      }
-      in
-      warnings := Warnings.add w !warnings
-    ) fmt
-
-let warn_at range fmt =
-  Format.kasprintf (fun msg ->
-      Exceptions.warn_at range "%s" msg;
-      let w = {
-        warn_range = Some range;
-        warn_message = msg;
-      }
-      in
-      warnings := Warnings.add w !warnings
-    ) fmt
+let () =
+  register_assumption {
+    print = (fun next fmt -> function
+        | A_stub_soundness_message msg -> Format.pp_print_string fmt msg
+        | a -> next fmt a
+      );
+    compare = (fun next a1 a2 ->
+        match a1,a2 with
+        | A_stub_soundness_message msg1, A_stub_soundness_message msg2 ->
+          String.compare msg1 msg2
+        | _ -> next a1 a2
+      );
+  }

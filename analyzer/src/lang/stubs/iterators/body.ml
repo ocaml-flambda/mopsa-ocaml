@@ -30,7 +30,6 @@ open Ast
 open Alarms
 
 
-
 module Domain =
 struct
 
@@ -159,7 +158,7 @@ struct
       Cases.singleton ([], mk_stub_resource_mem e res f.range) flow
 
     | F_forall(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
       Cases.singleton ((FORALL,v,s)::quants, cond) flow
 
     | F_forall(v,(S_interval (lo,hi) as s),ff) ->
@@ -168,7 +167,7 @@ struct
         ~fthen:(fun flow ->
             man.exec (mk_add_var v f.range) flow >>%
             man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
             Cases.singleton ((FORALL,v,s)::quants, cond) flow
           )
         ~felse:(fun flow ->
@@ -177,7 +176,7 @@ struct
         man flow
 
     | F_exists(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
       Cases.singleton ((EXISTS,v,s)::quants, cond) flow
 
     | F_exists(v,(S_interval (lo,hi) as s),ff) ->
@@ -186,7 +185,7 @@ struct
         ~fthen:(fun flow ->
             man.exec (mk_add_var v f.range) flow >>%
             man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
             Cases.singleton ((EXISTS,v,s)::quants, cond) flow
           )
         ~felse:(fun flow ->
@@ -206,7 +205,7 @@ struct
       (fun acc (_,v,s) ->
          match s with
          | S_interval _ -> man.exec (mk_remove_var v range) acc |> post_to_flow man
-         | S_resource _ -> acc) 
+         | S_resource _ -> acc)
       flow quants
 
 
@@ -228,7 +227,7 @@ struct
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
-      man.exec (cond_to_stmt e range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt e range) flow |> post_to_flow man
 
     | F_binop (AND, f1, f2) ->
       (* FIXME: when evaluating `requires: e1 and e2;`, two alarms
@@ -303,23 +302,23 @@ struct
       eval_quantified_formula cond_to_stmt f man flow
 
     | F_in (e, S_interval (l, u)) ->
-      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man
 
     | F_in (e, S_resource res ) ->
-      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man
 
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
     List.combine args params |>
     List.fold_left (fun flow (arg, param) ->
-        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man 
+        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man
       ) flow
 
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
     params |> List.fold_left (fun flow param ->
-        man.exec (mk_remove_var param range) flow |> post_to_flow man 
+        man.exec (mk_remove_var param range) flow |> post_to_flow man
       ) flow
 
 
@@ -351,7 +350,7 @@ struct
                 (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
                 local_range
              ) flow
-    |> post_to_flow man 
+    |> post_to_flow man
 
 
   (** Execute the `local` section *)
@@ -406,13 +405,13 @@ struct
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    man.exec (mk_block block range) flow |> post_to_flow man 
+    man.exec (mk_block block range) flow |> post_to_flow man
 
 
   let exec_free free range man flow =
     let e = free.content in
     let stmt = mk_stub_free e range in
-    man.exec stmt flow |> post_to_flow man 
+    man.exec stmt flow |> post_to_flow man
 
 
   let exec_message msg range man flow =
@@ -424,8 +423,7 @@ struct
         flow
 
       | UNSOUND ->
-        Soundness.warn_at range "%s" msg.content.message_body;
-        flow
+        Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) range flow
 
       | ALARM ->
         raise_stub_alarm msg.content.message_body range man flow

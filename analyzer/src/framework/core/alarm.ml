@@ -260,44 +260,83 @@ let compare_diagnostic d1 d2 =
     (d1.diag_range,d1.diag_check,d1.diag_status,d1.diag_alarms)
     (d2.diag_range,d2.diag_check,d2.diag_status,d2.diag_alarms)
 
-(** {1 Soundness hypothesis} *)
+(** {1 Soundness assumption} *)
 (** ************************ *)
 
-type hypothesis_scope =
-  | Hypo_global
-  | Hypo_local of range
+type assumption_scope =
+  | A_global
+  | A_local of range
 
-type hypothesis_kind = ..
+type assumption_kind = ..
 
-type hypothesis = {
-  hypo_scope : hypothesis_scope;
-  hypo_kind  : hypothesis_kind;
+type assumption_kind += A_ignore_unsupported_stmt of Ast.Stmt.stmt
+type assumption_kind += A_ignore_unsupported_expr of Ast.Expr.expr
+
+type assumption = {
+  assumption_scope : assumption_scope;
+  assumption_kind  : assumption_kind;
 }
 
-let hypothesis_compare_chain : hypothesis_kind TypeExt.compare_chain = TypeExt.mk_compare_chain compare
+let assumption_compare_chain : assumption_kind TypeExt.compare_chain =
+  TypeExt.mk_compare_chain
+    (fun a1 a2 ->
+       match a1,a2 with
+       | A_ignore_unsupported_stmt s1, A_ignore_unsupported_stmt s2 ->
+         Ast.Stmt.compare_stmt s1 s2
 
-let hypothesis_print_chain : hypothesis_kind TypeExt.print_chain =
-  TypeExt.mk_print_chain (fun _ _ -> Exceptions.panic "Print of unregistered hypothesis")
+       | A_ignore_unsupported_expr e1, A_ignore_unsupported_expr e2 ->
+         Ast.Expr.compare_expr e1 e2
 
-let register_hypothesis info =
-  TypeExt.register info hypothesis_compare_chain hypothesis_print_chain
+       | _ -> compare a1 a2
+    )
 
-let pp_hypothesis fmt h =
-  match h.hypo_scope with
-  | Hypo_global      -> TypeExt.print hypothesis_print_chain fmt h.hypo_kind
-  | Hypo_local range -> fprintf fmt "%a: %a" pp_relative_range range (TypeExt.print hypothesis_print_chain) h.hypo_kind
 
-let compare_hypothesis h1 h2 =
+let assumption_print_chain : assumption_kind TypeExt.print_chain =
+  TypeExt.mk_print_chain
+    (fun fmt -> function
+       | A_ignore_unsupported_stmt s ->
+         Format.fprintf fmt "ignoring unsupported statement '%a'"
+           (Debug.bold Ast.Stmt.pp_stmt) s
+
+       | A_ignore_unsupported_expr e ->
+         Format.fprintf fmt "ignoring unsupported expression '%a'"
+           (Debug.bold Ast.Expr.pp_expr) e
+
+       | _ -> Exceptions.panic "Print of unregistered assumption"
+    )
+
+let register_assumption info =
+  TypeExt.register info assumption_compare_chain assumption_print_chain
+
+let pp_assumption_kind fmt h =
+  TypeExt.print assumption_print_chain fmt h
+
+let pp_assumption fmt h =
+  match h.assumption_scope with
+  | A_global      -> pp_assumption_kind fmt h.assumption_kind
+  | A_local range -> fprintf fmt "%a: %a" pp_relative_range range pp_assumption_kind h.assumption_kind
+
+let compare_assumption_kind h1 h2 =
+  TypeExt.compare assumption_compare_chain h1 h2
+
+let compare_assumption h1 h2 =
   Compare.pair
     (fun scope1 scope2 ->
        match scope1, scope2 with
-       | Hypo_global, Hypo_global     -> 0
-       | Hypo_local r1, Hypo_local r2 -> compare_range r1 r2
+       | A_global, A_global     -> 0
+       | A_local r1, A_local r2 -> compare_range r1 r2
        | _ -> compare scope1 scope2 )
-    (TypeExt.compare hypothesis_compare_chain)
-    (h1.hypo_scope, h1.hypo_kind)
-    (h2.hypo_scope, h2.hypo_kind)
+    compare_assumption_kind
+    (h1.assumption_scope, h1.assumption_kind)
+    (h2.assumption_scope, h2.assumption_kind)
 
+let mk_global_assumption kind =
+  { assumption_scope = A_global;
+    assumption_kind = kind }
+
+let mk_local_assumption kind range =
+  { assumption_scope = A_local range;
+    assumption_kind = kind }
 
 (** {1 Alarms report} *)
 (** ***************** *)
@@ -306,16 +345,16 @@ module RangeMap = MapExt.Make(struct type t = range let compare = compare_range 
 
 module CheckMap = MapExt.Make(struct type t = check let compare = compare end)
 
-module HypothesisSet = SetExt.Make(struct type t = hypothesis let compare = compare_hypothesis end)
+module AssumptionSet = SetExt.Make(struct type t = assumption let compare = compare_assumption end)
 
 type report = {
   report_diagnostics : diagnostic CheckMap.t RangeMap.t;
-  report_soundness   : HypothesisSet.t;
+  report_assumptions : AssumptionSet.t;
 }
 
 let empty_report = {
   report_diagnostics = RangeMap.empty;
-  report_soundness = HypothesisSet.empty;
+  report_assumptions = AssumptionSet.empty;
 }
 
 let is_empty_report r = RangeMap.is_empty r.report_diagnostics
@@ -332,23 +371,23 @@ let is_safe_report r =
     ) r.report_diagnostics
 
 let is_sound_report r =
-  HypothesisSet.is_empty r.report_soundness
+  AssumptionSet.is_empty r.report_assumptions
 
 let singleton_report alarm =
   let diag = mk_diagnostic alarm.alarm_range (check_of_alarm alarm) Error (AlarmSet.singleton alarm) in
   let check = check_of_alarm alarm in
   { report_diagnostics = RangeMap.singleton alarm.alarm_range (CheckMap.singleton check diag);
-    report_soundness = HypothesisSet.empty; }
+    report_assumptions = AssumptionSet.empty; }
 
 let pp_report fmt r =
-  fprintf fmt "@[<v>soundness hypotheis: @[<v>%a@]@,%a@]"
-    (HypothesisSet.fprint
+  fprintf fmt "@[<v>assumptions: @[<v>%a@]@,%a@]"
+    (AssumptionSet.fprint
        SetExtSig.{ print_empty = "∅";
                    print_begin = "";
                    print_sep   = "@,";
                    print_end   = ""; }
-       pp_hypothesis
-    ) r.report_soundness
+       pp_assumption
+    ) r.report_assumptions
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (range,checks) ->
           pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
@@ -362,7 +401,7 @@ let pp_report fmt r =
 
 let subset_report r1 r2 =
   (r1 == r2)
-  || (HypothesisSet.equal r1.report_soundness r2.report_soundness
+  || (AssumptionSet.equal r1.report_assumptions r2.report_assumptions
       && (r1.report_diagnostics == r2.report_diagnostics
           || (RangeMap.for_all2zo
                 (fun _ checks1 -> false)
@@ -381,7 +420,7 @@ let join_report r1 r2 =
   if subset_report r1 r2 then r2 else
   if subset_report r2 r1 then r1
   else
-    { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+    { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
       report_diagnostics =
         RangeMap.map2zo
           (fun _ checks1 -> checks1)
@@ -400,7 +439,7 @@ let meet_report r1 r2 =
   if subset_report r1 r2 then r1 else
   if subset_report r2 r1 then r2
   else
-    { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+    { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
       report_diagnostics =
         RangeMap.fold2zo
           (fun range _ acc -> RangeMap.remove range acc)
@@ -437,7 +476,7 @@ let add_alarm alarm r =
   { r with report_diagnostics = RangeMap.add alarm.alarm_range (CheckMap.add check diag' checks) r.report_diagnostics }
 
 let map2zo_report f1 f2 f r1 r2 =
-  { report_soundness = HypothesisSet.union r1.report_soundness r2.report_soundness;
+  { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
     report_diagnostics =
       RangeMap.map2zo
         (fun range -> CheckMap.map f1)
@@ -529,3 +568,16 @@ let filter_report f report =
       report.report_diagnostics report.report_diagnostics
   in
   if diags = report.report_diagnostics then report else { report with report_diagnostics = diags }
+
+let add_assumption a report =
+  let assumptions = AssumptionSet.add a report.report_assumptions in
+  if assumptions == report.report_assumptions then report
+  else { report with report_assumptions = assumptions }
+
+let add_global_assumption kind report =
+  let a = mk_global_assumption kind in
+  add_assumption a report
+
+let add_local_assumption kind range report =
+  let a = mk_local_assumption kind range in
+  add_assumption a report

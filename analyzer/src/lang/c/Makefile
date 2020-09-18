@@ -23,8 +23,8 @@
 
 # C packs
 lang += c
-lang.c = ast pp visitor frontend common libs iterators cstubs memory hooks \
-         packing
+lang.c = ast pp visitor frontend common soundness libs iterators cstubs memory \
+	 hooks packing
 lang.c.common = builtins base alarms points_to quantified_offset scope_update
 lang.c.iterators = program switch loops goto interproc intraproc
 lang.c.memory = aggregates variable_length_array lowlevel scalars reductions

@@ -119,26 +119,36 @@ val add_alarm_to_diagnostic : alarm -> diagnostic -> diagnostic
 val compare_diagnostic : diagnostic -> diagnostic -> int
 
 
-(** {1 Soundness hypothesis} *)
+(** {1 Soundness assumption} *)
 (** ************************ *)
 
-type hypothesis_scope =
-  | Hypo_global
-  | Hypo_local of range
+type assumption_scope =
+  | A_global
+  | A_local of range
 
-type hypothesis_kind = ..
+type assumption_kind = ..
 
-type hypothesis = {
-  hypo_scope : hypothesis_scope;
-  hypo_kind  : hypothesis_kind;
+type assumption_kind += A_ignore_unsupported_stmt of Ast.Stmt.stmt
+type assumption_kind += A_ignore_unsupported_expr of Ast.Expr.expr
+
+type assumption = {
+  assumption_scope : assumption_scope;
+  assumption_kind  : assumption_kind;
 }
 
-val register_hypothesis : hypothesis_kind TypeExt.info -> unit
+val register_assumption : assumption_kind TypeExt.info -> unit
 
-val pp_hypothesis : formatter -> hypothesis -> unit
+val pp_assumption_kind : formatter -> assumption_kind -> unit
 
-val compare_hypothesis : hypothesis -> hypothesis -> int
+val pp_assumption : formatter -> assumption -> unit
 
+val compare_assumption_kind : assumption_kind -> assumption_kind -> int
+
+val compare_assumption : assumption -> assumption -> int
+
+val mk_global_assumption : assumption_kind -> assumption
+
+val mk_local_assumption : assumption_kind -> range -> assumption
 
 (** {1 Analysis report} *)
 (** ******************* *)
@@ -147,11 +157,11 @@ module RangeMap : MapExtSig.S with type key = range
 
 module CheckMap : MapExtSig.S with type key = check
 
-module HypothesisSet : SetExtSig.S with type elt = hypothesis
+module AssumptionSet : SetExtSig.S with type elt = assumption
 
 type report = {
   report_diagnostics : diagnostic CheckMap.t RangeMap.t;
-  report_soundness : HypothesisSet.t;
+  report_assumptions : AssumptionSet.t;
 }
 
 val empty_report : report
@@ -207,3 +217,9 @@ val fold2zo_report :
 val group_alarms_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
 
 val group_alarms_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t
+
+val add_assumption : assumption -> report -> report
+
+val add_global_assumption : assumption_kind -> report -> report
+
+val add_local_assumption : assumption_kind -> range -> report -> report

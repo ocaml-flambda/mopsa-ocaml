@@ -143,6 +143,12 @@ val add_alarm : ?force:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
 val raise_alarm : ?force:bool -> ?bottom:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
+val add_assumption : assumption -> 'a flow -> 'a flow
+
+val add_global_assumption : assumption_kind -> 'a flow -> 'a flow
+
+val add_local_assumption : assumption_kind -> Location.range -> 'a flow -> 'a flow
+
 val get_report : 'a flow -> report
 
 val set_report : report -> 'a flow -> 'a flow

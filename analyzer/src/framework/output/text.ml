@@ -166,7 +166,7 @@ let pp_alarm_message out diag alarm_kinds callstacks =
 
 
 let report ?(flow=None) man rep time files out =
-  if Soundness.is_sound ()
+  if is_sound_report rep
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
   else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
 
@@ -229,18 +229,18 @@ let report ?(flow=None) man rep time files out =
         ) (CheckMap.bindings check_total)
         total
   in
-let () =
-  match Soundness.get_warnings () with
-  | [] -> ()
-  | warnings ->
-    print out "%d warning%a detected:@,  @[<v>%a@]@.@." (List.length warnings) Debug.plurial_list warnings
-      (pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-         Core.Soundness.pp_warning
-      ) warnings
-in
-print out "Time: %.3fs@." time;
-()
+  let () =
+    if not (is_sound_report rep) then
+      let nb = AssumptionSet.cardinal rep.report_assumptions in
+      print out "%d assumption%a:@,  @[<v>%a@]@.@."
+        nb Debug.plurial_int nb
+        (pp_print_list
+           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           pp_assumption
+        ) (AssumptionSet.elements rep.report_assumptions)
+  in
+  print out "Time: %.3fs@." time;
+  ()
 
 let panic ~btrace exn files time out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";

@@ -450,11 +450,19 @@ struct
        end |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
-       Soundness.warn_at range "%a not properly supported" pp_stmt stmt;
+       let flow =
+         Flow.add_local_assumption
+           (A_ignore_unsupported_stmt stmt)
+           range flow
+       in
        man.exec   (mk_remove_var v range) flow |> OptionExt.return
 
     | S_py_delete _ ->
-       Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
+       let flow =
+         Flow.add_local_assumption
+           (A_ignore_unsupported_stmt stmt)
+           range flow
+       in
        flow |> Post.return |> OptionExt.return
 
 

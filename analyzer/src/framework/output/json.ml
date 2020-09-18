@@ -24,7 +24,6 @@
 open Yojson.Basic
 open ArgExt
 open Core.All
-open Soundness
 open Callstack
 open Location
 
@@ -88,17 +87,18 @@ let render_alarm (range,check,csl) =
     "callstacks", `List (List.map render_callstack csl);
   ]
 
-let render_warning w  =
-  match w.warn_range with
-  | None ->
+let render_soudness_assumtion h =
+  let msg = Format.asprintf "%a" pp_assumption_kind h.assumption_kind in
+  match h.assumption_scope with
+  | A_global ->
     `Assoc [
-      "message", `String w.warn_message;
+      "message", `String msg;
     ]
 
-  | Some r ->
+  | A_local r ->
     `Assoc [
-      "message", `String w.warn_message;
       "range", render_range r;
+      "message", `String msg;
     ]
 
 
@@ -123,7 +123,7 @@ let report ?(flow=None) man rep time files out : unit =
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
       "alarms", `List (aggregate_alarms rep |> List.map render_alarm);
-      "warnings", `List (List.map render_warning (get_warnings ()));
+      "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in
   print out json

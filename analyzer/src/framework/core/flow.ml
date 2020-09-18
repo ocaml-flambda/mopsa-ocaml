@@ -275,3 +275,12 @@ let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow
+
+let add_assumption assumption flow =
+  set_report (Alarm.add_assumption assumption flow.report) flow
+
+let add_global_assumption assumption_kind flow =
+  set_report (Alarm.add_global_assumption assumption_kind flow.report) flow
+
+let add_local_assumption assumption_kind range flow =
+  set_report (Alarm.add_local_assumption assumption_kind range flow.report) flow

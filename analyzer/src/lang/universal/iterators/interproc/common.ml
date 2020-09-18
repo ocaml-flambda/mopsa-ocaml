@@ -24,6 +24,7 @@
 
 open Mopsa
 open Ast
+open Soundness
 
 
 let name = "universal.iterators.interproc.common"
@@ -115,9 +116,9 @@ let get_last_call_site flow =
   let hd, _ = pop_callstack cs in
   hd.call_range
 
+
 (** {2 Recursion checks} *)
 (** ==================== *)
-
 
 (** Check that no recursion is happening *)
 let check_recursion f range cs =
@@ -128,7 +129,6 @@ let check_recursion f range cs =
 let check_nested_calls f cs =
   if cs = [] then false
   else List.exists (fun call -> call.call_fun_uniq_name = f) (List.tl cs)
-
 
 
 (** {2 Function inlining} *)
@@ -270,9 +270,11 @@ let inline f params locals body ret range man flow =
     match check_recursion f range (Flow.get_callstack flow) with
     | true ->
       begin
-        Soundness.warn_at range
-          "recursive call on function %s ignored" f.fun_orig_name
-        ;
+        let flow =
+          Flow.add_local_assumption
+            (A_ignore_recursion_side_effect f.fun_orig_name)
+            range flow
+        in
         match ret with
         | None -> Post.return flow
         | Some v ->
