@@ -91,7 +91,9 @@ val register_alarm : alarm_info -> unit
 
 module AlarmSet : SetExtSig.S with type elt = alarm
 
-type diagnostic_status =
+module CallstackSet : SetExtSig.S with type elt = callstack
+
+type diagnostic_kind =
   | Warning
   | Safe
   | Error
@@ -100,11 +102,18 @@ type diagnostic_status =
 type diagnostic = {
   diag_range : range;
   diag_check : check;
-  diag_status : diagnostic_status;
+  diag_kind : diagnostic_kind;
   diag_alarms : AlarmSet.t;
+  diag_callstacks : CallstackSet.t;
 }
 
-val mk_diagnostic : range -> check -> diagnostic_status -> AlarmSet.t -> diagnostic
+val mk_safe_diagnostic : check -> callstack -> range -> diagnostic
+
+val mk_error_diagnostic : alarm -> diagnostic
+
+val mk_warning_diagnostic : check -> callstack -> range -> diagnostic
+
+val mk_unreachable_diagnostic : check -> callstack -> range -> diagnostic
 
 val pp_diagnostic : Format.formatter -> diagnostic -> unit
 
@@ -184,7 +193,7 @@ val filter_report : (diagnostic -> bool) -> report -> report
 
 val singleton_report : alarm -> report
 
-val add_alarm : alarm -> report -> report
+val add_alarm : ?warning:bool -> alarm -> report -> report
 
 val set_diagnostic : diagnostic -> report -> report
 
