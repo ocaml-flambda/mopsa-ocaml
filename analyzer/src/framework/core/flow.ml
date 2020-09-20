@@ -263,18 +263,34 @@ let merge lattice ~merge_report pre (flow1,log1) (flow2,log2) =
 
 let get_token_map flow = flow.tmap
 
-let add_alarm ?(force=false) alarm lattice flow =
+let add_alarm ?(force=false) ?(warning=false) alarm lattice flow =
   let cur = get T_cur lattice flow in
   if not force
   && lattice.is_bottom cur
-  then flow
-  else { flow with report = Alarm.add_alarm alarm flow.report }
+  then { flow with report = Alarm.add_diagnostic (Alarm.mk_unreachable_diagnostic (check_of_alarm alarm) alarm.alarm_callstack alarm.alarm_range) flow.report }
+  else { flow with report = Alarm.add_alarm ~warning alarm flow.report }
 
-let raise_alarm ?(force=false) ?(bottom=false) alarm lattice flow =
-  let flow = add_alarm ~force alarm lattice flow in
+let raise_alarm ?(force=false) ?(bottom=false) ?(warning=false) alarm lattice flow =
+  let flow = add_alarm ~force ~warning alarm lattice flow in
   if not bottom
   then flow
   else set T_cur lattice.bottom lattice flow
+
+let add_diagnostic diag flow =
+  let report = Alarm.add_diagnostic diag flow.report in
+  if report == flow.report then flow else { flow with report }
+
+let add_safe_check check range flow =
+  let cs = get_callstack flow in
+  add_diagnostic (Alarm.mk_safe_diagnostic check cs range) flow
+
+let add_unreachable_check check range flow =
+  let cs = get_callstack flow in
+  add_diagnostic (Alarm.mk_unreachable_diagnostic check cs range) flow
+
+let add_warning_check check range flow =
+  let cs = get_callstack flow in
+  add_diagnostic (Alarm.mk_warning_diagnostic check cs range) flow
 
 let add_assumption assumption flow =
   set_report (Alarm.add_assumption assumption flow.report) flow

@@ -62,11 +62,7 @@ struct
   let numeric = Semantic "U/Numeric"
 
   let checks = [ CHK_C_INVALID_POINTER_COMPARE;
-                 CHK_C_INVALID_POINTER_SUB;
-                 CHK_C_NULL_DEREF;
-                 CHK_C_DANGLING_POINTER_DEREF;
-                 CHK_C_INVALID_DEREF;
-                 CHK_C_USE_AFTER_FREE ]
+                 CHK_C_INVALID_POINTER_SUB ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -660,21 +656,9 @@ struct
     let ctype = under_type ptr.etyp in
     eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
     match pt with
-    | P_null ->
-      raise_c_null_deref_alarm ptr man flow |>
-      Post.return
-
-    | P_invalid ->
-      raise_c_invalid_deref_alarm ptr man flow |>
-      Post.return
-
-    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_use_after_free_alarm ptr r man flow |>
-      Post.return
-
-    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_dangling_deref_alarm ptr v r man flow |>
-      Post.return
+    | P_null | P_invalid
+    | P_block ({ base_valid = false }, _, _) ->
+      Cases.empty flow
 
     | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
       assume (eq offset zero range)
@@ -869,23 +853,11 @@ struct
     let ctype = under_type ptr.etyp in
     eval_points_to ptr man flow |> OptionExt.none_to_exn >>$ fun pt flow ->
     match pt with
-    | P_null ->
-      raise_c_null_deref_alarm ptr man flow |>
-      Eval.empty
+    | P_null | P_invalid
+    | P_block ({ base_valid = false }, _, _) ->
+      Eval.empty flow
 
-    | P_invalid ->
-      raise_c_invalid_deref_alarm ptr man flow |>
-      Eval.empty
-
-    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_use_after_free_alarm ptr r man flow |>
-      Eval.empty
-
-    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_dangling_deref_alarm ptr v r man flow |>
-      Eval.empty
-
-    | P_block ({ base_kind = Var v}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
+    | P_block ({ base_kind = Var v; base_valid = true}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
       assume (eq offset zero range) ~route:scalar
         ~fthen:(man.eval ~route:scalar (mk_var v ~mode range))
         ~felse:(man.eval ~route:scalar (mk_top ctype range))
@@ -895,11 +867,6 @@ struct
       man.eval ~route:scalar (mk_top ctype range) flow
 
     | P_top ->
-      warn_at range "dereferencing ⊤ pointer %a" pp_expr ptr;
-      let flow = raise_c_null_deref_wo_info_alarm ~bottom:false range man flow |>
-                 raise_c_invalid_deref_wo_info_alarm ~bottom:false range man |>
-                 raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
-                 raise_c_dangling_deref_wo_info_alarm ~bottom:false range man in
       man.eval ~route:scalar (mk_top ctype range) flow
 
     | P_fun _ ->

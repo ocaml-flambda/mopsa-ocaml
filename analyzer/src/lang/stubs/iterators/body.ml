@@ -245,7 +245,7 @@ struct
       let new_errors1 =
         fold2zo_report
           (fun diag acc ->
-             match diag.diag_status with
+             match diag.diag_kind with
              | Error ->  diag::acc
              | _ -> acc)
           (fun _ acc -> acc)
@@ -254,7 +254,7 @@ struct
       let new_errors2 =
         fold2zo_report
           (fun diag acc ->
-             match diag.diag_status with
+             match diag.diag_kind with
              | Error -> diag::acc
              | _ -> acc)
           (fun _ acc -> acc)
@@ -269,7 +269,7 @@ struct
           let report =
             List.fold_left
               (fun acc diag ->
-                 let diag' = { diag with diag_status = Unreachable;
+                 let diag' = { diag with diag_kind = Unreachable;
                                          diag_alarms = AlarmSet.empty } in
                  set_diagnostic diag' acc)
               (Flow.get_report flow1) l in
@@ -278,7 +278,7 @@ struct
           let report =
             List.fold_left
               (fun acc diag ->
-                 let diag' = { diag with diag_status = Unreachable;
+                 let diag' = { diag with diag_kind = Unreachable;
                                          diag_alarms = AlarmSet.empty } in
                  set_diagnostic diag' acc)
               (Flow.get_report flow2) l in

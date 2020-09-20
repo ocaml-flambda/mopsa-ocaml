@@ -42,7 +42,6 @@ open Stubs.Ast
 open Ast
 open Common.Base
 open Common.Points_to
-open Common.Alarms
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Universal.Numeric.Common
 
@@ -375,10 +374,7 @@ struct
 
   let scalar = Semantic "C/Scalar"
 
-  let checks = [ CHK_C_OUT_OF_BOUND;
-                 CHK_C_NULL_DEREF;
-                 CHK_C_USE_AFTER_FREE;
-                 CHK_C_INVALID_DEREF ]
+  let checks = []
 
 
   (** {2 Command-line options} *)
@@ -606,30 +602,14 @@ struct
   let eval_pointed_base_offset ptr range man flow =
     resolve_pointer ptr man flow >>$ fun pt flow ->
     match pt with
-    | P_null ->
-      raise_c_null_deref_alarm ptr man flow |>
-      Cases.empty
-
-    | P_invalid ->
-      raise_c_invalid_deref_alarm ptr man flow |>
-      Cases.empty
-
-    | P_block ({ base_kind = Addr _; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_use_after_free_alarm ptr r man flow |>
-      Cases.empty
-
-    | P_block ({ base_kind = Var v; base_valid = false; base_invalidation_range = Some r }, offset, _) ->
-      raise_c_dangling_deref_alarm ptr v r man flow |>
-      Cases.empty
-
-    | P_block (base, offset, mode) ->
+    | P_block (base, offset, mode) when base.base_valid ->
       Cases.singleton (Some (base, offset, mode)) flow
 
     | P_top ->
       Cases.singleton None flow
 
-    | P_fun _ ->
-      assert false
+    | _ ->
+      Cases.empty flow
 
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) cases =
@@ -645,80 +625,62 @@ struct
       (* Get the size of the base *)
       eval_base_size base range man flow >>$ fun size flow ->
 
-      (* Convert the size and the offset to numeric *)
-      man.eval size flow >>$ fun size flow ->
-      man.eval offset flow >>$ fun offset flow ->
+      (* Compute the interval and create a finite number of cells *)
+      let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
+      let step = if Z.equal stride Z.zero then Z.one else stride in
 
-      (* Check the bounds: offset ∈ [0, size - |typ|] *)
-      let cond = mk_in offset (mk_zero range)
-          (sub size (mk_z elm range) range ~typ:T_int)
-          range
+      let l, u = Itv.bounds_opt itv in
+
+      let l =
+        match l with
+        | None -> Z.zero
+        | Some l -> Z.max l Z.zero
       in
-      assume_num cond
-        ~fthen:(fun flow ->
-            (* Compute the interval and create a finite number of cells *)
-            let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
-            let step = if Z.equal stride Z.zero then Z.one else stride in
 
-            let l, u = Itv.bounds_opt itv in
+      let u =
+        match u, expr_to_z size with
+        | None, Some size -> Z.sub size elm
+        | Some u, Some size -> Z.min u (Z.sub size elm)
+        | Some u, None -> u
+        | None, None ->
+          (* No bound found for the offset and the size is not constant, so
+             get an upper bound of the size.
+          *)
+          let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+          let ll, uu = Itv.bounds_opt size_itv in
+          match uu with
+          | Some size -> Z.sub size elm
+          | None ->
+            (* We are in trouble: the size is not bounded!
+               So we assume that it does not exceed the range of unsigned long long
+            *)
+            let _, uuu = rangeof ull in
+            Z.sub uuu elm
+      in
 
-            let l =
-              match l with
-              | None -> Z.zero
-              | Some l -> Z.max l Z.zero
-            in
-
-            let u =
-              match u, expr_to_z size with
-              | None, Some size -> Z.sub size elm
-              | Some u, Some size -> Z.min u (Z.sub size elm)
-              | Some u, None -> u
-              | None, None ->
-                (* No bound found for the offset and the size is not constant, so
-                   get an upper bound of the size.
-                *)
-                let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
-                let ll, uu = Itv.bounds_opt size_itv in
-                match uu with
-                | Some size -> Z.sub size elm
-                | None ->
-                  (* We are in trouble: the size is not bounded!
-                     So we assume that it does not exceed the range of unsigned long long
-                  *)
-                  let _, uuu = rangeof ull in
-                  Z.sub uuu elm
-            in
-
-            let nb = Z.div (Z.sub u l) step in
-            if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
-              (* too many cases -> top *)
-              let region = Region (base, l, u ,step) in
-              man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
-              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-              then Cases.empty flow
-              else Cases.singleton region flow
+      let nb = Z.div (Z.sub u l) step in
+      if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+        (* too many cases -> top *)
+        let region = Region (base, l, u ,step) in
+        man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
+        if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+        then Cases.empty flow
+        else Cases.singleton region flow
+      else
+        (* few cases -> iterate fully over [l, u] *)
+        let rec aux o =
+          if Z.gt o u
+          then []
+          else
+            let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
+            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+            then aux (Z.add o step)
             else
-              (* few cases -> iterate fully over [l, u] *)
-              let rec aux o =
-                if Z.gt o u
-                then []
-                else
-                  let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
-                  if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-                  then aux (Z.add o step)
-                  else
-                    let c = mk_cell base o typ in
-                    Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
-              in
-              let evals = aux l in
-              Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
-
-          )
-        ~felse:(fun eflow ->
-            let flow = raise_c_out_bound_alarm base size offset typ range man flow eflow in
-            Cases.empty flow
-          )
-        man flow
+              let c = mk_cell base o typ in
+              Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+        in
+        let evals = aux l in
+        Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
 
 
   (** Summarize a set of cells into a single smashed cell *)
@@ -875,13 +837,7 @@ struct
     let t = under_type p.etyp in
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
-    | Top ->
-      warn_at range "dereferencing ⊤ pointer %a" pp_expr p;
-      let flow = raise_c_null_deref_wo_info_alarm ~bottom:false range man flow |>
-                 raise_c_invalid_deref_wo_info_alarm ~bottom:false range man |>
-                 raise_c_use_after_free_wo_info_alarm ~bottom:false range man |>
-                 raise_c_dangling_deref_wo_info_alarm ~bottom:false range man |>
-                 raise_c_out_bound_wo_info_alarm ~bottom:false range man in
+    | Top -> 
       man.eval (mk_top (void_to_char t) range) flow
 
     | Region (base,lo,hi,step) ->
@@ -897,6 +853,7 @@ struct
           mk_numeric_cell_var_expr c ~mode range
       in
       man.eval v flow ~route:scalar
+
 
   let eval_scalar_var v mode range man flow =
     let c = mk_cell (mk_var_base v) Z.zero v.vtyp in
@@ -961,10 +918,6 @@ struct
           (Soundness.A_ignore_modification_undetermined_pointer ptr)
           range flow
       in
-      Post.return flow
-
-    | Cell ({ base },_) when is_base_readonly base ->
-      let flow = raise_c_modify_read_only_alarm ptr base man flow in
       Post.return flow
 
     | Cell (c,mode) ->

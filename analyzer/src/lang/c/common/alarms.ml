@@ -70,126 +70,69 @@ let pp_base_verbose fmt base =
     fprintf fmt "string %a\"%s\"" Pp.pp_character_kind k (String.escaped s)
 
 
-(** {2 NULL pointer dereference} *)
-(** **************************** *)
+(** {2 Checks for invalid memory access} *)
+(** ************************************ *)
 
-type check      += CHK_C_NULL_DEREF
-type alarm_kind += A_c_null_deref of expr (** pointer *)
+type check += CHK_C_INVALID_MEMORY_ACCESS
 
 let () =
   register_check (fun next fmt -> function
-      | CHK_C_NULL_DEREF -> fprintf fmt "NULL pointer dereference"
+      | CHK_C_INVALID_MEMORY_ACCESS -> fprintf fmt "Invalid memory access"
       | a -> next fmt a
     )
+
+type alarm_kind +=
+  | A_c_null_deref of expr (** pointer *)
+  | A_c_invalid_deref of expr
+  | A_c_out_of_bound of base (** accessed base *) *
+                        int_itv (** base size *) *
+                        int_itv (** offset *) *
+                        int_itv (** accessed bytes *)
+  | A_c_dangling_pointer_deref of expr (** pointer *) *
+                                  var (** pointed variable *) *
+                                  range (** return location *)
+  | A_c_use_after_free of expr (** pointer *) *
+                          range (** deallocation site *)
+  | A_c_modify_read_only of expr (** pointer *) *
+                            base (** pointed base *)
 
 let () =
   register_alarm {
     check = (fun next -> function
-        | A_c_null_deref _ -> CHK_C_NULL_DEREF
+        | A_c_null_deref _
+        | A_c_out_of_bound _
+        | A_c_invalid_deref _
+        | A_c_dangling_pointer_deref _
+        | A_c_use_after_free _
+        | A_c_modify_read_only _ ->
+          CHK_C_INVALID_MEMORY_ACCESS
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_c_null_deref(p1), A_c_null_deref(p2) -> compare_expr p1 p2
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_c_null_deref(pointer) -> fprintf fmt "pointer '%a' may be null" (Debug.bold pp_expr) pointer
-        | a -> next fmt a
-      );
-    join = (fun next -> next);
-  }
-
-let raise_c_null_deref_alarm ?(bottom=true) pointer ?(range=pointer.erange) man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_null_deref(pointer')) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-let raise_c_null_deref_wo_info_alarm ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_NULL_DEREF) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-(** {2 Invalid pointer dereference} *)
-(** ******************************* *)
-
-type check      += CHK_C_INVALID_DEREF
-type alarm_kind += A_c_invalid_deref of expr
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_C_INVALID_DEREF -> fprintf fmt "Invalid pointer dereference"
-      | a -> next fmt a
-    )
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_c_invalid_deref _ -> CHK_C_INVALID_DEREF
-        | a -> next a
-      );
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_c_invalid_deref(p1), A_c_invalid_deref(p2) -> compare_expr p1 p2
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_c_invalid_deref(pointer) -> fprintf fmt "pointer '%a' may be invalid" (Debug.bold pp_expr) pointer
-        | a -> next fmt a
-      );
-    join = (fun next -> next);
-  }
-
-let raise_c_invalid_deref_alarm ?(bottom=true) pointer ?(range=pointer.erange) man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_invalid_deref(pointer')) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-let raise_c_invalid_deref_wo_info_alarm ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_INVALID_DEREF) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-
-(** {2 Out-of-bound access} *)
-(** *********************** *)
-
-type check      += CHK_C_OUT_OF_BOUND
-type alarm_kind += A_c_out_of_bound of base (** accessed base *) *
-                                       int_itv (** base size *) *
-                                       int_itv (** offset *) *
-                                       int_itv (** accessed bytes *)
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_C_OUT_OF_BOUND -> fprintf fmt "Out of bound access"
-      | a -> next fmt a
-    )
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_c_out_of_bound _ -> CHK_C_OUT_OF_BOUND
-        | a -> next a
-      );
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
+        | A_c_null_deref(p1), A_c_null_deref(p2) ->
+          compare_expr p1 p2
+        | A_c_invalid_deref(p1), A_c_invalid_deref(p2) ->
+          compare_expr p1 p2
         | A_c_out_of_bound(b1,s1,o1,e1), A_c_out_of_bound(b2,s2,o2,e2) ->
           Compare.compose
             [ (fun () -> compare_base b1 b2);
               (fun () -> compare_int_interval s1 s2);
               (fun () -> compare_int_interval o1 o2);
               (fun () -> compare_int_interval e1 e2); ]
-
+        | A_c_dangling_pointer_deref(p1,v1,r1), A_c_dangling_pointer_deref(p2,v2,r2) ->
+          Compare.triple compare_expr compare_var compare_range (p1,v1,r1) (p2,v2,r2)
+        | A_c_use_after_free(p1,r1), A_c_use_after_free(p2,r2) ->
+          Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
+        | A_c_modify_read_only(p1,b1), A_c_modify_read_only(p2,b2) ->
+          Compare.pair compare_expr compare_base (p1,b1) (p2,b2)
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
+        | A_c_null_deref(pointer) ->
+          fprintf fmt "pointer '%a' may be null" (Debug.bold pp_expr) pointer
+        | A_c_invalid_deref(pointer) ->
+          fprintf fmt "pointer '%a' may be invalid" (Debug.bold pp_expr) pointer
         | A_c_out_of_bound (base,size,offset,elm) ->
           fprintf fmt "accessing %a byte%a at offset%a %a of %a of size %a byte%a"
             pp_const_or_interval elm
@@ -199,7 +142,28 @@ let () =
             pp_base_verbose base
             pp_const_or_interval size
             pp_interval_plurial size
+        | A_c_dangling_pointer_deref(p,v,r) ->
+          begin match v.vkind with
+            | V_cvar { cvar_scope = Variable_local f }
+            | V_cvar { cvar_scope = Variable_parameter f }->
+              fprintf fmt "'%a' points to dangling local variable '%a' of function '%a' deallocated at %a"
+                (Debug.bold pp_expr) p
+                (Debug.bold pp_var) v
+                (Debug.bold pp_print_string) f.c_func_org_name
+                pp_relative_range r
 
+            | _ ->
+              fprintf fmt "'%a' points to dangling local variable '%a' deallocated at %a"
+                (Debug.bold pp_expr) p
+                (Debug.bold pp_var) v
+                pp_relative_range r
+          end
+        | A_c_use_after_free(p,r) ->
+          fprintf fmt "'%a' points to memory deallocated at %a" (Debug.bold pp_expr) p pp_relative_range r
+        | A_c_modify_read_only(p,b) ->
+          fprintf fmt "'%a' points to read-only %a"
+            (Debug.bold pp_expr) p
+            pp_base_verbose b
         | a -> next fmt a
       );
     join = (fun next a1 a2 ->
@@ -217,22 +181,18 @@ let () =
       );
   }
 
+let raise_c_null_deref_alarm ?(bottom=true) pointer ?(range=pointer.erange) man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_null_deref(pointer')) cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
-let raise_c_out_var_bound_alarm ?(bottom=true) var offset typ range man input_flow error_flow =
-  let cs = Flow.get_callstack error_flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let size_itv = Bot.Nb (sizeof_type var.vtyp |> I.cst) in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
-  let alarm = mk_alarm (A_c_out_of_bound(mk_var_base var, size_itv, offset_itv, elm_itv)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
-let raise_c_out_addr_bound_alarm ?(bottom=true) addr size offset typ range man input_flow error_flow =
-  let cs = Flow.get_callstack error_flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let size_itv = man.ask (mk_int_interval_query size) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
-  let alarm = mk_alarm (A_c_out_of_bound(mk_addr_base addr, size_itv, offset_itv, elm_itv)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice error_flow
+let raise_c_invalid_deref_alarm ?(bottom=true) pointer ?(range=pointer.erange) man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_invalid_deref(pointer')) cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
@@ -242,21 +202,31 @@ let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_
   let alarm = mk_alarm (A_c_out_of_bound(base, size_itv, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
-
-let raise_c_quantified_out_bound_alarm ?(bottom=true) base size min max typ range man input_flow error_flow =
-  let cs = Flow.get_callstack error_flow in
-  let min_itv = man.ask (mk_int_interval_query min) input_flow in
-  let max_itv = man.ask (mk_int_interval_query max) input_flow in
-  let offset_itv = I.join_bot min_itv max_itv in
-  let size_itv = man.ask (mk_int_interval_query size) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
-  let alarm = mk_alarm (A_c_out_of_bound(base,size_itv, offset_itv, elm_itv)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice error_flow
-
-let raise_c_out_bound_wo_info_alarm ?(bottom=true) range  man flow =
+let raise_c_dangling_deref_alarm ?(bottom=true) ptr var ret_range ?(range=ptr.erange) man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_OUT_OF_BOUND) cs range in
+  let ptr' = get_orig_expr ptr in
+  let alarm = mk_alarm (A_c_dangling_pointer_deref(ptr',var,untag_range ret_range)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let raise_c_use_after_free_alarm ?(bottom=true) pointer dealloc_range ?(range=pointer.erange) man flow =
+  let cs = Flow.get_callstack flow in
+  let pointer' = get_orig_expr pointer in
+  let alarm = mk_alarm (A_c_use_after_free(pointer',untag_range dealloc_range)) cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let raise_c_modify_read_only_alarm ?(bottom=true) ptr base man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_modify_read_only(get_orig_expr ptr, base)) cs ptr.erange in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let safe_c_memory_access_check range man flow =
+  Flow.add_safe_check CHK_C_INVALID_MEMORY_ACCESS range flow
+
+let unreachable_c_memory_access_check range man flow =
+  Flow.add_unreachable_check CHK_C_INVALID_MEMORY_ACCESS range flow
+
+let raise_c_memory_access_warning range man flow =
+  Flow.add_warning_check CHK_C_INVALID_MEMORY_ACCESS range flow
 
 
 (** {2 Division by zero} *)
@@ -295,6 +265,12 @@ let raise_c_divide_by_zero_alarm ?(bottom=true) denominator range man flow =
   let denominator' = get_orig_expr denominator in
   let alarm = mk_alarm (A_c_divide_by_zero(denominator')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let safe_c_divide_by_zero_check range man flow =
+  Flow.add_safe_check CHK_C_DIVIDE_BY_ZERO range flow
+
+let unreachable_c_divide_by_zero_check range man flow =
+  Flow.add_unreachable_check CHK_C_DIVIDE_BY_ZERO range flow
 
 
 (** {2 Integer overflow} *)
@@ -347,19 +323,18 @@ let () =
       );  }
 
 
-let raise_c_integer_overflow_alarm ?(bottom=false) cexp nexp man input_flow error_flow =
+let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
   let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,cexp.etyp)) cs cexp'.erange in
-  Flow.raise_alarm alarm ~bottom man.lattice error_flow
+  Flow.raise_alarm alarm ~bottom:false ~warning man.lattice error_flow
 
-let raise_c_cast_integer_overflow_alarm ?(bottom=false) cexp nexp t man input_flow error_flow =
-  let cs = Flow.get_callstack error_flow in
-  let cexp' = get_orig_expr cexp in
-  let itv = man.ask (mk_int_interval_query nexp) input_flow in
-  let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,t)) cs cexp'.erange in
-  Flow.raise_alarm alarm ~bottom man.lattice error_flow
+let safe_c_integer_overflow_check range man flow =
+  Flow.add_safe_check CHK_C_INTEGER_OVERFLOW range flow
+
+let unreachable_c_integer_overflow_check range man flow =
+  Flow.add_unreachable_check CHK_C_INTEGER_OVERFLOW range flow
 
 
 (** {2 Invalid shift} *)
@@ -411,8 +386,6 @@ let () =
       );
   }
 
-
-
 let raise_c_invalid_shift_alarm ?(bottom=true) e shift man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let shift' = get_orig_expr shift in
@@ -420,6 +393,11 @@ let raise_c_invalid_shift_alarm ?(bottom=true) e shift man input_flow error_flow
   let alarm = mk_alarm (A_c_invalid_shift(e,shift',shift_itv)) cs shift.erange in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
+let safe_c_shift_check range man flow =
+  Flow.add_safe_check CHK_C_INVALID_SHIFT range flow
+
+let unreachable_c_shift_check range man flow =
+  Flow.add_unreachable_check CHK_C_INVALID_SHIFT range flow
 
 
 (** {2 Invalid pointer comparison} *)
@@ -511,116 +489,6 @@ let raise_c_invalid_pointer_sub ?(bottom=true) p1 p2 range man flow =
   let alarm = mk_alarm (A_c_invalid_pointer_sub(p1',p2')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
-
-
-(** {2 Dangling pointer dereference} *)
-(** ******************************** *)
-
-type check      += CHK_C_DANGLING_POINTER_DEREF
-type alarm_kind += A_c_dangling_pointer_deref of expr (** pointer *) *
-                                                 var (** pointed variable *) *
-                                                 range (** return location *)
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_C_DANGLING_POINTER_DEREF -> fprintf fmt "Dangling pointer dereference"
-      | a -> next fmt a
-    )
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_c_dangling_pointer_deref _ -> CHK_C_DANGLING_POINTER_DEREF
-        | a -> next a
-      );
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_c_dangling_pointer_deref(p1,v1,r1), A_c_dangling_pointer_deref(p2,v2,r2) ->
-          Compare.triple compare_expr compare_var compare_range (p1,v1,r1) (p2,v2,r2)
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_c_dangling_pointer_deref(p,v,r) ->
-          begin match v.vkind with
-            | V_cvar { cvar_scope = Variable_local f }
-            | V_cvar { cvar_scope = Variable_parameter f }->
-              fprintf fmt "'%a' points to dangling local variable '%a' of function '%a' deallocated at %a"
-                (Debug.bold pp_expr) p
-                (Debug.bold pp_var) v
-                (Debug.bold pp_print_string) f.c_func_org_name
-                pp_relative_range r
-
-            | _ ->
-              fprintf fmt "'%a' points to dangling local variable '%a' deallocated at %a"
-                (Debug.bold pp_expr) p
-                (Debug.bold pp_var) v
-                pp_relative_range r
-          end
-
-        | m -> next fmt m
-      );
-    join = (fun next -> next);
-  }
-
-
-let raise_c_dangling_deref_alarm ?(bottom=true) ptr var ret_range ?(range=ptr.erange) man flow =
-  let cs = Flow.get_callstack flow in
-  let ptr' = get_orig_expr ptr in
-  let alarm = mk_alarm (A_c_dangling_pointer_deref(ptr',var,untag_range ret_range)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-let raise_c_dangling_deref_wo_info_alarm ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_DANGLING_POINTER_DEREF) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-
-
-(** {2 Use after free} *)
-(** ****************** *)
-
-type check      += CHK_C_USE_AFTER_FREE
-type alarm_kind += A_c_use_after_free of expr (** pointer *) *
-                                         range (** deallocation site *)
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_C_USE_AFTER_FREE -> fprintf fmt "Use after free"
-      | a -> next fmt a
-    )
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_c_use_after_free _ -> CHK_C_USE_AFTER_FREE
-        | a -> next a
-      );
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_c_use_after_free(p1,r1), A_c_use_after_free(p2,r2) ->
-          Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_c_use_after_free(p,r) ->
-          fprintf fmt "'%a' points to memory deallocated at %a" (Debug.bold pp_expr) p pp_relative_range r
-        | m -> next fmt m
-      );
-    join = (fun next -> next);
-  }
-
-
-let raise_c_use_after_free_alarm ?(bottom=true) pointer dealloc_range ?(range=pointer.erange) man flow =
-  let cs = Flow.get_callstack flow in
-  let pointer' = get_orig_expr pointer in
-  let alarm = mk_alarm (A_c_use_after_free(pointer',untag_range dealloc_range)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-let raise_c_use_after_free_wo_info_alarm ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_USE_AFTER_FREE) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 (** {2 Double free} *)
@@ -727,6 +595,8 @@ let raise_c_insufficient_variadic_args ?(bottom=true) va_list counter args range
   let alarm = mk_alarm (A_c_insufficient_variadic_args(va_list,counter_itv,nargs_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
+let safe_variadic_args_number range man flow =
+  Flow.add_safe_check CHK_C_INSUFFICIENT_VARIADIC_ARGS range flow
 
 
 (** {2 Insufficient format arguments} *)
@@ -821,47 +691,6 @@ let raise_c_invalid_format_arg_type_alarm ?(bottom=false) arg typ man flow =
 let raise_c_invalid_format_arg_type_wo_info_alarm ?(bottom=false) range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_instance CHK_C_INVALID_FORMAT_ARG_TYPE) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-(** {2 Modification of read-only memory} *)
-(** ************************************** *)
-
-type check      += CHK_C_MODIFY_READ_ONLY
-type alarm_kind += A_c_modify_read_only of expr (** pointer *) *
-                                           base (** pointed base *)
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_C_MODIFY_READ_ONLY -> fprintf fmt "Modification of read-only memory"
-      | a -> next fmt a
-    )
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_c_modify_read_only _ -> CHK_C_MODIFY_READ_ONLY
-        | a -> next a
-      );
-    compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_c_modify_read_only(p1,b1), A_c_modify_read_only(p2,b2) ->
-          Compare.pair compare_expr compare_base (p1,b1) (p2,b2)
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_c_modify_read_only(p,b) ->
-          fprintf fmt "'%a' points to read-only %a"
-            (Debug.bold pp_expr) p
-            pp_base_verbose b
-        | m -> next fmt m
-      );
-    join = (fun next -> next);
-  }
-
-
-let raise_c_modify_read_only_alarm ?(bottom=true) ptr base man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_modify_read_only(get_orig_expr ptr, base)) cs ptr.erange in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 

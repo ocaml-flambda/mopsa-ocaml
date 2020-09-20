@@ -67,7 +67,7 @@ let aggregate_alarms report =
     (fun range checks acc ->
        CheckMap.fold
          (fun check diag acc ->
-            match diag.diag_status with
+            match diag.diag_kind with
             | Safe | Unreachable -> acc
             | Error | Warning ->
               let csl = AlarmSet.elements diag.diag_alarms |>

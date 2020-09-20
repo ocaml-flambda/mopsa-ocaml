@@ -44,10 +44,7 @@ struct
       let name = "c.cstubs.requires"
     end)
 
-  let checks = [ CHK_C_OUT_OF_BOUND;
-                 CHK_C_NULL_DEREF;
-                 CHK_C_USE_AFTER_FREE;
-                 CHK_C_INVALID_DEREF;
+  let checks = [ CHK_C_INVALID_MEMORY_ACCESS;
                  Stubs.Alarms.CHK_STUB_INVALID_REQUIRES ]
 
   (** Initialization of environments *)
@@ -135,7 +132,7 @@ struct
       assume cond
         ~fthen:(fun flow -> Post.return flow)
         ~felse:(fun eflow ->
-            raise_c_quantified_out_bound_alarm base size min max (under_type ptr.etyp) range man flow eflow |>
+            raise_c_out_bound_alarm base offset size (under_type ptr.etyp) range man flow eflow |>
             Post.return
           )
         man flow

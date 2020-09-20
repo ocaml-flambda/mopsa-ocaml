@@ -46,7 +46,7 @@ struct
 
   let numeric = Semantic "U/Numeric"
 
-  let checks = [ CHK_C_OUT_OF_BOUND;
+  let checks = [ CHK_C_INVALID_MEMORY_ACCESS;
                  CHK_C_INSUFFICIENT_VARIADIC_ARGS ]
 
   (** Flow-insensitive annotations *)
@@ -182,10 +182,11 @@ struct
       assume
         (mk_binop offset O_eq (mk_zero range) range)
         ~fthen:(fun flow ->
-            Cases.singleton ap flow
+            safe_c_memory_access_check range man flow |>
+            Cases.singleton ap
           )
         ~felse:(fun eflow ->
-            raise_c_out_var_bound_alarm ap offset (under_type ap.vtyp) range man flow eflow |>
+            raise_c_out_bound_alarm (mk_var_base ap) offset (mk_z base_size range) (under_type ap.vtyp) range man flow eflow |>
             Cases.empty
           )
         ~route:numeric
@@ -225,6 +226,7 @@ struct
     assume
       (mk_binop valc O_lt (mk_int (List.length unnamed) range) range)
       ~fthen:(fun flow ->
+          let flow = safe_variadic_args_number range man flow in
           (* Compute the interval of the counter *)
           let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query valc) flow |>
                     Itv.meet (Itv.of_int 0 (List.length unnamed - 1))

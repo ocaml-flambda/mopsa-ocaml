@@ -139,9 +139,17 @@ val copy_ctx : 'a flow -> 'a flow -> 'a flow
 
 val get_token_map : 'a flow -> 'a TokenMap.t
 
-val add_alarm : ?force:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
+val add_alarm : ?force:bool -> ?warning:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
-val raise_alarm : ?force:bool -> ?bottom:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
+val raise_alarm : ?force:bool -> ?bottom:bool -> ?warning:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
+
+val add_diagnostic : diagnostic -> 'a flow -> 'a flow
+
+val add_warning_check : check -> Location.range -> 'a flow -> 'a flow
+
+val add_safe_check : check -> Location.range -> 'a flow -> 'a flow
+
+val add_unreachable_check : check -> Location.range -> 'a flow -> 'a flow
 
 val add_assumption : assumption -> 'a flow -> 'a flow
 

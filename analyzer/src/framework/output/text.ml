@@ -137,10 +137,17 @@ let pp_alarm_message out diag alarm_kinds callstacks =
     (Debug.bold pp_print_string) file_name
     (Debug.bold pp_print_string) fun_name
     (Debug.bold pp_relative_range) diag.diag_range
-    (fun fmt -> function Error   -> Debug.color "magenta" pp_check fmt diag.diag_check
-                       | Warning -> Debug.color "yellow" pp_check fmt diag.diag_check
-                       | _ -> assert false
-    ) diag.diag_status
+    (fun fmt -> function
+       | Error ->
+         fprintf fmt "%a: %a"
+           (Debug.color "magenta" pp_print_string) "error"
+           (Debug.color "magenta" pp_check) diag.diag_check
+       | Warning ->
+         fprintf fmt "%a: %a"
+           (Debug.color "orange" pp_print_string) "warning"
+           (Debug.color "orange" pp_check) diag.diag_check
+       | _ -> assert false
+    ) diag.diag_kind
     highlight_range diag.diag_range
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) alarm_kinds
     (fun fmt callstacks ->
@@ -188,7 +195,7 @@ let report ?(flow=None) man rep time files out =
           (fun range checks acc ->
              CheckMap.fold
                (fun check diag (check_total, total) ->
-                  match diag.diag_status with
+                  match diag.diag_kind with
                   | Safe | Unreachable -> check_total, total
                   | Error | Warning ->
                     (* Get the set of alarms kinds and callstacks *)
