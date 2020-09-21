@@ -47,7 +47,7 @@ let register_check f =
 
 type alarm_kind = ..
 
-type alarm_kind += A_instance of check
+type alarm_kind += A_generic of check
 
 type alarm = {
   alarm_kind      : alarm_kind;
@@ -60,18 +60,18 @@ let alarm_compare_chain : alarm_kind TypeExt.compare_chain =
   TypeExt.mk_compare_chain
     (fun a1 a2 ->
        match a1,a2 with
-       | A_instance chk1, A_instance chk2 -> compare chk1 chk2
+       | A_generic chk1, A_generic chk2 -> compare chk1 chk2
        | _ -> compare a1 a2)
 
 let alarm_print_chain : alarm_kind TypeExt.print_chain =
   TypeExt.mk_print_chain
     (fun fmt -> function
-       | A_instance chk -> pp_check fmt chk
+       | A_generic chk -> pp_check fmt chk
        | _ -> Exceptions.panic "Print of unregistered alarm")
 
 let alarm_check_chain : (alarm_kind -> check) ref =
   ref (function
-      | A_instance chk -> chk
+      | A_generic chk -> chk
       | _ -> Exceptions.panic "Check of unregistered alarm")
 
 let alarm_join_chain : (alarm_kind -> alarm_kind -> alarm_kind option) ref =
@@ -275,16 +275,23 @@ let meet_diagnostic d1 d2 =
 
 let add_alarm_to_diagnostic a d =
   match d.diag_kind with
-  | Error       -> { d with diag_alarms = AlarmSet.add a d.diag_alarms;
-                            diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
-  | Warning     -> { d with diag_alarms = AlarmSet.add a d.diag_alarms;
-                            diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
-  | Safe        -> { d with diag_kind = Error;
-                            diag_alarms = AlarmSet.singleton a;
-                            diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
-  | Unreachable -> { d with diag_kind = Error;
-                            diag_alarms = AlarmSet.singleton a;
-                            diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
+  | Error ->
+    { d with diag_alarms = AlarmSet.add a d.diag_alarms;
+             diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
+
+  | Warning ->
+    { d with diag_alarms = AlarmSet.add a d.diag_alarms;
+             diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
+
+  | Safe ->
+    { d with diag_kind = Error;
+             diag_alarms = AlarmSet.singleton a;
+             diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
+
+  | Unreachable ->
+    { d with diag_kind = Error;
+             diag_alarms = AlarmSet.singleton a;
+             diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
 
 let compare_diagnostic d1 d2 =
   Compare.quadruple
@@ -296,8 +303,8 @@ let compare_diagnostic d1 d2 =
 (** ************************ *)
 
 type assumption_scope =
-  | A_global
   | A_local of range
+  | A_global
 
 type assumption_kind = ..
 
@@ -346,7 +353,9 @@ let pp_assumption_kind fmt h =
 let pp_assumption fmt h =
   match h.assumption_scope with
   | A_global      -> pp_assumption_kind fmt h.assumption_kind
-  | A_local range -> fprintf fmt "%a: %a" pp_relative_range range pp_assumption_kind h.assumption_kind
+  | A_local range -> fprintf fmt "%a: %a"
+                       pp_relative_range range
+                       pp_assumption_kind h.assumption_kind
 
 let compare_assumption_kind h1 h2 =
   TypeExt.compare assumption_compare_chain h1 h2
@@ -407,7 +416,8 @@ let is_sound_report r =
 
 let singleton_report alarm =
   let diag = mk_error_diagnostic alarm in
-  { report_diagnostics = RangeMap.singleton alarm.alarm_range (CheckMap.singleton alarm.alarm_check diag);
+  let checks = CheckMap.singleton alarm.alarm_check diag in
+  { report_diagnostics = RangeMap.singleton alarm.alarm_range checks;
     report_assumptions = AssumptionSet.empty; }
 
 let pp_report fmt r =
@@ -452,15 +462,20 @@ let join_report r1 r2 =
   if subset_report r1 r2 then r2 else
   if subset_report r2 r1 then r1
   else
+    let weaken_diagnostic diag =
+      match diag.diag_kind with
+      | Error -> { diag with diag_kind = Warning }
+      | _     -> diag
+    in
     { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
       report_diagnostics =
         RangeMap.map2zo
-          (fun _ checks1 -> CheckMap.map (fun diag1 -> if diag1.diag_kind = Error then { diag1 with diag_kind = Warning } else diag1) checks1)
-          (fun _ checks2 -> CheckMap.map (fun diag2 -> if diag2.diag_kind = Error then { diag2 with diag_kind = Warning } else diag2) checks2)
+          (fun _ checks1 -> CheckMap.map weaken_diagnostic checks1)
+          (fun _ checks2 -> CheckMap.map weaken_diagnostic checks2)
           (fun range checks1 checks2 ->
              CheckMap.map2zo
-               (fun check diag1 -> if diag1.diag_kind = Error then { diag1 with diag_kind = Warning } else diag1)
-               (fun check diag2 -> if diag2.diag_kind = Error then { diag2 with diag_kind = Warning } else diag2)
+               (fun check diag1 -> weaken_diagnostic diag1)
+               (fun check diag2 -> weaken_diagnostic diag2)
                (fun _ diag1 diag2 -> join_diagnostic diag1 diag2)
                checks1 checks2
           )
@@ -506,7 +521,7 @@ let add_alarm ?(warning=false) alarm r =
   let checks = try RangeMap.find range r.report_diagnostics with Not_found -> CheckMap.empty in
   let diag = try CheckMap.find check checks with Not_found -> mk_unreachable_diagnostic check callstack range in
   let diag' = add_alarm_to_diagnostic alarm diag in
-  let diag'' = if warning && diag'.diag_kind = Error then { diag' with diag_kind = Warning } else diag' in 
+  let diag'' = if warning && diag'.diag_kind = Error then { diag' with diag_kind = Warning } else diag' in
   { r with report_diagnostics = RangeMap.add alarm.alarm_range (CheckMap.add check diag'' checks) r.report_diagnostics }
 
 let map2zo_report f1 f2 f r1 r2 =
@@ -533,14 +548,19 @@ let fold2zo_report f1 f2 f r1 r2 init =
 
 let alarms_of_report r =
   RangeMap.fold
-    (fun range checks acc -> CheckMap.fold (fun check diag acc -> AlarmSet.union acc diag.diag_alarms) checks acc)
+    (fun range checks acc ->
+       CheckMap.fold (fun check diag acc ->
+           AlarmSet.union acc diag.diag_alarms) checks acc)
     r.report_diagnostics AlarmSet.empty
 
 let group_alarms_by_range s =
   AlarmSet.fold
     (fun a acc ->
        let range = a.alarm_range in
-       let s = try RangeMap.find range acc |> AlarmSet.add a with Not_found -> AlarmSet.singleton a in
+       let s =
+         try RangeMap.find range acc |>
+             AlarmSet.add a
+         with Not_found -> AlarmSet.singleton a in
        RangeMap.add range s acc
     ) s RangeMap.empty
 
@@ -548,7 +568,10 @@ let group_alarms_by_check s =
   AlarmSet.fold
     (fun a acc ->
        let check = check_of_alarm a in
-       let s = try CheckMap.find check acc |> AlarmSet.add a with Not_found -> AlarmSet.singleton a in
+       let s =
+         try CheckMap.find check acc |>
+             AlarmSet.add a
+         with Not_found -> AlarmSet.singleton a in
        CheckMap.add check s acc
     ) s CheckMap.empty
 
@@ -557,27 +580,39 @@ let find_diagnostic range check report =
   CheckMap.find check
 
 let set_diagnostic diag report =
-  let checks = try RangeMap.find diag.diag_range report.report_diagnostics with Not_found -> CheckMap.empty in
+  let checks =
+    try RangeMap.find diag.diag_range report.report_diagnostics
+    with Not_found -> CheckMap.empty
+  in
   let checks' = CheckMap.add diag.diag_check diag checks in
   if checks == checks' then report
-  else { report with report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
+  else { report with
+         report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
 
 let add_diagnostic diag report =
-  let checks = try RangeMap.find diag.diag_range report.report_diagnostics with Not_found -> CheckMap.empty in
+  let checks =
+    try RangeMap.find diag.diag_range report.report_diagnostics
+    with Not_found -> CheckMap.empty in
   try
     let old_diag = CheckMap.find diag.diag_check checks in
     let diag' = join_diagnostic diag old_diag in
     if old_diag == diag' then report
-    else { report with report_diagnostics = RangeMap.add diag.diag_range (CheckMap.add diag.diag_check diag' checks) report.report_diagnostics }
+    else
+      let checks' = CheckMap.add diag.diag_check diag' checks in
+      { report with
+        report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
   with Not_found ->
-    { report with report_diagnostics = RangeMap.add diag.diag_range (CheckMap.add diag.diag_check diag checks) report.report_diagnostics }
+    let checks' = CheckMap.add diag.diag_check diag checks in
+    { report with
+      report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
 
 let remove_diagnostic range check report =
   try
     let checks = RangeMap.find range report.report_diagnostics in
     let checks' = CheckMap.remove check checks in
     if checks == checks' then report
-    else { report with report_diagnostics = RangeMap.add range checks' report.report_diagnostics }
+    else { report with
+           report_diagnostics = RangeMap.add range checks' report.report_diagnostics }
   with Not_found ->
     report
 
