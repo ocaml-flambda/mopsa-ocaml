@@ -68,20 +68,34 @@ let eval_format_string wide format range man flow =
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when not wide ->
     if is_c_expr_equals_z offset Z.zero then
+      let flow = safe_c_memory_access_check range man flow in
       Cases.singleton (Some fmt) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-        ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
-        ~felse:(fun flow -> Cases.singleton None flow)
+        ~fthen:(fun flow ->
+            let flow = safe_c_memory_access_check range man flow in
+            Cases.singleton (Some fmt) flow
+          )
+        ~felse:(fun flow ->
+            let flow = raise_c_memory_access_warning range man flow in
+            Cases.singleton None flow
+          )
         man flow
 
   | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when wide ->
     if is_c_expr_equals_z offset Z.zero then
+      let flow = safe_c_memory_access_check range man flow in
       Cases.singleton (Some (format_of_wide_format fmt t)) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
-        ~fthen:(fun flow -> Cases.singleton (Some fmt) flow)
-        ~felse:(fun flow -> Cases.singleton None flow)
+        ~fthen:(fun flow ->
+            let flow = safe_c_memory_access_check range man flow in
+            Cases.singleton (Some fmt) flow
+          )
+        ~felse:(fun flow ->
+            let flow = raise_c_memory_access_warning range man flow in
+            Cases.singleton None flow
+          )
         man flow
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when wide ->

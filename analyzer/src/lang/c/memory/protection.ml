@@ -54,7 +54,7 @@ struct
     eval_base_size base range man flow >>$ fun size flow ->
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
     match eval_num_cond cond man flow with
-    | Some true  -> Post.return flow
+    | Some true  -> safe_c_memory_access_check range man flow |> Post.return
     | Some false -> raise_c_out_bound_alarm base offset size typ range man flow flow |>
                     Post.return
     | None ->
@@ -63,8 +63,8 @@ struct
         ~felse:(fun eflow -> raise_c_out_bound_alarm base offset size typ range man flow eflow |> Post.return)
         ~fnone:(fun nflow -> unreachable_c_memory_access_check range man flow |> Post.return)
         man flow
-  
-  let check_write_access lval range man flow =
+
+  let check_write_access lval man flow =
     let ptr = mk_c_address_of lval lval.erange in
     resolve_pointer ptr man flow >>$ fun pt flow ->
     match pt with
@@ -89,11 +89,11 @@ struct
       Cases.empty
 
     | P_block (base, offset, mode) ->
-      check_offset_access base offset lval.etyp range man flow
+      check_offset_access base offset lval.etyp lval.erange man flow
 
     | P_top ->
-      raise_c_memory_access_warning range man flow |>
-      Flow.add_local_assumption (Soundness.A_ignore_modification_undetermined_pointer ptr) range |>
+      raise_c_memory_access_warning lval.erange man flow |>
+      Flow.add_local_assumption (Soundness.A_ignore_modification_undetermined_pointer ptr) lval.erange |>
       Post.return
 
     | P_fun _ ->
@@ -124,7 +124,7 @@ struct
 
     | P_top ->
       raise_c_memory_access_warning lval.erange man flow |>
-      Post.return      
+      Post.return
 
     | P_fun _ ->
       assert false
@@ -132,7 +132,7 @@ struct
 
   (** {2 Transfer functions} *)
   (** ====================== *)
-  
+
   let init prog man flow = flow
 
   let exec stmt man flow =
@@ -140,8 +140,8 @@ struct
     | S_assign({ekind = E_var _},_) -> None
 
     | S_assign(lval,rval) when is_c_scalar_type lval.etyp ->
-      ( check_write_access lval stmt.srange man flow |>
-        Cases.remove_duplicate_results compare man.lattice  >>%
+      ( check_write_access lval man flow |>
+        Cases.remove_duplicate_results compare man.lattice >>%
         man.exec stmt ~route:(Below name)
       ) |>
       OptionExt.return

@@ -47,6 +47,12 @@ let raise_stub_invalid_requires ?(bottom=true) cond range man flow =
   let alarm = mk_alarm (A_stub_invalid_requires cond') (patch_callstack cs range) range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let safe_stub_requires range man flow =
+  Flow.add_safe_check CHK_STUB_INVALID_REQUIRES range flow
+
+let unreachable_stub_requires range man flow =
+  Flow.add_unreachable_check CHK_STUB_INVALID_REQUIRES range flow
+
 
 let () =
   register_check (fun default fmt -> function

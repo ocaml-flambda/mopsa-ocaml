@@ -67,7 +67,7 @@ struct
         if not (is_c_pointer_type arg.etyp) || not (is_c_int_type @@ under_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg ptr man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       assert_valid_ptr arg range man flow >>%
       man.exec (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range)
@@ -79,7 +79,7 @@ struct
         if not (is_c_pointer_type arg.etyp) || not (is_c_float_type @@ under_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg ptr man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       assert_valid_ptr arg range man flow >>%
       man.exec (mk_assign (mk_c_deref (mk_c_cast arg ptr range) range) (mk_top typ range) range)
@@ -92,7 +92,7 @@ struct
         if not (is_c_pointer_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       let w = match placeholder.ip_width with
         | None -> mk_top ul range
@@ -126,7 +126,9 @@ struct
           | ph :: tlp, arg :: tla ->
             assign_arg arg ph range man flow >>%
             iter tlp tla
-          | _ -> Post.return flow
+          | _ ->
+            safe_c_format_args_number range man flow |>
+            Post.return
         in
         iter placeholders args flow
 

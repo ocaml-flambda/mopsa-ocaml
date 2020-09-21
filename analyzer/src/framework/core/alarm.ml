@@ -455,12 +455,12 @@ let join_report r1 r2 =
     { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
       report_diagnostics =
         RangeMap.map2zo
-          (fun _ checks1 -> checks1)
-          (fun _ checks2 -> checks2)
+          (fun _ checks1 -> CheckMap.map (fun diag1 -> if diag1.diag_kind = Error then { diag1 with diag_kind = Warning } else diag1) checks1)
+          (fun _ checks2 -> CheckMap.map (fun diag2 -> if diag2.diag_kind = Error then { diag2 with diag_kind = Warning } else diag2) checks2)
           (fun range checks1 checks2 ->
              CheckMap.map2zo
-               (fun check diag1 -> diag1)
-               (fun check diag2 -> diag2)
+               (fun check diag1 -> if diag1.diag_kind = Error then { diag1 with diag_kind = Warning } else diag1)
+               (fun check diag2 -> if diag2.diag_kind = Error then { diag2 with diag_kind = Warning } else diag2)
                (fun _ diag1 diag2 -> join_diagnostic diag1 diag2)
                checks1 checks2
           )

@@ -74,10 +74,17 @@ struct
 
   let exec_requires cond range man flow =
     assume cond
-      ~fthen:(fun flow -> Post.return flow)
+      ~fthen:(fun flow ->
+          safe_stub_requires range man flow |>
+          Post.return
+        )
       ~felse:(fun flow ->
           raise_stub_invalid_requires cond range man flow |>
           Post.return
+        )
+      ~fnone:(fun flow ->
+          unreachable_stub_requires range man flow |>
+          Cases.empty
         )
       man flow
 

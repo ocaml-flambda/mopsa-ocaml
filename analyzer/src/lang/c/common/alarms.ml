@@ -591,7 +591,7 @@ let raise_c_insufficient_variadic_args ?(bottom=true) va_list counter args range
   let cs = Flow.get_callstack error_flow in
   let nargs = List.length args in
   let counter_itv = man.ask (mk_int_interval_query counter) input_flow in
-  let nargs_itv = Bot.Nb (I.cst_int nargs) in  
+  let nargs_itv = Bot.Nb (I.cst_int nargs) in
   let alarm = mk_alarm (A_c_insufficient_variadic_args(va_list,counter_itv,nargs_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
@@ -635,15 +635,16 @@ let () =
   }
 
 
-let raise_c_insufficient_format_args_alarm ?(bottom=true) required given range man flow =
+let raise_c_insufficient_format_args_alarm required given range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_insufficient_format_args(required,given)) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_insufficient_format_args_wo_info_alarm ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_INSUFFICIENT_FORMAT_ARGS) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
+let raise_c_insufficient_format_args_warning range man flow =
+  Flow.add_warning_check CHK_C_INSUFFICIENT_FORMAT_ARGS range flow
+
+let safe_c_format_args_number range man flow =
+  Flow.add_safe_check CHK_C_INSUFFICIENT_FORMAT_ARGS range flow
 
 
 (** {2 Invalid type of format argument} *)
@@ -683,15 +684,16 @@ let () =
   }
 
 
-let raise_c_invalid_format_arg_type_alarm ?(bottom=false) arg typ man flow =
+let raise_c_invalid_format_arg_type_alarm arg typ man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_c_invalid_format_arg_type(get_orig_expr arg, typ)) cs arg.erange in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
-let raise_c_invalid_format_arg_type_wo_info_alarm ?(bottom=false) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_instance CHK_C_INVALID_FORMAT_ARG_TYPE) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
+let raise_c_invalid_format_arg_type_warning range man flow =
+  Flow.add_warning_check CHK_C_INVALID_FORMAT_ARG_TYPE range flow
+
+let safe_c_format_arg_type range man flow =
+  Flow.add_safe_check CHK_C_INVALID_FORMAT_ARG_TYPE range flow
 
 
 
