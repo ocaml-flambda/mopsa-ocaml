@@ -100,7 +100,7 @@ let highlight_range fmt range =
           l,
           ""
       in
-      fprintf fmt "%a: %s%a%s" (Debug.bold pp_print_int) i s1 (Debug.color_str "red") s2 s3
+      fprintf fmt "%a: %s%a%s" (Debug.bold pp_print_int) i s1 (Debug.color_str "fushia") s2 s3
     in
 
     (* Underline bug region *)
@@ -112,7 +112,7 @@ let highlight_range fmt range =
       let s1 = String.make c1 ' ' in
       let s2 = String.make (c2 - c1) '^' in
       let s3 = String.make (c3 - c2) ' ' in
-      fprintf fmt "@,%s%a%s" s1 (Debug.color_str "red") s2 s3
+      fprintf fmt "@,%s%a%s" s1 (Debug.color_str "fushia") s2 s3
     in
 
     (* Print the highlighted lines *)
@@ -126,22 +126,28 @@ let highlight_range fmt range =
     | _ -> ()
 
 
-let pp_alarm_message out diag alarm_kinds callstacks =
+let pp_alarm_message out n diag alarm_kinds callstacks =
   (* Print the alarm instance *)
   let file_name = get_range_relative_file diag.diag_range in
   let fun_name = match CallstackSet.elements callstacks with
     | (c::_) :: _ -> c.call_fun_orig_name
     | _ -> "<>"
   in
-  print out "@.%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
+  print out "@.%a Alarm #%d:@,%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
+    (fun fmt -> function
+       | Warning -> Debug.color_str "orange" fmt "⚠"
+       | Error   -> Debug.color_str "red" fmt "✗"
+       | _ -> assert false
+    ) diag.diag_kind
+    (n+1)
     (Debug.bold pp_print_string) file_name
     (Debug.bold pp_print_string) fun_name
     (Debug.bold pp_relative_range) diag.diag_range
     (fun fmt -> function
        | Error ->
          fprintf fmt "%a: %a"
-           (Debug.color "magenta" pp_print_string) "error"
-           (Debug.color "magenta" pp_check) diag.diag_check
+           (Debug.color "red" pp_print_string) "error"
+           (Debug.color "red" pp_check) diag.diag_check
        | Warning ->
          fprintf fmt "%a: %a"
            (Debug.color "orange" pp_print_string) "warning"
@@ -151,23 +157,25 @@ let pp_alarm_message out diag alarm_kinds callstacks =
     highlight_range diag.diag_range
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) alarm_kinds
     (fun fmt callstacks ->
-       if not !opt_show_callstacks then ()
+       match CallstackSet.elements callstacks with
+       | [] -> ()
+       | [cs] -> fprintf fmt "@,Callstack:@,@[%a@]" pp_callstack cs
+       | cs::tl ->
+         if not !opt_show_callstacks then
+           let others = List.length tl in
+           fprintf fmt "@,Callstack:@,@[%a@]@,+%d other callstack%a" pp_callstack cs others Debug.plurial_int others
        else
          let pp_numbered_callstack i fmt cs =
-           fprintf fmt "@,@[<v>Call stack%a:@,%a@]"
+           fprintf fmt "@,@[<v>Callstack%a:@,%a@]"
              (fun fmt -> function
                 | None   -> ()
                 | Some i -> fprintf fmt " %d" (i+1)
              ) i
              pp_callstack cs
          in
-         match CallstackSet.elements callstacks with
-         | [] -> ()
-         | [cs] -> pp_numbered_callstack None fmt cs
-         | csl    ->
-           let csl' = List.mapi (fun i cs -> (i,cs)) csl in
-           pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-             (fun fmt (i,cs) -> pp_numbered_callstack (Some i) fmt cs)
+         let csl' = List.mapi (fun i cs -> (i,cs)) (cs::tl) in
+         pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+           (fun fmt (i,cs) -> pp_numbered_callstack (Some i) fmt cs)
              fmt csl';
     ) callstacks
 
@@ -223,7 +231,7 @@ let report ?(flow=None) man rep time files out =
                           aa',tl'
                     in
                     let kinds' = iter (AlarmKindSet.elements kinds) in
-                    pp_alarm_message out diag kinds' callstacks;
+                    pp_alarm_message out total diag kinds' callstacks;
                     CheckMap.add check (try 1 + CheckMap.find check check_total with Not_found -> 1) check_total,
                     total + 1
                ) checks acc

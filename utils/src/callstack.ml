@@ -31,7 +31,7 @@ type callsite = {
 
 let pp_callsite fmt c =
   Format.fprintf fmt "%a: %s"
-    pp_range c.call_range
+    pp_relative_range c.call_range
     c.call_fun_orig_name
 
 let compare_callsite c c' =
