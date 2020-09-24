@@ -105,13 +105,17 @@ struct
  (fun eaddr_tuple flow ->
           let addr_tuple = addr_of_expr eaddr_tuple in
           let els_vars = var_of_addr addr_tuple in
-          debug "els_vars = %a@.els = %a" (Format.pp_print_list pp_var) els_vars (Format.pp_print_list pp_expr) els;
           let flow = List.fold_left2 (fun acc vari eli ->
               acc >>% man.exec
                 (mk_assign (mk_var ~mode:(Some STRONG) vari range) eli range)) (Post.return flow) els_vars els in
           flow >>% Eval.singleton (mk_py_object (addr_tuple, None) range)
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__new__", _))}, _)}, cls::args, []) ->
+      Utils.new_wrapper man range flow "tuple" cls
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple []) range))
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__contains__" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args
@@ -135,15 +139,20 @@ struct
       Utils.check_instances f man flow range args
         ["tuple"; "int"]
         (fun eargs flow ->
+          (* FIXME: ask the intervals rather than do this hack *)
            let exception Nonconstantinteger  in
            let tuple = List.hd eargs in
            let tuple_vars = var_of_eobj tuple in
            try
+             debug "expr = %a" pp_expr (List.hd (List.tl args));
              let pos = match ekind (List.hd (List.tl args)) with
                | E_constant (C_int z) -> Z.to_int z
+               | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> - Z.to_int z
                | _ -> raise Nonconstantinteger in
              if 0 <= pos && pos < List.length tuple_vars then
                man.eval   (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
+             else if 0 > pos && pos >= - List.length tuple_vars then
+               man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + pos)) range) flow
              else
                man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
                Eval.empty
@@ -154,6 +163,17 @@ struct
                 :: (List.map (fun var -> man.eval   (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__len__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["tuple"]
+        (fun eargs flow ->
+          let tuple = List.hd eargs in
+          let tuple_vars = var_of_eobj tuple in
+          man.eval (mk_int ~typ:(T_py (Some Int)) (List.length tuple_vars) range) flow
+        )
+      |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args

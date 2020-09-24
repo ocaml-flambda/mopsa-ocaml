@@ -202,12 +202,12 @@ module Domain =
           parse (Some name) cls.py_cls_body
 
         | S_py_function(fundec) ->
-          let name = mk_dot_name base (get_orig_vname fundec.py_func_var) in
-          let fundec = {fundec with py_func_var = set_orig_vname name fundec.py_func_var} in
+          let fun_name = mk_dot_name base (get_orig_vname fundec.py_func_var) in
+          let fundec = {fundec with py_func_var = set_orig_vname fun_name fundec.py_func_var} in
           let kind =
             if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
-            if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported name
-            else F_builtin (name, Libs.Py_mopsa.builtin_type_name
+            if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported fun_name
+            else F_builtin (fun_name, Libs.Py_mopsa.builtin_type_name
                               (if name = "stdlib" then "builtin_function_or_method" else "function")
                               fundec)
           in

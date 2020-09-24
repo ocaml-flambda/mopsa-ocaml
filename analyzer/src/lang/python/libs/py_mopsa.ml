@@ -70,11 +70,6 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [], []) ->
          man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
-      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [
-                     {ekind = E_constant (C_int l)}; {ekind = E_constant (C_int u)}
-                   ], []) ->
-         man.eval (mk_py_z_interval l u range) flow |> OptionExt.return
-
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.random_int", _))}, _)}, [l; u], []) ->
               let tmp = mktmp ~typ:(T_py None) () in
               let l = Utils.mk_builtin_call "int" [l] range in

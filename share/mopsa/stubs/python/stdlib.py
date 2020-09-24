@@ -754,14 +754,15 @@ class set_iterator(object):
     def __iter__(self): pass
 
 class tuple(object):
-    @mopsa.type("wrapper_descriptor")
-    def __init__(self): pass
+    def __new__(self, o): pass
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __contains__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __getitem__(self, k): pass
+    @mopsa.type("wrapper_descriptor")
+    def __len__(self): pass
 
 class tuple_iterator(object):
     @mopsa.type("wrapper_descriptor")

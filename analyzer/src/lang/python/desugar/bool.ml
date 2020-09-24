@@ -53,7 +53,7 @@ module Domain =
          man.eval e2 flow |> OptionExt.return
 
       | E_binop(O_py_and, {ekind = E_constant (C_bool false)}, e2) ->
-         Eval.singleton (mk_py_false range) flow |> OptionExt.return
+         man.eval (mk_py_false range) flow |> OptionExt.return
 
       | E_binop(O_py_and, e1, e2) ->
          man.eval e1 flow >>$

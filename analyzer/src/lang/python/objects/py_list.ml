@@ -175,11 +175,12 @@ struct
            let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
            assume (mk_py_isinstance_builtin list "list" range) man flow
              ~fthen:(fun flow ->
-               assume (mk_py_isinstance_builtin index "int" range) man flow
+               assume (mk_py_hasattr index "__index__" range) man flow
                  ~fthen:(fun flow ->
-                   Cases.bind_list eargs (man.eval  ) flow |>
+                   Cases.bind_list [list; mk_py_call (mk_py_attr index "__index__" range) [] range] (man.eval  ) flow |>
                      Cases.bind_result (fun eargs flow ->
                          let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
+                         debug "list = %a, index = %a" pp_expr list pp_expr index;
                          let var_els = var_of_eobj list in
                          let length_list = length_var_of_eobj list in
                          assume

@@ -57,7 +57,6 @@ module Domain =
       match ekind expr with
       (* Special attributes *)
       | E_py_attribute(obj, ("__dict__" as attr))
-        | E_py_attribute(obj, ("__class__" as attr))
         | E_py_attribute(obj, ("__bases__" as attr))
         | E_py_attribute(obj, ("__name__" as attr))
         | E_py_attribute(obj, ("__qualname__" as attr))
@@ -65,6 +64,9 @@ module Domain =
         | E_py_attribute(obj, ("mro" as attr))
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
          panic_at range "Access to special attribute %s not supported" attr
+
+      | E_py_attribute(obj, "__class__") ->
+         man.eval (mk_py_type obj range) flow |> OptionExt.return
 
       (* Attributes of builtin classes are static, so we can be more efficient *)
       | E_py_attribute ({ekind = E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _)}, attr) ->

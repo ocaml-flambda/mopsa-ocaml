@@ -92,7 +92,7 @@ module Domain =
                                                           let open Universal.Iterators.Interproc.Common in
                                                           Flow.fold (fun acc tk env ->
                                                               match tk with
-                                                              | T_break | T_continue | T_return _ | T_py_exception _ ->
+                                                              | T_cur | T_break | T_continue | T_return _ | T_py_exception _ ->
                                                                  Flow.singleton (Flow.get_ctx acc) T_cur env |>
                                                                    man.exec finally |> post_to_flow man |>
                                                                    Flow.rename T_cur tk man.lattice |>
@@ -174,7 +174,8 @@ module Domain =
         |> OptionExt.return
 
       | S_py_raise None ->
-        panic_at stmt.srange "exceptions: re-raise previous caught exception not supported"
+         man.exec (Utils.mk_builtin_raise_msg "RuntimeError" "No active exception to reraise" range) flow
+         |> OptionExt.return
 
       | _ -> None
 
@@ -187,6 +188,10 @@ module Domain =
           | T_py_exception _ -> fun _ -> false
           | _ -> fun _ -> true) flow0 in
       debug "exec except flow0@ @[%a@]" (Flow.print man.lattice.print) flow0;
+      let except_var =
+        match excpt.py_excpt_name with
+        | None -> mk_range_attr_var range "artificial_except_var" (T_py None)
+        | Some v -> v in
       let flow1 =
         match excpt.py_excpt_type with
         (* Default except case: catch all exceptions *)
@@ -220,9 +225,7 @@ module Domain =
                                 (mk_py_isinstance exn e range)
                                 man
                                 ~fthen:(fun true_flow ->
-                                    match excpt.py_excpt_name with
-                                    | None -> Post.return true_flow
-                                    | Some v -> man.exec (mk_assign (mk_var v range) exn range) true_flow)
+                                      man.exec (mk_assign (mk_var except_var range) exn range) true_flow)
                                 ~felse:(fun false_flow ->
                                     Flow.set T_cur man.lattice.bottom man.lattice false_flow |> Post.return
                                   )
@@ -242,12 +245,18 @@ module Domain =
               | _ -> acc
             ) flow0 flow
       in
-      let clean_except_var =
-        match excpt.py_excpt_name with
-        | None -> mk_block [] (tag_range range "clean_except_var")
-        | Some v -> mk_remove_var v (tag_range range "clean_except_var") in
+      let clean_except_var = mk_remove_var except_var (tag_range range "clean_except_var") in
+      let except_body =
+        (* replace raise without arguments with `raise except_var` *)
+        Visitor.map_stmt
+          (fun e -> Keep e)
+          (fun s -> match skind s with
+                    | S_py_raise None -> Keep {s with skind=(S_py_raise (Some (mk_var except_var range)))}
+                    | _ -> VisitParts s)
+          excpt.py_excpt_body
+      in
       debug "except flow1 =@ @[%a@]" (Flow.print man.lattice.print) flow1;
-      man.exec excpt.py_excpt_body flow1
+      man.exec except_body flow1
       >>% man.exec clean_except_var |> post_to_flow man
 
 
