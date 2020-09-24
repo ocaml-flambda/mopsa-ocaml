@@ -380,13 +380,11 @@ struct
       OptionExt.return
 
     | E_var(var, mode) ->
-      let v = find var a in
+      find_opt var a |> OptionExt.lift @@ fun v ->
       let w = Value.filter b e.etyp v in
-      (if Value.is_bottom w then bottom else
+      if Value.is_bottom w then bottom else
        if var_mode var mode = STRONG then add ctx var w a
        else a
-      ) |>
-      OptionExt.return
 
     (* arithmetic comparison part, handled by Value *)
     | E_binop (op, e1, e2) ->
