@@ -63,6 +63,13 @@ sig
   val ask  : ('a,'r) query -> ('a, unit) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val pretty_print : Pretty_printer.printer -> expr -> ('a,unit) man -> 'a flow -> unit
+  (** Pretty printer of expression value *)
+
 end
 
 

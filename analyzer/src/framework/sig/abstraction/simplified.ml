@@ -65,9 +65,6 @@ sig
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
 
   (** {2 Predicates} *)
   (** ************** *)
@@ -118,6 +115,15 @@ sig
   val ask : ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
   (** Handler of queries *)
 
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
+  val pretty_print : Pretty_printer.printer -> expr -> t -> unit
+  (** Pretty printer of expressions *)
 
 end
 

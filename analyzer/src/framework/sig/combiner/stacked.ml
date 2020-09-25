@@ -33,6 +33,7 @@ sig
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val pretty_print : domain list -> Pretty_printer.printer -> expr -> ('a,t) man -> 'a flow -> unit
 end
 
 
@@ -45,6 +46,7 @@ struct
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask
+  let pretty_print targets = D.pretty_print
 end
 
 module CombinerToStacked(T:STACKED_COMBINER) : STACKED with type t = T.t =
@@ -53,6 +55,7 @@ struct
   let exec stmt man flow = T.exec [] stmt man flow
   let eval exp man flow  = T.eval [] exp man flow
   let ask query man flow = T.ask [] query man flow
+  let pretty_print printer el man flow = T.pretty_print [] printer el man flow
 end
 
 

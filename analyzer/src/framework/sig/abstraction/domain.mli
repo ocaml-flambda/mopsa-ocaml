@@ -63,9 +63,6 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -111,6 +108,16 @@ sig
 
   val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
   (** Handler of queries *)
+
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print: Format.formatter -> t -> unit
+  (** Printer of an abstract element. *)
+
+  val pretty_print : Pretty_printer.printer -> expr -> ('a,t) man -> 'a flow -> unit
+  (** Pretty printer of expression value *)
 
 end
 

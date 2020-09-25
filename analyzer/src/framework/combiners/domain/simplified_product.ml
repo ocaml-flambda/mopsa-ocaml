@@ -90,7 +90,8 @@ struct
     match D2.id with
     | C_empty -> D1.print fmt a1
     | _ ->  Format.fprintf fmt "%a@\n%a" D1.print a1 D2.print a2
-  
+
+
   let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
@@ -150,6 +151,24 @@ struct
               ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from simplified domains"))
            (f1 q (hdman man) ctx a1)
            (f2 q (tlman man) ctx a2))    
+
+  let pretty_print targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
+    with
+    | false, false -> raise Not_found
+    | true, false ->
+      let f1 = D1.pretty_print targets in
+      (fun printer e (a1,_) -> f1 printer e a1)
+    | false, true ->
+      let f2 = D2.pretty_print targets in
+      (fun printer e (_,a2) -> f2 printer e a2)
+    | true, true ->
+      let f1 = D1.pretty_print targets in
+      let f2 = D2.pretty_print targets in
+      (fun printer e (a1,a2) ->
+         f1 printer e a1;
+         f2 printer e a2)
 
 end
 

@@ -66,6 +66,7 @@ struct
   let exec _ _ _ flow = []
   let eval _ _ _ flow = []
   let ask _ _ _ _ = None
+  let pretty_print _ _ _ _ _ = ()
 end
 
 
@@ -163,6 +164,20 @@ struct
            (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_ctx flow) a b))
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
+
+
+  let pretty_print targets =
+    let f2 = P.pretty_print targets in
+    if not (sat_targets ~targets ~domains:S.domains) then
+      (fun printer e man flow ->
+         f2 printer e (snd_pair_man man) flow
+      )
+    else
+      let f1 = S.pretty_print targets in
+      (fun printer e man flow ->
+         f1 printer e (fst_pair_man man) flow;
+         f2 printer e (snd_pair_man man) flow
+      )
 end
 
 

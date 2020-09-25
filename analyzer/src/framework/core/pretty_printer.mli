@@ -19,78 +19,42 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Ast.Constant
-include Ast.Expr
-include Ast.Stmt
-include Ast.Typ
-include Ast.Program
-include Ast.Frontend
-include Ast.Operator
-include Ast.Var
-include Ast.Visitor
+(** Printer - pretty-printing of expressions values *)
 
-module Var =
-struct
-  type t = var
-  let compare = compare_var
-  let print = pp_var
-end
+open Ast.Var
+open Ast.Expr
+open Yojson.Basic
 
-include Alarm
-module Alarm = Alarm
 
-include Context
-module Context = Context
+module StringMap = MapExt.StringMap
 
-module Cases = Cases
+type section =
+  | Map    of section StringMap.t
+  | List   of section list
+  | String of string
 
-type 'r case = 'r Cases.case
-type ('a,'r) cases = ('a,'r) Cases.cases
+type domain = string
 
-let bind = Cases.bind
-let (>>=) = Cases.(>>=)
+type printer
 
-let bind_opt = Cases.bind_opt
-let (>>=?) = Cases.(>>=?)
+val empty_printer : printer
 
-let bind_result = Cases.bind_result
-let (>>$) = Cases.(>>$)
+val get_prev_exprs : printer -> expr list
 
-let bind_result_opt = Cases.bind_result_opt
-let (>>$?) = Cases.(>>$?)
+val add_expr : printer -> expr -> unit
 
-let bind_list = Cases.bind_list
-let bind_list_opt = Cases.bind_list_opt
+val mem_prev_expr : printer -> expr -> bool
 
-module Eval = Eval
-type 'a eval = 'a Eval.eval
+val pp_string : printer -> domain -> string -> unit
 
-module Flow = Flow
-type 'a flow = 'a Flow.flow
+val pp_map : printer -> domain -> (string*section) list -> unit
 
-module Post = Post
-type 'a post = 'a Post.post
+val pp_map_binding : printer -> domain -> string -> section -> unit
 
-let (>>%) = Post.(>>%)
-let (>>%?) = Post.(>>%?)
+val pp_list : printer -> domain -> section list -> unit
 
-module Log = Log
-include Log
+val pp_list_element : printer -> domain -> section -> unit
 
-include Query
+val flush : Format.formatter -> printer -> unit
 
-include Token
-
-include Semantic
-
-include Route
-
-include Lattice
-
-include Id
-
-include Manager
-
-module Hook = Hook
-
-module Pretty_printer = Pretty_printer
+val printer_to_json : printer -> Yojson.t

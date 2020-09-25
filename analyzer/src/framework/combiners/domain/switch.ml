@@ -150,6 +150,32 @@ struct
            (join_query q ~join:(fun a b -> man.lattice.join (Flow.get_ctx flow) a b))
            (f1 q (fst_pair_man man) flow)
            (f2 q (snd_pair_man man) flow))
+
+
+  (** Pretty printer of expressions *)
+  let pretty_print targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      let f = D1.pretty_print targets in
+      (fun printer e man flow ->
+         f printer e (fst_pair_man man) flow)
+
+    | false, true ->
+      let f = D2.pretty_print targets in
+      (fun printer e man flow ->
+         f printer e (snd_pair_man man) flow)
+
+    | true, true ->
+      let f1 = D1.pretty_print targets in
+      let f2 = D2.pretty_print targets in
+      (fun printer e man flow ->
+         f1 printer e (fst_pair_man man) flow;
+         f2 printer e (snd_pair_man man) flow
+      )
 end
 
 

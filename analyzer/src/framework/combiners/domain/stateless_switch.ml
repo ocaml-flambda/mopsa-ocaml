@@ -151,6 +151,28 @@ struct
            (f2 q man flow)
       )
 
+
+  (** Pretty printer of expressions *)
+  let pretty_print targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      D1.pretty_print targets
+
+    | false, true ->
+      D2.pretty_print targets
+
+    | true, true ->
+      let f1 = D1.pretty_print targets in
+      let f2 = D2.pretty_print targets in
+      (fun printer e man flow ->
+         f1 printer e man flow;
+         f2 printer e man flow
+      )
+
 end
 
 
