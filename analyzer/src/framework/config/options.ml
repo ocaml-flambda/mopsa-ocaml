@@ -268,9 +268,9 @@ let () =
         ["text"; "json"],
         (fun s ->
            match s with
-           | "text" -> Output.Factory.(opt_format := F_text)
+           | "text" -> Output.Common.(opt_format := F_text)
            | "json" ->
-              Output.Factory.(opt_format := F_json);
+              Output.Common.(opt_format := F_json);
               Debug.print_color := false
            | _ -> assert false
         )
@@ -284,7 +284,7 @@ let () =
     key = "-lflow";
     category = "Output";
     doc = " display the last output";
-    spec = ArgExt.Set Output.Factory.opt_display_lastflow;
+    spec = ArgExt.Set Output.Common.opt_display_lastflow;
     default = "false";
   }
 
@@ -295,7 +295,7 @@ let () =
     key = "-silent";
     category = "Output";
     doc = " do not return a non-zero value when detecting alarms";
-    spec = ArgExt.Set Output.Factory.opt_silent;
+    spec = ArgExt.Set Output.Common.opt_silent;
     default = "unset";
   }
 
@@ -306,7 +306,7 @@ let () =
     key = "-output";
     category = "Output";
     doc = " redirect output to a file";
-    spec = ArgExt.String (fun s -> Output.Factory.opt_file := Some s);
+    spec = ArgExt.String (fun s -> Output.Common.opt_file := Some s);
     default = "";
   }
 

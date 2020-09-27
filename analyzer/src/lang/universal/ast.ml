@@ -568,6 +568,9 @@ type stmt_kind +=
    | S_print
    (** Print the abstract flow map at current location *)
 
+   | S_pretty_print of expr list
+   (** Pretty print the values of expressions *)
+
    | S_free of addr
    (** Release a heap address *)
 
@@ -605,6 +608,8 @@ let () =
 
         | S_free(a1), S_free(a2) -> compare_addr a1 a2
 
+        | S_pretty_print el1, S_pretty_print el2 -> Compare.list compare_expr el1 el2
+
         | _ -> next s1 s2
       );
 
@@ -633,6 +638,7 @@ let () =
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
         | S_print -> fprintf fmt "print();"
+        | S_pretty_print el -> fprintf fmt "print_print(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -684,6 +690,10 @@ let () =
 
         | S_print -> leaf stmt
 
+        | S_pretty_print el ->
+          {exprs = el; stmts = []},
+          (function {exprs} -> {stmt with skind = S_pretty_print exprs})
+          
         | S_free _ -> leaf stmt
 
         | _ -> default stmt

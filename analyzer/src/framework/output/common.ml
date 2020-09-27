@@ -19,60 +19,40 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Render the output of an analysis depending on the selected engine. *)
+(** Definitions common to output engines *)
 
 open Core.All
-open Common
 
 
-(* Output engines *)
+(* Signature of an output engine *)
+(* ----------------------------- *)
+
+module type OUTPUT =
+sig
+  val report : ('a,'b) man -> 'a flow -> time:float -> files:string list -> out:string option -> unit
+  val panic : exn -> btrace:string -> time:float -> files:string list -> out:string option -> unit
+  val help : ArgExt.arg list -> out:string option -> unit
+  val dump : ('a,'b) man -> 'a flow -> range:Location.range -> out:string option -> unit
+  val pretty_print  : pprinter -> range:Location.range -> out:string option -> unit
+  val list_domains : string list -> out:string option -> unit
+  val list_hooks : string list -> out:string option -> unit
+  val list_checks : check list -> out:string option -> unit
+end
+
+
+(* Output formats *)
 (* -------------- *)
 
-let engines = Hashtbl.create 16
-
-let () = Hashtbl.add engines F_text (module Text : OUTPUT)
-let () = Hashtbl.add engines F_json (module Json : OUTPUT)
-
-let get_output_engine () : (module OUTPUT) = Hashtbl.find engines !opt_format 
+type format =
+  | F_text (* Textual output *)
+  | F_json (* Formatted output in JSON *)
 
 
-(* Result rendering *)
-(* ---------------- *)
+(* Command line option *)
+(* ------------------- *)
 
-(* Print collected alarms in the desired output format *)
-let report man flow ~time ~files =
-  let report = Core.Flow.get_report flow in
-  let return_v = if !opt_silent || is_safe_report report then 0 else 1 in
-  let module E = (val (get_output_engine ())) in
-  E.report man flow ~time ~files ~out:!opt_file;
-  return_v
-
-let panic ~btrace exn ~time ~files =
-  let module E = (val (get_output_engine ())) in
-  E.panic exn ~btrace ~time ~files ~out:!opt_file;
-  2
-
-let help (args:ArgExt.arg list) =
-  let module E = (val (get_output_engine ())) in
-  E.help args ~out:!opt_file
-
-let list_domains (domains:string list) =
-  let module E = (val (get_output_engine ())) in
-  E.list_domains domains ~out:!opt_file
-
-let list_checks (checks:check list) =
-  let module E = (val (get_output_engine ())) in
-  E.list_checks checks ~out:!opt_file
-
-let list_hooks (hooks:string list) =
-  let module E = (val (get_output_engine ())) in
-  E.list_hooks hooks ~out:!opt_file
-
-let dump range man flow =
-  let module E = (val (get_output_engine ())) in
-  E.dump man flow ~range ~out:!opt_file
-
-let pretty_print printer range =
-  let module E = (val (get_output_engine ())) in
-  E.pretty_print printer ~range ~out:!opt_file
+let opt_format = ref F_text
+let opt_file : string option ref = ref None
+let opt_display_lastflow = ref false
+let opt_silent = ref false
 

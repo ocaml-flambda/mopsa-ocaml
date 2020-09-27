@@ -258,12 +258,12 @@ struct
       Exceptions.panic "%s" s
 
     | E_c_builtin_call("_mopsa_print", []) ->
-       Framework.Output.Factory.print (erange exp) (Flow.print man.lattice.print) flow;
-       Eval.singleton (mk_int 0 exp.erange) flow |>
-       OptionExt.return
+      man.exec (mk_stmt S_print exp.erange) flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_print", args) ->
-      Framework.Output.Factory.print (erange exp) (print_values args man) flow;
+      man.exec (mk_stmt (S_pretty_print args) exp.erange) flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 

@@ -55,4 +55,4 @@ val pprint_list_element : pprinter -> domain -> pprint_section -> unit
 
 val flush_pprinter : Format.formatter -> pprinter -> unit
 
-val pprinter_to_json : pprinter -> Yojson.t
+val pprinter_to_json : pprinter -> Yojson.Basic.t

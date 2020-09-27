@@ -98,10 +98,10 @@ let analyze_files (files:string list) (args:string list option) : int =
     let res = Engine.exec stmt flow |> post_to_flow Engine.man in
     let t = Timing.stop t in
     Hook.on_finish Engine.man res;
-    Output.Factory.report Engine.man res t files
+    Output.Factory.report Engine.man res ~time:t ~files
   with e ->
     let t = try Timing.stop t with Not_found -> 0. in
-    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e t files
+    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files
 
 
 let run () =

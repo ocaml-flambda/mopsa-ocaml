@@ -26,7 +26,7 @@ open Core.All
 open Location
 open Format
 open Callstack
-
+open Common
 
 (** Command-line option to enable display of alarms call stacks *)
 let opt_show_callstacks = ref false
@@ -180,17 +180,17 @@ let pp_alarm_message out n diag alarm_kinds callstacks =
     ) callstacks
 
 
-let report ?(flow=None) man rep time files out =
+let report man flow ~time ~files ~out =
+  let rep = Flow.get_report flow in
   if is_sound_report rep
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
   else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
 
-  let () = match flow with
-    | None -> ()
-    | Some f ->
+  let () =
+    if !opt_display_lastflow then
       print out "Last flow =@[@\n%a@]@\n"
         (* "Context = @[@\n%a@]@\n" *)
-        (Core.Flow.print man.lattice.print) f
+        (Core.Flow.print man.lattice.print) flow
         (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
   in
 
@@ -257,7 +257,7 @@ let report ?(flow=None) man rep time files out =
   print out "Time: %.3fs@." time;
   ()
 
-let panic ~btrace exn files time out =
+let panic exn ~btrace ~time ~files ~out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";
   let () =
     match exn with
@@ -309,7 +309,7 @@ let group_args_by_category args =
   in
   grouped
 
-let help (args:ArgExt.arg list) out =
+let help (args:ArgExt.arg list) ~out =
   let print_default fmt d =
     if d = "" then ()
     else fprintf fmt " (default: %s)" d
@@ -334,22 +334,30 @@ let help (args:ArgExt.arg list) out =
         ) (List.sort Stdlib.compare args)
     ) groups
 
-let list_domains (domains:string list) out =
+let list_domains (domains:string list) ~out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
 
-let list_checks checks out =
+let list_checks checks ~out =
   print out "Checks:@.";
   List.iter (fun chk -> print out "  %a@." Core.Alarm.pp_check chk) checks
 
-let list_hooks hooks out =
+let list_hooks hooks ~out =
   print out "Hooks:@.";
   List.iter (fun h -> print out "  %s@." h) hooks
 
-let print range printer flow out =
+let dump man flow ~range ~out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."
-      Location.pp_range range
-      printer flow
+      Location.pp_relative_range range
+      (Flow.print man.lattice.print) flow
+  else
+    ()
+
+let pretty_print printer ~range ~out =
+  if Debug.can_print "print" then
+    print out "%a@\n  @[%a@]@."
+      Location.pp_relative_range range
+      flush_pprinter printer
   else
     ()

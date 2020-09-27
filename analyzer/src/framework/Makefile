@@ -44,7 +44,7 @@ framework.combiners.value = union product nonrel
 framework.combiners.domain = switch compose product simplified_product stateless_switch
 framework.abstraction.json = syntax visitor parser
 framework.engines = engine automatic interactive
-framework.output = text json factory
+framework.output = common text json factory
 framework.config = abstraction paths options
 framework.config.abstraction = syntax visitor parser builder
 
