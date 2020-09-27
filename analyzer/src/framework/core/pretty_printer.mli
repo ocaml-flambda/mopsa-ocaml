@@ -35,7 +35,7 @@ type domain = string
 
 type pprinter
 
-val empty_pprinter : pprinter
+val empty_pprinter : unit -> pprinter
 
 val get_pprinter_exprs : pprinter -> expr list
 

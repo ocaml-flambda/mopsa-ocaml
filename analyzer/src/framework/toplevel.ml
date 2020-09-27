@@ -292,6 +292,16 @@ struct
           RouteMap.add route (Domain.eval domains) map
       ) map
 
+  (** Get the actual route of the expression in case of a
+       variable, since variable can have an intrinsic semantic *)
+  let refine_route_with_var_semantic route e =
+    if compare_route route toplevel = 0 then
+      match ekind e with
+      | E_var (v,_) -> Semantic v.vsemantic
+      | _ -> route
+    else
+      route
+
   (** Evaluation of expressions. *)
   let eval ?(route=toplevel) exp man flow =
     let flow =
@@ -302,17 +312,6 @@ struct
         let x = Hook.on_before_eval route exp man flow in
         let () = exit_hook() in
         match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
-    in
-
-    (* Get the actual route of the expression in case of a
-       variable, since variable can have an intrinsic semantic *)
-    let refine_route_with_var_semantic route e =
-      if compare_route route toplevel = 0 then
-        match ekind e with
-        | E_var (v,_) -> Semantic v.vsemantic
-        | _ -> route
-      else
-        route
     in
 
     let route = refine_route_with_var_semantic route exp in
@@ -405,8 +404,14 @@ struct
 
   (** Pretty print of expression values *)
   let pretty_print ?(route=toplevel) printer exp man flow =
+    if mem_pprinter_expr printer exp then () else
+    let route = refine_route_with_var_semantic route exp in
     match RouteMap.find_opt route pretty_print_map with
-    | Some f -> f printer exp man flow
-    | None   -> Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
+    | Some f ->
+      f printer exp man flow;
+      add_pprinter_expr printer exp
+
+    | None ->
+      Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end

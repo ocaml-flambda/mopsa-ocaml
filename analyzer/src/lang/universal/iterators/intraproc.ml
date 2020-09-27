@@ -147,7 +147,7 @@ struct
       Some (Post.return flow)
 
     | S_pretty_print el ->
-      let printer = empty_pprinter in
+      let printer = empty_pprinter () in
       List.iter (fun e -> man.pretty_print printer e flow) el;
       Framework.Output.Factory.pretty_print printer (srange stmt);
       Some (Post.return flow)

@@ -40,7 +40,7 @@ type pprinter = {
   mutable prev_exprs: ExprSet.t;
 }
 
-let empty_pprinter =
+let empty_pprinter () =
   { sections = StringMap.empty;
     prev_exprs = ExprSet.empty }
 

@@ -1031,7 +1031,21 @@ struct
   (** {2 Pretty printer} *)
   (** ****************** *)
 
-  let pretty_print printer exp man flow = ()
+  let pretty_print printer exp man flow =
+    match ekind (remove_casts exp) with
+    | E_var (var,_) when is_c_pointer_type var.vtyp
+                      && not (is_c_array_type var.vtyp) ->
+      let a = get_env T_cur man flow in
+      let v = Map.find var a in
+      pprint_map_binding printer "pointers"
+        (Format.asprintf "%a" pp_var var)
+        (String (Format.asprintf "%a" PointerSet.print v))
+      ;
+      if PointerSet.is_valid v then
+        let o = mk_offset var None exp.erange in
+        man.pretty_print printer o flow ~route:numeric
+
+    | _ -> ()
 
 end
 

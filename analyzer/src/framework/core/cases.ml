@@ -278,6 +278,24 @@ let fold_result
        | Empty | NotHandled -> acc
     ) init cases
 
+let iter
+    (f:'r case -> 'a flow -> unit)
+    (cases:('a,'r) cases)
+  : unit =
+  Dnf.iter (fun (case,flow) -> f case flow) cases
+
+
+let iter_result
+    (f:'r -> 'a flow -> unit)
+    (cases:('a,'r) cases)
+  : unit =
+  iter
+    (fun case flow ->
+       match case with
+       | Result (r,_,_)     -> f r flow
+       | Empty | NotHandled -> ()
+    ) cases
+
 let partition
     (f:'r case -> 'a flow -> bool)
     (cases:('a,'r) cases)

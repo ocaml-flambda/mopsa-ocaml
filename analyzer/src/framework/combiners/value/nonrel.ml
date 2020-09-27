@@ -521,6 +521,6 @@ struct
     | Some (_,v) ->
       let es = Format.asprintf "%a" pp_expr exp in
       let vs = Format.asprintf "%a" Value.print v in
-      pprint_map_binding printer Value.name es (String vs)
+      pprint_map_binding printer Value.display es (String vs)
 
 end
