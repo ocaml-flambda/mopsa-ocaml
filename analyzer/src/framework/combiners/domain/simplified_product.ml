@@ -159,16 +159,18 @@ struct
     | false, false -> raise Not_found
     | true, false ->
       let f1 = D1.pretty_print targets in
-      (fun printer e (a1,_) -> f1 printer e a1)
+      (fun printer e man ctx (a1,_) ->
+         f1 printer e (hdman man) ctx a1)
     | false, true ->
       let f2 = D2.pretty_print targets in
-      (fun printer e (_,a2) -> f2 printer e a2)
+      (fun printer e man ctx (_,a2) ->
+         f2 printer e (tlman man) ctx a2)
     | true, true ->
       let f1 = D1.pretty_print targets in
       let f2 = D2.pretty_print targets in
-      (fun printer e (a1,a2) ->
-         f1 printer e a1;
-         f2 printer e a2)
+      (fun printer e man ctx (a1,a2) ->
+         f1 printer e (hdman man) ctx a1;
+         f2 printer e (tlman man) ctx a2)
 
 end
 

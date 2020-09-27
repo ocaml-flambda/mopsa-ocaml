@@ -137,3 +137,8 @@ let pprinter_to_json printer =
     StringMap.bindings printer.sections |>
     List.map (fun (domain,sec) -> domain,pprint_section_to_json sec)
   )
+
+let pprint_redirect f =
+  let printer = empty_pprinter () in
+  f printer;
+  printer.sections

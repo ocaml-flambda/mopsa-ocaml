@@ -368,6 +368,8 @@ struct
       | _ -> None
 
 
-  let pretty_print printer exp flow = ()
+  let pretty_print printer exp man ctx (a,_) =
+    pprint_string printer "numeric-relations"
+      (Format.asprintf "%a" Apron.Abstract1.print a)
 
 end

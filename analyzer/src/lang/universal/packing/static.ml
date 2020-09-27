@@ -443,7 +443,22 @@ struct
 
 
     (** Pretty printer *)
-    let pretty_print printer exp a = ()
+    let pretty_print printer exp man ctx a =
+      let packs = packs_of_expr ctx exp in
+      Set.iter
+        (fun pack ->
+           match Map.find_opt pack a with
+           | None -> ()
+           | Some aa ->
+             let sections = pprint_redirect (fun p -> Domain.pretty_print p exp (pack_man pack man) ctx aa) in
+             MapExt.StringMap.iter
+               (fun domain section ->
+                  pprint_map_binding printer
+                    (Format.asprintf "static-packing(%s)" domain)
+                    (Format.asprintf "%a" Strategy.print pack)
+                    section
+               ) sections
+        ) packs
 
   end
 end

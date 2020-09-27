@@ -515,7 +515,7 @@ struct
     Value.ask (value_man None map) query
 
 
-  let pretty_print printer exp a =
+  let pretty_print printer exp man ctx a =
     match eval exp a with
     | None -> ()
     | Some (_,v) ->

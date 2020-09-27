@@ -32,7 +32,7 @@ sig
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
-  val pretty_print : domain list -> pprinter -> expr -> t -> unit
+  val pretty_print : domain list -> pprinter -> expr -> ('a,t) simplified_man -> 'a ctx -> t -> unit
 end
 
 
@@ -119,7 +119,7 @@ struct
        let a = get_env T_cur man flow in
        if D.is_bottom a
        then ()
-       else f printer e a
+       else f printer e (simplified_man man flow) (Flow.get_ctx flow) a
     )
 end
 
