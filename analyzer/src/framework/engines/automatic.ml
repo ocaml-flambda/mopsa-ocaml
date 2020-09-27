@@ -44,6 +44,9 @@ struct
     fun ?(route=toplevel) query flow ->
       Toplevel.ask ~route query man flow
 
+  and pretty_print ?(route=toplevel) printer exp flow =
+    Toplevel.pretty_print ~route printer exp man flow
+
   and lattice : Toplevel.t lattice = {
     bottom = Toplevel.bottom;
     top = Toplevel.top;
@@ -65,6 +68,7 @@ struct
     exec = exec;
     eval = eval;
     ask = ask;
+    pretty_print = pretty_print;
   }
 
 

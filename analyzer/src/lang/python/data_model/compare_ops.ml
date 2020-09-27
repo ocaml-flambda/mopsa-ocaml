@@ -141,6 +141,7 @@ module Domain = struct
 
   let exec _ _ _ = None
   let ask _ _ _ = None
+  let pretty_print _ _ _ _ = ()
 
 end
 

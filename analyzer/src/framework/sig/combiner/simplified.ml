@@ -32,7 +32,7 @@ sig
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
-  val pretty_print : domain list -> Pretty_printer.printer -> expr -> t -> unit
+  val pretty_print : domain list -> pprinter -> expr -> t -> unit
 end
 
 

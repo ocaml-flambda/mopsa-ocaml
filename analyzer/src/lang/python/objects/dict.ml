@@ -527,6 +527,8 @@ struct
 
     | _ -> None
 
+  let pretty_print _ _ _ _ = ()
+
 end
 
 let () =

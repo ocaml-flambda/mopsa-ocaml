@@ -286,6 +286,9 @@ struct
        let cur = get_env T_cur man flow in
        Nonrel.ask query man ctx cur
 
+
+  let pretty_print printer exp man flow = ()
+
 end
 
 let () =

@@ -430,6 +430,8 @@ struct
 
   let ask _ _ _ = None
 
+  let pretty_print printer exp man flow = ()
+
 end
 
 (*==========================================================================*)

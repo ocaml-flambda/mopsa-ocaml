@@ -468,6 +468,8 @@ struct
 
       | _ -> None
 
+  let pretty_print _ _ _ _ = ()
+
 end
 
 let () = register_standard_domain (module Domain)

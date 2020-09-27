@@ -26,35 +26,33 @@ open Ast.Expr
 open Yojson.Basic
 
 
-module StringMap = MapExt.StringMap
-
-type section =
-  | Map    of section StringMap.t
-  | List   of section list
+type pprint_section =
+  | Map    of pprint_section MapExt.StringMap.t
+  | List   of pprint_section list
   | String of string
 
 type domain = string
 
-type printer
+type pprinter
 
-val empty_printer : printer
+val empty_pprinter : pprinter
 
-val get_prev_exprs : printer -> expr list
+val get_pprinter_exprs : pprinter -> expr list
 
-val add_expr : printer -> expr -> unit
+val add_pprinter_expr : pprinter -> expr -> unit
 
-val mem_prev_expr : printer -> expr -> bool
+val mem_pprinter_expr : pprinter -> expr -> bool
 
-val pp_string : printer -> domain -> string -> unit
+val pprint_string : pprinter -> domain -> string -> unit
 
-val pp_map : printer -> domain -> (string*section) list -> unit
+val pprint_map : pprinter -> domain -> (string*pprint_section) list -> unit
 
-val pp_map_binding : printer -> domain -> string -> section -> unit
+val pprint_map_binding : pprinter -> domain -> string -> pprint_section -> unit
 
-val pp_list : printer -> domain -> section list -> unit
+val pprint_list : pprinter -> domain -> pprint_section list -> unit
 
-val pp_list_element : printer -> domain -> section -> unit
+val pprint_list_element : pprinter -> domain -> pprint_section -> unit
 
-val flush : Format.formatter -> printer -> unit
+val flush_pprinter : Format.formatter -> pprinter -> unit
 
-val printer_to_json : printer -> Yojson.t
+val pprinter_to_json : pprinter -> Yojson.t

@@ -210,7 +210,12 @@ struct
 
   let ask _ _ _ = None
 
-  end
+  (** Pretty printer *)
+  (** ============== *)
+
+  let pretty_print _ _ _ _ = ()
+
+end
 
 let () =
     register_stateless_domain (module Domain)

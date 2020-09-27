@@ -737,6 +737,9 @@ struct
     else if Log.is_empty_log log' then a
     else if Log.is_empty_log log then a'
     else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.pp_log log print a' Log.pp_log log' in assert false
+
+  let pretty_print _ _ _ _ = ()
+
 end
 
 let () =

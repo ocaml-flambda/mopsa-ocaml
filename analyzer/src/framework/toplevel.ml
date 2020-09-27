@@ -73,6 +73,8 @@ sig
 
   val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
+  val pretty_print : ?route:route -> pprinter -> expr -> (t,t) man -> t flow -> unit
+
 end
 
 
@@ -382,5 +384,29 @@ struct
     | None -> raise Not_found
     | Some r -> r
 
+
+  (** {2 Pretty printer of expressions} *)
+  (** ********************************* *)
+
+  (** Build the map of [pretty_print] functions *)
+  let pretty_print_map : (pprinter -> expr -> (t,t) man -> t flow -> unit) RouteMap.t =
+    (* Add the implicit printer for toplevel *)
+    let map = RouteMap.singleton toplevel (Domain.pretty_print []) in
+
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.pretty_print domains) map
+      ) map
+
+  (** Pretty print of expression values *)
+  let pretty_print ?(route=toplevel) printer exp man flow =
+    match RouteMap.find_opt route pretty_print_map with
+    | Some f -> f printer exp man flow
+    | None   -> Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end

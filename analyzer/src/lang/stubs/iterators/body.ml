@@ -665,6 +665,12 @@ struct
 
   let ask query man flow = None
 
+
+  (** Pretty printer *)
+  (** ============== *)
+
+  let pretty_print printer exp man flow = ()
+
 end
 
 let () =

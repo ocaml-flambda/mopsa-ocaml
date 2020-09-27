@@ -570,6 +570,12 @@ struct
 
   let init _ _ flow =  flow
 
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  let pretty_print printer exp man flow = ()
+
 end
 
 let () =

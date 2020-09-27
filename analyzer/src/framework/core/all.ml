@@ -93,4 +93,4 @@ include Manager
 
 module Hook = Hook
 
-module Pretty_printer = Pretty_printer
+include Pretty_printer

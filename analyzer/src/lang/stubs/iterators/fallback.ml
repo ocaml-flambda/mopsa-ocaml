@@ -37,6 +37,7 @@ struct
 
   let init prog man flow = flow
   let ask query man flow = None
+  let pretty_print printer exp man flow = ()
 
   let opt_stub_use_forall_loop_eval = ref false
   (** Use fallback evaluation of ∀ formulas with loops *)

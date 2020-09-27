@@ -439,6 +439,12 @@ struct
 
   let ask _ _ _  = None
 
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  let pretty_print printer exp man flow = ()
+
 end
 
 let () =

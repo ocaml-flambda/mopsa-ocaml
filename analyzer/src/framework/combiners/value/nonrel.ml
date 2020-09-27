@@ -515,4 +515,12 @@ struct
     Value.ask (value_man None map) query
 
 
+  let pretty_print printer exp a =
+    match eval exp a with
+    | None -> ()
+    | Some (_,v) ->
+      let es = Format.asprintf "%a" pp_expr exp in
+      let vs = Format.asprintf "%a" Value.print v in
+      pprint_map_binding printer Value.name es (String vs)
+
 end

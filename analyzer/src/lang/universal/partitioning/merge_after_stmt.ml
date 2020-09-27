@@ -50,6 +50,8 @@ struct
     let post' = Post.remove_duplicates man.lattice post in
     OptionExt.return post'
 
+  let pretty_print printer exp man flow = ()
+
 end
 
 let () =

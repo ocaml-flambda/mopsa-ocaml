@@ -34,7 +34,7 @@ sig
   val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
-  val pretty_print : domain list -> Pretty_printer.printer -> expr -> ('a,unit) man -> 'a flow -> unit
+  val pretty_print : domain list -> pprinter -> expr -> ('a,unit) man -> 'a flow -> unit
 end
 
 

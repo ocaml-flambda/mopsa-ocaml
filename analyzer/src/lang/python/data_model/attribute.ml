@@ -236,6 +236,7 @@ module Domain =
       | _ -> None
 
     let ask _ _ _ = None
+    let pretty_print _ _ _ _ = ()
   end
 
 

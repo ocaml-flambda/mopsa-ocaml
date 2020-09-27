@@ -30,66 +30,66 @@ module StringMap = MapExt.StringMap
 
 type domain = string
 
-type section =
-  | Map    of section StringMap.t
-  | List   of section list
+type pprint_section =
+  | Map    of pprint_section StringMap.t
+  | List   of pprint_section list
   | String of string
 
-type printer = {
-  mutable sections : section StringMap.t;
+type pprinter = {
+  mutable sections : pprint_section StringMap.t;
   mutable prev_exprs: ExprSet.t;
 }
 
-let empty_printer =
+let empty_pprinter =
   { sections = StringMap.empty;
     prev_exprs = ExprSet.empty }
 
-let get_prev_exprs printer =
+let get_pprinter_exprs printer =
   ExprSet.elements printer.prev_exprs
 
-let add_expr printer exp =
+let add_pprinter_expr printer exp =
   printer.prev_exprs <- ExprSet.add exp printer.prev_exprs
 
-let mem_prev_expr printer exp =
+let mem_pprinter_expr printer exp =
   ExprSet.mem exp printer.prev_exprs
 
-let set_section printer domain s =
+let set_pprint_section printer domain s =
   printer.sections <- StringMap.add domain s printer.sections
 
-let get_section printer domain =
+let get_pprint_section printer domain =
   StringMap.find domain printer.sections
 
-let get_section_opt printer domain =
+let get_pprint_section_opt printer domain =
   StringMap.find_opt domain printer.sections
 
-let pp_string printer domain s =
-  set_section printer domain (String s)
+let pprint_string printer domain s =
+  set_pprint_section printer domain (String s)
 
-let pp_map_binding printer domain key value =
+let pprint_map_binding printer domain key value =
   let map =
-    match get_section_opt printer domain with
+    match get_pprint_section_opt printer domain with
     | None -> StringMap.empty
     | Some (Map m) -> m
-    | _ -> Exceptions.panic "add_to_map_section called on a non-map section"
+    | _ -> Exceptions.panic "pprint_map_binding called on a non-map section"
   in
-  set_section printer domain (Map (StringMap.add key value map))
+  set_pprint_section printer domain (Map (StringMap.add key value map))
 
-let pp_map printer domain bindings =
-  set_section printer domain (Map (StringMap.of_list bindings))
+let pprint_map printer domain bindings =
+  set_pprint_section printer domain (Map (StringMap.of_list bindings))
 
-let pp_list_element printer domain value =
+let pprint_list_element printer domain value =
   let l =
-    match get_section_opt printer domain with
+    match get_pprint_section_opt printer domain with
     | None -> []
     | Some (List l) -> l
-    | _ -> Exceptions.panic "add_to_list_section called on a non-list section"
+    | _ -> Exceptions.panic "add_to_list_pprint_section called on a non-list section"
   in
-  set_section printer domain (List (value::l))
+  set_pprint_section printer domain (List (value::l))
 
-let pp_list printer domain l =
-  set_section printer domain (List l)
+let pprint_list printer domain l =
+  set_pprint_section printer domain (List l)
 
-let rec flush_section fmt = function
+let rec flush_pprint_section fmt = function
   | String s -> Format.pp_print_string fmt s
   | Map m ->
     Format.(
@@ -98,7 +98,7 @@ let rec flush_section fmt = function
            (fun fmt (k,v) ->
               fprintf fmt "@[<hov2>%s: @,%a@]"
                 k
-                flush_section v
+                flush_pprint_section v
            )
         ) (StringMap.bindings m)
     )
@@ -106,34 +106,34 @@ let rec flush_section fmt = function
     Format.(
       fprintf fmt "@[<v>%a@]"
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           flush_section
+           flush_pprint_section
         ) l
     )
 
-let flush fmt printer =
+let flush_pprinter fmt printer =
   Format.(
     fprintf fmt "@[<v>%a@]"
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
          (fun fmt (domain,sec) ->
             fprintf fmt "%s:@,  @[<v>%a@]"
               domain
-              flush_section sec
+              flush_pprint_section sec
          )
       ) (StringMap.bindings printer.sections)
   )
 
-let rec section_to_json = function
+let rec pprint_section_to_json = function
   | String s -> `String s
   | Map m ->
     `Assoc (
       StringMap.bindings m |>
-      List.map (fun (k,v) -> k,section_to_json v)
+      List.map (fun (k,v) -> k,pprint_section_to_json v)
     )
-  | List l -> `List (List.map section_to_json l)
+  | List l -> `List (List.map pprint_section_to_json l)
 
 
-let printer_to_json printer =
+let pprinter_to_json printer =
   `Assoc (
     StringMap.bindings printer.sections |>
-    List.map (fun (domain,sec) -> domain,section_to_json sec)
+    List.map (fun (domain,sec) -> domain,pprint_section_to_json sec)
   )
