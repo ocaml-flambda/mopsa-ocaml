@@ -103,7 +103,8 @@ struct
       print = (fun next fmt v ->
           match v.vkind with
           | V_c_string_length (base,elemsz) ->
-            Format.fprintf fmt "length(%a)*%i" pp_base base elemsz
+            if elemsz = 1 then Format.fprintf fmt "length(%a)" pp_base base
+            else Format.fprintf fmt "length(%a)*%i" pp_base base elemsz
 
           | _ -> next fmt v
         );
@@ -949,7 +950,31 @@ struct
   (** {2 Pretty printer} *)
   (** ****************** *)
 
-  let pretty_print printer exp man flow = ()
+  let pretty_print printer exp man flow =
+    let exp = remove_casts exp in
+    (* Process only integer C lvalues *)
+    if not (is_c_type exp.etyp && is_c_lval exp) then () else
+    (* Iterate over bases and offsets *)
+    resolve_pointer (mk_c_address_of exp exp.erange) man flow |>
+    Cases.iter_result
+      (fun pt _ ->
+         match pt with
+         | P_block(base,offset,_) when base.base_valid
+                                    && is_interesting_base base ->
+           let l = mk_length_var base elem_size exp.erange in
+           pprint_list_element printer "string-length"
+             (String (Format.asprintf
+                        "∀ i < %a: %a[i] ≠ 0 ∧ %a[%a] = 0"
+                        pp_expr l
+                        pp_base base
+                        pp_base base
+                        pp_expr l
+                     ));
+           man.pretty_print ~route:numeric printer l flow
+
+         | _ -> ()
+      )
+
 
 end
 

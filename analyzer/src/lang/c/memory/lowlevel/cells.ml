@@ -1161,13 +1161,14 @@ struct
   (** ****************** *)
 
   let pretty_print printer exp man flow =
+    let exp = remove_casts exp in
     (* Process only C lvalues *)
-    if not (is_c_type exp.etyp && is_c_lval (remove_casts exp)) then () else
+    if not (is_c_type exp.etyp && is_c_lval exp) then () else
     (* Don't process scalar variables *)
-    if is_c_scalar_type exp.etyp && is_var_base_expr (remove_casts exp) then ()
+    if is_c_scalar_type exp.etyp && is_var_base_expr exp then ()
     else
       (* Iterate over bases and offsets *)
-      resolve_pointer (mk_c_address_of (remove_casts exp) exp.erange) man flow |>
+      resolve_pointer (mk_c_address_of exp exp.erange) man flow |>
       Cases.iter_result
         (fun pt _ ->
            match pt with
