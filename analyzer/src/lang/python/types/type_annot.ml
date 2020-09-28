@@ -32,7 +32,7 @@ open Universal.Ast
 module Domain =
 struct
 
-  module ESet = Framework.Lattices.Powerset.Make(struct type t = expr let compare = compare_expr let print = pp_expr end)
+  module ESet = Framework.Lattices.Powerset.Make(struct type t = expr let compare = compare_expr let print = unformat pp_expr end)
 
   module Keys = (struct
     type t = Global of string | Class of var
@@ -41,18 +41,15 @@ struct
       | Global s1, Global s2 -> Stdlib.compare s1 s2
       | Class c1, Class c2 -> compare_var c1 c2
       | _ -> Stdlib.compare t1 t2
-    let print fmt t  = match t with
-      | Global s -> Format.fprintf fmt "Global %a" Format.pp_print_string s
-      | Class v -> Format.fprintf fmt "Class %a" pp_var v
+    let print printer t  = match t with
+      | Global s -> pp_boxed_format printer "Global %a" Format.pp_print_string s
+      | Class v -> pp_boxed_format printer "Class %a" pp_var v
   end)
 
 
   module TVMap = Framework.Lattices.Partial_map.Make(Keys)(ESet)
 
   include TVMap
-
-  let print fmt m =
-    Format.fprintf fmt "TypeVar annotations: @[%a@]@\n" TVMap.print m
 
   include GenDomainId(struct
       type nonrec t = t
@@ -73,7 +70,6 @@ struct
             (fun acc expr -> match ekind expr with
                | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
                  let set = if types = [] then ESet.top else ESet.of_list types in
-                 debug "in %a, set = %a" pp_expr expr ESet.print set;
                  let var = match self with
                    | None ->
                      Keys.Global s
@@ -88,7 +84,7 @@ struct
                       end)
                    | Some set2 ->
                      if ESet.equal set set2 then Keep acc
-                     else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s ESet.print set ESet.print set2
+                     else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s (format ESet.print) set (format ESet.print) set2
                  end
                | _ ->
                  VisitParts acc)
@@ -151,13 +147,13 @@ struct
                          if ESet.subset set etypes then
                            TVMap.add (Class tyvar) set cur
                          else
-                           Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                           Exceptions.panic_at range "conflict for typevar %a, global set %a and class set %a differ" pp_var tyvar (format ESet.print) set (format ESet.print) etypes
                       end
                     | Some set ->
                        if ESet.subset set etypes then
                          cur
                        else
-                         Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar ESet.print set ESet.print etypes
+                         Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar (format ESet.print) set (format ESet.print) etypes
                   ) cur typevars in
                 let flow = set_env T_cur ncur man flow in
                 Eval.singleton eobj flow
@@ -206,15 +202,15 @@ struct
             debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
             let cur = get_env T_cur man flow in
             let new_typevars = collect_typevars (if is_method then Some (List.hd args) else None) signature in
-            debug "new_typevars: %a" TVMap.print new_typevars;
-            debug "cur: %a" TVMap.print cur;
+            debug "new_typevars: %a" (format TVMap.print) new_typevars;
+            debug "cur: %a" (format TVMap.print) cur;
             debug "kwargs: %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (fun fmt (argn, argv) -> Format.fprintf fmt "(%a, %a)" (OptionExt.print Format.pp_print_string) argn pp_expr argv)) kwargs;
             let ncur = TVMap.fold2zo
                 TVMap.add
                 TVMap.add
                 (fun s tycur tynew acc ->
                    if ESet.equal tycur tynew then TVMap.add s tycur acc else
-                     Exceptions.panic_at range "s = %a, tycur = %a, tynew = %a, acc = %a" Keys.print s ESet.print tycur ESet.print tynew TVMap.print acc)
+                     Exceptions.panic_at range "s = %a, tycur = %a, tynew = %a, acc = %a" (format Keys.print) s (format ESet.print) tycur (format ESet.print) tynew (format TVMap.print) acc)
                 cur new_typevars TVMap.empty in
             let flow = set_env T_cur ncur man flow in
             let in_types, in_args =
@@ -290,11 +286,11 @@ struct
                     try
                       let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
                       let nflow = post_to_flow man nflow in
-                      debug "nflow after apply_sig = %a@\n" (Flow.print man.lattice.print) nflow;
+                      debug "nflow after apply_sig = %a@\n" (format (Flow.print man.lattice.print)) nflow;
                       let cur = get_env T_cur man nflow in
                       let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
                       let nflow = set_env T_cur ncur man nflow in
-                      debug "nflow = %a@\n" (Flow.print man.lattice.print) nflow;
+                      debug "nflow = %a@\n" (format (Flow.print man.lattice.print)) nflow;
                       if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
                       else
                         let raised_exn = List.map (fun exn ->
@@ -432,7 +428,7 @@ struct
                                             {ekind = E_var _}) -> []
                     | _ ->
                       Exceptions.panic_at range "tname %a, abase %a" pp_expr (List.hd c.py_cls_a_abases) pp_expr abase in
-                  debug "here, tnames=%a, cur = %a" (Format.pp_print_list Format.pp_print_string) tnames TVMap.print (get_env T_cur man flow);
+                  debug "here, tnames=%a, cur = %a" (Format.pp_print_list Format.pp_print_string) tnames (format TVMap.print) (get_env T_cur man flow);
                   let substi =
                     Visitor.map_expr
                       (fun expr -> match ekind expr with
@@ -471,14 +467,14 @@ struct
                                          (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
                                           | None ->
                                             debug "tname(%s) not found in cur" tname;
-                                            debug "cur = %a" TVMap.print (get_env T_cur man flow);
+                                            debug "cur = %a" (format TVMap.print) (get_env T_cur man flow);
                                             ESet.singleton ctype
 
                                           | Some st ->
                                             debug "tname(%s) found in cur" tname;
                                             st)
                                          (get_env T_cur man flow)) man flow) flow tnames types in
-                  debug "after %a, cur = %a" pp_expr exp TVMap.print (get_env T_cur man flow);
+                  debug "after %a, cur = %a" pp_expr exp (format TVMap.print) (get_env T_cur man flow);
                   Eval.singleton eobj flow
                 )
           end
@@ -513,7 +509,7 @@ struct
           let cur = get_env T_cur man flow in
           begin match TVMap.find_opt (Global s) cur with
           | Some tycur ->
-            debug "tycur = %a@\n" ESet.print tycur;
+            debug "tycur = %a@\n" (format ESet.print) tycur;
             begin match ESet.cardinal tycur with
               | 0 ->
                 Flow.bottom_from flow |>
@@ -534,7 +530,7 @@ struct
             (* FIXME: add assumption for:
                let () = Soundness.warn_at range "cheating in type annots" in
             *) ESet.of_list types in
-          debug "tycur = %a@\n" ESet.print tycur;
+          debug "tycur = %a@\n" (format ESet.print) tycur;
           begin match ESet.cardinal tycur with
           | 0 ->
             Flow.bottom_from flow |>
@@ -675,7 +671,7 @@ struct
             | E_constant (C_string s) -> Keys.Global s
             | E_var (v, _) -> Keys.Class v
             | _ -> assert false in
-          debug "key = %a" Keys.print key;
+          debug "key = %a" (format Keys.print) key;
           let flows_ok =
             if Flow.is_bottom man.lattice flow then [] else
             List.fold_left (fun flows_caught typ ->
@@ -699,7 +695,7 @@ struct
     | S_fold ({ekind = E_py_annot {ekind = E_addr a'}}, [{ekind = (E_addr a)}])
     | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
       let cur = get_env T_cur man flow in
-      debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange TVMap.print cur;
+      debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange (format TVMap.print) cur;
       let ncur =
         let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
             match k with
@@ -709,7 +705,7 @@ struct
               (acc_a, TVMap.add k v acc_nota)
           ) cur (TVMap.empty, TVMap.empty) in
         TVMap.join abasedaddr other in
-      debug "ncur = %a" TVMap.print ncur;
+      debug "ncur = %a" (format TVMap.print) ncur;
       set_env T_cur ncur man flow
       |> Post.return |> OptionExt.return
 
@@ -736,9 +732,14 @@ struct
     if a == a' then a
     else if Log.is_empty_log log' then a
     else if Log.is_empty_log log then a'
-    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.pp_log log print a' Log.pp_log log' in assert false
+    else assert false
 
-  let pretty_print _ _ _ _ = ()
+
+  let print_state printer m =
+    pp_boxed ~path:[Key "TypeVar annotations"]
+      TVMap.print printer m
+
+  let print_expr _ _ _ _ = ()
 
 end
 

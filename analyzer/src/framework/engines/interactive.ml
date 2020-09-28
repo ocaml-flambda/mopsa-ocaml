@@ -719,12 +719,12 @@ struct
       interact action flow
 
     | Print ->
-      printf "%a@." (Flow.print man.lattice.print) flow;
+      printf "%a@." (format (Flow.print man.lattice.print)) flow;
       interact action flow
 
     | Env ->
       let env = Flow.get T_cur man.lattice flow in
-      printf "%a@." man.lattice.print env;
+      printf "%a@." (Print.format man.lattice.print) env;
       interact action flow
 
     | Where ->
@@ -815,7 +815,7 @@ struct
       let file_fmt = formatter_of_out_channel ch in
       Format.kasprintf (fun str ->
           Format.fprintf file_fmt "%s%!" str
-        )  "%a" (Flow.print man.lattice.print) flow;
+        )  "%a" (format (Flow.print man.lattice.print)) flow;
       close_out ch;
       interact action flow
 
@@ -851,8 +851,8 @@ struct
     fun ?(route=toplevel)query flow ->
       Toplevel.ask query man flow
 
-  and pretty_print ?(route=toplevel) printer exp flow =
-    Toplevel.pretty_print ~route printer exp man flow
+  and print_expr ?(route=toplevel) flow printer exp =
+    Toplevel.print_expr ~route man flow printer exp
 
   and lattice : Toplevel.t lattice = {
     bottom = Toplevel.bottom;
@@ -863,7 +863,7 @@ struct
     meet = (fun a a' -> Toplevel.meet man a a');
     widen = (fun ctx a a' -> Toplevel.widen man ctx a a');
     merge = Toplevel.merge;
-    print = Toplevel.print;
+    print = Toplevel.print_state;
   }
 
   and man : (Toplevel.t, Toplevel.t) man = {
@@ -875,7 +875,7 @@ struct
     exec = exec;
     eval = eval;
     ask = ask;
-    pretty_print = pretty_print;
+    print_expr = print_expr;
   }
 
 

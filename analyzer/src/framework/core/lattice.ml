@@ -23,6 +23,7 @@
 
 open Log
 open Context
+open Print
 
 (** Signature of a lattice module. *)
 module type LATTICE =
@@ -69,7 +70,7 @@ sig
   (** {2 Printing} *)
   (** ************ *)
 
-  val print: Format.formatter -> t -> unit
+  val print: printer -> t -> unit
   (** Printer of an abstract element. *)
 
 end
@@ -86,5 +87,5 @@ type 'a lattice = {
   meet:      'a ctx -> 'a -> 'a -> 'a;
   widen:     'a ctx -> 'a -> 'a -> 'a;
   merge:     'a -> 'a * log -> 'a * log -> 'a;
-  print:     Format.formatter -> 'a -> unit;
+  print:     printer -> 'a -> unit;
 }

@@ -152,7 +152,7 @@ struct
   (** ****************** *)
 
   module STypeSet = Framework.Lattices.Powerset.Make
-      (struct type t = styp let compare = compare_styp let print = pp_styp end)
+      (struct type t = styp let compare = compare_styp let print = unformat pp_styp end)
 
   (** Initialization state with shortcut states to avoid useless tests on `uninit` *)
   module Init =
@@ -175,12 +175,16 @@ struct
 
     let top = Partial STypeSet.top
 
-    let print fmt x =
+    let print printer x =
       match x with
-      | Bot        -> fprintf fmt "⊥"
-      | None       -> fprintf fmt "none"
-      | Full ts    -> fprintf fmt "full(%a)" STypeSet.print ts
-      | Partial ts -> fprintf fmt "partial(%a)" STypeSet.print ts
+      | Bot        -> pp_string printer "⊥"
+      | None       -> pp_string printer "none"
+      | Full ts    -> pp_obj_tuple printer
+                        [ boxed pp_string "full";
+                          boxed STypeSet.print ts ]
+      | Partial ts -> pp_obj_tuple printer
+                        [ boxed pp_string "partial";
+                          boxed STypeSet.print ts ]
 
     let is_bottom x = (x = Bot)
 
@@ -258,9 +262,6 @@ struct
       type nonrec t = t
       let name = name
     end)
-
-  let print fmt (a:t) =
-    fprintf fmt "smashes: @[%a@]@\n" State.print a
 
 
   (** {2 Smash variables} *)
@@ -1353,7 +1354,10 @@ struct
   (** {2 Pretty printer} *)
   (** ****************** *)
 
-  let pretty_print printer exp man flow = ()
+  let print_state printer (a:t) =
+    pp_boxed ~path:[Key "smash"] State.print printer a
+
+  let print_expr man flow printer exp = ()
 
 end
 

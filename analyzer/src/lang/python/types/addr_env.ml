@@ -50,11 +50,11 @@ struct
     | Def addr1, Def addr2 -> compare_addr addr1 addr2
     | _ -> compare a1 a2
 
-  let print fmt =
+  let print printer =
     function
-    | Def a -> Universal.Ast.pp_addr fmt a
-    | Undef_local -> Format.fprintf fmt "UndefLocal"
-    | Undef_global -> Format.fprintf fmt "UndefGlobal"
+    | Def a -> unformat Universal.Ast.pp_addr printer a
+    | Undef_local -> pp_string printer "UndefLocal"
+    | Undef_global -> pp_string printer "UndefGlobal"
 end
 
 
@@ -113,7 +113,7 @@ struct
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
-      (struct type t = var let compare = compare_var let print = pp_var end)
+      (struct type t = var let compare = compare_var let print = unformat pp_var end)
       (ASet)
 
   include AMap
@@ -131,9 +131,6 @@ struct
   let checks = []
 
   let merge _ _ _ = assert false
-
-  let print fmt m =
-    Format.fprintf fmt "addrs: @[%a@]@\n" AMap.print m
 
   let init prog man flow =
     addr_none := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG};
@@ -170,9 +167,7 @@ struct
          flow |> Post.return |> OptionExt.return
        else
          let ncur = add v (ASet.singleton Undef_global) cur in
-         let () = debug "cur was %a@\nncur is %a@\n" print cur print ncur in
          let flow =  set_env T_cur ncur man flow in
-         let () = debug "flow is now %a@\n" (Flow.print man.lattice.print) flow in
          flow |> Post.return |> OptionExt.return
 
     | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when is_py_exp vl && var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
@@ -311,7 +306,6 @@ struct
                                                    Utils.change_evar_type t r)}) >>% fun flow ->
        begin
          let cur = get_env T_cur man flow in
-         debug "after fold, flow = %a" (Flow.print man.lattice.print) flow;
          begin match AMap.find_opt v cur with
          | Some aset ->
             set_env T_cur (AMap.rename v v' cur) man flow |> Post.return
@@ -331,7 +325,6 @@ struct
        let new_av, flow = List.fold_left (fun (av, flow) ev' ->
                               let flow = post_to_flow man flow in
                               let ncur = get_env T_cur man flow in
-                              Debug.debug ~channel:"addrenv" "av = %a@.ncur = %a" ASet.print av AMap.print ncur;
                               let v' = match ekind ev' with
                                 | E_var (v', _) -> v'
                                 | _ -> assert false in
@@ -540,7 +533,6 @@ struct
               Eval.empty flow :: acc, Flow.get_ctx flow
 
             | Undef_local ->
-              debug "Incoming UnboundLocalError, on var %a, range %a, cs = %a @\ncur = %a@\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow) man.lattice.print (Flow.get T_cur man.lattice flow);
               let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow) in
               Eval.empty flow :: acc, Flow.get_ctx flow
@@ -690,7 +682,7 @@ struct
          let subvalues = ASet.fold (fun pyaddr acc ->
                              match pyaddr with
                              | Def addr ->
-                                let s = Format.asprintf "%a" PyAddr.print pyaddr in
+                                let s = Format.asprintf "%a" (format PyAddr.print) pyaddr in
                                 if List.exists (fun a' -> compare_addr  addr (OptionExt.none_to_exn a') = 0)
                                      [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
                                   (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
@@ -705,7 +697,7 @@ struct
                                 else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
                                   let str =  man.ask (Universal.Strings.Powerset.Q_strings_powerset (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
                                   let str_info =
-                                    {var_value = Some (Format.asprintf "%a" Universal.Strings.Powerset.StringPower.print str);
+                                    {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
                                      var_value_type = T_string;
                                      var_sub_value = None} in
                                   (s, str_info) :: acc
@@ -721,7 +713,12 @@ struct
 
       | _ -> None
 
-  let pretty_print _ _ _ _ = ()
+
+  let print_state printer m =
+    pp_boxed ~path:[Key "addrs"] AMap.print printer m
+
+  
+  let print_expr _ _ _ _ = ()
 
 end
 

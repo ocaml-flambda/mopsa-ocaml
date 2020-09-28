@@ -32,7 +32,7 @@ module StringPower = Framework.Lattices.Powerset.Make
     (struct
       type t = string
       let compare = Stdlib.compare
-      let print = Format.pp_print_string
+      let print = unformat Format.pp_print_string
     end)
 
 type ('a, _) query +=
@@ -99,13 +99,13 @@ struct
       end
     | O_mult -> assert false
     | O_eq | O_lt | O_le | O_ge | O_gt | O_ne ->
-       debug "binop %a %a %a %a" pp_operator op pp_typ t StringPower.print a1 StringPower.print a2;
+       debug "binop %a %a %a %a" pp_operator op pp_typ t (format StringPower.print) a1 (format StringPower.print) a2;
        Top.TOP
     | _  ->
        panic "todo binop %a" pp_operator op
 
   let filter b t a =
-    debug "filter %b %a %a" b pp_typ t StringPower.print a;
+    debug "filter %b %a %a" b pp_typ t (format StringPower.print) a;
     if t = T_string then a else assert false
       (* failwith "todo filter" *)
 
@@ -163,7 +163,7 @@ struct
   let meet = Nonrel.meet
   let join = Nonrel.join
   let subset = Nonrel.subset
-  let print = Nonrel.print
+  let print_state = Nonrel.print_state
   let widen = Nonrel.widen
 
   include Framework.Core.Id.GenDomainId(struct
@@ -287,7 +287,7 @@ struct
        Nonrel.ask query man ctx cur
 
 
-  let pretty_print printer exp man flow = ()
+  let print_expr man flow printer exp = ()
 
 end
 

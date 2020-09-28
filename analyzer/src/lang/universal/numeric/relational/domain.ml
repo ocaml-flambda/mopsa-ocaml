@@ -148,11 +148,6 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
-  let print fmt (abs,_) =
-    Format.fprintf fmt "%s:@,  @[%a@]@\n"
-      ApronManager.name
-      Apron.Abstract1.print abs
-
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -368,8 +363,11 @@ struct
       | _ -> None
 
 
-  let pretty_print printer exp man ctx (a,_) =
-    pprint_string printer "numeric-relations"
-      (Format.asprintf "%a" Apron.Abstract1.print a)
+  let print_state printer (a,_) =
+    unformat Apron.Abstract1.print printer a
+      ~path:[Key "numeric-relations"]
+
+  let print_expr man ctx a printer exp =
+    print_state printer a
 
 end

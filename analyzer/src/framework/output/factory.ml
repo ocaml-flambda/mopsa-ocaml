@@ -33,7 +33,7 @@ let engines = Hashtbl.create 16
 let () = Hashtbl.add engines F_text (module Text : OUTPUT)
 let () = Hashtbl.add engines F_json (module Json : OUTPUT)
 
-let get_output_engine () : (module OUTPUT) = Hashtbl.find engines !opt_format 
+let get_output_engine () : (module OUTPUT) = Hashtbl.find engines !opt_format
 
 
 (* Result rendering *)
@@ -72,7 +72,6 @@ let dump range man flow =
   let module E = (val (get_output_engine ())) in
   E.dump man flow ~range ~out:!opt_file
 
-let pretty_print printer range =
+let print printer range =
   let module E = (val (get_output_engine ())) in
-  E.pretty_print printer ~range ~out:!opt_file
-
+  E.print printer ~range ~out:!opt_file

@@ -179,11 +179,8 @@ let bottom_from flow : 'a flow =
   bottom (get_ctx flow) (get_report flow)
 
 
-let print (pp: Format.formatter -> 'a -> unit) fmt flow =
-  Format.fprintf fmt "@[%a@\n|alarms| = %d@]"
-    (TokenMap.print pp) flow.tmap
-    (let errors,warnings = count_alarms flow.report in errors + warnings)
-
+let print (pp: Print.printer -> 'a -> unit) printer flow =
+  TokenMap.print pp printer flow.tmap
 
 let get (tk: token) (lattice: 'a lattice) (flow: 'a flow) : 'a =
   TokenMap.get tk lattice flow.tmap

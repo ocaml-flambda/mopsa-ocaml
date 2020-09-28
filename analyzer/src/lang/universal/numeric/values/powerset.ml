@@ -37,7 +37,7 @@ struct
   module Powerset = Framework.Lattices.Powerset.Make(struct
       type t = Z.t
       let compare = Z.compare
-      let print = Z.pp_print
+      let print = unformat Z.pp_print
     end)
 
   include Powerset

@@ -55,9 +55,6 @@ struct
 
   let top = Map.top
 
-  let print fmt a =
-    Format.fprintf fmt "pointers: %a@\n" Map.print a
-
   let scalar  = Semantic "C/Scalar"
   let numeric = Semantic "U/Numeric"
 
@@ -1030,20 +1027,23 @@ struct
 
   (** {2 Pretty printer} *)
   (** ****************** *)
+  
+  let print_state printer a =
+    pp_boxed ~path:[Key "pointers"] Map.print printer a
 
-  let pretty_print printer exp man flow =
+  let print_expr man flow printer exp =
     match ekind (remove_casts exp) with
     | E_var (var,_) when is_c_pointer_type var.vtyp
                       && not (is_c_array_type var.vtyp) ->
       let a = get_env T_cur man flow in
       let v = Map.find var a in
-      pprint_map_binding printer "pointers"
-        (Format.asprintf "%a" pp_var var)
-        (String (Format.asprintf "%a" PointerSet.print v))
+      pp_boxed ~path:[ Key "pointers";
+                       fkey "%a" pp_var var ]
+        PointerSet.print printer v
       ;
       if PointerSet.is_valid v then
         let o = mk_offset var None exp.erange in
-        man.pretty_print printer o flow ~route:numeric
+        man.print_expr flow printer o ~route:numeric
 
     | _ -> ()
 

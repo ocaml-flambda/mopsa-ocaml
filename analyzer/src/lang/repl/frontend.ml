@@ -217,7 +217,7 @@ let rec repl_loop ctx man flow =
             let stmt = parse_stmt ctx str in
             pf "%s@[<v 4>X♯ ≜ 𝕊⟦%a@]⟧ =@]%s@." col_out pp_stmt stmt col_reset;
             let flow = man.exec stmt flow |> post_to_flow man in
-            pf "%s@[<v 4>%a@]%s@." col_out (Flow.print man.lattice.print) flow col_reset;
+            pf "%s@[<v 4>%a@]%s@." col_out (format (Flow.print man.lattice.print)) flow col_reset;
             ctx, flow
 
          | VarDecl ->
@@ -230,7 +230,7 @@ let rec repl_loop ctx man flow =
                 pf "variable %a : %a declared@." pp_var v pp_typ (vtyp v)
               ) vars;
             pf "%s@[<v 4>X♯ ≜%s@." col_out col_reset;
-            pf "%s%a%s@." col_out (Flow.print man.lattice.print) flow col_reset;
+            pf "%s%a%s@." col_out (format (Flow.print man.lattice.print)) flow col_reset;
             ctx, flow
 
          | FunDecl ->
@@ -317,7 +317,7 @@ module Domain = struct
 
   let ask query man flow = None
 
-  let pretty_print printer exp man flow = ()
+  let print_expr man flow printer exp = ()
 
 end
 

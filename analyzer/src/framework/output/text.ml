@@ -190,7 +190,7 @@ let report man flow ~time ~files ~out =
     if !opt_display_lastflow then
       print out "Last flow =@[@\n%a@]@\n"
         (* "Context = @[@\n%a@]@\n" *)
-        (Core.Flow.print man.lattice.print) flow
+        (format (Core.Flow.print man.lattice.print)) flow
         (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
   in
 
@@ -350,14 +350,14 @@ let dump man flow ~range ~out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."
       Location.pp_relative_range range
-      (Flow.print man.lattice.print) flow
+      (format (Flow.print man.lattice.print)) flow
   else
     ()
 
-let pretty_print printer ~range ~out =
+let print printer ~range ~out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."
       Location.pp_relative_range range
-      flush_pprinter printer
+      fprint printer
   else
     ()

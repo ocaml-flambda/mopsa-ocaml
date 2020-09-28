@@ -128,21 +128,6 @@ struct
   let merge pre (post,log) (post',log') =
     assert false
 
-  let print fmt a =
-    let rec pp_first fmt l =
-      let l' = List.mapi (fun i s -> (i, s)) l in
-      Format.pp_print_list
-        ~pp_sep:(fun fmt () -> Format.fprintf fmt " ,@;")
-        (fun fmt (i, s) ->
-           Format.fprintf fmt "%d ↦ @[<h>%a@]"
-             i Slot.print s
-        )
-        fmt l'
-    in
-    Format.fprintf fmt "files: @[@[%a@]@\n@[%a@]@]@\n"
-      pp_first a.first
-      Table.print a.others
-
 
   (** Domain identification *)
   (** ===================== *)
@@ -461,7 +446,18 @@ struct
 
   let ask _ _ _ = None
 
-  let pretty_print _ _ _ _ = ()
+  let print_state printer a =
+    let rec pp_first printer l =
+      let l' = List.mapi (fun i s -> (i, s)) l in
+      pp_map
+        pp_int Slot.print
+        printer l'
+    in
+    pp_obj_sequence printer ~path:[Key "files"]
+      [ boxed pp_first a.first;
+        boxed Table.print a.others ]
+
+  let print_expr _ _ _ _ = ()
 
 end
 

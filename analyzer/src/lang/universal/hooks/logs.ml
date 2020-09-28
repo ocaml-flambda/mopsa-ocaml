@@ -149,7 +149,7 @@ struct
     else
       indent "%a @,in %a @,and semantic %a"
         pp_S stmt
-        (Flow.print man.lattice.print) flow
+        (format (Flow.print man.lattice.print)) flow
         pp_route route
         ~symbol:BEGIN
     ;
@@ -172,7 +172,11 @@ struct
         pp_route route
         time
         nb Debug.plurial_int nb
-        (Post.print man.lattice.print) post
+        (Cases.print
+           (fun fmt _ flow ->
+              format (Flow.print man.lattice.print) fmt flow
+           )
+        ) post
         ~symbol:END
 
 
@@ -185,7 +189,7 @@ struct
     else
       indent "%a @,in %a @,and semantic %a"
         pp_E exp
-        (Flow.print man.lattice.print) flow
+        (format (Flow.print man.lattice.print)) flow
         pp_route route
         ~symbol:BEGIN
     ;

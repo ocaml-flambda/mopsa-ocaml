@@ -76,7 +76,7 @@ struct
         )
         a1 a2
 
-  let print fmt (a:t) = I.fprint_bot fmt a
+  let print printer (a:t) = unformat I.fprint_bot printer a
 
   let apply_int t default f =
     match t with
@@ -328,7 +328,7 @@ struct
   let bounds (itv:t) : Z.t * Z.t =
     bot_dfl1 (Z.one, Z.zero) (function
         | I.B.Finite a, I.B.Finite b -> (a, b)
-        | _ -> panic "bounds called on a unbounded interval %a" print itv
+        | _ -> panic "bounds called on a unbounded interval %a" (format print) itv
       ) itv
 
   let bounds_opt (itv:t) : Z.t option * Z.t option =
@@ -350,7 +350,7 @@ struct
     bot_compare (I.compare) itv1 itv2
 
   let map (f: Z.t -> 'a) (itv:t) : 'a list =
-    if not (is_bounded itv) then panic ~loc:__LOC__ "map: unbounded interval %a" print itv
+    if not (is_bounded itv) then panic ~loc:__LOC__ "map: unbounded interval %a" (format print) itv
     else if is_bottom itv then []
     else
       let a, b = bounds itv in

@@ -212,7 +212,6 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.get" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:2 f man flow range args ["dict"]
         (fun args flow ->
-           debug "at range %a, flow = %a@\n" pp_range range (Flow.print man.lattice.print) flow;
            let var_k, var_v = extract_vars (List.hd args) in
 
            let eval_r = man.eval   (mk_var var_v range) flow in
@@ -527,7 +526,7 @@ struct
 
     | _ -> None
 
-  let pretty_print _ _ _ _ = ()
+  let print_expr _ _ _ _ = ()
 
 end
 

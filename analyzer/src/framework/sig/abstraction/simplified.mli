@@ -130,11 +130,11 @@ sig
   (** {2 Printing} *)
   (** ************ *)
 
-  val print: Format.formatter -> t -> unit
+  val print_state : printer -> t -> unit
   (** Printer of an abstract element. *)
 
-  val pretty_print : pprinter -> expr -> ('a,t) simplified_man -> 'a ctx -> t -> unit
-  (** Pretty printer of expression value *)
+  val print_expr  : ('a,t) simplified_man -> 'a ctx -> t -> printer -> expr -> unit
+  (** Printer of an expression's value *)
 
 end
 

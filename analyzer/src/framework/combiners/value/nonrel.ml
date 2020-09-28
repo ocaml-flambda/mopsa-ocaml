@@ -156,10 +156,6 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let merge pre (a1, log1) (a2, log2) =
-    debug "generic_nonrel_merge:@.pre = %a@.a1 = %a@.log1 = %a@.a2 = %a@.log2 = %a"
-      VarMap.print pre
-      VarMap.print a1 pp_block log1
-      VarMap.print a2 pp_block log2;
     let a1', a2' = Log.generic_domain_merge ~add ~remove ~find (a1, log1) (a2, log2) in
     try VarMap.map2zo
       (fun _ v1 -> v1)
@@ -213,10 +209,6 @@ struct
     VarMap.add var vv a
 
 
-  let print fmt a =
-    Format.fprintf fmt "%s:@,@[   %a@]@\n" Value.display VarMap.print a
-
-
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)
 
@@ -228,14 +220,6 @@ struct
     | A_binop of aexpr * Value.t * aexpr * Value.t
     | A_unsupported
 
-
-  (** Pretty printer of annotated expressions *)
-  let rec pp_aexp fmt = function
-    | A_var v -> Format.fprintf fmt "(var, %a)" Value.print v
-    | A_cst v -> Format.fprintf fmt "(cst, %a)" Value.print v
-    | A_unop (ae,v) -> Format.fprintf fmt "(unop, %a, %a)" pp_aexp ae Value.print v
-    | A_binop (ae1,v1,ae2,v2) -> Format.fprintf fmt "(binop, %a, %a, %a, %a)" pp_aexp ae1 Value.print v1 pp_aexp ae2 Value.print v2
-    | A_unsupported -> Format.pp_print_string fmt "?"
 
 
   (** Value manager *)
@@ -514,13 +498,16 @@ struct
   let ask query man ctx map =
     Value.ask (value_man None map) query
 
+  let print_state printer a =
+    pp_boxed VarMap.print printer a
+      ~path:[Key Value.display]
 
-  let pretty_print printer exp man ctx a =
+  let print_expr man ctx a printer exp =
     match eval exp a with
     | None -> ()
     | Some (_,v) ->
-      let es = Format.asprintf "%a" pp_expr exp in
-      let vs = Format.asprintf "%a" Value.print v in
-      pprint_map_binding printer Value.display es (String vs)
+      pp_boxed Value.print printer v
+        ~path:[ Key Value.display;
+                fkey "%a" pp_expr exp ]
 
 end

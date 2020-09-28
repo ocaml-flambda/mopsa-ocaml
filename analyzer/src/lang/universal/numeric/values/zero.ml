@@ -78,12 +78,12 @@ struct
 
   let widen ctx (a1:t) (a2:t) : t = join a1 a2
 
-  let print fmt (a:t) =
+  let print printer (a:t) =
     match a with
-    | TOP -> Format.fprintf fmt "⊤"
-    | BOT -> Format.fprintf fmt "⊥"
-    | ZERO -> Format.fprintf fmt "0"
-    | NON_ZERO -> Format.fprintf fmt "≠ 0"
+    | TOP -> pp_string printer "⊤"
+    | BOT -> pp_string printer "⊥"
+    | ZERO -> pp_string printer "0"
+    | NON_ZERO -> pp_string printer "≠ 0"
 
   let constant t c =
     match t with

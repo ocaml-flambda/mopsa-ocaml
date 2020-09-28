@@ -143,7 +143,7 @@ struct
   let display = ""
   let bottom = ()
   let top = ()
-  let print fmt () = ()
+  let print printer () = ()
   let is_bottom () = false
   let subset () () = true
   let join () () = ()

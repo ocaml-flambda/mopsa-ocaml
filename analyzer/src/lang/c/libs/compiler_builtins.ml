@@ -78,7 +78,7 @@ struct
 
   let ask _ _ _  = None
 
-  let pretty_print _ _ _ _ = ()
+  let print_expr _ _ _ _ = ()
 
 end
 

@@ -61,9 +61,6 @@ struct
 
   let is_bottom _ = false
 
-  let print fmt (a:t) =
-    Format.fprintf fmt "alloca: %a@\n" AddrSet.print a
-
   let widen ctx = join
 
   let merge pre (a1,log1) (a2,log2) =
@@ -181,28 +178,27 @@ struct
         else
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
-           debug "call function %a" (Flow.print man.lattice.print) flow;
-          let open Universal.Ast in
-          let ret_var = mktmp ~typ:fundec.c_func_return () in
-          let fundec' = {
-            fun_orig_name = fundec.c_func_org_name;
-            fun_uniq_name = fundec.c_func_unique_name;
-            fun_parameters = fundec.c_func_parameters;
-            fun_locvars = [];
-            (* FIXME: This is a temporary fix to avoid double removal of
-               local variables. The field fun_locvars is used by the
-               Universal iterator at the end of the call to clean the
-               environment. Since the environment is automatically
-               cleaned by the scope mechanism, local variables are
-               removed twice. *)
-            fun_body = {skind = S_c_goto_stab (body); srange = srange body};
-            fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
-            fun_return_var = ret_var;
-            fun_range = fundec.c_func_range;
-          }
-          in
-          let exp' = mk_call fundec' args range in
-          man.eval exp' flow ~route:(Below name)
+           let open Universal.Ast in
+           let ret_var = mktmp ~typ:fundec.c_func_return () in
+           let fundec' = {
+             fun_orig_name = fundec.c_func_org_name;
+             fun_uniq_name = fundec.c_func_unique_name;
+             fun_parameters = fundec.c_func_parameters;
+             fun_locvars = [];
+             (* FIXME: This is a temporary fix to avoid double removal of
+                local variables. The field fun_locvars is used by the
+                Universal iterator at the end of the call to clean the
+                environment. Since the environment is automatically
+                cleaned by the scope mechanism, local variables are
+                removed twice. *)
+             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
+             fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
+             fun_return_var = ret_var;
+             fun_range = fundec.c_func_range;
+           }
+           in
+           let exp' = mk_call fundec' args range in
+           man.eval exp' flow ~route:(Below name)
 
         | {c_func_variadic = true} ->
           let exp' = mk_c_call fundec args range in
@@ -294,7 +290,11 @@ struct
   (** Pretty printer *)
   (** ============== *)
 
-  let pretty_print _ _ _ _ = ()
+  let print_state printer (a:t) =
+    pp_boxed AddrSet.print ~path:[Key "alloca"]
+      printer a
+
+  let print_expr _ _ _ _ = ()
 
 end
 

@@ -34,7 +34,7 @@
 *)
 
 open Top
-open Core.Lattice
+open Core.All
 
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.pointwise" fmt
@@ -43,7 +43,7 @@ module type KEY =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : printer -> t -> unit
 end
 
 
@@ -113,18 +113,14 @@ struct
       )
       a b
 
-  let print fmt (a:t) : unit =
+  let print printer (a:t) : unit =
     match a with
-    | TOP -> Format.pp_print_string fmt "⊤"
-    | Nt m when M.is_empty m -> Format.fprintf fmt "⊥"
+    | TOP -> pp_string printer "⊤"
+    | Nt m when M.is_empty m -> pp_string printer "⊥"
     | Nt m ->
-      Format.fprintf fmt "@[<v>%a@]"
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
-           (fun fmt (k, v) ->
-              Format.fprintf fmt "%a ⇀ @[%a@]" Key.print k Value.print v
-           )
-        ) (M.bindings m)
+      pp_map
+        Key.print Value.print
+        printer (M.bindings m)
 
   (** Returns ⊥ value if either k is not found, or a is the ⊤ map. *)
   let find (k: Key.t) (a:t) : Value.t =

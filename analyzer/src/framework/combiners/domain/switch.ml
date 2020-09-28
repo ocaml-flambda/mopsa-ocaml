@@ -72,11 +72,6 @@ struct
     D1.is_bottom a1 ||
     D2.is_bottom a2
 
-  let print fmt (a1,a2) =
-    Format.fprintf fmt "%a%a"
-      D1.print a1
-      D2.print a2
-
 
   (**************************************************************************)
   (**                      {2 Lattice operators}                            *)
@@ -152,30 +147,57 @@ struct
            (f2 q (snd_pair_man man) flow))
 
 
-  (** Pretty printer of expressions *)
-  let pretty_print targets =
+  (** Pretty printer of states *)
+  let print_state targets =
     match sat_targets ~targets ~domains:D1.domains,
           sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
 
     | true, false ->
-      let f = D1.pretty_print targets in
-      (fun printer e man flow ->
-         f printer e (fst_pair_man man) flow)
+      let f = D1.print_state targets in
+      (fun printer (a1,_) ->
+         f printer a1)
 
     | false, true ->
-      let f = D2.pretty_print targets in
-      (fun printer e man flow ->
-         f printer e (snd_pair_man man) flow)
+      let f = D2.print_state targets in
+      (fun printer (_,a2) ->
+         f printer a2)
 
     | true, true ->
-      let f1 = D1.pretty_print targets in
-      let f2 = D2.pretty_print targets in
-      (fun printer e man flow ->
-         f1 printer e (fst_pair_man man) flow;
-         f2 printer e (snd_pair_man man) flow
+      let f1 = D1.print_state targets in
+      let f2 = D2.print_state targets in
+      (fun printer (a1,a2) ->
+         f1 printer a1;
+         f2 printer a2
       )
+
+
+  (** Pretty printer of expressions *)
+  let print_expr targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      let f = D1.print_expr targets in
+      (fun man flow printer e ->
+         f (fst_pair_man man) flow printer e)
+
+    | false, true ->
+      let f = D2.print_expr targets in
+      (fun man flow printer e ->
+         f (snd_pair_man man) flow printer e)
+
+    | true, true ->
+      let f1 = D1.print_expr targets in
+      let f2 = D2.print_expr targets in
+      (fun man flow printer e ->
+         f1 (fst_pair_man man) flow printer e;
+         f2 (snd_pair_man man) flow printer e
+      )
+
 end
 
 

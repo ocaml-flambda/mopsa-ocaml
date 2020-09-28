@@ -568,7 +568,7 @@ type stmt_kind +=
    | S_print
    (** Print the abstract flow map at current location *)
 
-   | S_pretty_print of expr list
+   | S_print_expr of expr list
    (** Pretty print the values of expressions *)
 
    | S_free of addr
@@ -608,7 +608,7 @@ let () =
 
         | S_free(a1), S_free(a2) -> compare_addr a1 a2
 
-        | S_pretty_print el1, S_pretty_print el2 -> Compare.list compare_expr el1 el2
+        | S_print_expr el1, S_print_expr el2 -> Compare.list compare_expr el1 el2
 
         | _ -> next s1 s2
       );
@@ -638,7 +638,7 @@ let () =
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
         | S_print -> fprintf fmt "print();"
-        | S_pretty_print el -> fprintf fmt "print_print(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
+        | S_print_expr el -> fprintf fmt "print_print(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -690,9 +690,9 @@ let () =
 
         | S_print -> leaf stmt
 
-        | S_pretty_print el ->
+        | S_print_expr el ->
           {exprs = el; stmts = []},
-          (function {exprs} -> {stmt with skind = S_pretty_print exprs})
+          (function {exprs} -> {stmt with skind = S_print_expr exprs})
           
         | S_free _ -> leaf stmt
 
@@ -1045,7 +1045,7 @@ module Addr =
 struct
   type t = addr
   let compare = compare_addr
-  let print = pp_addr
+  let print = unformat pp_addr
   let from_expr e =
     match ekind e with
     | E_addr addr -> addr
@@ -1055,15 +1055,6 @@ end
 module AddrSet =
 struct
   include SetExt.Make(Addr)
-
-  let print fmt s =
-    if is_empty s then pp_print_string fmt "∅"
-    else
-      let l = elements s in
-      fprintf fmt "@[<h>{";
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-        pp_addr fmt l
-      ;
-      fprintf fmt "}@]"
+  let print printer s =
+    pp_set Addr.print printer (elements s)
 end

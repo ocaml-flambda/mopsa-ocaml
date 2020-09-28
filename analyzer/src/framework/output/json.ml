@@ -215,7 +215,7 @@ let list_hooks hooks ~out =
   print out json
 
 let dump man flow ~range ~out =
-  Flow.print man.lattice.print Format.str_formatter flow;
+  format (Flow.print man.lattice.print) Format.str_formatter flow;
   let str = Format.flush_str_formatter () in
   let json =
     `Assoc [
@@ -226,10 +226,10 @@ let dump man flow ~range ~out =
   print out json
 
 
-let pretty_print printer ~range ~out =
+let print printer ~range ~out =
   let json =
     `Assoc [
-       "print", pprinter_to_json printer;
+       "print", printer_to_json printer;
        "range", render_range range;
      ]
   in

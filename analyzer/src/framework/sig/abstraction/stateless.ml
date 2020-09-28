@@ -60,8 +60,8 @@ sig
   (** {2 Printing} *)
   (** ************ *)
 
-  val pretty_print : pprinter -> expr -> ('a,unit) man -> 'a flow -> unit
-  (** Pretty printer of expression value *)
+  val print_expr  : ('a,unit) man -> 'a flow -> printer -> expr -> unit
+  (** Printer of an expression's value *)
 
 end
 

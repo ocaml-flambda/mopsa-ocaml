@@ -75,10 +75,10 @@ let widen ctx a1 a2 = {
   support = AddrSet.inter a1.support a2.support;
 }
 
-let print fmt a =
-  Format.fprintf fmt "others: @[%a@]@\nsupport: @[%a@]"
-    AddrItvMap.print a.map
-    AddrSet.print a.support
+let print printer a =
+  pp_obj_map printer
+    [ (boxed pp_string "others", boxed AddrItvMap.print a.map);
+      (boxed pp_string "support", boxed AddrSet.print a.support) ]
 
 let add addr itv a = {
   map = AddrItvMap.add addr itv a.map;

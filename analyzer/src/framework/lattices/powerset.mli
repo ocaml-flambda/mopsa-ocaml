@@ -22,13 +22,14 @@
 (** Powerset lattice with finite cardinality elements or ⊺. *)
 
 open Top
+open Core.All
 open Powerset_sig
 
 module type ELT =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
 end
 
 

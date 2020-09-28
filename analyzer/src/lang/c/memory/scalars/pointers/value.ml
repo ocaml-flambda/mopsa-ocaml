@@ -52,12 +52,12 @@ struct
     | Fun f1, Fun f2 -> compare f1.c_func_unique_name f2.c_func_unique_name
     | _ -> compare p1 p2
 
-  let print fmt v =
+  let print printer v =
     match v with
-    | Null -> Format.pp_print_string fmt "NULL"
-    | Invalid -> Format.pp_print_string fmt "INVALID"
-    | Base b -> pp_base fmt b
-    | Fun f -> Format.fprintf fmt "λ%s" f.c_func_org_name
+    | Null -> pp_string printer "NULL"
+    | Invalid -> pp_string printer "INVALID"
+    | Base b -> unformat pp_base printer b
+    | Fun f -> pp_boxed_format printer "λ%s" f.c_func_org_name
 end
 
 

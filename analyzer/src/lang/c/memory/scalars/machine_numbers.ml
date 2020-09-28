@@ -574,11 +574,11 @@ struct
   (** {2 Pretty printer} *)
   (** ****************** *)
 
-  let pretty_print printer exp man flow =
+  let print_expr man flow printer exp =
     match ekind (remove_casts exp) with
     | E_var (v,_) when is_c_num_type v.vtyp ->
       let vv = mk_num_var v in
-      man.pretty_print ~route:numeric printer (mk_var vv exp.erange) flow
+      man.print_expr ~route:numeric flow printer (mk_var vv exp.erange)
     | _ -> ()
 
 end

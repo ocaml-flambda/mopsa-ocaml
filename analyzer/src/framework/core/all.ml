@@ -33,7 +33,7 @@ module Var =
 struct
   type t = var
   let compare = compare_var
-  let print = pp_var
+  let print = Print.unformat pp_var
 end
 
 include Alarm
@@ -93,4 +93,5 @@ include Manager
 
 module Hook = Hook
 
-include Pretty_printer
+include Print
+module Print = Print

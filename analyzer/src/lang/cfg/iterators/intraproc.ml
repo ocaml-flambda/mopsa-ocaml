@@ -97,7 +97,7 @@ struct
       let ctx = Flow.get_ctx flow in
       let v = List.fold_left (man.lattice.join ctx) man.lattice.bottom vs in
       debug "update node value %a: abs = @[%a@]@."
-        pp_node_as_id node man.lattice.print v;
+        pp_node_as_id node (format man.lattice.print) v;
       Flow.set (T_cfg_node nid) v man.lattice flow
     in
     
@@ -112,7 +112,7 @@ struct
           (fun flow (port,node) ->
              let v = Flow.get (T_cfg_node (CFG.node_id node)) man.lattice flow in
              debug "input node %a -> port %a, abs = @[%a@]"
-               pp_node_as_id node pp_token port man.lattice.print v;
+               pp_node_as_id node pp_token port (format man.lattice.print) v;
              Flow.add port v man.lattice flow
           )
           flow src
@@ -125,7 +125,7 @@ struct
           (fun flow (port,_) ->
              let v = Flow.get port man.lattice flow in
              debug "edge post %a %a: abs = @[%a@]"
-               pp_edge_as_id edge pp_token port man.lattice.print v;
+               pp_edge_as_id edge pp_token port (format man.lattice.print) v;
              Flow.set (T_cfg_edge_post (CFG.edge_id edge,port)) v man.lattice flow
           )
           flow dst
@@ -164,7 +164,7 @@ struct
       let old = Flow.get (T_cfg_node wid) man.lattice flow in
       debug "analyzing component @[%a@], widen=%a, count=%i, abs=@[%a@]"
             (Graph.pp_nested_list_list pp_node_as_id) lst
-            pp_node_id wid count man.lattice.print old;
+            pp_node_id wid count (format man.lattice.print) old;
       (* analyze the component *)
       analyze_component true lst flow >>% fun flow ->
       let v = Flow.get (T_cfg_node wid) man.lattice flow in
@@ -192,7 +192,7 @@ struct
         (* finished *)
         debug "component analysis finished @[%a@], head=%a, abs=@[%a@]"
           (Graph.pp_nested_list_list pp_node_as_id) lst
-          pp_node_id wid man.lattice.print
+          pp_node_id wid (format man.lattice.print)
           (Flow.get (T_cfg_node wid) man.lattice flow);
         Post.return flow
       )
@@ -268,11 +268,8 @@ struct
     
     (* all together now *)
     let flow = flow_in flow in
-    debug "CFG iteration started:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     analyze_component false cfg.cfg_order flow >>% fun flow ->
-    debug "CFG iteration finished:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     let flow = flow |> flow_out |> cleanup in
-    debug "returned flow:@\nabs = @[%a@]" (Flow.print man.lattice.print) flow;
     Post.return flow
 
 
@@ -309,7 +306,7 @@ struct
 
   let ask query man flow = None
 
-  let pretty_print printer exp man flow = ()
+  let print_expr man flow printer exp = ()
 
 end
 

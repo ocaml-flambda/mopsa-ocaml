@@ -246,7 +246,6 @@ module Domain =
         | Py_program(_, g, b) -> g, b
         | _ -> assert false in
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
-        debug "parse (basename=%a) %a %a" (OptionExt.print Format.pp_print_string) basename pp_stmt stmt (Flow.print man.lattice.print) flow;
         let range = srange stmt in
         match skind stmt with
         | S_assign ({ekind = E_var (v, _)}, e) ->
@@ -314,7 +313,6 @@ module Domain =
                             | _ -> ebases in
                           let name = mk_dot_name basename (get_orig_vname c.py_cls_var) in
                           let py_cls_a_body, globals, flow = parse (Some name) c.py_cls_body globals flow in
-                          debug "body of %s: %a, flow = %a" name pp_stmt py_cls_a_body (Flow.print man.lattice.print) flow;
                           let newc =
                             { py_cls_a_var = set_orig_vname name c.py_cls_var;
                               py_cls_a_body;
@@ -409,7 +407,7 @@ module Domain =
 
     let eval _ _ _ = None
     let ask _ _ _ = None
-    let pretty_print _ _ _ _ = ()
+    let print_expr _ _ _ _ = ()
   end
 
 let () = register_stateless_domain (module Domain)

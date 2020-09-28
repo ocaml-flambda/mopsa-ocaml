@@ -21,13 +21,14 @@
 
 (** Powerset lattice with finite cardinality elements or ⊺. *)
 
+open Core.All
 open Top
 
 module type ELT =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : printer -> t -> unit
 end
 
 
@@ -78,21 +79,13 @@ struct
       )
       abs1 abs2
 
-  open Format
-  let print fmt (abs:t) =
-    let open Format in
-    top_fprint (fun fmt s ->
-        if Set.is_empty s then pp_print_string fmt "∅"
-        else
-          let l = Set.elements s in
-          fprintf fmt "@[<h>{";
-          pp_print_list
-            ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-            Elt.print fmt l
-          ;
-          fprintf fmt "}@]";
-          ()
-      ) fmt abs
+  let print printer (abs:t) =
+    match abs with
+    | Top.TOP -> pp_string printer "⊤"
+    | Top.Nt s ->
+      if Set.is_empty s then pp_string printer "∅"
+      else
+        pp_set Elt.print printer (Set.elements s)
 
   let add v (abs:t) : t =
     top_lift1 (Set.add v) abs

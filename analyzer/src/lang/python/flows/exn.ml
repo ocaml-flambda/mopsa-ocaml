@@ -70,7 +70,7 @@ module Domain =
         (* Execute try body *)
         begin
           man.exec body flow0 >>% fun try_flow ->
-                                  debug "post try flow:@\n  @[%a@]" (Flow.print man.lattice.print) try_flow;
+                                  debug "post try flow:@\n  @[%a@]" (format (Flow.print man.lattice.print)) try_flow;
                                   (* Execute handlers *)
                                   let flow_caught, flow_uncaught =
                                     List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
@@ -136,7 +136,7 @@ module Domain =
                    (* FIXME: remove cleaners after executing them *)
                    man.exec (mk_block (StmtSet.elements cleaners) range) true_flow >>% fun true_flow ->
                    let cur = Flow.get T_cur man.lattice true_flow in
-                   debug "asking...@\ntrue_flow = %a" (Flow.print man.lattice.print) true_flow;
+                   debug "asking...@\ntrue_flow = %a" (format (Flow.print man.lattice.print)) true_flow;
                    let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
                    debug "ok@\n";
                    let tk =
@@ -181,13 +181,13 @@ module Domain =
 
 
     and exec_except man excpt range flow =
-      debug "exec except on@ @[%a@]" (Flow.print man.lattice.print) flow;
+      debug "exec except on@ @[%a@]" (format (Flow.print man.lattice.print)) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
-      debug "flow_cur %a@\n" (Flow.print man.lattice.print) flow;
+      debug "flow_cur %a@\n" (format (Flow.print man.lattice.print)) flow;
       let flow0 = Flow.filter (function
           | T_py_exception _ -> fun _ -> false
           | _ -> fun _ -> true) flow0 in
-      debug "exec except flow0@ @[%a@]" (Flow.print man.lattice.print) flow0;
+      debug "exec except flow0@ @[%a@]" (format (Flow.print man.lattice.print)) flow0;
       let except_var =
         match excpt.py_excpt_name with
         | None -> mk_range_attr_var range "artificial_except_var" (T_py None)
@@ -255,7 +255,7 @@ module Domain =
                     | _ -> VisitParts s)
           excpt.py_excpt_body
       in
-      debug "except flow1 =@ @[%a@]" (Flow.print man.lattice.print) flow1;
+      debug "except flow1 =@ @[%a@]" (format (Flow.print man.lattice.print)) flow1;
       man.exec except_body flow1
       >>% man.exec clean_except_var |> post_to_flow man
 
@@ -308,7 +308,7 @@ module Domain =
 
 
     let ask _ _ _ = None
-    let pretty_print _ _ _ _ = ()
+    let print_expr _ _ _ _ = ()
 
   end
 

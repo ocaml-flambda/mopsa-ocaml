@@ -50,14 +50,14 @@ struct
     | FunctionVar of string * string
     | Resource of string
 
-  let pp_user_pack_elm fmt = function
-    | Var v -> Format.pp_print_string fmt v
-    | Function f -> Format.fprintf fmt "$%s" f
-    | FunctionVar (f,v) -> Format.fprintf fmt "$%s.%s" f v
-    | Resource r -> Format.fprintf fmt "@@%s" r
+  let pp_user_pack_elm printer = function
+    | Var v -> pp_string printer v
+    | Function f -> pp_boxed_format printer "$%s" f
+    | FunctionVar (f,v) -> pp_boxed_format printer "$%s.%s" f v
+    | Resource r -> pp_boxed_format printer "@@%s" r
 
-  let pp_user_pack fmt pack =
-    Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ",") pp_user_pack_elm fmt pack
+  let pp_user_pack printer pack =
+    pp_list pp_user_pack_elm printer pack
 
   let compare_user_pack_elem e1 e2 =
     match e1,e2 with
@@ -143,10 +143,10 @@ struct
 
 
   (** Pretty printer of packing keys *)
-  let print fmt = function
-    | Globals  -> Format.pp_print_string fmt "[globals]"
-    | Locals f -> Format.pp_print_string fmt f
-    | User u  -> Format.fprintf fmt "(%a)" pp_user_pack u
+  let print printer = function
+    | Globals  -> pp_string printer "[globals]"
+    | Locals f -> pp_string printer f
+    | User u  -> pp_user_pack printer u
 
 
   (** Initialization *)

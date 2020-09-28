@@ -969,7 +969,7 @@ struct
             bind_result (fun iterator flow ->
                 let list_addr = match ekind iterator with
                   | E_py_object ({addr_kind = A_py_list} as a, _) -> a
-                  | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (Flow.print man.lattice.print) flow in
+                  | _ -> Exceptions.panic "should be a list: %a@\nflow = %a@\n" pp_expr iterator (format (Flow.print man.lattice.print)) flow in
                 let var_els = var_of_addr list_addr in
                 man.eval (mk_expr ~etyp:(T_py None) (E_py_check_annot (mk_var var_els range, i)) range) flow
               )
@@ -1140,7 +1140,7 @@ struct
 
     | _ -> None
 
-  let pretty_print _ _ _ _ = ()
+  let print_expr _ _ _ _ = ()
 
 end
 

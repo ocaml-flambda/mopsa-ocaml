@@ -240,13 +240,13 @@ struct
   module Cell = struct
       type t = cell
       let compare = compare_cell
-      let print = pp_cell
+      let print = unformat pp_cell
     end
 
   module Off = struct
     type t = Z.t
     let compare = Z.compare
-    let print = Z.pp_print
+    let print = unformat Z.pp_print
   end
 
   module Cells = Framework.Lattices.Powerset.Make(Cell)
@@ -360,10 +360,6 @@ struct
     cells = CellSet.top;
     bases = BaseSet.top;
   }
-
-  let print fmt a =
-    Format.fprintf fmt "cells: @[%a@]@\n"
-      CellSet.print a.cells
 
 
   (** Domain identifier *)
@@ -1160,7 +1156,10 @@ struct
   (** {2 Pretty printer} *)
   (** ****************** *)
 
-  let pretty_print printer exp man flow =
+  let print_state printer a =
+    pp_boxed CellSet.print printer a.cells ~path:[Key "cells"]
+
+  let print_expr man flow printer exp =
     let exp = remove_casts exp in
     (* Process only C lvalues *)
     if not (is_c_type exp.etyp && is_c_lval exp) then () else
@@ -1187,7 +1186,7 @@ struct
                    (fun c ->
                       let v = mk_cell_var c in
                       let ve = mk_var v exp.erange in
-                      man.pretty_print ~route:scalar printer ve flow
+                      man.print_expr ~route:scalar flow printer ve
                    ) s)
                (CellSet.find base a.cells) lo hi
            | _ -> ()

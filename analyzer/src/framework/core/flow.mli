@@ -75,7 +75,7 @@ val meet_list : 'a lattice -> empty:'a flow -> 'a flow list -> 'a flow
 val widen : 'a lattice -> 'a flow -> 'a flow -> 'a flow
 (** Widening operator. *)
 
-val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a flow -> unit
+val print : (Print.printer -> 'a -> unit) -> Print.printer -> 'a flow -> unit
 
 val get : token -> 'a lattice -> 'a flow -> 'a
 (** [get tk lat flow] returns the abstract element associated to token

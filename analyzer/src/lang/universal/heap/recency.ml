@@ -29,11 +29,12 @@ open Ast
 
 (* open Policies *)
 
-module Pool = Framework.Lattices.Powerset.Make
+module Pool =
+  Framework.Lattices.Powerset.Make
     (struct
       type t = addr
       let compare = compare_addr
-      let print = pp_addr
+      let print = unformat pp_addr
     end)
 
 type ('a,_) query +=
@@ -115,10 +116,6 @@ struct
       let name = name
     end)
 
-  let print fmt pool =
-    Format.fprintf fmt "heap: @[%a@]@\n"
-      Pool.print pool
-
   let bottom = Pool.bottom
 
   let top = Pool.top
@@ -186,7 +183,7 @@ struct
        let all = get_env T_cur man flow in
        let alive = man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
-       debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) Pool.print dead;
+       debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) (format Pool.print) dead;
        let trange = tag_range range "agc" in
        let flow = set_env T_cur alive man flow in
        let post = Pool.fold (fun addr acc ->
@@ -265,7 +262,11 @@ struct
   (** Pretty printer *)
   (** ************** *)
 
-  let pretty_print printer exp man flow = ()
+  let print_state printer pool =
+    pp_boxed Pool.print printer pool
+      ~path:[Key "heap"]
+
+  let print_expr man flow printer exp = ()
 
 
 end

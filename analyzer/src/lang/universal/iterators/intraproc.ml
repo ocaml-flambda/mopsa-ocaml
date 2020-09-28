@@ -146,10 +146,10 @@ struct
       Framework.Output.Factory.dump (srange stmt) man flow;
       Some (Post.return flow)
 
-    | S_pretty_print el ->
-      let printer = empty_pprinter () in
-      List.iter (fun e -> man.pretty_print printer e flow) el;
-      Framework.Output.Factory.pretty_print printer (srange stmt);
+    | S_print_expr el ->
+      let printer = empty_printer () in
+      List.iter (man.print_expr flow printer) el;
+      Framework.Output.Factory.print printer (srange stmt);
       Some (Post.return flow)
 
 
@@ -206,7 +206,7 @@ struct
 
   let ask query man flow = None
 
-  let pretty_print printer exp man flow = ()
+  let print_expr man flow printer exp = ()
 
 end
 
