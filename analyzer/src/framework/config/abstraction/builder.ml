@@ -237,4 +237,7 @@ and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
     )
 
 let from_json (domain:domain) : (module STACKED_COMBINER) =
-  make_stacked_domain domain
+  let d = make_stacked_domain domain in
+  (* Add an empty domain below the abstraction to ensure that leave domains
+     have always a [Below] route *)
+  Combiners.Domain.Compose.make [d; (module EmptyDomain)]
