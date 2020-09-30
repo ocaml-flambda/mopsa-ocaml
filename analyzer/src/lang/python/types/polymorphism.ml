@@ -74,9 +74,10 @@ struct
       | Bot_top.Nbt p ->
         pp_list
           (fun printer (vs, aks) ->
-             pp_obj_tuple ~sym_sep:"~" printer
-               [ boxed (pp_set (unformat pp_var)) (VarSet.elements vs);
-                 boxed (pp_set (unformat pp_addr_kind)) (AKS.elements aks) ]
+             pp_obj_list printer
+               [ pbox (pp_list (unformat pp_var) ~lopen:"{" ~lsep:"," ~lclose:"}") (VarSet.elements vs);
+                 pbox (pp_list (unformat pp_addr_kind) ~lopen:"{" ~lsep:"," ~lclose:"}") (AKS.elements aks) ]
+               ~lopen:"(" ~lsep:"~" ~lclose:")"
           ) printer p
 
     let join l r = panic "ni join"
@@ -122,7 +123,7 @@ struct
   let ask _ _ _ = None
 
   let print_state printer a =
-    pp_boxed ~path:[Key "partitions"] Partitions.print printer a
+    pprint ~path:[Key "partitions"] printer (pbox Partitions.print a)
 
   let print_expr _ _ _ _ = ()
 

@@ -46,10 +46,10 @@ struct
     | false, true -> V1.print printer v1
     | true, false -> V2.print printer v2
     | false, false ->
-      pp_obj_sequence printer
-        [ boxed V1.print v1;
-          boxed V2.print v2 ]
-        ~sym_sep:"∨"
+      pp_obj_list printer
+        [ pbox V1.print v1;
+          pbox V2.print v2 ]
+        ~lopen:"" ~lsep:"∨" ~lclose:""
 
 
   (** {2 Lattice operators} *)

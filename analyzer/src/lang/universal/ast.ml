@@ -1056,5 +1056,5 @@ module AddrSet =
 struct
   include SetExt.Make(Addr)
   let print printer s =
-    pp_set Addr.print printer (elements s)
+    pp_list Addr.print printer (elements s) ~lopen:"{" ~lsep:"," ~lclose:"}"
 end

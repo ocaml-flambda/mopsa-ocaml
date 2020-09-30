@@ -263,8 +263,8 @@ struct
   (** ************** *)
 
   let print_state printer pool =
-    pp_boxed Pool.print printer pool
-      ~path:[Key "heap"]
+    pprint printer ~path:[Key "heap"]
+      (pbox Pool.print pool)
 
   let print_expr man flow printer exp = ()
 

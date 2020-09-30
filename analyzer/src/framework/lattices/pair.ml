@@ -85,9 +85,9 @@ struct
     apply2 (First.widen ctx) (Second.widen ctx) v w
 
   let print printer ((a,b):t) : unit =
-    pp_obj_tuple
+    pp_obj_list ~lopen:"(" ~lsep:"," ~lclose:")"
       printer
-      [ boxed First.print a;
-        boxed Second.print b ]
+      [ pbox First.print a;
+        pbox Second.print b ]
 
 end

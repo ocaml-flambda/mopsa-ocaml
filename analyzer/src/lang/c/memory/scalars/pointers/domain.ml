@@ -1029,7 +1029,7 @@ struct
   (** ****************** *)
   
   let print_state printer a =
-    pp_boxed ~path:[Key "pointers"] Map.print printer a
+    pprint ~path:[Key "pointers"] printer (pbox Map.print a)
 
   let print_expr man flow printer exp =
     match ekind (remove_casts exp) with
@@ -1037,9 +1037,9 @@ struct
                       && not (is_c_array_type var.vtyp) ->
       let a = get_env T_cur man flow in
       let v = Map.find var a in
-      pp_boxed ~path:[ Key "pointers";
-                       fkey "%a" pp_var var ]
-        PointerSet.print printer v
+      pprint printer ~path:[ Key "pointers";
+                             fkey "%a" pp_var var ]
+        (pbox PointerSet.print v)
       ;
       if PointerSet.is_valid v then
         let o = mk_offset var None exp.erange in

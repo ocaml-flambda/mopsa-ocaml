@@ -52,9 +52,9 @@ struct
 
   let pp_user_pack_elm printer = function
     | Var v -> pp_string printer v
-    | Function f -> pp_boxed_format printer "$%s" f
-    | FunctionVar (f,v) -> pp_boxed_format printer "$%s.%s" f v
-    | Resource r -> pp_boxed_format printer "@@%s" r
+    | Function f -> pprint printer (fbox "$%s" f)
+    | FunctionVar (f,v) -> pprint printer (fbox "$%s.%s" f v)
+    | Resource r -> pprint printer (fbox "@@%s" r)
 
   let pp_user_pack printer pack =
     pp_list pp_user_pack_elm printer pack

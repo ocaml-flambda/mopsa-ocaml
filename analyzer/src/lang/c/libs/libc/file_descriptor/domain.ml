@@ -453,9 +453,10 @@ struct
         pp_int Slot.print
         printer l'
     in
-    pp_obj_sequence printer ~path:[Key "files"]
-      [ boxed pp_first a.first;
-        boxed Table.print a.others ]
+    pp_obj_list printer ~path:[Key "files"]
+      [ pbox pp_first a.first;
+        pbox Table.print a.others ]
+      ~lopen:"" ~lsep:"," ~lclose:""
 
   let print_expr _ _ _ _ = ()
 

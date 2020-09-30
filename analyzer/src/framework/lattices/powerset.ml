@@ -85,7 +85,7 @@ struct
     | Top.Nt s ->
       if Set.is_empty s then pp_string printer "∅"
       else
-        pp_set Elt.print printer (Set.elements s)
+        pp_list Elt.print printer (Set.elements s) ~lopen:"{" ~lsep:"," ~lclose:"}"
 
   let add v (abs:t) : t =
     top_lift1 (Set.add v) abs

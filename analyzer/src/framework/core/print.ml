@@ -24,15 +24,25 @@
 open Ast.Var
 open Ast.Expr
 open Yojson.Basic
-
-
 module StringMap = MapExt.StringMap
 
 
-type print_symbols = {
-  sym_begin  : string;
-  sym_sep    : string;
-  sym_end    : string;
+
+(****************************************************************************)
+(**                          {1 Print objects}                              *)
+(****************************************************************************)
+
+type map_symbols = {
+  mopen : string;
+  msep   : string;
+  mbind  : string;
+  mclose   : string;
+}
+
+type list_symbols = {
+  lopen : string;
+  lsep   : string;
+  lclose   : string;
 }
 
 type print_object =
@@ -41,13 +51,23 @@ type print_object =
   | Int    of Z.t
   | Float  of float
   | String of string
-  | Map    of print_object MapExt.StringMap.t * print_symbols
-  | List   of print_object list * print_symbols
+  | Map    of print_object MapExt.StringMap.t * map_symbols
+  | List   of print_object list * list_symbols
+
+let default_map_symbols = { mopen = "{"; msep = ","; mclose = "}"; mbind = ":" }
+
+let default_list_symbols = { lopen = "["; lsep = ","; lclose = "]" }
+
+(****************************************************************************)
+(**                            {1 Printers}                                 *)
+(****************************************************************************)
 
 type printer = {
   mutable body : print_object;
   mutable prev_exprs: ExprSet.t;
 }
+
+let get_printed_object printer = printer.body
 
 let empty_printer () =
   { body = Empty;
@@ -63,9 +83,15 @@ let mem_printed_expr printer exp =
   ExprSet.mem exp printer.prev_exprs
 
 
+(****************************************************************************)
+(**                           {1 Print paths}                               *)
+(****************************************************************************)
+
 type print_selector =
   | Key    of string
   | Index  of int
+  | Head
+  | Tail
 
 type print_path = print_selector list
 
@@ -79,24 +105,40 @@ let find_print_object printer path =
     | Index i::tl, List (l,_) -> begin try iter tl (List.nth l i) with Failure _ -> raise Not_found end
     | Index i::tl, Empty -> Empty
     | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
+    | Head::tl, List (l,_) -> begin try iter tl (List.hd l) with Failure _ -> raise Not_found end
+    | Head::tl, Empty -> Empty
+    | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
+    | Tail::tl, List (l,_) -> begin try iter tl (ListExt.last l) with Failure _ -> raise Not_found end
+    | Tail::tl, Empty -> Empty
+    | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
   in
   iter path printer.body
 
-let pp_obj ?(path=[]) printer obj =
+
+(****************************************************************************)
+(**                    {1 Generic print functions}                          *)
+(****************************************************************************)
+
+let pprint ?(path=[]) printer obj =
   let rec iter p o =
     match p,o with
     | [],_ -> obj
     | Key k::tl, Map (m,sym) -> Map (StringMap.add k (iter tl (try StringMap.find k m with Not_found -> Empty)) m, sym)
-    | Key k::tl, Empty -> Map (StringMap.singleton k (iter tl Empty), {sym_begin = ""; sym_sep = ","; sym_end = ""})
+    | Key k::tl, Empty -> Map (StringMap.singleton k (iter tl Empty), default_map_symbols)
     | Key _::_,_ -> Exceptions.panic "print: key selector on non-map object"
     | Index i::tl, List (l,sym) -> List (List.mapi (fun j e -> if i = j then iter tl e else e) l, sym)
-    | Index i::tl, Empty -> List (List.init (i+1) (fun j -> if i = j then iter tl Empty else Empty), {sym_begin = ""; sym_sep = ","; sym_end = ""})
+    | Index i::tl, Empty -> List (List.init (i+1) (fun j -> if i = j then iter tl Empty else Empty), default_list_symbols)
     | Index _::_,_ -> Exceptions.panic "print: index selector on non-list object"
+    | Head::tl, List (l,sym) -> List (iter tl Empty::l, sym)
+    | Head::tl, Empty -> List ([iter tl Empty], default_list_symbols)
+    | Head::_,_ -> Exceptions.panic "print: head selector on non-list object"
+    | Tail::tl, List (l,sym) -> List (l@[iter tl Empty], sym)
+    | Tail::tl, Empty -> List ([iter tl Empty], default_list_symbols)
+    | Tail::_,_ -> Exceptions.panic "print: tail selector on non-list object"
   in
   printer.body <- iter path printer.body
 
-
-let rec fprint_obj fmt = function
+let rec pp_print_object fmt = function
   | Empty    -> ()
   | Bool b   -> Format.pp_print_bool fmt b
   | Int n    -> Z.pp_print fmt n
@@ -104,117 +146,115 @@ let rec fprint_obj fmt = function
   | String s -> Format.pp_print_string fmt s
   | Map (m,sym) ->
     Format.(
-      fprintf fmt "@[<hov>%s%a%s@]"
-        sym.sym_begin
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.sym_sep)
+      fprintf fmt "@[<hv>%s%a%s@]"
+        sym.mopen
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.msep)
            (fun fmt (k,v) ->
-              fprintf fmt "@[<hov2>%s: @,%a@]"
-                k
-                fprint_obj v
+              fprintf fmt "@[<hov2>%s %s @,%a@]"
+                k sym.mbind
+                pp_print_object v
            )
         ) (StringMap.bindings m)
-        sym.sym_end
+        sym.mclose
     )
   | List (l,sym) ->
     Format.(
       fprintf fmt "@[<hov>%s%a%s@]"
-        sym.sym_begin
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.sym_sep)
-           fprint_obj
+        sym.lopen
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.lsep)
+           pp_print_object
         ) l
-        sym.sym_end
+        sym.lclose
     )
 
-let fprint fmt printer =
-  fprint_obj fmt printer.body
+let pflush fmt printer = pp_print_object fmt printer.body
 
 let format f fmt x =
   let printer = empty_printer () in
   f printer x;
-  fprint fmt printer
+  pflush fmt printer
 
-let pp_int ?(path=[]) printer n =
-  pp_obj ~path printer (Int (Z.of_int n))
+let unformat ?(path=[]) f printer x =
+  Format.kasprintf (fun str ->
+      pprint printer (String str) ~path
+    ) "%a" f x
 
-let pp_z ?(path=[]) printer z =
-  pp_obj ~path printer (Int z)
-
-let pp_bool ?(path=[]) printer b =
-  pp_obj ~path printer (Bool b)
-
-let pp_float ?(path=[]) printer f =
-  pp_obj ~path printer (Float f)
-
-let pp_string ?(path=[]) printer str =
-  pp_obj ~path printer (String str)
-
-let boxed f x =
+let pbox f x =
   let printer = empty_printer () in
   f printer x;
   printer.body
 
-let boxed_format fmt =
+let fbox fmt =
   Format.kasprintf (fun str ->
-      boxed pp_string str
+      pbox (fun printer str -> pprint printer (String str)) str
     ) fmt
 
-let pp_obj_list ?(path=[]) ?(sym_begin="[") ?(sym_sep=",") ?(sym_end="]") printer l =
-  pp_obj ~path printer
-    (List (l, {sym_begin; sym_sep; sym_end}))
+let fprint ?(path=[]) printer fmt =
+  Format.kasprintf (fun str ->
+      pprint ~path printer (String str)
+    ) fmt
 
-let pp_list ?(path=[]) ?(sym_begin="[") ?(sym_sep=",") ?(sym_end="]") f printer l =
-  pp_obj_list ~path ~sym_begin ~sym_sep ~sym_end printer
-    (List.map (boxed f) l)
+let sprint f x =
+  Format.asprintf "%a" (format f) x
 
-let pp_append_obj_list ?(path=[]) printer o =
-  let l,s =
-    match find_print_object printer path with
-    | Empty -> [o], {sym_begin=""; sym_sep=""; sym_end=""}
-    | List(l,s) -> o::l,s
-    | _ ->  Exceptions.panic "pp_append_obj_list: non-list object"
-  in
-  pp_obj_list printer l ~path ~sym_begin:s.sym_begin ~sym_sep:s.sym_sep ~sym_end:s.sym_end
+let fkey fmt =
+  Format.kasprintf (fun str ->
+      Key str
+    ) fmt
 
-let pp_append_list ?(path=[]) f printer e =
-  pp_append_obj_list ~path printer (boxed f e)
+let pkey f x =
+  fkey "%a" (format f) x
 
-let pp_obj_map ?(path=[]) ?(sym_begin="{") ?(sym_sep=",") ?(sym_end="}") printer l =
-  let l =
-    List.map (fun (k,v) ->
-        let s =
-          match k with
-          | String s -> s
-          | _ -> Format.asprintf "%a" (format pp_obj) k
-        in
-        (s,v)
-      ) l
-  in
+
+(****************************************************************************)
+(**                      {1 Typed print functions}                          *)
+(****************************************************************************)
+
+let pp_int ?(path=[]) printer n =
+  pprint ~path printer (Int (Z.of_int n))
+
+let pp_z ?(path=[]) printer z =
+  pprint ~path printer (Int z)
+
+let pp_bool ?(path=[]) printer b =
+  pprint ~path printer (Bool b)
+
+let pp_float ?(path=[]) printer f =
+  pprint ~path printer (Float f)
+
+let pp_string ?(path=[]) printer str =
+  pprint ~path printer (String str)
+
+let pp_obj_list ?(path=[]) ?(lopen="[") ?(lsep=",") ?(lclose="]") printer l =
+  pprint ~path printer
+    (List (l, {lopen; lsep; lclose;}))
+
+let pp_list ?(path=[]) ?(lopen="[") ?(lsep=",") ?(lclose="]") f printer l =
+  pp_obj_list ~path ~lopen ~lsep ~lclose printer
+    (List.map (pbox f) l)
+
+let pp_obj_smap ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") printer l =
   let m = StringMap.of_list l in
-  pp_obj ~path printer (Map (m, {sym_begin; sym_sep; sym_end}))
+  pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
 
-let pp_map ?(path=[]) ?(sym_begin="{") ?(sym_sep=",") ?(sym_end="}") fk fv printer l =
-  pp_obj_map ~path ~sym_begin ~sym_sep ~sym_end printer
-    (List.map (fun (k,v) -> (boxed fk k,boxed fv v)) l)
+let pp_obj_map ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") printer l =
+  let m = List.map (fun (k,v) -> (sprint pprint k, v)) l |>
+          StringMap.of_list in
+  pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
 
-let pp_set = pp_list ~sym_begin:"{" ~sym_end:"}"
+let pp_smap ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") fv printer l =
+  pp_obj_smap ~path ~mopen ~msep ~mclose ~mbind printer
+    (List.map (fun (k,v) -> (k,pbox fv v)) l)
 
-let pp_obj_set = pp_obj_list ~sym_begin:"{" ~sym_end:"}"
+let pp_map ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") fk fv printer l =
+  pp_obj_map ~path ~mopen ~msep ~mclose ~mbind printer
+    (List.map (fun (k,v) -> (pbox fk k,pbox fv v)) l)
 
-let pp_tuple = pp_list ~sym_begin:"(" ~sym_end:")"
 
-let pp_obj_tuple = pp_obj_list ~sym_begin:"(" ~sym_end:")"
 
-let pp_sequence = pp_list ~sym_begin:"" ~sym_end:""
-
-let pp_obj_sequence = pp_obj_list ~sym_begin:"" ~sym_end:""
-
-let pp_boxed ?(path=[]) f printer x =
-  pp_obj ~path printer (boxed f x)
-
-let pp_boxed_format ?(path=[]) printer fmt =
-  Format.kasprintf (fun str ->
-      pp_string ~path printer str
-    ) fmt
+(****************************************************************************)
+(**                              {1 JSON}                                   *)
+(****************************************************************************)
 
 let rec print_object_to_json = function
   | Empty     -> `Null
@@ -229,19 +269,14 @@ let rec print_object_to_json = function
     )
   | List (l,_) -> `List (List.map print_object_to_json l)
 
-
-let printer_to_json printer =
-  print_object_to_json printer.body
-
-let fkey fmt =
-  Format.kasprintf (fun str ->
-      Key str
-    ) fmt
-
-let pkey f x =
-  fkey "%a" (format f) x
-
-let unformat ?(path=[]) f printer x =
-  Format.kasprintf (fun str ->
-      pp_string ~path printer str
-    ) "%a" f x
+let rec json_to_print_object = function
+  | `Null -> Empty
+  | `Bool b -> Bool b
+  | `Int n -> Int (Z.of_int n)
+  | `Float f -> Float f
+  | `String s -> String s
+  | `Assoc a ->
+    let m = List.map (fun (k,v) -> (k,json_to_print_object v)) a |>
+            StringMap.of_list in
+    Map(m,default_map_symbols)
+  | `List l -> List(List.map json_to_print_object l,default_list_symbols)

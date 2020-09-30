@@ -1157,7 +1157,7 @@ struct
   (** ****************** *)
 
   let print_state printer a =
-    pp_boxed CellSet.print printer a.cells ~path:[Key "cells"]
+    pprint printer (pbox CellSet.print a.cells) ~path:[Key "cells"]
 
   let print_expr man flow printer exp =
     let exp = remove_casts exp in

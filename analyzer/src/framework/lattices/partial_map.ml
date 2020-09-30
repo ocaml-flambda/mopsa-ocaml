@@ -140,7 +140,7 @@ struct
     | TOP -> pp_string printer "⊤"
     | Nbt m when PMap.is_empty m -> pp_string printer "∅"
     | Nbt m ->
-      pp_map Key.print Value.print printer (PMap.bindings m)
+      pp_map Key.print Value.print printer (PMap.bindings m) ~mopen:"" ~mbind:"⇀" ~msep:"," ~mclose:""
   (** Printing. *)
 
   let find (k: Key.t) (a:t) : 'a =

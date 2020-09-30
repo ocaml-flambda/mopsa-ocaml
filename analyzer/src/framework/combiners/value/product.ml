@@ -43,10 +43,10 @@ struct
     | _ ->  "(" ^ V1.display ^ " ∧ " ^ V2.display ^ ")"
 
   let print printer (v1,v2) =
-      pp_obj_sequence printer
-        [ boxed V1.print v1;
-          boxed V2.print v2 ]
-        ~sym_sep:"∧"
+      pp_obj_list printer
+        [ pbox V1.print v1;
+          pbox V2.print v2 ]
+         ~lopen:"" ~lsep:"∧" ~lclose:""
 
 
   let hdman (man:('a,t) value_man) : (('a,V1.t) value_man) = {

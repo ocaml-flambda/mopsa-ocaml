@@ -499,15 +499,15 @@ struct
     Value.ask (value_man None map) query
 
   let print_state printer a =
-    pp_boxed VarMap.print printer a
-      ~path:[Key Value.display]
+    Print.pprint printer ~path:[Key Value.display]
+      (pbox VarMap.print a)
 
   let print_expr man ctx a printer exp =
     match eval exp a with
     | None -> ()
     | Some (_,v) ->
-      pp_boxed Value.print printer v
+      Print.pprint printer
         ~path:[ Key Value.display;
                 fkey "%a" pp_expr exp ]
-
+        (pbox Value.print v)
 end

@@ -229,7 +229,7 @@ let dump man flow ~range ~out =
 let print printer ~range ~out =
   let json =
     `Assoc [
-       "print", printer_to_json printer;
+       "print", print_object_to_json (get_printed_object printer);
        "range", render_range range;
      ]
   in

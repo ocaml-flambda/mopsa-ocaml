@@ -42,8 +42,8 @@ struct
       | Class c1, Class c2 -> compare_var c1 c2
       | _ -> Stdlib.compare t1 t2
     let print printer t  = match t with
-      | Global s -> pp_boxed_format printer "Global %a" Format.pp_print_string s
-      | Class v -> pp_boxed_format printer "Class %a" pp_var v
+      | Global s -> pprint printer (fbox "Global %a" Format.pp_print_string s)
+      | Class v  -> pprint printer (fbox "Class %a" pp_var v)
   end)
 
 
@@ -736,8 +736,7 @@ struct
 
 
   let print_state printer m =
-    pp_boxed ~path:[Key "TypeVar annotations"]
-      TVMap.print printer m
+    pprint ~path:[Key "TypeVar annotations"] printer (pbox TVMap.print m)
 
   let print_expr _ _ _ _ = ()
 

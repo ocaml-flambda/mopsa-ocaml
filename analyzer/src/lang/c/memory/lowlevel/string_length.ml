@@ -962,15 +962,13 @@ struct
          | P_block(base,offset,_) when base.base_valid
                                     && is_interesting_base base ->
            let len = mk_length_var base elem_size exp.erange in
-           pp_append_obj_list ~path:[Key "string-length"]
-             printer
-             (boxed_format
+           pprint ~path:[Key "string-length"; Tail] printer
+             (fbox
                 "∀ i < %a: %a[i] ≠ 0 ∧ %a[%a] = 0"
                 pp_expr len
                 pp_base base
                 pp_base base
-                pp_expr len
-             );
+                pp_expr len);
            man.print_expr flow printer len ~route:numeric
          | _ -> ()
       )

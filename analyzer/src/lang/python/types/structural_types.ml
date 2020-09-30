@@ -466,7 +466,7 @@ struct
 
 
   let print_state printer d =
-    pp_boxed ~path:[Key "attributes"] AMap.print printer d
+    pprint ~path:[Key "attributes"] printer (pbox AMap.print d)
 
   let print_expr _ _ _ _ = ()
 

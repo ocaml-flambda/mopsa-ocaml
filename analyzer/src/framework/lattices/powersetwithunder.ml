@@ -107,20 +107,21 @@ struct
     | BOT -> pp_string printer "⊥"
     | Nb (l, u) (* lower, upper *) ->
       let le = Set.elements l in
-      pp_boxed ~path:[Key "U"]
-        (fun printer le ->
-           if le = [] then pp_string printer "∅"
-           else
-             pp_list Elt.print printer le ~sym_begin:"{" ~sym_end:"}"
-        ) printer le
+      pprint ~path:[Key "U"] printer
+        (pbox
+           (fun printer le ->
+              if le = [] then pp_string printer "∅"
+              else
+                pp_list Elt.print printer le ~lopen:"{" ~lsep:"," ~lclose:"}"
+           ) le)
       ;
       let ud = USet.diff u (Nt l) in
       if USet.is_empty ud then
         pp_string ~path:[Key "O"] printer "U"
       else
-        pp_obj ~path:[Key "O"] printer
+        pprint ~path:[Key "O"] printer
           (List ([ String "U";
-                   boxed USet.print ud ],
-                 { sym_begin =""; sym_sep = "∪"; sym_end = ""} ))
+                   pbox USet.print ud ],
+                 { lopen =""; lsep = "∪"; lclose = ""} ))
 
 end

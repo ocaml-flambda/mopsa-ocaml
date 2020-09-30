@@ -77,8 +77,8 @@ let widen ctx a1 a2 = {
 
 let print printer a =
   pp_obj_map printer
-    [ (boxed pp_string "others", boxed AddrItvMap.print a.map);
-      (boxed pp_string "support", boxed AddrSet.print a.support) ]
+    [ (pbox pp_string "others", pbox AddrItvMap.print a.map);
+      (pbox pp_string "support", pbox AddrSet.print a.support) ]
 
 let add addr itv a = {
   map = AddrItvMap.add addr itv a.map;

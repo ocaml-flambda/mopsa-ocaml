@@ -324,7 +324,6 @@ struct
        let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
        let new_av, flow = List.fold_left (fun (av, flow) ev' ->
                               let flow = post_to_flow man flow in
-                              let ncur = get_env T_cur man flow in
                               let v' = match ekind ev' with
                                 | E_var (v', _) -> v'
                                 | _ -> assert false in
@@ -715,7 +714,7 @@ struct
 
 
   let print_state printer m =
-    pp_boxed ~path:[Key "addrs"] AMap.print printer m
+    pprint ~path:[Key "addrs"] printer (pbox AMap.print m)
 
   
   let print_expr _ _ _ _ = ()

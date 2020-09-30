@@ -291,8 +291,7 @@ struct
   (** ============== *)
 
   let print_state printer (a:t) =
-    pp_boxed AddrSet.print ~path:[Key "alloca"]
-      printer a
+    pprint ~path:[Key "alloca"] printer (pbox AddrSet.print a)
 
   let print_expr _ _ _ _ = ()
 

@@ -358,6 +358,6 @@ let print printer ~range ~out =
   if Debug.can_print "print" then
     print out "%a@\n  @[%a@]@."
       Location.pp_relative_range range
-      fprint printer
+      pflush printer
   else
     ()

@@ -431,11 +431,12 @@ struct
       | TOP -> Domain.print_state printer Domain.top
       | BOT -> Domain.print_state printer Domain.bottom
       | _ ->
-        pp_map
-          (fun printer pack -> pp_boxed_format printer "pack(%a)" (format Strategy.print) pack)
+        Map.bindings a |>
+        List.map (fun (pack,aa) -> sprint Strategy.print pack,aa) |>
+        pp_smap
           Domain.print_state
-          printer (Map.bindings a)
-          ~sym_begin:"" ~sym_end:"" ~sym_sep:""
+          printer
+          ~mopen:"" ~mclose:"" ~msep:"" ~mbind:":"
 
     (** Pretty printer *)
     let print_expr man ctx a printer exp =
@@ -446,8 +447,8 @@ struct
            | None -> ()
            | Some aa ->
              let key = fkey "pack(%a)" (format Strategy.print) pack in
-             pp_boxed (Domain.print_expr (pack_man pack man) ctx aa) printer exp
-               ~path:[key]
+             pprint printer ~path:[key]
+               (pbox (Domain.print_expr (pack_man pack man) ctx aa) exp)
         ) packs
 
   end

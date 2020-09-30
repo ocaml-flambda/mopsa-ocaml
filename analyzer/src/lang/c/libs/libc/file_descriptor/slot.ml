@@ -120,8 +120,8 @@ let print printer s =
   | Bot -> pp_string printer "⊥"
   | Top -> pp_string printer "⊤"
   | Free -> pp_string printer "🔓"
-  | NotFree a -> pp_boxed AddrSet.print printer a ~path:[Key "🔒"]
-  | MaybeFree a -> pp_boxed AddrSet.print printer a ~path:[Key "❓"]
+  | NotFree a -> pprint printer (pbox AddrSet.print a) ~path:[Key "🔒"]
+  | MaybeFree a -> pprint printer (pbox AddrSet.print a) ~path:[Key "❓"]
 
 
 let add addr s =

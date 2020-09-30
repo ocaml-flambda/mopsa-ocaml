@@ -107,8 +107,8 @@ struct
 
     | Nbt m ->
       Relation.iter_domain (fun k vs ->
-          pp_boxed (pp_set Value.print) printer (ValueSet.elements vs)
-            ~path:[pkey Key.print k]
+          pprint printer ~path:[pkey Key.print k]
+            (pbox (pp_list Value.print ~lopen:"{" ~lsep:"," ~lclose:"}") (ValueSet.elements vs))
         ) m.relations;
       KeySet.iter (fun k ->
           pp_string printer "⊤"

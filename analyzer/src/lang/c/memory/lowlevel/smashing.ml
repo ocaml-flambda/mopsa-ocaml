@@ -179,12 +179,14 @@ struct
       match x with
       | Bot        -> pp_string printer "⊥"
       | None       -> pp_string printer "none"
-      | Full ts    -> pp_obj_tuple printer
-                        [ boxed pp_string "full";
-                          boxed STypeSet.print ts ]
-      | Partial ts -> pp_obj_tuple printer
-                        [ boxed pp_string "partial";
-                          boxed STypeSet.print ts ]
+      | Full ts    -> pp_obj_list printer
+                        [ pbox pp_string "full";
+                          pbox STypeSet.print ts ]
+                        ~lopen:"(" ~lsep:"," ~lclose:")"
+      | Partial ts -> pp_obj_list printer
+                        [ pbox pp_string "partial";
+                          pbox STypeSet.print ts ]
+                        ~lopen:"(" ~lsep:"," ~lclose:")"
 
     let is_bottom x = (x = Bot)
 
@@ -1355,7 +1357,7 @@ struct
   (** ****************** *)
 
   let print_state printer (a:t) =
-    pp_boxed ~path:[Key "smash"] State.print printer a
+    pprint printer ~path:[Key "smash"] (pbox State.print a)
 
   let print_expr man flow printer exp = ()
 

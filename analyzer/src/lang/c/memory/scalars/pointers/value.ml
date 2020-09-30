@@ -57,7 +57,7 @@ struct
     | Null -> pp_string printer "NULL"
     | Invalid -> pp_string printer "INVALID"
     | Base b -> unformat pp_base printer b
-    | Fun f -> pp_boxed_format printer "λ%s" f.c_func_org_name
+    | Fun f -> pprint printer (fbox "λ%s" f.c_func_org_name)
 end
 
 
