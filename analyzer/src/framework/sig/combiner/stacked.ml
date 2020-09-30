@@ -37,6 +37,30 @@ sig
   val print_expr  : domain list -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
 
+module EmptyDomain : STACKED_COMBINER =
+struct
+  type t = unit
+  let name = "empty"
+  include GenDomainId(struct type nonrec t = t let name = name end)
+  let domains = DomainSet.singleton name
+  let semantics = SemanticSet.empty
+  let routing_table = empty_routing_table
+  let alarms = []
+  let bottom = ()
+  let top = ()
+  let is_bottom _ = false
+  let print _ _  = ()
+  let subset _ _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ _ ((),s) ((),s') = (),s,s',true
+  let merge _ _ _ = ()
+  let init _ _ flow = flow
+  let exec _ _ _ flow = None
+  let eval _ _ _ flow = None
+  let ask _ _ _ _ = None
+end
+
 
 module StackedToCombiner(D:STACKED) : STACKED_COMBINER with type t = D.t =
 struct
