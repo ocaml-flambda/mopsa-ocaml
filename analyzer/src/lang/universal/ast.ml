@@ -565,7 +565,7 @@ type stmt_kind +=
    | S_satisfy of expr
    (** Unit tests satisfiability check *)
 
-   | S_print
+   | S_print_state
    (** Print the abstract flow map at current location *)
 
    | S_print_expr of expr list
@@ -637,8 +637,8 @@ let () =
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
-        | S_print -> fprintf fmt "print();"
-        | S_print_expr el -> fprintf fmt "print_print(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
+        | S_print_state -> fprintf fmt "print();"
+        | S_print_expr el -> fprintf fmt "print_expr(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -688,7 +688,7 @@ let () =
              {stmt with skind = S_unit_tests(tests)}
           )
 
-        | S_print -> leaf stmt
+        | S_print_state -> leaf stmt
 
         | S_print_expr el ->
           {exprs = el; stmts = []},

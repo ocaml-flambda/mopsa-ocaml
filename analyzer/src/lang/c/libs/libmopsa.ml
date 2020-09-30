@@ -258,7 +258,7 @@ struct
       Exceptions.panic "%s" s
 
     | E_c_builtin_call("_mopsa_print", []) ->
-      man.exec (mk_stmt S_print exp.erange) flow >>%? fun flow ->
+      man.exec (mk_stmt S_print_state exp.erange) flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 

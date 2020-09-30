@@ -309,7 +309,7 @@ let rec add_stmt (c:ctx) (pre:node) (post:node) (s:stmt) : unit =
   | S_expression _
   | S_assert _
   | S_satisfy _
-  | S_print
+  | S_print_state
   | S_free _
     ->
     

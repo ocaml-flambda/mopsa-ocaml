@@ -32,7 +32,6 @@ sig
   val report : ('a,'b) man -> 'a flow -> time:float -> files:string list -> out:string option -> unit
   val panic : exn -> btrace:string -> time:float -> files:string list -> out:string option -> unit
   val help : ArgExt.arg list -> out:string option -> unit
-  val dump : ('a,'b) man -> 'a flow -> range:Location.range -> out:string option -> unit
   val print  : printer -> range:Location.range -> out:string option -> unit
   val list_domains : string list -> out:string option -> unit
   val list_hooks : string list -> out:string option -> unit
