@@ -259,11 +259,10 @@ struct
      values for each sub-expression *)
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
-    | E_var(var, mode) ->
-       let ov = find_opt var a in
-       OptionExt.bind (fun v ->
-           (A_var v, v) |>
-             OptionExt.return) ov
+    | E_var(var, mode) when Value.accept_type var.vtyp ->
+       let v = find var a in
+       (A_var v, v) |>
+       OptionExt.return
 
     | E_constant(c) ->
       Value.constant e.etyp c |> OptionExt.lift @@ fun v ->
@@ -286,10 +285,7 @@ struct
       let v = Value.binop op e.etyp v1 v2 in
       (A_binop (ae1, v1, ae2, v2), v)
 
-    | _ ->
-      (* unsupported -> ⊤ *)
-      (* A_unsupported, Value.top *)
-      None
+    | _ -> None
 
 
 
@@ -363,12 +359,13 @@ struct
       (if Value.is_bottom w then bottom else a) |>
       OptionExt.return
 
-    | E_var(var, mode) ->
-      find_opt var a |> OptionExt.lift @@ fun v ->
+    | E_var(var, mode) when Value.accept_type var.vtyp ->
+      let v = find var a in
       let w = Value.filter b e.etyp v in
-      if Value.is_bottom w then bottom else
-       if var_mode var mode = STRONG then add ctx var w a
-       else a
+      ( if Value.is_bottom w then bottom else
+        if var_mode var mode = STRONG then add ctx var w a
+        else a ) |>
+      OptionExt.return
 
     (* arithmetic comparison part, handled by Value *)
     | E_binop (op, e1, e2) ->
@@ -409,7 +406,7 @@ struct
       VarMap.remove v map |>
       OptionExt.return
 
-    | S_add { ekind = E_var (v, _) } ->
+    | S_add { ekind = E_var (v, _) } when Value.accept_type v.vtyp ->
       (* Check of the variable is already present *)
       if VarMap.mem v map
       then OptionExt.return map
@@ -429,17 +426,17 @@ struct
         ) empty vars
       |> OptionExt.return
 
-    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
+    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) when Value.accept_type var1.vtyp ->
       let v = find var1 map in
       remove var1 map |>
       add ctx var2 v |>
       OptionExt.return
 
-    | S_forget { ekind = E_var (var, _) } ->
+    | S_forget { ekind = E_var (var, _) } when Value.accept_type var.vtyp ->
       add ctx var Value.top map |>
       OptionExt.return
 
-    | S_assign ({ ekind= E_var (var, mode) }, e)  ->
+    | S_assign ({ ekind= E_var (var, mode) }, e) when Value.accept_type var.vtyp ->
       eval e map |> OptionExt.lift @@ fun (_, v) ->
       let map' = add ctx var v map in
       begin
@@ -449,7 +446,8 @@ struct
       end
 
     | S_expand ({ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      when Value.accept_type v.vtyp &&
+           List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
       ->
       let vl = List.map (function
           | { ekind = E_var (v, _) } -> v
@@ -463,7 +461,8 @@ struct
       OptionExt.return
 
     | S_fold ({ekind = E_var (v, mode)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      when Value.accept_type v.vtyp &&
+           List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
       ->
       (* Collect values of variables vl before removing them from the map *)
       let value,map' = List.fold_left

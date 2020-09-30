@@ -40,6 +40,8 @@ struct
 
   let display = V1.display ^ " ∪ " ^ V2.display
 
+  let accept_type t = V1.accept_type t || V2.accept_type t
+
   let print printer (v1,v2) =
     match V1.is_bottom v1, V2.is_bottom v2 with
     | true, true -> pp_string printer Bot.bot_string
@@ -76,14 +78,18 @@ struct
   (** ********************* *)
 
   let constant t c =
-    match V1.constant t c, V2.constant t c with
+    let v1 = if V1.accept_type t then V1.constant t c else None in
+    let v2 = if V2.accept_type t then V2.constant t c else None in
+    match v1, v2 with
     | None, None -> None
     | Some v1, Some v2 -> Some (v1,v2)
     | Some v1, None -> Some (v1,V2.bottom)
     | None, Some v2 -> Some (V1.bottom,v2)
 
   let cast man t e =
-    match V1.cast (v1_man man) t e, V2.cast (v2_man man) t e with
+    let v1 = if V1.accept_type t then V1.cast (v1_man man) t e else None in
+    let v2 = if V2.accept_type t then V2.cast (v2_man man) t e else None in
+    match v1, v2 with
     | None, None       -> None
     | Some v1, Some v2 -> Some (v1,v2)
     | Some v1, None    -> Some (v1,V2.bottom)

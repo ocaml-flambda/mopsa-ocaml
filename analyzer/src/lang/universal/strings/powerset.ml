@@ -69,10 +69,10 @@ struct
             end)
 
 
-  let is_string_type = function T_string -> true | _ -> false
+  let accept_type = function T_string -> true | _ -> false
 
   let constant t c =
-    if is_string_type t then
+    if accept_type t then
       match c with
       | C_string s -> Some (singleton s)
       | _          -> Some top
@@ -80,7 +80,7 @@ struct
       None
 
   let cast man t e =
-    if is_string_type t then Some top else None
+    if accept_type t then Some top else None
 
   let unop op t v =
     match op with

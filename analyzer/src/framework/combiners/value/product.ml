@@ -37,10 +37,12 @@ struct
 
   let name = "framework.combiners.value.product"
 
-  let display = 
+  let display =
     match V2.id with
     | V_empty -> V1.display
     | _ ->  "(" ^ V1.display ^ " ∧ " ^ V2.display ^ ")"
+
+  let accept_type t = V1.accept_type t || V2.accept_type t
 
   let print printer (v1,v2) =
       pp_obj_list printer
@@ -60,14 +62,18 @@ struct
   }
 
   let constant t c =
-    match V1.constant t c, V2.constant t c with
+    let v1 = if V1.accept_type t then V1.constant t c else None in
+    let v2 = if V2.accept_type t then V2.constant t c else None in
+    match v1, v2 with
     | None, None       -> None
     | Some v1, Some v2 -> Some (v1,v2)
     | Some v1, None    -> Some (v1,V2.top)
     | None, Some v2    -> Some (V1.top,v2)
 
-  let cast man e t =
-    match V1.cast (hdman man) e t, V2.cast (tlman man) e t with
+  let cast man t e =
+    let v1 = if V1.accept_type t then V1.cast (hdman man) t e else None in
+    let v2 = if V2.accept_type t then V2.cast (tlman man) t e else None in
+    match v1, v2 with
     | None, None       -> None
     | Some v1, Some v2 -> Some (v1,v2)
     | Some v1, None    -> Some (v1,V2.top)
@@ -101,7 +107,7 @@ struct
          ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
       (V1.ask (hdman man) q)
       (V2.ask (tlman man) q)
-    
+
 end
 
 module Make(V:VALUE)(R:sig val rules: (module VALUE_REDUCTION) list end) : VALUE with type t = V.t =
@@ -173,7 +179,7 @@ struct
   let bwd_unop op t v r = V.bwd_unop op t v r |> reduce
   let bwd_binop op t v1 v2 r = V.bwd_binop op t v1 v2 r |> reduce_pair
   let predicate op b t v = V.predicate op b t v |> reduce
-  let compare op b t v1 v2 = V.compare op b t v1 v2 |> reduce_pair                        
+  let compare op b t v1 v2 = V.compare op b t v1 v2 |> reduce_pair
 
 end
 
