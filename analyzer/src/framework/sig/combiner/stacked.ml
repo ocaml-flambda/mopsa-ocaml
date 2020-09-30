@@ -43,7 +43,7 @@ struct
   let domains = DomainSet.singleton name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
-  let alarms = []
+  let checks = []
   let bottom = ()
   let top = ()
   let is_bottom _ = false
