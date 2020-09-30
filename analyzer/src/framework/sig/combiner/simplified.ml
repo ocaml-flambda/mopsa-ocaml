@@ -72,7 +72,7 @@ struct
 
   let routing_table = empty_routing_table
 
-  let alarms = []
+  let checks = []
 
   let simplified_man man flow = {
     exec = (fun stmt -> man.Core.Manager.exec stmt flow |>

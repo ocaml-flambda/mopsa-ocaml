@@ -35,7 +35,7 @@ struct
       let name = "python.objects.iterable"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init (prog:program) man flow =
     flow

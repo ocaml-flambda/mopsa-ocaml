@@ -43,9 +43,9 @@ struct
 
   let numeric = Semantic "U/Numeric"
 
-  let alarms = [ A_c_integer_overflow;
-                 A_c_divide_by_zero;
-                 A_c_invalid_shift ]
+  let checks = [ CHK_C_INTEGER_OVERFLOW;
+                 CHK_C_DIVIDE_BY_ZERO;
+                 CHK_C_INVALID_SHIFT ]
 
   (** Command-line options *)
   (** ==================== *)
@@ -182,12 +182,22 @@ struct
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
-      if Itv.is_bottom itv then Eval.empty flow else
-      if Itv.subset itv ritv then Eval.singleton nexp flow else
+      if Itv.is_bottom itv then
+        unreachable_c_integer_overflow_check range man flow |>
+        Eval.singleton nexp
+      else
+      if Itv.subset itv ritv then
+        safe_c_integer_overflow_check range man flow |>
+        Eval.singleton nexp
+      else
         let nexp' = wrap_expr nexp (rmin, rmax) range in
         let flow' =
           if raise_alarm
-          then raise_c_integer_overflow_alarm cexp nexp man flow flow
+          then
+            if Itv.meet itv ritv |> Itv.is_bottom then
+              raise_c_integer_overflow_alarm ~warning:false cexp nexp man flow flow
+            else
+              raise_c_integer_overflow_alarm ~warning:true cexp nexp man flow flow
           else flow
         in
         Eval.singleton nexp' flow'
@@ -221,12 +231,17 @@ struct
     let cond = ne denominator zero range in
     assume cond
       ~fthen:(fun tflow ->
+          let tflow = safe_c_divide_by_zero_check range man tflow in
           let exp' = mk_binop nominator op denominator ~etyp:T_int range in
           Eval.singleton exp' tflow
         )
       ~felse:(fun fflow ->
           let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
           Eval.empty flow
+        )
+      ~fnone:(fun nflow ->
+          let nflow = unreachable_c_divide_by_zero_check range man nflow in
+          Eval.empty nflow
         )
       ~route:numeric man flow
 
@@ -243,15 +258,20 @@ struct
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
+          let tflow = safe_c_shift_check range man tflow in
           let exp' = { exp with
                        ekind = E_binop(op,e,n);
                        etyp  = to_num_type t; }
           in
-          check_overflow exp exp' range man flow
+          check_overflow exp exp' range man tflow
         )
       ~felse:(fun fflow ->
           let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
           Eval.empty flow'
+        )
+      ~fnone:(fun nflow ->
+          let nflow = unreachable_c_shift_check range man nflow in
+          Eval.empty nflow
         )
       ~route:numeric man flow
 

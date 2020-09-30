@@ -105,7 +105,7 @@ struct
       let name = "python.types.polymorphism"
     end)
 
-  let alarms = []
+  let checks = []
 
   let merge _ _ _ = assert false
 

@@ -30,7 +30,6 @@ open Ast
 open Alarms
 
 
-
 module Domain =
 struct
 
@@ -38,7 +37,7 @@ struct
       let name = "stubs.iterators.body"
     end)
 
-  let alarms = []
+  let checks = [CHK_STUB_ALARM]
 
 
   (** Initialization of environments *)
@@ -128,56 +127,6 @@ struct
       ) f.range
 
 
-  let combine_alarms op flow1 flow2 flow range =
-    let alarms1 = Flow.get_alarms flow1 in
-    let alarms2 = Flow.get_alarms flow2 in
-    let alarms = Flow.get_alarms flow in
-    let diff1 = AlarmSet.diff alarms1 alarms in
-    let diff2 = AlarmSet.diff alarms2 alarms in
-    let is_requires_alarm a =
-      match get_alarm_class a with
-      | A_stub_invalid_requires -> true
-      | _ -> false in
-    let get_requires_condition a =
-      match get_alarm_message a with
-      | A_stub_invalid_requires_condition cond -> cond
-      | _ -> assert false in
-    let combine_requires_alarms op =
-      let requires1,diff1' = AlarmSet.partition is_requires_alarm diff1 in
-      let requires2,diff2' = AlarmSet.partition is_requires_alarm diff2 in
-      let f = match op with
-        | AND -> mk_log_and
-        | OR -> mk_log_or
-        | IMPLIES -> assert false in
-      if AlarmSet.is_empty requires1 || AlarmSet.is_empty requires2 then
-        AlarmSet.union diff1 diff2
-      else
-        AlarmSet.fold
-          (fun a1 acc ->
-             let cond1 = get_requires_condition a1 in
-             let a = AlarmSet.map (fun a2 ->
-                 let cond2 = get_requires_condition a2 in
-                 mk_alarm (A_stub_invalid_requires_condition (f cond1 cond2 range)) (get_alarm_callstack a1) (get_alarm_range a1)
-               ) requires2 in
-             AlarmSet.union a acc
-          ) requires1 (AlarmSet.union diff1' diff2') in
-    match op with
-    | AND ->
-      if AlarmSet.is_empty diff1 && AlarmSet.is_empty diff2 then
-        alarms
-      else
-        AlarmSet.union (combine_requires_alarms AND) alarms
-
-    | OR ->
-      if AlarmSet.is_empty diff1 || AlarmSet.is_empty diff2 then
-        alarms
-      else
-        AlarmSet.union (combine_requires_alarms OR) alarms
-
-    | IMPLIES ->
-      assert false
-
-
   (** Translate a formula into prenex normal form *)
   let rec to_prenex_formula f man flow =
     match f.content with
@@ -209,7 +158,7 @@ struct
       Cases.singleton ([], mk_stub_resource_mem e res f.range) flow
 
     | F_forall(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
       Cases.singleton ((FORALL,v,s)::quants, cond) flow
 
     | F_forall(v,(S_interval (lo,hi) as s),ff) ->
@@ -218,7 +167,7 @@ struct
         ~fthen:(fun flow ->
             man.exec (mk_add_var v f.range) flow >>%
             man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
             Cases.singleton ((FORALL,v,s)::quants, cond) flow
           )
         ~felse:(fun flow ->
@@ -227,7 +176,7 @@ struct
         man flow
 
     | F_exists(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow -> 
+      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
       Cases.singleton ((EXISTS,v,s)::quants, cond) flow
 
     | F_exists(v,(S_interval (lo,hi) as s),ff) ->
@@ -236,7 +185,7 @@ struct
         ~fthen:(fun flow ->
             man.exec (mk_add_var v f.range) flow >>%
             man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow -> 
+            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
             Cases.singleton ((EXISTS,v,s)::quants, cond) flow
           )
         ~felse:(fun flow ->
@@ -256,7 +205,7 @@ struct
       (fun acc (_,v,s) ->
          match s with
          | S_interval _ -> man.exec (mk_remove_var v range) acc |> post_to_flow man
-         | S_resource _ -> acc) 
+         | S_resource _ -> acc)
       flow quants
 
 
@@ -278,20 +227,64 @@ struct
     debug "@[<hov>eval formula@ %a@]" pp_formula f;
     match f.content with
     | F_expr e ->
-      man.exec (cond_to_stmt e range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt e range) flow |> post_to_flow man
 
     | F_binop (AND, f1, f2) ->
-      let flow1 = eval_formula cond_to_stmt f1 range man flow in
-      let flow2 = eval_formula cond_to_stmt f2 range man (Flow.set_alarms (Flow.get_alarms flow) flow1) in
-      let alarms = combine_alarms AND flow1 flow2 flow range in
-      Flow.set_alarms alarms flow2
+      (* FIXME: when evaluating `requires: e1 and e2;`, two alarms
+         maybe generated (at location of `e1` and `e2` resp.).
+         These alarms should be merged into a single one. *)
+      eval_formula cond_to_stmt f1 range man flow |>
+      eval_formula cond_to_stmt f2 range man
 
     | F_binop (OR, f1, f2) ->
       let flow1 = eval_formula cond_to_stmt f1 range man flow in
       let flow2 = eval_formula cond_to_stmt f2 range man flow in
-      let alarms = combine_alarms OR flow1 flow2 flow range in
-      Flow.join man.lattice flow1 flow2 |>
-      Flow.set_alarms alarms
+      (* Since this is a disjunction, we can remove alarms raised by one flow
+         if the other one is safe *)
+      (* First, get the alarms raised by each flow *)
+      let new_errors1 =
+        fold2zo_report
+          (fun diag acc ->
+             match diag.diag_kind with
+             | Error ->  diag::acc
+             | _ -> acc)
+          (fun _ acc -> acc)
+          (fun _ _ acc -> acc)
+          (Flow.get_report flow1) (Flow.get_report flow) [] in
+      let new_errors2 =
+        fold2zo_report
+          (fun diag acc ->
+             match diag.diag_kind with
+             | Error -> diag::acc
+             | _ -> acc)
+          (fun _ acc -> acc)
+          (fun _ _ acc -> acc)
+          (Flow.get_report flow2) (Flow.get_report flow) [] in
+      let flow1,flow2 =
+        match new_errors1,new_errors2 with
+        | [],[] -> flow1,flow2
+        | l,[] ->
+          (* Here, flow1 raised alarms while flow2 is safe. So, mark the checks
+             as unreachable *)
+          let report =
+            List.fold_left
+              (fun acc diag ->
+                 let diag' = { diag with diag_kind = Unreachable;
+                                         diag_alarms = AlarmSet.empty } in
+                 set_diagnostic diag' acc)
+              (Flow.get_report flow1) l in
+          Flow.set_report report flow1, flow2
+        | [],l ->
+          let report =
+            List.fold_left
+              (fun acc diag ->
+                 let diag' = { diag with diag_kind = Unreachable;
+                                         diag_alarms = AlarmSet.empty } in
+                 set_diagnostic diag' acc)
+              (Flow.get_report flow2) l in
+          flow1, Flow.set_report report flow2
+        | _,_ -> flow1,flow2 in
+      Flow.join man.lattice flow1 flow2
 
     | F_binop (IMPLIES, f1, f2) ->
       let nf1 = eval_formula mk_assume (negate_formula f1) range man flow in
@@ -309,23 +302,23 @@ struct
       eval_quantified_formula cond_to_stmt f man flow
 
     | F_in (e, S_interval (l, u)) ->
-      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man
 
     | F_in (e, S_resource res ) ->
-      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man 
+      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man
 
 
   (** Initialize the parameters of the stubbed function *)
   let init_params args params range man flow =
     List.combine args params |>
     List.fold_left (fun flow (arg, param) ->
-        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man 
+        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man
       ) flow
 
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
     params |> List.fold_left (fun flow param ->
-        man.exec (mk_remove_var param range) flow |> post_to_flow man 
+        man.exec (mk_remove_var param range) flow |> post_to_flow man
       ) flow
 
 
@@ -357,7 +350,7 @@ struct
                 (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
                 local_range
              ) flow
-    |> post_to_flow man 
+    |> post_to_flow man
 
 
   (** Execute the `local` section *)
@@ -412,13 +405,13 @@ struct
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    man.exec (mk_block block range) flow |> post_to_flow man 
+    man.exec (mk_block block range) flow |> post_to_flow man
 
 
   let exec_free free range man flow =
     let e = free.content in
     let stmt = mk_stub_free e range in
-    man.exec stmt flow |> post_to_flow man 
+    man.exec stmt flow |> post_to_flow man
 
 
   let exec_message msg range man flow =
@@ -430,8 +423,7 @@ struct
         flow
 
       | UNSOUND ->
-        Soundness.warn_at range "%s" msg.content.message_body;
-        flow
+        Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) range flow
 
       | ALARM ->
         raise_stub_alarm msg.content.message_body range man flow

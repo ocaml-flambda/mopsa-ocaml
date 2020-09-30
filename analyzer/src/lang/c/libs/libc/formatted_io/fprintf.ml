@@ -42,12 +42,9 @@ struct
       let name = "c.libs.clib.formatted_io.fprint"
     end)
 
-  let alarms = [
-    A_c_insufficient_format_args;
-    A_c_null_deref;
-    A_c_invalid_deref;
-    A_c_use_after_free;
-    A_c_invalid_format_arg_type
+  let checks = [
+    CHK_C_INSUFFICIENT_FORMAT_ARGS;
+    CHK_C_INVALID_FORMAT_ARG_TYPE
   ]
 
 
@@ -68,7 +65,7 @@ struct
         if not (is_c_int_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg typ man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       let exp = mk_c_cast arg typ arg.erange in
       man.eval exp flow >>$ fun _ flow ->
@@ -80,7 +77,7 @@ struct
         if not (is_c_float_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg typ man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       let exp = mk_c_cast arg typ arg.erange in
       man.eval exp flow >>$ fun _ flow ->
@@ -91,7 +88,7 @@ struct
         if not (is_c_pointer_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg (T_c_pointer void) man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       Post.return flow
 
@@ -100,7 +97,7 @@ struct
         if not (is_c_pointer_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       assert_valid_string arg range man flow
 
@@ -109,7 +106,7 @@ struct
         if not (is_c_pointer_type arg.etyp) then
           raise_c_invalid_format_arg_type_alarm arg (T_c_pointer s8) man flow
         else
-          flow
+          safe_c_format_arg_type range man flow
       in
       assert_valid_wide_string arg range man flow
 
@@ -119,8 +116,8 @@ struct
     parse_output_format ?wide format range man flow >>$ fun placeholders flow ->
     match placeholders with
     | None ->
-      raise_c_invalid_format_arg_type_wo_info_alarm ~bottom:false range man flow |>
-      raise_c_insufficient_format_args_wo_info_alarm ~bottom:false range man |>
+      raise_c_invalid_format_arg_type_warning range man flow |>
+      raise_c_insufficient_format_args_warning range man |>
       Post.return
 
     | Some placeholders ->
@@ -132,7 +129,9 @@ struct
       else
         let rec iter placeholders args flow =
           match placeholders, args with
-          | [], [] -> Post.return flow
+          | [], [] ->
+            safe_c_format_args_number range man flow |>
+            Post.return
 
           | ph :: tlp, arg :: tla ->
             check_arg arg ph range man flow >>%

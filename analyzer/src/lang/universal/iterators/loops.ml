@@ -71,7 +71,7 @@ let opt_unrolling = {
   unroll_global_nb = Some 1;
   unroll_locals = [];
 }
-  
+
 
 (** Parse local unrolling specification string *)
 let parse_unroll_local (spec:string) : local_unrolling =
@@ -146,7 +146,7 @@ let () =
     key = "-loop-full-unrolling";
     category = "Loops";
     doc = " unroll loops without applying widening";
-    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb)); 
+    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb));
     default = "false";
   };
   register_domain_option name {
@@ -188,7 +188,7 @@ struct
       let name = name
     end)
 
-  let alarms = []
+  let checks = []
 
   (** {3 Cache of last fixpoint} *)
   (** ************************** *)
@@ -242,7 +242,7 @@ struct
         else r
       with Not_found -> LoopHeadMap.empty in
     let stripped_flow =
-      Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |>
+      Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow) |>
       Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice |>
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
@@ -290,13 +290,13 @@ struct
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
-      if AlarmSet.subset (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
+      if subset_report (Flow.get_report flow') (Flow.get_report flow_init) then
         Post.return flow'
       else
         let () = debug "decreasing iteration" in
         Flow.remove T_continue flow' |>
         Flow.remove T_break |>
-        Flow.remove_alarms |>
+        Flow.remove_report |>
         man.exec (mk_assume cond cond.erange) >>%
         man.exec body >>% fun f ->
         merge_cur_and_continue man f |>
@@ -322,7 +322,7 @@ struct
       (OptionExt.print ~none:"" ~some:"" Format.pp_print_int) i
       pp_range (srange body);
     if i = Some 0 then
-      Cases.singleton (false, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow
+      Cases.singleton (false, Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow
     else
       let post1 =
         man.exec {skind = S_assume cond; srange = cond.erange} flow >>%
@@ -341,7 +341,7 @@ struct
         let () = debug "stabilisation reached in unrolling!" in
         Cases.singleton (true, flow2) flow1
       else
-        unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' -> 
+        unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' ->
         Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
 
   let decr_iteration cond body man flow_init flow =
@@ -369,7 +369,7 @@ struct
 
       begin if !opt_loop_use_cache then
           match join_w_old_lfp man flow0 (stmt.srange, Flow.get_callstack flow0) with
-          | Some flow0 -> Cases.singleton (false, Flow.bottom (Flow.get_ctx flow0) (Flow.get_alarms flow0)) flow0
+          | Some flow0 -> Cases.singleton (false, Flow.bottom (Flow.get_ctx flow0) (Flow.get_report flow0)) flow0
           | None -> unroll (get_range_unrolling stmt.srange) cond body man flow0
         else
           unroll (get_range_unrolling stmt.srange) cond body man flow0
@@ -386,7 +386,7 @@ struct
         if is_fp then
           Post.return flow_init
         else
-          lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp -> 
+          lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp ->
           begin
             if !opt_loop_decreasing_it then
               decr_iteration cond body man flow_init flow_lfp

@@ -38,71 +38,80 @@ let patch_callstack cs range =
   aux cs
 
 
-type alarm_class   += A_stub_invalid_requires
-type alarm_message += A_stub_invalid_requires_condition of expr
+type check      += CHK_STUB_INVALID_REQUIRES
+type alarm_kind += A_stub_invalid_requires of expr (** condition *)
 
 let raise_stub_invalid_requires ?(bottom=true) cond range man flow =
   let cs = Flow.get_callstack flow in
   let cond' = get_orig_expr cond in
-  let alarm = mk_alarm (A_stub_invalid_requires_condition cond') (patch_callstack cs range) range in
+  let alarm = mk_alarm (A_stub_invalid_requires cond') (patch_callstack cs range) range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let safe_stub_requires range man flow =
+  Flow.add_safe_check CHK_STUB_INVALID_REQUIRES range flow
+
+let unreachable_stub_requires range man flow =
+  Flow.add_unreachable_check CHK_STUB_INVALID_REQUIRES range flow
 
 
 let () =
-  register_alarm_class (fun default fmt -> function
-      | A_stub_invalid_requires -> Format.fprintf fmt "Invalid stub requirement"
+  register_check (fun default fmt -> function
+      | CHK_STUB_INVALID_REQUIRES -> Format.fprintf fmt "Invalid stub requirement"
       | a -> default fmt a
     )
 
 
 let () =
-  register_alarm_message {
-    classifier = (fun next -> function
-        | A_stub_invalid_requires_condition _ -> A_stub_invalid_requires
+  register_alarm {
+    check = (fun next -> function
+        | A_stub_invalid_requires _ -> CHK_STUB_INVALID_REQUIRES
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_stub_invalid_requires_condition e1, A_stub_invalid_requires_condition e2 ->
+        | A_stub_invalid_requires e1, A_stub_invalid_requires e2 ->
           compare_expr e1 e2
         | _ -> next a1 a2
       );
-      print = (fun next fmt -> function
-        | A_stub_invalid_requires_condition e -> Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
+    print = (fun next fmt -> function
+        | A_stub_invalid_requires e ->
+          Format.fprintf fmt "invalid requirement '%a'" (Debug.bold pp_expr) e
         | a -> next fmt a
       );
+    join = (fun next -> next);
   }
 
 
-type alarm_class   += A_stub_alarm
-type alarm_message += A_stub_alarm_body of string
+type check      += CHK_STUB_ALARM
+type alarm_kind += A_stub_alarm of string
 
 let raise_stub_alarm ?(bottom=true) msg range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_stub_alarm_body msg) (patch_callstack cs range) range in
+  let alarm = mk_alarm (A_stub_alarm msg) (patch_callstack cs range) range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
 
 let () =
-  register_alarm_class (fun default fmt -> function
-      | A_stub_alarm -> Format.fprintf fmt "Stub alarm"
-      | a -> default fmt a
+  register_check (fun default fmt -> function
+      | CHK_STUB_ALARM -> Format.fprintf fmt "Stub alarm"
+      | a              -> default fmt a
     )
 
 
 let () =
-  register_alarm_message {
-    classifier = (fun next -> function
-        | A_stub_alarm_body _ -> A_stub_alarm
+  register_alarm {
+    check = (fun next -> function
+        | A_stub_alarm _ -> CHK_STUB_ALARM
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
-        | A_stub_alarm_body m1, A_stub_alarm_body m2 -> compare m1 m2
+        | A_stub_alarm m1, A_stub_alarm m2 -> String.compare m1 m2
         | _ -> next a1 a2
       );
       print = (fun next fmt -> function
-        | A_stub_alarm_body m -> Format.pp_print_string fmt m
+        | A_stub_alarm m -> Format.pp_print_string fmt m
         | a -> next fmt a
       );
+    join = (fun next -> next);
   };

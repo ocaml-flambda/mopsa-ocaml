@@ -61,7 +61,7 @@ struct
     in
     t2
 
-  let alarms = D1.alarms @ D2.alarms |> List.sort_uniq compare
+  let checks = D1.checks @ D2.checks |> List.sort_uniq compare
 
   let bottom = D1.bottom, D2.bottom
 

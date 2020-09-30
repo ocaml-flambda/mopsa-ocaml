@@ -35,7 +35,7 @@ module Domain =
         let name = "python.objects.lambda"
       end)
 
-    let alarms = []
+    let checks = []
 
     let init _ _ flow = flow
 

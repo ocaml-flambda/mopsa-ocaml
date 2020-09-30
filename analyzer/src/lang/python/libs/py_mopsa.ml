@@ -46,7 +46,7 @@ module Domain =
         let name = "python.libs.mopsa"
       end)
 
-    let alarms = []
+    let checks = []
 
     (*==========================================================================*)
     (**                       {2 Transfer functions }                           *)
@@ -186,11 +186,11 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->
         debug "begin assert_exception";
         let ctx = Flow.get_ctx flow in
-        let alarms = Flow.get_alarms flow in
+        let report = Flow.get_report flow in
         let this_error_env, good_exns = Flow.fold (fun (acc_env, acc_good_exn) tk env ->
             match tk with
             | T_py_exception (exn, _, _) ->
-              let flow1 = Flow.bottom ctx alarms in
+              let flow1 = Flow.bottom ctx report in
               let flow1 = Flow.set T_cur env man.lattice flow1 in
               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then
@@ -222,11 +222,11 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.ignore_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->
          debug "begin ignore_exception(%a) on %a" pp_expr assert_exn (Flow.print man.lattice.print) flow;
          let ctx = Flow.get_ctx flow in
-         let alarms = Flow.get_alarms flow in
+         let report = Flow.get_report flow in
          let none = mk_py_none range in
          let flow = Flow.fold (fun acc tk env -> match tk with
              | T_py_exception (exn, _, _) ->
-               let flow1 = Flow.bottom ctx alarms |> Flow.set T_cur env man.lattice in
+               let flow1 = Flow.bottom ctx report |> Flow.set T_cur env man.lattice in
                debug "assert_exn = %a, exn = %a" pp_expr assert_exn pp_expr exn;
                let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
                debug "flow2 = %a" (Flow.print man.lattice.print) flow2;
@@ -234,7 +234,7 @@ module Domain =
                  Flow.set tk env man.lattice acc
                else
                  acc
-             | _ -> Flow.set tk env man.lattice acc) (Flow.bottom ctx alarms) flow
+             | _ -> Flow.set tk env man.lattice acc) (Flow.bottom ctx report) flow
          in
          debug "Final flow = %a" (Flow.print man.lattice.print) flow;
          man.eval none flow |> OptionExt.return
@@ -242,10 +242,10 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception_exists", _))}, _)}, [{ekind = cls} as assert_exn], [])  ->
         debug "begin assert_exception_exists";
         let ctx = Flow.get_ctx flow in
-        let alarms = Flow.get_alarms flow in
+        let report = Flow.get_report flow in
         let error_env = Flow.fold (fun acc tk env -> match tk with
             | T_py_exception (exn, _, _) ->
-              let flow1 = Flow.bottom ctx alarms in
+              let flow1 = Flow.bottom ctx report in
               let flow1 = Flow.set T_cur env man.lattice flow1 in
               let flow2 = man.exec (mk_assume (mk_py_isinstance exn assert_exn range) range) flow1 |> post_to_flow man in
               if not @@ (Flow.get T_cur man.lattice flow2 |> man.lattice.is_bottom) then

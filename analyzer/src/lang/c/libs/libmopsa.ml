@@ -41,7 +41,7 @@ struct
     end)
 
 
-  let alarms = [Universal.Iterators.Unittest.A_assert_fail]
+  let checks = [Universal.Iterators.Unittest.CHK_ASSERT_FAIL]
 
   let is_rand_function = function
     | "_mopsa_rand_s8"
@@ -289,7 +289,7 @@ struct
 
 
     | E_c_builtin_call("_mopsa_assert_safe", []) ->
-      let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
+      let is_safe = Flow.get_report flow |> is_safe_report in
       let flow =
         if is_safe
         then flow
@@ -299,10 +299,10 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_unsafe", []) ->
-      let is_safe = Flow.get_alarms flow |> AlarmSet.is_empty in
+      let is_safe = Flow.get_report flow |> is_safe_report in
       let flow =
         if not is_safe
-        then Flow.remove_alarms flow
+        then Flow.remove_report flow
         else Universal.Iterators.Unittest.raise_assert_fail exp ~force:true man flow
       in
       Eval.singleton (mk_int 0 exp.erange) flow |>

@@ -136,6 +136,9 @@ let assume
           (fthen then_flow)
           (felse else_flow)
       ))
+    ?(fnone=(fun flow ->
+        Cases.empty flow
+      ))
     man flow
   =
   (* First, evaluate the condition *)
@@ -161,7 +164,7 @@ let assume
   with
   | false,true  -> fthen then_flow
   | true,false  -> felse else_flow
-  | true,true   -> Cases.empty (Flow.join man.lattice then_flow else_flow)
+  | true,true   -> fnone (Flow.join man.lattice then_flow else_flow)
   | false,false -> fboth then_flow else_flow
 
 

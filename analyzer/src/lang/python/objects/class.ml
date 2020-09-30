@@ -35,7 +35,7 @@ struct
       let name = "python.objects.class"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
 

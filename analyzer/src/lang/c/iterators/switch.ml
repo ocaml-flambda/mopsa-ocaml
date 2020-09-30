@@ -39,7 +39,7 @@ struct
     end)
 
 
-  let alarms = []
+  let checks = []
 
   (** {2 Initialization} *)
   (** ****************** *)

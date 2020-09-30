@@ -178,7 +178,7 @@ struct
 
   let routing_table = empty_routing_table
 
-  let alarms = []
+  let checks = []
 
   let debug fmt = Debug.debug ~channel:name fmt
 

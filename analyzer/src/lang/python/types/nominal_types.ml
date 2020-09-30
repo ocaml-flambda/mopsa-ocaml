@@ -33,7 +33,7 @@ struct
       let name = "python.types.nominal_types"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
 

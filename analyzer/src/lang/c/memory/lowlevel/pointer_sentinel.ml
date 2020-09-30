@@ -63,7 +63,7 @@ struct
   let scalar = Semantic "C/Scalar"
   let numeric = Semantic "U/Numeric"
 
-  let alarms = []
+  let checks = []
 
   (** {2 Auxiliary variables} *)
   (** *********************** *)

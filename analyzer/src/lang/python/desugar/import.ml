@@ -39,7 +39,7 @@ module Domain =
 
     exception Module_not_found of string
 
-    let alarms = []
+    let checks = []
 
     let rec exec stmt man flow =
       let range = srange stmt in

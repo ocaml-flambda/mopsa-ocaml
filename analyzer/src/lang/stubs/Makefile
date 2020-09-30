@@ -22,5 +22,5 @@
 
 # Stubs
 lang += stubs
-lang.stubs = ast alarms iterators
+lang.stubs = ast alarms soundness iterators
 lang.stubs.iterator = body fallback

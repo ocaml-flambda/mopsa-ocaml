@@ -42,7 +42,7 @@ struct
       let name = "c.cstubs.builtins"
     end)
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization of environments *)

@@ -84,7 +84,7 @@ struct
     }
 
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization of environments *)
@@ -139,7 +139,7 @@ struct
         | _ -> false
       ) vars
     |> fst
-    
+
 
   (** Execute exit functions using a loop *)
   let exec_exit_functions_with_loop a b buf range man flow =
@@ -170,8 +170,10 @@ struct
             Post.return (fix_flow flow'')
 
         | P_top ->
-          Soundness.warn "ignoring side-effects of ⊤ exit functions";
-          Post.return flow
+          Flow.add_global_assumption
+            Soundness.A_ignore_undetermined_exit_functions
+            flow |>
+          Post.return
 
         | _ -> assert false
     in
@@ -203,8 +205,11 @@ struct
         exec_exit_functions_with_loop a b buf range man flow
 
       | _ ->
-        Soundness.warn "ignoring side-effects of unbounded number of exit functions";
-        Post.return (Flow.remove T_cur flow)
+        Flow.add_global_assumption
+          Soundness.A_ignore_undetermined_exit_functions
+          flow |>
+        Flow.remove T_cur |>
+        Post.return
 
     (* Variables _next_exit_fun_slot and _exit_fun_buf not found,
        probably because <stdlib.h> not included. In this case, do nothing *)
@@ -219,7 +224,7 @@ struct
       let stmt = mk_c_call_stmt f' [] f.c_func_range in
       man.exec stmt flow
 
-  
+
   (** Allocate the argv array *)
   let alloc_argv range man flow =
     let arange = tag_range range "argv" in
@@ -273,7 +278,7 @@ struct
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
     man.eval (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
-    let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in 
+    let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in
     man.exec (mk_assign bytes (mk_z size range) range) flow >>% fun flow ->
 
     (* Initialize argv[0] with the name of the program *)
@@ -319,9 +324,9 @@ struct
 
   (** Initialize argc and argv with symbolic arguments *)
   let call_main_with_symbolic_args main lo hi functions man flow =
-    (* FIXME: functions call_main_* main generate false alarms. Since
+    (* FIXME: functions call_main_* may generate false alarms. Since
        we are sure they are safe, we can remove these alarms *)
-    let alarms = Flow.get_alarms flow in
+    let report = Flow.get_report flow in
 
     let range = main.c_func_name_range in
 
@@ -406,8 +411,8 @@ struct
     let last = mk_c_subscript_access argv argc range in
     man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
 
-    (* Put the initial alarm set *)
-    let flow = Flow.set_alarms alarms flow in
+    (* Put the initial alarms report *)
+    let flow = Flow.set_report report flow in
 
     exec_entry_body main man flow
 
@@ -531,7 +536,7 @@ struct
         ) cs []
       in
       Some (globals @ locals)
-      
+
 
     (* Get the value of a variable *)
     | Q_debug_variable_value var ->

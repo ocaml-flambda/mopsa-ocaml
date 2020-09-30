@@ -39,7 +39,7 @@ open Log
 type 'a flow
 (** A flow is a flow map augmented with an context *)
 
-val bottom : 'a ctx -> AlarmSet.t -> 'a flow
+val bottom : 'a ctx -> report -> 'a flow
 (** Empty set of flows *)
 
 val top : 'a ctx -> 'a flow
@@ -119,10 +119,10 @@ val fold : ('b -> token -> 'a -> 'b)  -> 'b -> 'a flow -> 'b
 
 val map2zo :
   (token -> 'a -> 'a) -> (token -> 'a -> 'a) -> (token -> 'a -> 'a -> 'a) ->
-  (AlarmSet.t -> AlarmSet.t -> AlarmSet.t) ->
+  (report -> report -> report) ->
   'a flow -> 'a flow -> 'a flow
 
-val merge : 'a lattice -> merge_alarms:(AlarmSet.t -> AlarmSet.t -> AlarmSet.t) -> 'a flow -> 'a flow * log -> 'a flow * log -> 'a flow
+val merge : 'a lattice -> merge_report:(report -> report -> report) -> 'a flow -> 'a flow * log -> 'a flow * log -> 'a flow
 
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)
@@ -139,19 +139,33 @@ val copy_ctx : 'a flow -> 'a flow -> 'a flow
 
 val get_token_map : 'a flow -> 'a TokenMap.t
 
-val add_alarm : ?force:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
+val add_alarm : ?force:bool -> ?warning:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
-val raise_alarm : ?force:bool -> ?bottom:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
+val raise_alarm : ?force:bool -> ?bottom:bool -> ?warning:bool -> alarm -> 'a lattice -> 'a flow -> 'a flow
 
-val get_alarms : 'a flow -> AlarmSet.t
+val add_diagnostic : diagnostic -> 'a flow -> 'a flow
 
-val set_alarms : AlarmSet.t -> 'a flow -> 'a flow
+val add_warning_check : check -> Location.range -> 'a flow -> 'a flow
 
-val remove_alarms : 'a flow -> 'a flow
+val add_safe_check : check -> Location.range -> 'a flow -> 'a flow
 
-val copy_alarms : 'a flow -> 'a flow -> 'a flow
+val add_unreachable_check : check -> Location.range -> 'a flow -> 'a flow
 
-val create : 'a ctx -> AlarmSet.t -> 'a TokenMap.t -> 'a flow
+val add_assumption : assumption -> 'a flow -> 'a flow
+
+val add_global_assumption : assumption_kind -> 'a flow -> 'a flow
+
+val add_local_assumption : assumption_kind -> Location.range -> 'a flow -> 'a flow
+
+val get_report : 'a flow -> report
+
+val set_report : report -> 'a flow -> 'a flow
+
+val copy_report : 'a flow -> 'a flow -> 'a flow
+
+val remove_report : 'a flow -> 'a flow
+
+val create : 'a ctx -> report -> 'a TokenMap.t -> 'a flow
 
 val get_callstack : 'a flow -> callstack
 
