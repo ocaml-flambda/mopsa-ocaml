@@ -214,18 +214,6 @@ let list_hooks hooks ~out =
   in
   print out json
 
-let dump man flow ~range ~out =
-  format (Flow.print man.lattice.print) Format.str_formatter flow;
-  let str = Format.flush_str_formatter () in
-  let json =
-    `Assoc [
-       "dump", `String str;
-       "range", render_range range;
-     ]
-  in
-  print out json
-
-
 let print printer ~range ~out =
   let json =
     `Assoc [

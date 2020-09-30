@@ -68,10 +68,6 @@ let list_hooks (hooks:string list) =
   let module E = (val (get_output_engine ())) in
   E.list_hooks hooks ~out:!opt_file
 
-let dump range man flow =
-  let module E = (val (get_output_engine ())) in
-  E.dump man flow ~range ~out:!opt_file
-
 let print printer range =
   let module E = (val (get_output_engine ())) in
   E.print printer ~range ~out:!opt_file

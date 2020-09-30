@@ -142,8 +142,10 @@ struct
       Post.join then_post else_post |>
       OptionExt.return
 
-    | S_print ->
-      Framework.Output.Factory.dump (srange stmt) man flow;
+    | S_print_state ->
+      let printer = empty_printer () in
+      Flow.print man.lattice.print printer flow;
+      Framework.Output.Factory.print printer (srange stmt);
       Some (Post.return flow)
 
     | S_print_expr el ->

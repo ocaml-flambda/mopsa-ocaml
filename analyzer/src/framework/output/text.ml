@@ -263,7 +263,7 @@ let print_and_count_alarms rep out =
 let print_summary checks_map total safe error warning time out =
   print out "@[<v 2>Analysis summary:@,Time: %.3fs@,@[<v2>Checks: %a, %a, %a, %a@,%a@]@]@.@."
     time
-    (Debug.bold (fun fmt total -> fprintf fmt "%d total%a" total Debug.plurial_int total)) total
+    (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (Debug.color (color_of_diag Safe) (fun fmt safe -> fprintf fmt "%s %d safe" (icon_of_diag Safe) safe)) safe
     (Debug.color (color_of_diag Error) (fun fmt error -> fprintf fmt "%s %d error%a" (icon_of_diag Error) error Debug.plurial_int error)) error
     (Debug.color (color_of_diag Warning) (fun fmt warning -> fprintf fmt "%s %d warning%a" (icon_of_diag Warning) warning Debug.plurial_int warning)) warning
@@ -394,14 +394,6 @@ let list_checks checks ~out =
 let list_hooks hooks ~out =
   print out "Hooks:@.";
   List.iter (fun h -> print out "  %s@." h) hooks
-
-let dump man flow ~range ~out =
-  if Debug.can_print "print" then
-    print out "%a@\n  @[%a@]@."
-      Location.pp_relative_range range
-      (format (Flow.print man.lattice.print)) flow
-  else
-    ()
 
 let print printer ~range ~out =
   if Debug.can_print "print" then
