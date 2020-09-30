@@ -17,6 +17,7 @@
             "python.desugar.loops",
 
             "python.flows.exceptions",
+            "python.flows.generators",
 
             "universal.iterators.intraproc",
             "universal.iterators.interproc.sequential_cache",

@@ -72,7 +72,7 @@ let () = register_token {
 
 
 let mk_framed_var v obj =
-  mk_attr_var v (Format.asprintf "%a" Pp.pp_py_object obj) v.vtyp
+  mk_attr_var v (Format.asprintf "%a" Universal.Ast.pp_addr (fst obj)) v.vtyp
 
 (** The current generator being analyzed is stored in the context. *)
 module GenKey =
@@ -183,21 +183,29 @@ module Domain = struct
            (* Keep the input cur environment *)
            let cur = Flow.get T_cur man.lattice flow in
 
+           debug "flow = %a" (Flow.print man.lattice.print) flow;
+
            let ctx = Flow.get_ctx flow in
            (* Compute the next tokens *)
            let flow1 = Flow.fold (fun acc tk env ->
                            match tk with
                            | T_cur -> acc
-                           | T_py_gen_start(g) when compare_py_object g self = 0 ->
+                           | T_py_gen_start(g) when compare_addr (fst g) (fst self) = 0 ->
                               Flow.add T_cur env man.lattice acc
-                           | T_py_gen_next _ -> acc
+                           | T_py_gen_start _ -> acc
 
-                           | T_py_gen_yield(g, _, r) when compare_py_object g self = 0 ->
+                           | T_py_gen_next(g, r) when compare_addr (fst g) (fst self) = 0 ->
+                              Flow.add tk env man.lattice acc
+                           | T_py_gen_next _ ->
+                              acc
+
+                           | T_py_gen_yield(g, _, r) when compare_addr (fst g) (fst self) = 0 ->
                               Flow.add T_cur env man.lattice acc
                            | T_py_gen_yield _ -> acc
 
                            | T_py_gen_stop(g) -> acc (* this case is handled later *)
                            | Universal.Iterators.Interproc.Common.T_return _ -> acc
+
                            | tk ->
                               Flow.add T_cur env man.lattice acc
                          ) (Flow.bottom_from flow) flow
@@ -208,8 +216,8 @@ module Domain = struct
            (* FIXME: add relational counter *)
            let flow2 = Flow.map (fun tk env ->
                            match tk with
-                           | T_cur -> man.lattice.meet ctx env cur
-                           | T_py_gen_next(g, r) -> man.lattice.meet ctx env cur
+                           | T_cur -> man.lattice.join ctx env cur
+                           | T_py_gen_next(g, r) -> man.lattice.join ctx env cur
                            | _ -> env
                          ) flow1
            in
@@ -230,13 +238,16 @@ module Domain = struct
            let locals' = List.map (fun v -> mk_framed_var v self) (func.py_func_locals @ func.py_func_parameters) in
 
            (* Execute the body statement *)
+           let flow2 = Flow.set_ctx (Context.add_ctx Universal.Iterators.Interproc.Common.return_key (Universal.Iterators.Interproc.Common.mk_return_var exp) (Flow.get_ctx flow2)) flow2 in
            let flow2 = Flow.set_ctx (Context.add_ctx generator_key self (Flow.get_ctx flow2)) flow2 in
            let flow3 = man.exec body' flow2 |> post_to_flow man in
+
+           debug "flow3 = %a" (Flow.print man.lattice.print) flow3;
 
            (* Add the input stop flows  *)
            let flow3 = Flow.fold (fun acc tk env ->
                            match tk with
-                           | T_py_gen_stop(g) when compare_py_object g self = 0 ->
+                           | T_py_gen_stop(g) when compare_addr (fst g) (fst self) = 0 ->
                               Flow.add tk env man.lattice acc
                            | _ -> acc
                          ) flow3 flow
@@ -248,11 +259,11 @@ module Domain = struct
                            match tk with
                            | Universal.Iterators.Interproc.Common.T_return _ ->
                               Flow.add tk env man.lattice acc
-                           | T_py_gen_start(g) when compare_py_object g self <> 0 ->
+                           | T_py_gen_start(g) when compare_addr (fst g) (fst self) <> 0 ->
                               Flow.add tk env man.lattice acc
-                           | T_py_gen_yield(g, _, _) when compare_py_object g self <> 0 ->
+                           | T_py_gen_yield(g, _, _) when compare_addr (fst g) (fst self) <> 0 ->
                               Flow.add tk env man.lattice acc
-                           | T_py_gen_stop(g) when compare_py_object g self <> 0 ->
+                           | T_py_gen_stop(g) when compare_addr (fst g) (fst self) <> 0 ->
                               Flow.add tk env man.lattice acc
                            | _ -> acc
                          ) (Flow.bottom_from flow) flow
@@ -261,9 +272,10 @@ module Domain = struct
            (* Process the resulting yield, return and exception flows *)
            let cases = Flow.fold (fun acc tk env ->
                match tk with
-               | T_py_gen_yield(g, e, r) when compare_py_object g self = 0 ->
+               | T_py_gen_yield(g, e, r) when compare_addr (fst g) (fst self) = 0 ->
                   (* Assign the yielded value to a temporary return variable *)
-                  let tmp = mktmp () in
+                  let tmp = mktmp ~typ:(T_py None) () in
+                  debug "putting yielded value into %a" pp_var tmp;
                   let flow = Flow.set T_cur env man.lattice flow4 |>
                                man.exec (mk_assign (mk_var tmp range) e range) |>
                                post_to_flow man
@@ -279,7 +291,7 @@ module Domain = struct
                                post_to_flow man |>
                                Flow.get T_cur man.lattice
                   in
-                  let r = Flow.set (T_py_gen_yield(g, e, r)) cur' man.lattice flow |>
+                  let r = Flow.set (T_py_gen_next(g, r)) cur' man.lattice flow |>
                     man.eval (mk_var tmp range) |>
                             Cases.add_cleaners [mk_remove_var tmp range] in
                   r :: acc
@@ -311,18 +323,6 @@ module Domain = struct
 
 
 
-    (* E⟦ yield e ⟧ *)
-    | E_py_yield e ->
-       let ctx = Flow.get_ctx flow  in
-       let g = Context.find_ctx generator_key ctx in
-       let flow = Flow.fold (fun acc tk env ->
-                      match tk with
-                      | T_cur -> Flow.add (T_py_gen_yield(g, e, range)) env man.lattice acc
-                      | T_py_gen_next(g, r) -> Flow.add T_cur env man.lattice acc
-                      | _ -> Flow.add tk env man.lattice acc
-                    ) (Flow.bottom_from flow) flow
-       in
-       OptionExt.return @@ Eval.empty flow
 
     (* E⟦ x for x in g | isinstance(g, generator) ⟧ *)
     | E_py_generator_comprehension _ ->
@@ -331,7 +331,25 @@ module Domain = struct
     | _ -> None
 
   let init _ _ flow = flow
-  let exec _ _ _ = None
+  let exec stmt man flow =
+    let range = srange stmt in
+    match skind stmt with
+    | S_expression {ekind = E_py_yield e} ->
+       let ctx = Flow.get_ctx flow  in
+       let g = Context.find_ctx generator_key ctx in
+       let flow = Flow.fold (fun acc tk env ->
+                      match tk with
+                      | T_cur -> Flow.add (T_py_gen_yield(g, e, range)) env man.lattice acc
+                      | T_py_gen_next(g, r) when compare_range r range = 0 ->
+                         Flow.add T_cur env man.lattice acc
+                      | _ -> Flow.add tk env man.lattice acc
+                    ) (Flow.bottom_from flow) flow
+       in
+       OptionExt.return @@ Post.return flow
+
+
+    | _ -> None
+
   let ask _ _ _ = None
 
 end
