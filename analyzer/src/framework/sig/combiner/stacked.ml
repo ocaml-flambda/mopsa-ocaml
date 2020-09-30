@@ -42,7 +42,6 @@ struct
   type t = unit
   let name = "empty"
   include GenDomainId(struct type nonrec t = t let name = name end)
-  let checks = []
   let domains = DomainSet.singleton name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
