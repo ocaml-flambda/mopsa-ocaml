@@ -54,9 +54,9 @@ type print_object =
   | Map    of print_object MapExt.StringMap.t * map_symbols
   | List   of print_object list * list_symbols
 
-let default_map_symbols = { mopen = "{"; msep = ","; mclose = "}"; mbind = ":" }
+let default_map_symbols = { mopen = ""; msep = ","; mclose = ""; mbind = ":" }
 
-let default_list_symbols = { lopen = "["; lsep = ","; lclose = "]" }
+let default_list_symbols = { lopen = ""; lsep = ","; lclose = "" }
 
 (****************************************************************************)
 (**                            {1 Printers}                                 *)
@@ -122,7 +122,6 @@ let find_print_object printer path =
 let pprint ?(path=[]) printer obj =
   let rec iter p o =
     match p,o with
-    | [],_ -> obj
     | Key k::tl, Map (m,sym) -> Map (StringMap.add k (iter tl (try StringMap.find k m with Not_found -> Empty)) m, sym)
     | Key k::tl, Empty -> Map (StringMap.singleton k (iter tl Empty), default_map_symbols)
     | Key _::_,_ -> Exceptions.panic "print: key selector on non-map object"
@@ -135,6 +134,11 @@ let pprint ?(path=[]) printer obj =
     | Tail::tl, List (l,sym) -> List (l@[iter tl Empty], sym)
     | Tail::tl, Empty -> List ([iter tl Empty], default_list_symbols)
     | Tail::_,_ -> Exceptions.panic "print: tail selector on non-list object"
+    | [],_ ->
+      match o,obj with
+      | Map(m1,s1),Map(m2,s2) -> Map(StringMap.map2zo (fun k v1 -> v1) (fun k v2 -> v2) (fun k v1 v2 -> v2) m1 m2, s2)
+      | List(l1,s1),List(l2,s2) -> List(l1@l2, s2)
+      | _ -> obj
   in
   printer.body <- iter path printer.body
 
@@ -225,28 +229,28 @@ let pp_float ?(path=[]) printer f =
 let pp_string ?(path=[]) printer str =
   pprint ~path printer (String str)
 
-let pp_obj_list ?(path=[]) ?(lopen="[") ?(lsep=",") ?(lclose="]") printer l =
+let pp_obj_list ?(path=[]) ?(lopen="") ?(lsep=",") ?(lclose="") printer l =
   pprint ~path printer
     (List (l, {lopen; lsep; lclose;}))
 
-let pp_list ?(path=[]) ?(lopen="[") ?(lsep=",") ?(lclose="]") f printer l =
+let pp_list ?(path=[]) ?(lopen="") ?(lsep=",") ?(lclose="") f printer l =
   pp_obj_list ~path ~lopen ~lsep ~lclose printer
     (List.map (pbox f) l)
 
-let pp_obj_smap ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") printer l =
+let pp_obj_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") printer l =
   let m = StringMap.of_list l in
   pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
 
-let pp_obj_map ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") printer l =
+let pp_obj_map ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") printer l =
   let m = List.map (fun (k,v) -> (sprint pprint k, v)) l |>
           StringMap.of_list in
   pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
 
-let pp_smap ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") fv printer l =
+let pp_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") fv printer l =
   pp_obj_smap ~path ~mopen ~msep ~mclose ~mbind printer
     (List.map (fun (k,v) -> (k,pbox fv v)) l)
 
-let pp_map ?(path=[]) ?(mopen="{") ?(msep=",") ?(mclose="}") ?(mbind=":") fk fv printer l =
+let pp_map ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") fk fv printer l =
   pp_obj_map ~path ~mopen ~msep ~mclose ~mbind printer
     (List.map (fun (k,v) -> (pbox fk k,pbox fv v)) l)
 
