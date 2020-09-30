@@ -32,6 +32,9 @@ open Common
 let opt_show_callstacks = ref false
 
 
+(** Command-line option to show safe checks *)
+let opt_show_safe_checks = ref false
+
 let print out fmt =
   let formatter =
     match out with
@@ -46,11 +49,21 @@ let print out fmt =
 
 
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
-module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
 
+let color_of_diag = function
+  | Safe        -> "green"
+  | Unreachable -> "gray"
+  | Error       -> "red"
+  | Warning     -> "orange"
+
+let icon_of_diag = function
+  | Safe        -> "✔"
+  | Warning     -> "⚠"
+  | Error       -> "✗"
+  | Unreachable -> "🛇"
 
 (** Highlight source code at a given location range *)
-let highlight_range fmt range =
+let highlight_range color fmt range =
   if not @@ is_orig_range @@ untag_range range then ()
   else
     (* Print source code at location range *)
@@ -58,6 +71,8 @@ let highlight_range fmt range =
     let end_pos = get_range_end range in
     let file = get_pos_file start_pos in
     assert (file = get_pos_file end_pos);
+
+    if not @@ Sys.file_exists file then () else
 
     let is_bug_line i = i >= get_pos_line start_pos && i <= get_pos_line end_pos in
 
@@ -100,11 +115,11 @@ let highlight_range fmt range =
           l,
           ""
       in
-      fprintf fmt "%a: %s%a%s" (Debug.bold pp_print_int) i s1 (Debug.color_str "fushia") s2 s3
+      fprintf fmt "%a: %s%a%s" (Debug.bold pp_print_int) i s1 (Debug.color_str color) s2 s3
     in
 
     (* Underline bug region *)
-    let underline_bug fmt (i,l) =
+    let underline_bug color fmt (i,l) =
       let n = string_of_int i |> String.length in
       let c1 = get_pos_column start_pos + n + 2 in
       let c2 = get_pos_column end_pos + n + 2 in
@@ -112,7 +127,7 @@ let highlight_range fmt range =
       let s1 = String.make c1 ' ' in
       let s2 = String.make (c2 - c1) '^' in
       let s3 = String.make (c3 - c2) ' ' in
-      fprintf fmt "@,%s%a%s" s1 (Debug.color_str "fushia") s2 s3
+      fprintf fmt "@,%s%a%s" s1 (Debug.color_str color) s2 s3
     in
 
     (* Print the highlighted lines *)
@@ -122,43 +137,46 @@ let highlight_range fmt range =
 
     (* Underline bug if the number of lines is 1 *)
     match lines with
-    | [bug] -> underline_bug fmt bug
+    | [bug] -> underline_bug color fmt bug
     | _ -> ()
 
 
-let pp_alarm_message out n diag alarm_kinds callstacks =
+let pp_diagnostic out n diag alarm_kinds callstacks =
   (* Print the alarm instance *)
   let file_name = get_range_relative_file diag.diag_range in
   let fun_name = match CallstackSet.elements callstacks with
-    | (c::_) :: _ -> c.call_fun_orig_name
-    | _ -> "<>"
+    | (c::_) :: _ -> Some c.call_fun_orig_name
+    | _ -> None
   in
-  print out "@.%a Alarm #%d:@,%a: In function '%a':@.@[<v 2>%a: %a@,@,%a@,%a%a@]@.@."
-    (fun fmt -> function
-       | Warning -> Debug.color_str "orange" fmt "⚠"
-       | Error   -> Debug.color_str "red" fmt "✗"
-       | _ -> assert false
-    ) diag.diag_kind
+  print out "@.%a Check #%d:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
+    (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (n+1)
-    (Debug.bold pp_print_string) file_name
-    (Debug.bold pp_print_string) fun_name
-    (Debug.bold pp_relative_range) diag.diag_range
     (fun fmt -> function
-       | Error ->
-         fprintf fmt "%a: %a"
-           (Debug.color "red" pp_print_string) "error"
-           (Debug.color "red" pp_check) diag.diag_check
-       | Warning ->
-         fprintf fmt "%a: %a"
-           (Debug.color "orange" pp_print_string) "warning"
-           (Debug.color "orange" pp_check) diag.diag_check
-       | _ -> assert false
-    ) diag.diag_kind
-    highlight_range diag.diag_range
-    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) alarm_kinds
+       | None -> ()
+       | Some f ->
+         fprintf fmt "@,%a: In function '%a':"
+           (Debug.bold pp_print_string) file_name
+           (Debug.bold pp_print_string) f
+    ) fun_name
+    (Debug.bold pp_relative_range) diag.diag_range
+    (Debug.color (color_of_diag diag.diag_kind) pp_diagnostic_kind) diag.diag_kind
+    (Debug.color (color_of_diag diag.diag_kind) pp_check) diag.diag_check
+    (fun fmt range ->
+       let start_pos = get_range_start range in
+       let file = get_pos_file start_pos in
+       if not @@ Sys.file_exists file then () else
+         fprintf fmt "@,@,%a" (highlight_range (color_of_diag diag.diag_kind)) range
+    ) diag.diag_range
+    (fun fmt -> function
+       | [] -> ()
+       | l ->
+         fprintf fmt "@,%a"
+           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) l
+    ) alarm_kinds
     (fun fmt callstacks ->
        match CallstackSet.elements callstacks with
        | [] -> ()
+       | [cs] when is_empty_callstack cs -> ()
        | [cs] -> fprintf fmt "@,Callstack:@,@[%a@]" pp_callstack cs
        | cs::tl ->
          if not !opt_show_callstacks then
@@ -180,82 +198,113 @@ let pp_alarm_message out n diag alarm_kinds callstacks =
     ) callstacks
 
 
+
+let incr_check_diag check diag checks_map =
+  let (safe,error,warning) =
+    match CheckMap.find_opt check checks_map with
+    | Some x -> x
+    | None   -> (0,0,0)
+  in
+  let total =
+    match diag with
+    | Safe        -> safe+1,error,warning
+    | Unreachable -> safe,error,warning
+    | Error       -> safe,error+1,warning
+    | Warning     -> safe,error,warning+1
+  in
+  CheckMap.add check total checks_map
+
+let print_and_count_alarms rep out =
+  RangeMap.fold
+    (fun range checks acc ->
+       CheckMap.fold
+         (fun check diag (i,safe,error,warning,checks_map) ->
+            let checks_map' = incr_check_diag check diag.diag_kind checks_map in
+            match diag.diag_kind with
+            | Unreachable ->
+              i, safe, error, warning, checks_map'
+
+            | Safe ->
+              if !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
+              i+1, safe+1, error, warning, checks_map'
+
+            | Error | Warning ->
+              (* Get the set of alarms kinds and callstacks *)
+              let kinds,callstacks =
+                AlarmSet.fold
+                  (fun a (kinds,callstacks) ->
+                     AlarmKindSet.add a.alarm_kind kinds,
+                     CallstackSet.add a.alarm_callstack callstacks)
+                  diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
+              (* Join alarm kinds *)
+              let rec iter = function
+                | [] -> []
+                | hd::tl ->
+                  let hd',tl' = iter_with hd tl in
+                  hd'::iter tl'
+              and iter_with a = function
+                | [] -> a,[]
+                | hd::tl ->
+                  match join_alarm_kind a hd with
+                  | None    ->
+                    let a',tl' = iter_with a tl in
+                    a',hd::tl'
+                  | Some aa ->
+                    let aa',tl' = iter_with aa tl in
+                    aa',tl'
+              in
+              let kinds' = iter (AlarmKindSet.elements kinds) in
+              pp_diagnostic out i diag kinds' callstacks;
+              let error',warning' = if diag.diag_kind = Error then error+1,warning else error,warning+1 in
+              i+1, safe, error', warning', checks_map'
+         ) checks acc
+    ) rep.report_diagnostics (0,0,0,0,CheckMap.empty)
+
+let print_summary checks_map total safe error warning time out =
+  print out "@[<v 2>Analysis summary:@,Time: %.3fs@,@[<v2>Checks: %a, %a, %a, %a@,%a@]@]@.@."
+    time
+    (Debug.bold (fun fmt total -> fprintf fmt "%d total%a" total Debug.plurial_int total)) total
+    (Debug.color (color_of_diag Safe) (fun fmt safe -> fprintf fmt "%s %d safe" (icon_of_diag Safe) safe)) safe
+    (Debug.color (color_of_diag Error) (fun fmt error -> fprintf fmt "%s %d error%a" (icon_of_diag Error) error Debug.plurial_int error)) error
+    (Debug.color (color_of_diag Warning) (fun fmt warning -> fprintf fmt "%s %d warning%a" (icon_of_diag Warning) warning Debug.plurial_int warning)) warning
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+       (fun fmt (check,(safe,error,warning)) ->
+          fprintf fmt "%a: %a, %a, %a"
+            pp_check check
+            (Debug.color (color_of_diag Safe) (fun fmt safe -> fprintf fmt "%d safe" safe)) safe
+            (Debug.color (color_of_diag Error) (fun fmt error -> fprintf fmt "%d error%a" error Debug.plurial_int error)) error
+            (Debug.color (color_of_diag Warning) (fun fmt warning -> fprintf fmt "%d warning%a" warning Debug.plurial_int warning)) warning
+       )
+    ) (CheckMap.bindings checks_map)
+
 let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
   if is_sound_report rep
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
   else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
 
-  let () =
-    if !opt_display_lastflow then
-      print out "Last flow =@[@\n%a@]@\n"
-        (* "Context = @[@\n%a@]@\n" *)
-        (format (Core.Flow.print man.lattice.print)) flow
-        (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
-  in
+  if !opt_display_lastflow then
+    print out "Last flow =@[@\n%a@]@\n"
+      (* "Context = @[@\n%a@]@\n" *)
+      (format (Core.Flow.print man.lattice.print)) flow
+      (* (Core.Context.print man.lattice.print) (Flow.get_ctx f) *)
+  ;
 
-  let () =
-    if is_safe_report rep
-    then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔"
-    else
-      let check_total, total =
-        RangeMap.fold
-          (fun range checks acc ->
-             CheckMap.fold
-               (fun check diag (check_total, total) ->
-                  match diag.diag_kind with
-                  | Safe | Unreachable -> check_total, total
-                  | Error | Warning ->
-                    (* Get the set of alarms kinds and callstacks *)
-                    let kinds,callstacks =
-                      AlarmSet.fold
-                        (fun a (kinds,callstacks) ->
-                           AlarmKindSet.add a.alarm_kind kinds,
-                           CallstackSet.add a.alarm_callstack callstacks)
-                        diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
-                    (* Join alarm kinds *)
-                    let rec iter = function
-                      | [] -> []
-                      | hd::tl ->
-                        let hd',tl' = iter_with hd tl in
-                        hd'::iter tl'
-                    and iter_with a = function
-                      | [] -> a,[]
-                      | hd::tl ->
-                        match join_alarm_kind a hd with
-                        | None    ->
-                          let a',tl' = iter_with a tl in
-                          a',hd::tl'
-                        | Some aa ->
-                          let aa',tl' = iter_with aa tl in
-                          aa',tl'
-                    in
-                    let kinds' = iter (AlarmKindSet.elements kinds) in
-                    pp_alarm_message out total diag kinds' callstacks;
-                    CheckMap.add check (try 1 + CheckMap.find check check_total with Not_found -> 1) check_total,
-                    total + 1
-               ) checks acc
-          ) rep.report_diagnostics (CheckMap.empty,0)
-      in
-      (* Print alarms summary *)
-      print out "@[<v 2>Summary of detected alarms:@,%a@,Total: %d@]@.@."
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           (fun fmt (check,nb) -> fprintf fmt "%a: %d" pp_check check nb)
-        ) (CheckMap.bindings check_total)
-        total
-  in
-  let () =
-    if not (is_sound_report rep) then
-      let nb = AssumptionSet.cardinal rep.report_assumptions in
-      print out "%d assumption%a:@,  @[<v>%a@]@.@."
-        nb Debug.plurial_int nb
-        (pp_print_list
-           ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-           pp_assumption
-        ) (AssumptionSet.elements rep.report_assumptions)
-  in
-  print out "Time: %.3fs@." time;
-  ()
+  if is_safe_report rep
+  then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔";
+
+  let total, safe, error, warning, checks_map = print_and_count_alarms rep out in
+  print_summary checks_map total safe error warning time out
+  ;
+  if not (is_sound_report rep) then
+    let nb = AssumptionSet.cardinal rep.report_assumptions in
+    print out "%d assumption%a:@,  @[<v>%a@]@.@."
+      nb Debug.plurial_int nb
+      (pp_print_list
+         ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         pp_assumption
+      ) (AssumptionSet.elements rep.report_assumptions)
+
 
 let panic exn ~btrace ~time ~files ~out =
   print out "%a@." (Debug.color_str "red") "Analysis aborted";

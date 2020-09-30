@@ -313,10 +313,20 @@ let () =
 
 let () =
   register_builtin_option {
-    key = "-show-call-stacks";
-    category = "Output";
+    key = "-show-callstacks";
+    category = "Alarms";
     doc = " display the call stacks when reporting alarms in text format";
     spec = ArgExt.Set Output.Text.opt_show_callstacks;
+    default = "false";
+  }
+
+
+let () =
+  register_builtin_option {
+    key = "-show-safe-checks";
+    category = "Alarms";
+    doc = " show safe checks when reporting alarms in text format";
+    spec = ArgExt.Set Output.Text.opt_show_safe_checks;
     default = "false";
   }
 

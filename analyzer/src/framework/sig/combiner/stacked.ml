@@ -42,6 +42,7 @@ struct
   type t = unit
   let name = "empty"
   include GenDomainId(struct type nonrec t = t let name = name end)
+  let checks = []
   let domains = DomainSet.singleton name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
@@ -49,7 +50,8 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let print _ _  = ()
+  let print_state _ _ _ = ()
+  let print_expr _ _ _ _ _ = ()
   let subset _ _ _ ((),s) ((),s') = true,s,s'
   let join _ _ _ ((),s) ((),s') = (),s,s'
   let meet _ _ _ ((),s) ((),s') = (),s,s'
