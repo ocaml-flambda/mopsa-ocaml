@@ -286,11 +286,11 @@ module Domain = struct
                                ) flow locals'
                   in
                   (* Clean the yield frame by projecting on the generator local variables *)
-                  let cur' = Flow.set T_cur env man.lattice flow4 |>
-                               man.exec (mk_project_vars locals' range) |>
-                               post_to_flow man |>
-                               Flow.get T_cur man.lattice
-                  in
+                  (* let cur' = Flow.set T_cur env man.lattice flow4 |>
+                   *              man.exec (mk_project_vars locals' range) |>
+                   *              post_to_flow man |>
+                   *              Flow.get T_cur man.lattice
+                   * in *)
                   let r = flow |> (* Flow.set (T_py_gen_next(g, r)) cur' man.lattice flow |>*)
                     man.eval (mk_var tmp range) |>
                             Cases.add_cleaners [mk_remove_var tmp range] in
@@ -367,7 +367,7 @@ module Domain = struct
     | _ -> None
 
   let ask _ _ _ = None
-
+  let checks = []
 end
 
 let () = register_stateless_domain (module Domain)

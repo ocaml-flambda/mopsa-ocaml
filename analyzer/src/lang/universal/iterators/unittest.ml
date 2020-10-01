@@ -183,12 +183,16 @@ struct
         ~felse:(fun fail_flow ->
             raise_assert_fail cond man fail_flow |>
             Post.return
-          )
+        )
+        ~fnone:(fun none_flow ->
+          raise_assert_fail ~force:true cond man none_flow |>
+            Post.return
+        )
         man flow
       |> OptionExt.return
 
     | S_satisfy(cond) ->
-      man.exec (mk_assume cond stmt.srange) flow >>%? fun flow' -> 
+      man.exec (mk_assume cond stmt.srange) flow >>%? fun flow' ->
       if not @@ man.lattice.is_bottom @@ Flow.get T_cur man.lattice flow' then
         Post.return flow |>
         OptionExt.return
