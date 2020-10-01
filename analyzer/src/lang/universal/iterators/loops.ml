@@ -71,7 +71,7 @@ let opt_unrolling = {
   unroll_global_nb = Some 1;
   unroll_locals = [];
 }
-  
+
 
 (** Parse local unrolling specification string *)
 let parse_unroll_local (spec:string) : local_unrolling =
@@ -146,7 +146,7 @@ let () =
     key = "-loop-full-unrolling";
     category = "Loops";
     doc = " unroll loops without applying widening";
-    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb)); 
+    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb));
     default = "false";
   };
   register_domain_option name {
@@ -303,8 +303,7 @@ struct
         Flow.join man.lattice flow_init |>
         Post.return
     else if delay = 0 then
-      let wcur = man.lattice.widen (Flow.get_ctx flow') cur cur' in
-      let wflow = Flow.set T_cur wcur man.lattice flow' in
+      let wflow = Flow.widen man.lattice flow flow' in
       let () = debug
           "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
           pp_range body.srange
@@ -341,7 +340,7 @@ struct
         let () = debug "stabilisation reached in unrolling!" in
         Cases.singleton (true, flow2) flow1
       else
-        unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' -> 
+        unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' ->
         Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
 
   let decr_iteration cond body man flow_init flow =
@@ -386,7 +385,7 @@ struct
         if is_fp then
           Post.return flow_init
         else
-          lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp -> 
+          lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp ->
           begin
             if !opt_loop_decreasing_it then
               decr_iteration cond body man flow_init flow_lfp

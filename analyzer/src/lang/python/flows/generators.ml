@@ -291,9 +291,24 @@ module Domain = struct
                                post_to_flow man |>
                                Flow.get T_cur man.lattice
                   in
-                  let r = Flow.set (T_py_gen_next(g, r)) cur' man.lattice flow |>
+                  let r = flow |> (* Flow.set (T_py_gen_next(g, r)) cur' man.lattice flow |>*)
                     man.eval (mk_var tmp range) |>
                             Cases.add_cleaners [mk_remove_var tmp range] in
+                  r :: acc
+
+               | T_py_gen_next _ ->
+                  let flow = Flow.set T_cur env man.lattice flow4 in
+                  (* Clean the cur environment by removing the generator local variables *)
+                  let flow = List.fold_left (fun acc v ->
+                                 man.exec (mk_remove_var v range) acc |> post_to_flow man
+                               ) flow locals'
+                  in
+                  (* Clean the yield frame by projecting on the generator local variables *)
+                  let cur' = Flow.set T_cur env man.lattice flow4 |>
+                               man.exec (mk_project_vars locals' range) |>
+                               post_to_flow man |>
+                               Flow.get T_cur man.lattice in
+                  let r = Eval.empty (Flow.add tk cur' man.lattice flow) in
                   r :: acc
 
                | Alarms.T_py_exception (obj, name, kind) ->
@@ -322,8 +337,6 @@ module Domain = struct
        |> OptionExt.return
 
 
-
-
     (* E⟦ x for x in g | isinstance(g, generator) ⟧ *)
     | E_py_generator_comprehension _ ->
       panic_at range "Generator comprehension not supported"
@@ -339,15 +352,18 @@ module Domain = struct
        let g = Context.find_ctx generator_key ctx in
        let flow = Flow.fold (fun acc tk env ->
                       match tk with
-                      | T_cur -> Flow.add (T_py_gen_yield(g, e, range)) env man.lattice acc
+                      | T_cur ->
+                         let acc = Flow.add (T_py_gen_yield(g, e, range)) env man.lattice acc in
+                         Flow.add (T_py_gen_next (g, range)) env man.lattice acc
                       | T_py_gen_next(g, r) when compare_range r range = 0 ->
+                         debug "moving a gen_next to cur";
                          Flow.add T_cur env man.lattice acc
                       | _ -> Flow.add tk env man.lattice acc
                     ) (Flow.bottom_from flow) flow
        in
        OptionExt.return @@ Post.return flow
 
-
+    (* FIXME: renaming of framed variables, when the generator address is renamed *)
     | _ -> None
 
   let ask _ _ _ = None
