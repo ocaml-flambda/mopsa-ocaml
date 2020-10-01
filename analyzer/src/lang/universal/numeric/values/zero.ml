@@ -89,39 +89,20 @@ struct
     | ZERO -> pp_string printer "0"
     | NON_ZERO -> pp_string printer "≠ 0"
 
-  let constant t c =
-    match t with
-    | T_int | T_bool ->
-      let v = match c with
-        | C_bool true -> NON_ZERO
-
-        | C_bool false -> ZERO
-
-        | C_int i when Z.equal i Z.zero -> ZERO
-
-        | C_int i -> NON_ZERO
-
-        | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
-                                      Z.equal i2 Z.zero ->
-          ZERO
-
-        | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
-                                      Z.lt i2 Z.zero ->
-          NON_ZERO
-
-        | _ -> TOP
-      in
-      Some v
-
-    | _ -> None
-
-  let cast man t e =
-    match t with
-    | T_int | T_bool -> Some top
-    | _              -> None
+  let constant t = function
+    | C_bool true -> NON_ZERO
+    | C_bool false -> ZERO
+    | C_int i when Z.equal i Z.zero -> ZERO
+    | C_int i -> NON_ZERO
+    | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
+                                  Z.equal i2 Z.zero ->
+      ZERO
+    | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
+                                  Z.lt i2 Z.zero ->
+      NON_ZERO
+    | _ -> TOP
       
-
-  let unop op t a =
+  let unop t op a =
     match op with
     | O_log_not -> begin match a with
         | TOP -> TOP
@@ -133,7 +114,7 @@ struct
     | O_plus  -> a
     | _ -> top
 
-  let binop op t a1 a2 =
+  let binop t op a1 a2 =
     match op with
     | O_plus | O_minus ->
       begin match a1, a2 with
@@ -152,7 +133,11 @@ struct
       end
     | _     -> top
 
-  let filter b t a =
+  let het_unop man t op (a,e) = top
+
+  let het_binop man t op (a1,e1) (a2,e2) = top
+
+  let filter t b a =
     match a with
     | TOP -> TOP
     | BOT -> BOT
@@ -163,11 +148,13 @@ struct
 
   let bwd_binop = default_bwd_binop
 
-  let bwd_cast = default_bwd_cast
+  let bwd_het_unop = default_bwd_het_unop
+
+  let bwd_het_binop = default_bwd_het_binop
 
   let predicate = default_predicate
 
-  let compare op b t a1 a2 =
+  let compare t op b a1 a2 =
     let op = if b then op else negate_comparison_op op in
     match op with
     | O_eq ->
@@ -187,6 +174,7 @@ struct
 
   let ask man q = None
 
+  let refine hint a = None
 end
 
 let () =

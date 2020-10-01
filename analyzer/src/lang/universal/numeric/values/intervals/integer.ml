@@ -87,41 +87,23 @@ struct
     | T_int | T_bool -> f ()
     | _              -> default
 
-  let constant t c =
-    apply_int t None @@ fun () ->
-    match c with
+  let constant t = function
     | C_bool true ->
-      Nb (I.cst_int 1) |>
-      OptionExt.return
+      Nb (I.cst_int 1)
 
     | C_bool false ->
-      Nb (I.cst_int 0) |>
-      OptionExt.return
+      Nb (I.cst_int 0)
 
     | C_top T_bool ->
-      Nb (I.of_int 0 1) |>
-      OptionExt.return
+      Nb (I.of_int 0 1)
 
     | C_int i ->
-      Nb (I.of_z i i) |>
-      OptionExt.return
+      Nb (I.of_z i i)
 
     | C_int_interval (i1,i2) ->
-      Nb (I.of_z i1 i2) |>
-      OptionExt.return
+      Nb (I.of_z i1 i2)
 
-    | _ -> Some top
-
-  let cast man t e =
-    match t, e.etyp with
-    | (T_int | T_bool), T_float _ ->
-      let float_itv = man.ask (Common.Q_float_interval e) in
-      let itv = ItvUtils.FloatItvNan.to_int_itv float_itv in
-      Some itv
-
-    | (T_int | T_bool), _ -> Some top
-
-    | _ -> None
+    | _ -> top
 
 
   let zero = Nb (I.zero)
@@ -129,7 +111,7 @@ struct
   let of_z z1 z2 : t = Nb (I.of_z z1 z2)
   let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
-  let unop op t a =
+  let unop t op a =
     apply_int t bottom @@ fun () ->
     match op with
     | O_log_not -> bot_lift1 I.log_not a
@@ -139,7 +121,20 @@ struct
     | O_bit_invert -> bot_lift1 I.bit_not a
     | _ -> top
 
-  let binop op t a1 a2 =
+  let het_unop man t op (a,e) =
+    match op with
+    | O_cast ->
+      begin match e.etyp with
+        | T_float _ ->
+          let float_itv = man.ask (Common.Q_float_interval e) in
+          ItvUtils.FloatItvNan.to_int_itv float_itv
+
+        | _ -> top
+      end
+
+    | _ -> top
+
+  let binop t op a1 a2 =
     apply_int t bottom @@ fun () ->
     match op with
     | O_plus   -> bot_lift2 I.add a1 a2
@@ -163,11 +158,13 @@ struct
     | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
     | _     -> top
 
-  let filter b t a =
+  let het_binop man t op a1 a2 = top
+  
+  let filter t b a =
     if b then bot_absorb1 I.meet_nonzero a
     else bot_absorb1 I.meet_zero a
 
-  let bwd_unop op t a r =
+  let bwd_unop t op a r =
     apply_int t a @@ fun () ->
     try
       let a, r = bot_to_exn a, bot_to_exn r in
@@ -181,7 +178,22 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_binop op t a1 a2 r =
+  let bwd_het_unop man t op (a,e) (r:t) =
+    match op, e.etyp with
+    | O_cast, T_float _ ->
+      begin match r with
+        | BOT -> a
+        | Nb iitv ->
+          (* Compute the interval of the integer expression cast(t,e) *)
+          let fitv = man.ask (Common.Q_float_interval e) in
+          let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
+          man.refine (H_float_interval fitv') a
+      end
+
+    | _ -> a
+
+
+  let bwd_binop t op a1 a2 r =
     apply_int t (a1,a2) @@ fun () ->
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
@@ -210,24 +222,11 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let cast_range = tag_range (mk_fresh_range ()) "cast-of-int"
-
-  let bwd_cast man t e a =
-    match t with
-    | T_float p ->
-      (* Compute the interval of the float expression cast(t,e) *)
-      let cast = mk_unop O_cast e ~etyp:t cast_range in
-      let fitv = man.ask (Common.Q_float_interval cast) in
-      begin match a with
-        | BOT    -> bottom
-        | Nb itv -> ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv fitv
-      end
-     
-    | _ -> default_bwd_cast man t e a
+  let bwd_het_binop = default_bwd_het_binop
 
   let predicate = default_predicate
 
-  let compare op b t a1 a2 =
+  let compare t op b a1 a2 =
     apply_int t (a1,a2) @@ fun () ->
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
@@ -249,23 +248,29 @@ struct
 
   (** {2 Query handlers} *)
 
-  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option =
+  let ask : type r. ('a,'v,t) value_man -> ('a,r) query -> r option =
     fun man q ->
     match q with
     | Common.Q_int_interval e ->
       man.eval e |>
+      man.get |>
       OptionExt.return
 
     | Common.Q_fast_int_interval e ->
       man.eval e |>
+      man.get |>
       OptionExt.return
 
     | Common.Q_int_congr_interval e ->
-      (man.eval e, Common.C.minf_inf) |> OptionExt.return
+      (man.eval e |> man.get, Common.C.minf_inf) |> OptionExt.return
 
     | _ -> None
 
 
+  let refine hint a =
+    match hint with
+    | H_int_interval itv -> Some (meet itv a)
+    | _ -> None
 
   (** {2 Utility functions} *)
 
@@ -363,9 +368,6 @@ struct
         else f i :: iter (Z.succ i)
       in
       iter a
-
-
-
 
 end
 

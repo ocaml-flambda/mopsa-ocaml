@@ -116,27 +116,15 @@ struct
     | T_int | T_bool -> true
     | _ -> false
 
-  let constant t c =
-    match t with
-    | T_int | T_bool ->
-      let v = match c with
-        | C_bool true -> singleton Z.one |> bound
-        | C_bool false -> singleton Z.zero |> bound
-        | C_top T_bool -> of_bounds Z.zero Z.one |> bound
-        | C_int n -> singleton n |> bound
-        | C_int_interval (i1,i2) -> of_bounds i1 i2
-        | _ -> TOP
-      in
-      Some v
-    | _ -> None
+  let constant t = function
+    | C_bool true -> singleton Z.one |> bound
+    | C_bool false -> singleton Z.zero |> bound
+    | C_top T_bool -> of_bounds Z.zero Z.one |> bound
+    | C_int n -> singleton n |> bound
+    | C_int_interval (i1,i2) -> of_bounds i1 i2
+    | _ -> TOP
 
-  let cast man t e =
-    match t with
-    | T_int | T_bool -> Some top
-    | _              -> None
-
-
-  let unop op t a =
+  let unop t op a =
     match op with
     | O_plus       -> a
     | O_minus      -> map Z.neg a
@@ -157,7 +145,7 @@ struct
         ) a1 empty
       |> bound
       
-  let binop op t a1 a2 =
+  let binop t op a1 a2 =
     if is_bottom a1 || is_bottom a2 then bottom else
     if is_top a1 || is_top a2 then top else
       let with_int f a b = f a (Z.to_int b) in
@@ -195,6 +183,9 @@ struct
         | _     -> top
       with Z.Overflow -> TOP
 
+  let het_unop man t op (a,e) = top
+
+  let het_binop man t op (a1,e1) (a2,e2) = top  
 
   let widen ctx (a1:t) (a2:t) : t =
     (*if subset a2 a1 then a1 else TOP*)
@@ -206,18 +197,18 @@ struct
   (** ********************** *)
 
 
-  let filter b t a =
+  let filter t b a =
     if b then remove Z.zero a
     else meet a (singleton Z.zero)
 
-  let bwd_unop op t a r =
+  let bwd_unop t op a r =
     match op with
     | O_plus       -> meet a r
     | O_minus      -> meet a (map Z.neg r)
     | O_bit_invert -> meet a (map Z.lognot r)
     | _ -> default_bwd_unop op t a r
 
-  let bwd_binop op t a1 a2 r =
+  let bwd_binop t op a1 a2 r =
     let b1, b2 =  match op with
       | O_plus  -> meet a1 (map2 Z.sub r a2), meet a2 (map2 Z.sub r a1)
       | O_minus -> meet a1 (map2 Z.add a2 r), meet a2 (map2 Z.sub a1 r)
@@ -231,7 +222,9 @@ struct
     if is_empty b1 || is_empty b2 then bottom, bottom
     else b1,b2
 
-  let bwd_cast = default_bwd_cast
+  let bwd_het_unop = default_bwd_het_unop
+
+  let bwd_het_binop = default_bwd_het_binop
 
   let predicate = default_predicate
 
@@ -249,7 +242,7 @@ struct
       let m = minmax b2 in
       Powerset.filter (fun n -> cmp n m) a1
 
-  let compare op b t a1 a2 =
+  let compare t op b a1 a2 =
     let op = if b then op else negate_comparison_op op in
     let b1,b2 =
       match op with
@@ -273,6 +266,8 @@ struct
 
 
   let ask man q = None
+
+  let refine hint a = None
 
 end
 
