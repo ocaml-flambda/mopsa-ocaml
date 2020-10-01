@@ -24,13 +24,13 @@
 *)
 
 open Core.All
-open Sig.Abstraction.Value
+open Sig.Combiner.Value
 
 
 (** {2 Identifier for the non-relation domain} *)
 (** ****************************************** *)
 
-type _ id += D_nonrel : (module VALUE with type t = 'v) -> (var,'v) Lattices.Partial_map.map id
+type _ id += D_nonrel : (module VALUE_COMBINER with type t = 'v) -> (var,'v) Lattices.Partial_map.map id
 
 let () =
   let open Eq in
@@ -134,7 +134,7 @@ let find_var_bounds_ctx_opt v ctx =
 (** {2 Non-relational domain} *)
 (** ************************* *)
 
-module Make(Value: VALUE) =
+module Make(Value: VALUE_COMBINER) : Sig.Abstraction.Simplified.SIMPLIFIED =
 struct
 
 
@@ -172,9 +172,8 @@ struct
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
-      match Value.constant var.vtyp bounds with
-      | None    -> v
-      | Some vv -> Value.meet v vv
+      let vv = Value.constant var.vtyp bounds in
+      Value.meet v vv
 
   let widen ctx a1 a2 =
     let open Bot_top in
@@ -223,34 +222,12 @@ struct
 
 
   (** Value manager *)
-  let rec value_man (ev:(expr*aexpr*Value.t) option) (map:t) : ('a,Value.t) value_man = {
-    eval = (fun e ->
-        (* check if expression e has been evaluated by searching withing the annotated value-expression ev *)
-        match ev with
-        | None ->
-          eval e map |>
-          OptionExt.default (A_unsupported,Value.top) |>
-          snd
-
-        | Some (ee,ae,v) ->
-          let rec aux ee ae v =
-            if compare_expr ee e = 0 then v
-            else match ee.ekind,ae with
-              | E_unop(_,e1),A_unop(ae1,v1) ->
-                aux e1 ae1 v1
-
-              | E_binop(_,e1,e2),A_binop(ae1,v1,ae2,v2) ->
-                (try aux e1 ae1 v1 with Not_found -> aux e2 ae2 v2)
-
-              | _ -> raise Not_found
-          in
-          try aux ee ae v
-          with Not_found ->
-            eval e map |>
-            OptionExt.default (A_unsupported,Value.top) |>
-            snd
-      );
-    ask = (fun q -> match Value.ask (value_man ev map) q with Some r -> r | _ -> raise Not_found);
+  let rec value_man (map:t) : ('a,Value.t,Value.t) value_man = {
+    get = (fun v -> v);
+    set = (fun v _ -> v);
+    eval = (fun e -> match eval e map with Some (_,v) -> v | None -> Value.top);
+    ask = (fun q -> match Value.ask (value_man map) q with Some r -> r | _ -> raise Not_found);
+    refine = (fun msg v -> match Value.refine msg v with Some r -> r | None -> v);
   }
 
 
@@ -259,30 +236,25 @@ struct
      values for each sub-expression *)
   and eval (e:expr) (a:t) : (aexpr * Value.t) option =
     match ekind e with
+    | E_constant(c) when Value.accept_type e.etyp ->
+      let v = Value.constant e.etyp c in
+      (A_cst v, v) |>
+      OptionExt.return
+
     | E_var(var, mode) when Value.accept_type var.vtyp ->
        let v = find var a in
        (A_var v, v) |>
        OptionExt.return
 
-    | E_constant(c) ->
-      Value.constant e.etyp c |> OptionExt.lift @@ fun v ->
-      (A_cst v, v)
-
-    | E_unop(O_cast, e1) ->
-      eval e1 a |> OptionExt.bind @@ fun (ae1, v1) ->
-      (* Keep the evaluation of e1 in the manager to let the domain query it *)
-      Value.cast (value_man (Some (e1,ae1,v1)) a) e.etyp e1 |> OptionExt.lift @@ fun v ->
-      (A_unop (ae1,v1), v)
-
     | E_unop (op,e1) ->
       eval e1 a |> OptionExt.lift @@ fun (ae1, v1) ->
-      let v = Value.unop op e.etyp v1 in
+      let v = Value.unop (value_man a) e.etyp op (v1,e1) in
       (A_unop (ae1, v1), v)
 
     | E_binop (op,e1,e2) ->
       eval e1 a |> OptionExt.bind @@ fun (ae1, v1) ->
       eval e2 a |> OptionExt.lift @@ fun (ae2, v2) ->
-      let v = Value.binop op e.etyp v1 v2 in
+      let v = Value.binop (value_man a) e.etyp op (v1,e1) (v2,e2) in
       (A_binop (ae1, v1, ae2, v2), v)
 
     | _ -> None
@@ -295,6 +267,11 @@ struct
   let rec refine ctx (e:expr) (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
     let r' = Value.meet v r in
     match e.ekind,ae with
+    | E_constant _, A_cst _ ->
+      if Value.is_bottom r'
+      then bottom
+      else a
+
     | E_var(var,mode), A_var _ ->
       if Value.is_bottom r'
       then bottom
@@ -305,23 +282,12 @@ struct
 
       else a
 
-    | E_constant _, A_cst _ ->
-      if Value.is_bottom r'
-      then bottom
-      else a
-
-    | E_unop(O_cast,e1), A_unop(ae1, v1) ->
-      (* Keep the refined evaluation of [r'] of [e] in the manager so
-         that it can be used by the domain to refine value [v1] *)
-      let w = Value.bwd_cast (value_man (Some (e,ae,r')) a) e.etyp e1 v1 in
-      refine ctx e1 ae1 v1 w a
-
     | E_unop(op,e1), A_unop (ae1, v1) ->
-      let w = Value.bwd_unop op e.etyp v1 r' in
+      let w = Value.bwd_unop (value_man a) e.etyp op (v1,e1) r' in
       refine ctx e1 ae1 v1 w a
 
     | E_binop(op,e1,e2), A_binop (ae1, v1, ae2, v2) ->
-      let w1, w2 = Value.bwd_binop op e.etyp v1 v2 r' in
+      let w1, w2 = Value.bwd_binop (value_man a) e.etyp op (v1,e1) (v2,e2) r' in
       let a1 = refine ctx e1 ae1 v1 w1 a in
       refine ctx e2 ae2 v2 w2 a1
 
@@ -353,15 +319,15 @@ struct
       (if b then join else meet) a1 a2 |>
       OptionExt.return
 
-    | E_constant c ->
-      Value.constant e.etyp c |> OptionExt.bind @@ fun v ->
-      let w = Value.filter b e.etyp v in
+    | E_constant c when Value.accept_type e.etyp ->
+      let v = Value.constant e.etyp c in
+      let w = Value.filter e.etyp b v in
       (if Value.is_bottom w then bottom else a) |>
       OptionExt.return
 
     | E_var(var, mode) when Value.accept_type var.vtyp ->
       let v = find var a in
-      let w = Value.filter b e.etyp v in
+      let w = Value.filter e.etyp b v in
       ( if Value.is_bottom w then bottom else
         if var_mode var mode = STRONG then add ctx var w a
         else a ) |>
@@ -374,7 +340,7 @@ struct
       eval e2 a |> OptionExt.bind @@ fun (ae2,v2) ->
 
       (* apply comparison *)
-      let r1, r2 = Value.compare op b e1.etyp v1 v2 in (* FIXME: both types should be given to Value.compare? *)
+      let r1, r2 = Value.compare e1.etyp op b v1 v2 in (* FIXME: both types should be given to Value.compare? *)
 
       (* propagate backward on both argument expressions *)
       refine ctx e2 ae2 v2 r2 @@ refine ctx e1 ae1 v1 r1 a |>
@@ -386,7 +352,7 @@ struct
       eval e a |> OptionExt.bind @@ fun (ae,v) ->
 
       (* apply the predicate *)
-      let r = Value.predicate op b e.etyp v in
+      let r = Value.predicate e.etyp op b v in
 
       (* propagate backward on the argument *)
       refine ctx e ae v r a |>
@@ -493,7 +459,7 @@ struct
 
 
   let ask query man ctx map =
-    Value.ask (value_man None map) query
+    Value.ask (value_man map) query
 
   let print_state printer a =
     Print.pprint printer ~path:[Key Value.display]

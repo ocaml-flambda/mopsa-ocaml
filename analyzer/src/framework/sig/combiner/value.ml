@@ -22,13 +22,9 @@
 (** Signature of a value abstraction. *)
 
 open Core.All
+open Abstraction.Value
 
-
-(*==========================================================================*)
-(**                          {2 Value manager}                              *)
-(*==========================================================================*)
-
-type ('a,'v,'t) value_man = {
+type ('a,'v,'t) value_man =  ('a,'v,'t) Abstraction.Value.value_man = {
   get  : 'v -> 't;
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
@@ -36,12 +32,7 @@ type ('a,'v,'t) value_man = {
   refine : hint -> 'v -> 'v;
 }
 
-(*==========================================================================*)
-(**                          {2 Value domain}                               *)
-(*==========================================================================*)
-
-
-module type VALUE =
+module type VALUE_COMBINER =
 sig
 
   (** {2 Header of the abstraction} *)
@@ -99,23 +90,17 @@ sig
   val constant : typ -> constant -> t
   (** Forward evaluation of constants *)
 
-  val unop : typ -> operator -> t -> t
+  val unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t
   (** Forward evaluation of unary expressions *)
 
-  val binop : typ -> operator -> t -> t -> t
+  val binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t
   (** Forward evaluation of binary expressions *)
-
-  val het_unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t
-  (** Forward evaluation of heterogenous unary expressions *)
-
-  val het_binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t
-  (** Forward evaluation of heterogenous binary expressions *)
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : typ -> operator -> t -> t -> t
+  val bwd_unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t -> 'v
   (** Backward evaluation of unary operators.
       [bwd_unop man op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -123,7 +108,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : typ -> operator -> t -> t -> t -> (t * t)
+  val bwd_binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t -> ('v * 'v)
   (** Backward evaluation of binary operators.
       [bwd_binop man op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -148,20 +133,14 @@ sig
       [compare op x y false] is similar, but assumes that the test is false
   *)
 
-  val bwd_het_unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t -> 'v
-
-  val bwd_het_binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t -> ('v * 'v)
-
-
-  (** {2 Communication handlers } *)
-  (** *************************** *)
+  (** {2 Query handler } *)
+  (** ****************** *)
 
   val ask : ('a,'v,t) value_man -> ('a,'r) query -> 'r option
   (** Query handler *)
 
   val refine : hint -> t -> t option
   (** Refinement handler *)
-
 
   (** {2 Pretty printer} *)
   (** ****************** *)
@@ -172,37 +151,37 @@ sig
 end
 
 
-let default_bwd_unop t op v r = v
-let default_bwd_binop t op v1 v2 r = (v1,v2)
-let default_bwd_het_unop man t op (a,e) r = a
-let default_bwd_het_binop man t op (a1,e1) (a2,e2) r = (a1,a2)
-let default_predicate t op b v = v
-let default_compare t op b v1 v2 = (v1,v2)
-
-
 (*==========================================================================*)
-(**                          {2 Registration}                               *)
+(**                              {2 Lifter}                                 *)
 (*==========================================================================*)
 
-let values : (module VALUE) list ref = ref []
+module ValueToCombiner(Value:VALUE) : VALUE_COMBINER with type t = Value.t =
+struct
+  include Value
 
-let register_value_abstraction dom =
-  values := dom :: !values
+  let unop man t op (a,e) =
+    if accept_type e.etyp then
+      Value.unop t op (man.get a)
+    else
+      Value.het_unop man t op (a,e)
 
-let find_value_abstraction name =
-  List.find (fun dom ->
-      let module D = (val dom : VALUE) in
-      compare D.name name = 0
-    ) !values
+  let binop man t op (a1,e1) (a2,e2) =
+    if accept_type e1.etyp && accept_type e2.etyp then
+      Value.binop t op (man.get a1) (man.get a2)
+    else
+      Value.het_binop man t op (a1,e1) (a2,e2)
 
-let mem_value_abstraction name =
-  List.exists (fun dom ->
-      let module D = (val dom : VALUE) in
-      compare D.name name = 0
-    ) !values
+  let bwd_unop man t op (a,e) r =
+    if accept_type e.etyp then
+      let v = Value.bwd_unop t op (man.get a) r in
+      man.set v a
+    else
+      Value.bwd_het_unop man t op (a,e) r
 
-let value_abstraction_names () =
-  List.map (fun dom ->
-      let module D = (val dom : VALUE) in
-      D.name
-    ) !values
+  let bwd_binop man t op (a1,e1) (a2,e2) r =
+    if accept_type e1.etyp && accept_type e2.etyp then
+      let v1,v2 = Value.bwd_binop t op (man.get a1) (man.get a2) r in
+      man.set v1 a1, man.set v2 a2
+    else
+      Value.bwd_het_binop man t op (a1,e1) (a2,e2) r
+end

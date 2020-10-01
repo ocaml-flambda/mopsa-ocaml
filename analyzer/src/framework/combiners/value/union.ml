@@ -22,11 +22,11 @@
 (** Union of two value abstractions *)
 
 open Core.All
-open Sig.Abstraction.Value
+open Sig.Combiner.Value
 open Common
 
 
-module Make(V1:VALUE)(V2:VALUE) : VALUE =
+module Make(V1:VALUE_COMBINER)(V2:VALUE_COMBINER) : VALUE_COMBINER with type t = V1.t * V2.t =
 struct
 
   (** {2 Header of the abstraction} *)
@@ -63,14 +63,20 @@ struct
   (** {2 Value managers} *)
   (** ****************** *)
 
-  let v1_man (man:('a,t) value_man) : ('a,V1.t) value_man = {
+  let v1_man (man:('a,'v,t) value_man) : ('a,'v,V1.t) value_man = {
     man with
-    eval = (fun e -> man.eval e |> fst);
+    get  = (fun a -> man.get a |> fst);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v1 then a else man.set (x,v2) a);
   }
 
-  let v2_man (man:('a,t) value_man) : ('a,V2.t) value_man = {
+  let v2_man (man:('a,'v,t) value_man) : ('a,'v,V2.t) value_man = {
     man with
-    eval = (fun e -> man.eval e |> snd);
+    get  = (fun a -> man.get a |> snd);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v2 then a else man.set (v1,x) a);
   }
 
 
@@ -78,71 +84,55 @@ struct
   (** ********************* *)
 
   let constant t c =
-    let v1 = if V1.accept_type t then V1.constant t c else None in
-    let v2 = if V2.accept_type t then V2.constant t c else None in
+    let v1 = if V1.accept_type t then Some (V1.constant t c) else None in
+    let v2 = if V2.accept_type t then Some (V2.constant t c) else None in
     match v1, v2 with
-    | None, None -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None -> Some (v1,V2.bottom)
-    | None, Some v2 -> Some (V1.bottom,v2)
+    | None, None -> assert false
+    | Some v1, Some v2 -> (v1,v2)
+    | Some v1, None -> (v1,V2.bottom)
+    | None, Some v2 -> (V1.bottom,v2)
 
-  let cast man t e =
-    let v1 = if V1.accept_type t then V1.cast (v1_man man) t e else None in
-    let v2 = if V2.accept_type t then V2.cast (v2_man man) t e else None in
-    match v1, v2 with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.bottom)
-    | None, Some v2    -> Some (V1.bottom,v2)
-
-  let unop op t a =
+  let unop man t op (a,e) =
     apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.unop op t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.unop op t v2)
-      a
+      (fun v1 -> if V1.is_bottom v1 then v1 else V1.unop (v1_man man) t op (a,e))
+      (fun v2 -> if V2.is_bottom v2 then v2 else V2.unop (v2_man man) t op (a,e))
+      (man.get a)
 
-  let binop op t =
+  let binop man t op (a1,e1) (a2,e2) =
     apply2
-      (fun v1 w1 -> if V1.(is_bottom v1 || is_bottom w1) then V1.bottom else V1.binop op t v1 w1)
-      (fun v2 w2 -> if V2.(is_bottom v2 || is_bottom w2) then V2.bottom else V2.binop op t v2 w2)
+      (fun v1 w1 -> if V1.(is_bottom v1 || is_bottom w1) then V1.bottom else V1.binop (v1_man man) t op (a1,e1) (a2,e2))
+      (fun v2 w2 -> if V2.(is_bottom v2 || is_bottom w2) then V2.bottom else V2.binop (v2_man man) t op (a1,e1) (a2,e2))
+      (man.get a1) (man.get a2)
 
-  let filter b t =
+  let filter t b =
     apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.filter b t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.filter b t v2)
+      (fun v1 -> if V1.is_bottom v1 then v1 else V1.filter t b v1)
+      (fun v2 -> if V2.is_bottom v2 then v2 else V2.filter t b v2)
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  let bwd_unop op t =
-    apply2
-      (fun v1 r1 -> if V1.is_bottom v1 then v1 else V1.bwd_unop op t v1 r1)
-      (fun v2 r2 -> if V2.is_bottom v2 then v2 else V2.bwd_unop op t v2 r2)
+  let bwd_unop man t op (a,e) (r1,r2) =
+    let aa = if V1.is_bottom r1 then a else V1.bwd_unop (v1_man man) t op (a,e) r1 in
+    if V2.is_bottom r2 then aa else V2.bwd_unop (v2_man man) t op (aa,e) r2
 
-  let bwd_binop op t (v1,v2) (w1,w2) (r1,r2) =
-    let x1,y1 = if V1.(is_bottom v1 || is_bottom w1) then V1.bottom,V1.bottom else V1.bwd_binop op t v1 w1 r1 in
-    let x2,y2 = if V2.(is_bottom v2 || is_bottom w2) then V2.bottom,V2.bottom else V2.bwd_binop op t v2 w2 r2 in
-    ((x1,x2),(y1,y2))
+  let bwd_binop man t op (a1,e1) (a2,e2) (r1,r2) =
+    let aa1,aa2 = if V1.is_bottom r1 then a1,a2 else V1.bwd_binop (v1_man man) t op (a1,e1) (a2,e2) r1 in
+    if V2.is_bottom r2 then aa1,aa2 else V2.bwd_binop (v2_man man) t op (aa1,e1) (aa2,e2) r2
 
-  let bwd_cast man t e =
+  let predicate t op b =
     apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.bwd_cast (v1_man man) t e v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.bwd_cast (v2_man man) t e v2)
+      (fun v1 -> if V1.is_bottom v1 then v1 else V1.predicate t op b v1)
+      (fun v2 -> if V2.is_bottom v2 then v2 else V2.predicate t op b v2)
 
-
-  let predicate op b t =
-    apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.predicate op b t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.predicate op b t v2)
-
-  let compare op b t (v1,v2) (w1,w2) =
-    let x1,y1 = if V1.(is_bottom v1 || is_bottom w1) then V1.bottom,V1.bottom else V1.compare op b t v1 w1 in
-    let x2,y2 = if V2.(is_bottom v2 || is_bottom w2) then V2.bottom,V2.bottom else V2.compare op b t v2 w2 in
+  let compare t op b (v1,v2) (w1,w2) =
+    let x1,y1 = if V1.(is_bottom v1 || is_bottom w1) then V1.bottom,V1.bottom else V1.compare t op b v1 w1 in
+    let x2,y2 = if V2.(is_bottom v2 || is_bottom w2) then V2.bottom,V2.bottom else V2.compare t op b v2 w2 in
     ((x1,x2),(y1,y2))
 
 
-  (** {2 Query handler} *)
-  (** ***************** *)
+  (** {2 Communication handlers} *)
+  (** ************************** *)
 
   let ask man q =
     OptionExt.neutral2
@@ -151,13 +141,25 @@ struct
       (V1.ask (v1_man man) q)
       (V2.ask (v2_man man) q)
 
+  let refine msg ((v1,v2) as v) =
+    let r1 = V1.refine msg v1 in
+    let r2 = V2.refine msg v2 in
+    match r1,r2 with
+    | None,None -> None
+    | Some r1,Some r2 ->
+      if r1 == v1 && r2 == v2 then Some v else Some (r1,r2)
+    | Some r1, None ->
+      if r1 == v1 then Some v else Some (r1,v2)
+    | None, Some r2 ->
+      if r2 == v2 then Some v else Some (v1,r2)
+
 
 
 
 end
 
-let rec make (values:(module VALUE) list) : (module VALUE) =
+let rec make (values:(module VALUE_COMBINER) list) : (module VALUE_COMBINER) =
   match values with
-  | [] -> (module EmptyValue)
+  | [] -> assert false
   | [v] -> v
-  | hd::tl -> (module Make(val hd : VALUE)(val (make tl) : VALUE) : VALUE)
+  | hd::tl -> (module Make(val hd : VALUE_COMBINER)(val (make tl) : VALUE_COMBINER) : VALUE_COMBINER)

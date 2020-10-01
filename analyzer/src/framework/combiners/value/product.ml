@@ -22,13 +22,13 @@
 (** Reduced product of value abstractions with n-ary reduction rules *)
 
 open Core.All
-open Sig.Abstraction.Value
+open Sig.Combiner.Value
 open Sig.Reduction.Value
 open Common
 
 
 
-module MakeValuePair(V1:VALUE)(V2:VALUE) : VALUE =
+module MakeValuePair(V1:VALUE_COMBINER)(V2:VALUE_COMBINER) : VALUE_COMBINER with type t = V1.t * V2.t =
 struct
 
   include Lattices.Pair.Make(V1)(V2)
@@ -51,54 +51,61 @@ struct
          ~lopen:"" ~lsep:"∧" ~lclose:""
 
 
-  let hdman (man:('a,t) value_man) : (('a,V1.t) value_man) = {
+  let hdman (man:('a,'v,t) value_man) : (('a,'v,V1.t) value_man) = {
     man with
-    eval = (fun exp -> man.eval exp |> fst);
+    get  = (fun a -> man.get a |> fst);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v1 then a else man.set (x,v2) a);
   }
 
-  let tlman (man:('a,t) value_man) : (('a,V2.t) value_man) = {
+  let tlman (man:('a,'v,t) value_man) : (('a,'v,V2.t) value_man) = {
     man with
-    eval = (fun exp -> man.eval exp |> snd);
+    get  = (fun a -> man.get a |> snd);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v2 then a else man.set (v1,x) a);
   }
 
   let constant t c =
-    let v1 = if V1.accept_type t then V1.constant t c else None in
-    let v2 = if V2.accept_type t then V2.constant t c else None in
+    let v1 = if V1.accept_type t then Some (V1.constant t c) else None in
+    let v2 = if V2.accept_type t then Some (V2.constant t c) else None in
     match v1, v2 with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.top)
-    | None, Some v2    -> Some (V1.top,v2)
+    | None, None       -> assert false
+    | Some v1, Some v2 -> (v1,v2)
+    | Some v1, None    -> (v1,V2.top)
+    | None, Some v2    -> (V1.top,v2)
 
-  let cast man t e =
-    let v1 = if V1.accept_type t then V1.cast (hdman man) t e else None in
-    let v2 = if V2.accept_type t then V2.cast (tlman man) t e else None in
-    match v1, v2 with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.top)
-    | None, Some v2    -> Some (V1.top,v2)
+  let unop man t op (a,e) =
+    apply
+      (fun _ -> V1.unop (hdman man) t op (a,e))
+      (fun _ -> V2.unop (tlman man) t op (a,e))
+      (man.get a)
 
-  let unop op t = apply (V1.unop op t) (V2.unop op t)
+  let binop man t op (a1,e1) (a2,e2) =
+    apply2
+      (fun _ _ -> V1.binop (hdman man) t op (a1,e1) (a2,e2))
+      (fun _ _ -> V2.binop (tlman man) t op (a1,e1) (a2,e2))
+      (man.get a1) (man.get a2)
 
-  let binop op t = apply2 (V1.binop op t) (V2.binop op t)
+  let filter t b =
+    apply (V1.filter t b) (V2.filter t b)
 
-  let filter b t = apply (V1.filter b t) (V2.filter b t)
+  let bwd_unop man t op (a,e) (r1,r2) =
+    let aa = V1.bwd_unop (hdman man) t op (a,e) r1 in
+    V2.bwd_unop (tlman man) t op (aa,e) r2
 
-  let bwd_unop op t = apply2 (V1.bwd_unop op t) (V2.bwd_unop op t)
+  let bwd_binop man op t (a1,e1) (a2,e2) (r1,r2) =
+    let aa1,aa2 = V1.bwd_binop (hdman man) op t (a1,e1) (a2,e2) r1 in
+    V2.bwd_binop (tlman man) op t (aa1,e1) (aa2,e2) r2
 
-  let bwd_binop op t (v1,v2) (w1,w2) (r1,r2) =
-    let x1,y1 = V1.bwd_binop op t v1 w1 r1 in
-    let x2,y2 = V2.bwd_binop op t v2 w2 r2 in
-    ((x1,x2),(y1,y2))
+  let predicate t op b =
+    apply
+      (V1.predicate t op b) (V2.predicate t op b)
 
-  let bwd_cast man t e = apply (V1.bwd_cast (hdman man) t e) (V2.bwd_cast (tlman man) t e)
-
-  let predicate op b t = apply (V1.predicate op b t) (V2.predicate op b t)
-
-  let compare op b t (v1,v2) (w1,w2) =
-    let x1,y1 = V1.compare op b t v1 w1 in
-    let x2,y2 = V2.compare op b t v2 w2 in
+  let compare t op b (v1,v2) (w1,w2) =
+    let x1,y1 = V1.compare t op b v1 w1 in
+    let x2,y2 = V2.compare t op b v2 w2 in
     ((x1,x2),(y1,y2))
 
   let ask man q =
@@ -108,9 +115,23 @@ struct
       (V1.ask (hdman man) q)
       (V2.ask (tlman man) q)
 
+  let refine msg ((v1,v2) as v) =
+    let r1 = V1.refine msg v1 in
+    let r2 = V2.refine msg v2 in
+    match r1,r2 with
+    | None,None -> None
+    | Some r1,Some r2 ->
+      if r1 == v1 && r2 == v2 then Some v else Some (r1,r2)
+    | Some r1, None ->
+      if r1 == v1 then Some v else Some (r1,v2)
+    | None, Some r2 ->
+      if r2 == v2 then Some v else Some (v1,r2)
+
+
+
 end
 
-module Make(V:VALUE)(R:sig val rules: (module VALUE_REDUCTION) list end) : VALUE with type t = V.t =
+module Make(V:VALUE_COMBINER)(R:sig val rules: (module VALUE_REDUCTION) list end) : VALUE_COMBINER with type t = V.t =
 struct
 
   include V
@@ -170,31 +191,37 @@ struct
     let v2' = reduce v2 in
     if v1 == v1' && v2 == v2' then v else (v1',v2')
 
+  let reduce_man (man:('a,'v,t) value_man) a =
+    man.set (reduce (man.get a)) a
 
-  let constant t c = V.constant t c |> OptionExt.lift reduce
-  let cast man t e = V.cast man t e |> OptionExt.lift reduce
-  let unop op t v = V.unop op t v |> reduce
-  let binop op t v1 v2 = V.binop op t v1 v2 |> reduce
-  let filter b t v = V.filter b t v |> reduce
-  let bwd_unop op t v r = V.bwd_unop op t v r |> reduce
-  let bwd_binop op t v1 v2 r = V.bwd_binop op t v1 v2 r |> reduce_pair
-  let predicate op b t v = V.predicate op b t v |> reduce
-  let compare op b t v1 v2 = V.compare op b t v1 v2 |> reduce_pair
+  let reduce_man_pair (man:('a,'v,t) value_man) (a1,a2) =
+    let v = man.get a1, man.get a2 in
+    let (v1,v2) = reduce_pair v in
+    man.set v1 a1, man.set v2 a2
+
+  let constant t c = V.constant t c |> reduce
+  let unop man t op v = V.unop man t op v |> reduce
+  let binop man t op v1 v2 = V.binop man t op v1 v2 |> reduce
+  let filter t b v = V.filter t b v |> reduce
+  let bwd_unop man t op v r = V.bwd_unop man t op v r |> reduce_man man
+  let bwd_binop man t op v1 v2 r = V.bwd_binop man t op v1 v2 r |> reduce_man_pair man
+  let predicate t op b v = V.predicate t op b v |> reduce
+  let compare t op b v1 v2 = V.compare t op b v1 v2 |> reduce_pair
 
 end
 
 
 let make
-    (values: (module VALUE) list)
+    (values: (module VALUE_COMBINER) list)
     (rules: (module VALUE_REDUCTION) list)
-  : (module VALUE) =
+  : (module VALUE_COMBINER) =
 
   let rec aux = function
-    | [] -> (module EmptyValue : VALUE)
+    | [] -> assert false
     | [v] -> v
     | hd::tl ->
       let v = aux tl in
-      (module MakeValuePair(val hd)(val v))
+      (module MakeValuePair(val hd : VALUE_COMBINER)(val v : VALUE_COMBINER) : VALUE_COMBINER)
   in
   let v = aux values in
   (module Make(val v)(struct let rules = rules end))

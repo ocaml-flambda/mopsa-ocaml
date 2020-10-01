@@ -38,6 +38,9 @@ type ('a,_) query +=
   | Q_int_interval : expr -> ('a,int_itv) query (** Query to evaluate the integer interval of an expression *)
   | Q_fast_int_interval : expr -> ('a,int_itv) query (** Query handled by non-relational domains only *)
 
+type hint +=
+  | H_int_interval of int_itv
+
 let mk_int_interval_query ?(fast=true) e =
   if fast then Q_fast_int_interval e else Q_int_interval e
 
@@ -130,6 +133,9 @@ type float_itv = F.t
 type ('a,_) query +=
   | Q_float_interval : expr -> ('a,float_itv) query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
   | VQ_to_float_interval : ('a,float_itv) query (** Value query to cast an abstract value to a float interval *)
+
+type hint +=
+  | H_float_interval of float_itv
 
 let mk_float_interval_query e =
   Q_float_interval e

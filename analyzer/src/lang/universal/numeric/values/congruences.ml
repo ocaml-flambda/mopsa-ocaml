@@ -64,42 +64,23 @@ struct
 
   let print printer (a:t) = unformat C.fprint_bot printer a
 
-  let constant t c =
-    match t with
-    | T_int | T_bool ->
-      let v = match c with
-        | C_bool true -> Nb (C.cst_int 1)
-        | C_bool false -> Nb (C.cst_int 0)
-        | C_int i -> Nb (C.cst i)
-        | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
-        | _ -> top
-      in
-      Some v
-    | _ -> None
+  let constant t = function
+    | C_bool true -> Nb (C.cst_int 1)
+    | C_bool false -> Nb (C.cst_int 0)
+    | C_int i -> Nb (C.cst i)
+    | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
+    | _ -> top
 
-  let cast man t e =
-    match t, e.etyp with
-    | (T_int | T_bool), T_float _ ->
-      let float_itv = man.ask (Common.Q_float_interval e) in
-      let itv = ItvUtils.FloatItvNan.to_int_itv float_itv in
-      begin match itv with
-        | BOT -> Some bottom
-        | Nb(a,b) -> Some (C.of_bound_bot a b)
-      end
-
-    | (T_int | T_bool), _ -> Some top
-
-    | _ -> None
-
-  let unop op t a =
+  let unop t op a =
     match op with
     | O_log_not -> bot_lift1 C.log_not a
     | O_minus  -> bot_lift1 C.neg a
     | O_plus  -> a
     | _ -> top
 
+  let het_unop man t op (a,e) = top
 
-  let binop op t a1 a2 =
+  let binop t op a1 a2 =
     match op with
     | O_plus   -> bot_lift2 C.add a1 a2
     | O_minus  -> bot_lift2 C.sub a1 a2
@@ -112,12 +93,13 @@ struct
     | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
     | _     -> top
 
-  let filter b t a =
+  let het_binop man t op (a1,e1) (a2,e2) = top
+
+  let filter t b a =
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
 
-
-  let bwd_unop op t a r =
+  let bwd_unop t op a r =
     try
       let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
@@ -128,7 +110,9 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_binop op t a1 a2 r =
+  let bwd_het_unop = default_bwd_het_unop
+
+  let bwd_binop t op a1 a2 r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -146,11 +130,11 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let bwd_cast = default_bwd_cast
+  let bwd_het_binop = default_bwd_het_binop
 
   let predicate = default_predicate
 
-  let compare op b t a1 a2 =
+  let compare t op b a1 a2 =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
       let op = if b then op else negate_comparison_op op in
@@ -169,10 +153,10 @@ struct
       bottom, bottom
 
 
-  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option = fun man query ->
+  let ask : type r. ('a,'v,t) value_man -> ('a,r) query -> r option = fun man query ->
     match query with
     | Common.Q_int_congr_interval e ->
-      let c = man.eval e in
+      let c = man.eval e |> man.get in
       let ret =
         match c with
         | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
@@ -181,6 +165,8 @@ struct
       OptionExt.return ret
 
     | _ -> None
+
+  let refine hint a = None
 
 end
 

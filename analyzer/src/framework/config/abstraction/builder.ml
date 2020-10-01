@@ -28,20 +28,18 @@ open Sig.Combiner.Stacked
 open Sig.Combiner.Domain
 open Sig.Combiner.Stateless
 open Sig.Combiner.Simplified
-open Sig.Abstraction.Value
+open Sig.Combiner.Value
 
 
 (** {2 Values} *)
 (** ********** *)
 
-let rec make_value (value:value) : (module VALUE) =
+let rec make_value (value:value) : (module VALUE_COMBINER) =
   match value with
-  | V_value v                     -> v
+  | V_value v                     -> (module ValueToCombiner(val v))
   | V_union values                -> Combiners.Value.Union.make (List.map make_value values)
   | V_product (values,reductions) -> Combiners.Value.Product.make (List.map make_value values) reductions
-  | V_functor(f, vv) ->
-    let module F = (val f) in
-    (module F.Functor(val (make_value vv)))
+  | V_functor(f, vv)              -> Exceptions.panic "value functors not implemented"
 
 
 
