@@ -47,7 +47,7 @@ struct
 
   let lowlevel = Semantic "C/Lowlevel"
 
-  let alarms = []
+  let checks = []
 
 
   (** Initialization of environments *)
@@ -172,7 +172,11 @@ struct
       exec_assign_base base offset mode target.etyp assigned_indices range man flow
 
     | P_top ->
-      Soundness.warn_at range "ignoring assigns on ⊤ pointer %a" pp_expr (get_orig_expr ptr);
+      let flow =
+        Flow.add_local_assumption
+          (Soundness.A_ignore_modification_undetermined_pointer ptr)
+          range flow
+      in
       Post.return flow
 
     | _ -> assert false
@@ -259,7 +263,6 @@ struct
       eval_primed_base base offset mode e.etyp range man flow
 
     | P_top ->
-      Soundness.warn_at range "ignoring prime of ⊤ pointer %a" pp_expr (get_orig_expr ptr);
       man.eval (mk_top e.etyp range) flow
 
     | _ -> assert false

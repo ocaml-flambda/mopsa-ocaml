@@ -28,6 +28,7 @@ open Manager
 open Ast.Expr
 open Ast.Stmt
 open Route
+open Alarm
 
 let debug fmt = Debug.debug ~channel:"framework.core.cache" fmt
 
@@ -101,12 +102,12 @@ struct
 
   module ExecCache = Queue(
     struct
-      type t = route * stmt * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (route1,stmt1,tmap1,alarms1) (route2,stmt2,tmap2,alarms2) =
+      type t = route * stmt * Domain.t Token.TokenMap.t * Alarm.report
+      let equal (route1,stmt1,tmap1,report1) (route2,stmt2,tmap2,report2) =
         compare_route route1 route2 = 0 &&
         stmt1 == stmt2 &&
         tmap1 == tmap2 &&
-        alarms1 == alarms2
+        report1 == report2
     end
     )
 
@@ -118,8 +119,8 @@ struct
 
     else try
         let tmap = Flow.get_token_map flow in
-        let alarms = Flow.get_alarms flow in
-        let opost = ExecCache.find (semantic,stmt,tmap,alarms) exec_cache in
+        let report = Flow.get_report flow in
+        let opost = ExecCache.find (semantic,stmt,tmap,report) exec_cache in
         OptionExt.lift (fun post ->
             Cases.set_ctx (
               Context.most_recent_ctx (Cases.get_ctx post) (Flow.get_ctx flow)
@@ -127,7 +128,7 @@ struct
           ) opost
       with Not_found ->
         let post = f stmt man flow in
-        ExecCache.add (semantic, stmt, Flow.get_token_map flow, Flow.get_alarms flow) post exec_cache;
+        ExecCache.add (semantic, stmt, Flow.get_token_map flow, Flow.get_report flow) post exec_cache;
         post
 
 
@@ -136,12 +137,12 @@ struct
 
   module EvalCache = Queue(
     struct
-      type t = route * expr * Domain.t Token.TokenMap.t * Alarm.AlarmSet.t
-      let equal (route1,exp1,tmap1,alarms1) (route2,exp2,tmap2,alarms2) =
+      type t = route * expr * Domain.t Token.TokenMap.t * Alarm.report
+      let equal (route1,exp1,tmap1,report1) (route2,exp2,tmap2,report2) =
         compare_route route1 route2 = 0 &&
         exp1 == exp2 &&
         tmap1 == tmap2 &&
-        alarms1 == alarms2
+        report1 == report2
     end
     )
 
@@ -152,15 +153,15 @@ struct
     then f exp man flow
     else try
         let tmap = Flow.get_token_map flow in
-        let alarms = Flow.get_alarms flow in
-        let evls = EvalCache.find (route,exp,tmap,alarms) eval_cache in
+        let report = Flow.get_report flow in
+        let evls = EvalCache.find (route,exp,tmap,report) eval_cache in
         OptionExt.lift (fun evl ->
             let ctx = Context.most_recent_ctx (Cases.get_ctx evl) (Flow.get_ctx flow) in
             Cases.set_ctx ctx evl
           ) evls
       with Not_found ->
         let evals = f exp man flow in
-        EvalCache.add (route, exp, Flow.get_token_map flow, Flow.get_alarms flow) evals eval_cache;
+        EvalCache.add (route, exp, Flow.get_token_map flow, Flow.get_report flow) evals eval_cache;
         evals
 
 end

@@ -75,7 +75,7 @@ struct
 
   let debug fmt = Debug.debug ~channel:name fmt
 
-  let alarms = []
+  let checks = []
 
   let print fmt d =
     Format.fprintf fmt "attributes: @[%a@]@\n"

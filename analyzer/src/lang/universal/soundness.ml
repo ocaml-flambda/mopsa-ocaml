@@ -19,21 +19,25 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Soundness warnings *)
+(** Soundness assumptions *)
 
-type warning = {
-  warn_range   : Location.range option;
-  warn_message : string;
-}
+open Mopsa
+open Ast
 
-val pp_warning : Format.formatter -> warning -> unit
 
-val compare_warning : warning -> warning -> int
+type assumption_kind += A_ignore_recursion_side_effect of string
 
-val is_sound : unit -> bool
-
-val get_warnings : unit -> warning list
-
-val warn : ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val warn_at : Location.range -> ('a, Format.formatter, unit, unit) format4 -> 'a
+let () = register_assumption {
+    print = (fun next fmt -> function
+        | A_ignore_recursion_side_effect f ->
+          Format.fprintf fmt "ignoring side effects of recursive call to '%a'"
+            (Debug.bold Format.pp_print_string) f
+        | a -> next fmt a
+      );
+    compare = (fun next a1 a2 ->
+        match a1,a2 with
+        | A_ignore_recursion_side_effect f1, A_ignore_recursion_side_effect f2 ->
+          compare f1 f2
+        | _ -> next a1 a2
+      );
+  }

@@ -45,8 +45,8 @@ sig
   val id : unit id
   (** Identifier of the domain *)
 
-  val alarms : alarm_class list
-  (** List of alarms detected by the domain *)
+  val checks : check list
+  (** List of checks performed by the domain *)
 
 
   (** {2 Transfer functions} *)

@@ -47,7 +47,7 @@ struct
 
   include Framework.Core.Id.GenStatelessDomainId(struct let name = "python.objects.object" end)
 
-  let alarms = []
+  let checks = []
 
   let init prog man flow = flow
 

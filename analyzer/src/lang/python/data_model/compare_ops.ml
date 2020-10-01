@@ -36,7 +36,7 @@ module Domain = struct
       let name = "python.data_model.compare_ops"
     end)
 
-  let alarms = []
+  let checks = []
 
   let init _ _ flow = flow
 

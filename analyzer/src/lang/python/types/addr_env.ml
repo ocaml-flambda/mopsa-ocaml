@@ -128,7 +128,7 @@ struct
   let meet = AMap.meet
   let widen = AMap.widen
 
-  let alarms = []
+  let checks = []
 
   let merge _ _ _ = assert false
 
@@ -432,7 +432,7 @@ struct
                      | E_addr a' ->
                         Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice (Flow.add tk d man.lattice acc)
                      | _ -> assert false) acc addrs
-              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow in
+              | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow in
        begin match akind a with
        | A_py_instance {addr_kind = A_py_class (C_annot _, _)} ->
           let skind = S_expand ({e1 with ekind = E_py_annot e1}, addrs) in
@@ -463,7 +463,7 @@ struct
                match tk with
                | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
                   Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
-               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow
+               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow
          else
            flow in
        begin match akind a with
@@ -497,11 +497,19 @@ struct
        end |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
-       Soundness.warn_at range "%a not properly supported" pp_stmt stmt;
+       let flow =
+         Flow.add_local_assumption
+           (A_ignore_unsupported_stmt stmt)
+           range flow
+       in
        man.exec   (mk_remove_var v range) flow |> OptionExt.return
 
     | S_py_delete _ ->
-       Soundness.warn_at range "%a not supported, ignored" pp_stmt stmt;
+       let flow =
+         Flow.add_local_assumption
+           (A_ignore_unsupported_stmt stmt)
+           range flow
+       in
        flow |> Post.return |> OptionExt.return
 
 

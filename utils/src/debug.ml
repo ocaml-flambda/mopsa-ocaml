@@ -32,7 +32,7 @@ let colors = [
   ("yellow", 0xbe);
   ("blue", 4);
   ("magenta", 5);
-  ("fushia", 13);
+  ("fushia", 177);
   ("orange", 0xd0);
   ("teal", 6);
 ]

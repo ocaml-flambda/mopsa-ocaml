@@ -91,6 +91,4 @@ include Id
 
 include Manager
 
-module Soundness = Soundness
-
 module Hook = Hook

@@ -33,7 +33,7 @@ struct
     end)
 
 
-  let alarms = []
+  let checks = []
 
   let init prog man flow = flow
 

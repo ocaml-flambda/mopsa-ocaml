@@ -84,7 +84,7 @@ struct
       let name = name
     end)
 
-  let alarms = []
+  let checks = []
 
   let init (prog:program) man flow = flow
 

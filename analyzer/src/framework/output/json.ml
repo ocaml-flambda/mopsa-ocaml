@@ -24,13 +24,8 @@
 open Yojson.Basic
 open ArgExt
 open Core.All
-open Soundness
 open Callstack
 open Location
-
-module AlarmMessageSet = SetExt.Make(struct type t = alarm_message let compare = compare_alarm_message end)
-module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
-
 
 let print out json =
   let channel =
@@ -67,50 +62,43 @@ let render_call (c:callsite)  =
 let render_callstack cs  =
   `List (List.map render_call cs)
 
-let render_alarm_class alarm =
-  let title = Format.asprintf "%a" pp_alarm_class alarm in
+let aggregate_alarms report =
+  RangeMap.fold
+    (fun range checks acc ->
+       CheckMap.fold
+         (fun check diag acc ->
+            match diag.diag_kind with
+            | Safe | Unreachable -> acc
+            | Error | Warning ->
+              let csl = AlarmSet.elements diag.diag_alarms |>
+                        List.map callstack_of_alarm in
+              (range,check,csl) :: acc
+         ) checks acc
+    ) report.report_diagnostics []
+
+let render_check check =
+  let title = Format.asprintf "%a" pp_check check in
   `String title
 
-let render_alarm_messages cls messages =
-  let msgs = Format.asprintf "%a" (pp_grouped_alarm_message cls) (AlarmMessageSet.elements messages) in
-  `String msgs
-
-let render_alarm cls messages range callstacks =
+let render_alarm (range,check,csl) =
   `Assoc [
-      "title", render_alarm_class cls;
-      "messages", render_alarm_messages cls messages;
-      "range", render_range range;
-      "callstacks", `List (List.map render_callstack callstacks);
+    "title", render_check check;
+    "range", render_range range;
+    "callstacks", `List (List.map render_callstack csl);
+  ]
+
+let render_soudness_assumtion h =
+  let msg = Format.asprintf "%a" pp_assumption_kind h.assumption_kind in
+  match h.assumption_scope with
+  | A_global ->
+    `Assoc [
+      "message", `String msg;
     ]
 
-let render_alarms alarms =
-  let cls_map = index_alarm_set_by_class alarms in
-  ClassMap.fold (fun cls ss alarms ->
-    (* Then iterate on the location ranges within each class *)
-    let range_map = index_alarm_set_by_range ss in
-    RangeMap.fold (fun range sss alarms ->
-
-    (* Group similar messages and callstacks *)
-    let messages, callstacks = AlarmSet.fold (fun alarm (messages,callstacks) ->
-      AlarmMessageSet.add (get_alarm_message alarm) messages,
-      CallstackSet.add (get_alarm_callstack alarm) callstacks
-                                 ) sss (AlarmMessageSet.empty, CallstackSet.empty)
-    in
-    (render_alarm cls messages range (CallstackSet.elements callstacks)) :: alarms
-                       ) range_map alarms
-    ) cls_map []
-
-let render_warning w  =
-  match w.warn_range with
-  | None ->
+  | A_local r ->
     `Assoc [
-      "message", `String w.warn_message;
-    ]
-
-  | Some r ->
-    `Assoc [
-      "message", `String w.warn_message;
       "range", render_range r;
+      "message", `String msg;
     ]
 
 
@@ -127,15 +115,15 @@ let render_env (var,value)  =
   ]
 
 
-let report ?(flow=None) man alarms time files out : unit =
+let report ?(flow=None) man rep time files out : unit =
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (render_alarms alarms);
-      "warnings", `List (List.map render_warning (get_warnings ()));
+      "alarms", `List (aggregate_alarms rep |> List.map render_alarm);
+      "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in
   print out json
@@ -209,9 +197,9 @@ let list_domains (domains:string list) out =
   in
   print out json
 
-let list_alarms alarms out =
+let list_checks checks out =
   let json = `List (
-      List.map render_alarm_class alarms
+      List.map render_check checks
     )
   in
   print out json

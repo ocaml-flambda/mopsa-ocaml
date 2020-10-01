@@ -39,7 +39,7 @@ struct
 
   let scalar = Semantic "C/Scalar"
 
-  let alarms = []
+  let checks = []
 
 
   (** {2 Initialization} *)

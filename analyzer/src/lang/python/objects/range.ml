@@ -70,7 +70,7 @@ struct
         Eval.singleton (mk_py_object (addr, oe) range)
       )
 
-  let alarms = []
+  let checks = []
 
   let rec eval exp man flow =
     let range = exp.erange in

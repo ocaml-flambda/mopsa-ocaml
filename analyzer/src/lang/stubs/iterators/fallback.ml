@@ -32,7 +32,8 @@ module Domain =
 struct
 
   include GenStatelessDomainId(struct let name = "stubs.iterators.fallback" end)
-  let alarms = []
+
+  let checks = [CHK_STUB_INVALID_REQUIRES]
 
   let init prog man flow = flow
   let ask query man flow = None
@@ -73,10 +74,17 @@ struct
 
   let exec_requires cond range man flow =
     assume cond
-      ~fthen:(fun flow -> Post.return flow)
+      ~fthen:(fun flow ->
+          safe_stub_requires range man flow |>
+          Post.return
+        )
       ~felse:(fun flow ->
           raise_stub_invalid_requires cond range man flow |>
           Post.return
+        )
+      ~fnone:(fun flow ->
+          unreachable_stub_requires range man flow |>
+          Cases.empty
         )
       man flow
 

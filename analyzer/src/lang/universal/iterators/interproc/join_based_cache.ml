@@ -41,7 +41,7 @@ struct
 
   let dependencies = []
 
-  let alarms = []
+  let checks = []
 
   let debug fmt = Debug.debug ~channel:name fmt
 

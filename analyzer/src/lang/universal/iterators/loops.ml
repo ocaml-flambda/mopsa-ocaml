@@ -188,7 +188,7 @@ struct
       let name = name
     end)
 
-  let alarms = []
+  let checks = []
 
   (** {3 Cache of last fixpoint} *)
   (** ************************** *)
@@ -242,7 +242,7 @@ struct
         else r
       with Not_found -> LoopHeadMap.empty in
     let stripped_flow =
-      Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow) |>
+      Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow) |>
       Flow.add T_cur (Flow.get T_cur man.lattice flow) man.lattice |>
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
@@ -290,13 +290,13 @@ struct
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
-      if AlarmSet.subset (Flow.get_alarms flow') (Flow.get_alarms flow_init) then
+      if subset_report (Flow.get_report flow') (Flow.get_report flow_init) then
         Post.return flow'
       else
         let () = debug "decreasing iteration" in
         Flow.remove T_continue flow' |>
         Flow.remove T_break |>
-        Flow.remove_alarms |>
+        Flow.remove_report |>
         man.exec (mk_assume cond cond.erange) >>%
         man.exec body >>% fun f ->
         merge_cur_and_continue man f |>
@@ -321,7 +321,7 @@ struct
       (OptionExt.print ~none:"" ~some:"" Format.pp_print_int) i
       pp_range (srange body);
     if i = Some 0 then
-      Cases.singleton (false, Flow.bottom (Flow.get_ctx flow) (Flow.get_alarms flow)) flow
+      Cases.singleton (false, Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow
     else
       let post1 =
         man.exec {skind = S_assume cond; srange = cond.erange} flow >>%
@@ -368,7 +368,7 @@ struct
 
       begin if !opt_loop_use_cache then
           match join_w_old_lfp man flow0 (stmt.srange, Flow.get_callstack flow0) with
-          | Some flow0 -> Cases.singleton (false, Flow.bottom (Flow.get_ctx flow0) (Flow.get_alarms flow0)) flow0
+          | Some flow0 -> Cases.singleton (false, Flow.bottom (Flow.get_ctx flow0) (Flow.get_report flow0)) flow0
           | None -> unroll (get_range_unrolling stmt.srange) cond body man flow0
         else
           unroll (get_range_unrolling stmt.srange) cond body man flow0

@@ -123,7 +123,7 @@ struct
 
   let top = Pool.top
 
-  let alarms = []
+  let checks = []
 
   (** Lattice operators *)
   (** ================= *)

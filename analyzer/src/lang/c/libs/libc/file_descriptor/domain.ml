@@ -154,7 +154,7 @@ struct
 
   let numeric = Semantic "U/Numeric"
 
-  let alarms = []
+  let checks = []
 
   (** Initialization of environments *)
   (** ============================== *)

@@ -82,7 +82,7 @@ module Domain =
       | E_addr a -> a
       | _ -> assert false
 
-    let alarms = []
+    let checks = []
 
 
     let init _ _ flow = flow
