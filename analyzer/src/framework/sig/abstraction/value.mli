@@ -42,88 +42,25 @@ type ('v,'t) value_man = {
   from_aval : 'r. 'r aval -> 'r -> 'v;
 }
 
-type 'v vexpr =
-  | Map of ('v * 'v vexpr) ExprMap.t
+(*==========================================================================*)
+(**                        {2 Valued expressions}                           *)
+(*==========================================================================*)
 
-let empty_vexpr = Map ExprMap.empty
+type 'v vexpr
 
-let singleton_vexpr e v ve =
-  Map (ExprMap.singleton e (v,ve))
+val empty_vexpr : 'v vexpr
+val singleton_vexpr : expr -> 'v -> 'v vexpr -> 'v vexpr
+val add_vexpr : expr -> 'v -> 'v vexpr -> 'v vexpr -> 'v vexpr
+val refine_vexpr : expr -> 'v -> 'v vexpr -> 'v vexpr
+val find_vexpr : expr -> 'v vexpr -> 'v * 'v vexpr
+val find_vexpr_opt : expr -> 'v vexpr -> ('v * 'v vexpr) option
+val map_vexpr : ('v -> 's) -> 'v vexpr -> 's vexpr
+val fold_root_vexpr : ('a -> expr -> 'v -> 'v vexpr -> 'a) -> 'a -> 'v vexpr -> 'a
+val fold_vexpr : ('a -> expr -> 'v -> 'v vexpr -> 'a) -> 'a -> 'v vexpr -> 'a
+val map2_vexpr : ('v -> 's) -> ('v -> 's) -> ('v -> 'v -> 's) -> 'v vexpr -> 'v vexpr -> 's vexpr
+val merge_vexpr : ('v -> 'v -> 'v) -> 'v vexpr -> 'v vexpr -> 'v vexpr
 
-let add_vexpr e v ve = function
-  | Map map -> Map (ExprMap.add e (v,ve) map)
 
-let refine_vexpr e v = function
-  | Map map ->
-    let r =
-      match ExprMap.find_opt e map with
-      | Some (_,ve) -> (v,ve)
-      | None -> (v,empty_vexpr)
-    in
-    Map (ExprMap.add e r map)
-
-let rec find_vexpr e = function
-  | Map map ->
-    try ExprMap.find e map
-    with Not_found ->
-      let rec iter = function
-        | [] -> raise Not_found
-        | (_,(_,vee))::tl ->
-          try find_vexpr e vee
-          with Not_found -> iter tl
-      in
-      iter (ExprMap.bindings map)
-
-let find_vexpr_opt e ve =
-  try Some (find_vexpr e ve)
-  with Not_found -> None
-
-let rec map_vexpr f = function
-  | Map map ->
-    let map' =
-      ExprMap.map
-        (fun (v,ve) -> (f v,map_vexpr f ve))
-        map
-    in
-    Map map'
-
-let fold_root_vexpr f init = function
-  | Map map ->
-    ExprMap.fold
-      (fun e (v,ve) acc -> f acc e v ve)
-      map init
-
-let rec fold_vexpr f init = function
-  | Map map ->
-    ExprMap.fold
-      (fun e (v,ve) acc -> fold_vexpr f (f acc e v ve) ve)
-      map init
-
-let rec map2_vexpr f1 f2 f ve1 ve2 =
-  match ve1,ve2 with
-  | Map m1, Map m2 ->
-    let m =
-      ExprMap.map2o
-        (fun e (v1,ve1) -> f1 v1, map_vexpr f1 ve1)
-        (fun e (v2,ve2) -> f2 v2, map_vexpr f2 ve2)
-        (fun e (v1,ve1) (v2,ve2) ->
-           (f v1 v2, map2_vexpr f1 f2 f ve1 ve2)
-        )
-        m1 m2 in
-    Map m
-
-let rec merge_vexpr vmerge ve1 ve2 =
-  match ve1,ve2 with
-  | Map m1, Map m2 ->
-    let m =
-      ExprMap.map2zo
-        (fun e ve1 -> ve1)
-        (fun e ve2 -> ve2)
-        (fun e (v1,ve1) (v2,ve2) ->
-           (vmerge v1 v2, merge_vexpr vmerge ve1 ve2)
-        )
-        m1 m2 in
-    Map m
 
 (*==========================================================================*)
 (**                          {2 Value domain}                               *)
@@ -202,7 +139,7 @@ sig
 
   val compare : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
   (** Backward evaluation of boolean comparisons.
-      [compare man true op e1 v1 e2 v2] returns (v1',v2') where:
+      [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
        - v1' abstracts the set of v  in v1 such that v1' op v' is true for some v' in v2'
        - v2' abstracts the set of v' in v2 such that v2' op v' is true for some v  in v1'
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
@@ -228,44 +165,29 @@ sig
 end
 
 
-let default_filter man b e = None
-let default_eval man e = None
-let default_backward man e ve r = None
-let default_compare man op b e1 v1 e2 v2 = None
+val default_eval : ('v,'t) value_man -> expr -> 'v option
+val default_filter : ('v,'t) value_man -> bool -> expr -> 'v option
+val default_backward : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+val default_compare : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
 
-module DefaultValueFunctions =
-struct
-  let eval = default_eval
-  let filter = default_filter
-  let backward = default_backward
-  let compare = default_compare
-  let to_aval man aval v = None
-  let from_aval man aval av = None
+module DefaultValueFunctions :
+sig
+  val eval : ('v,'t) value_man -> expr -> 'v option
+  val filter : ('v,'t) value_man -> bool -> expr -> 'v option
+  val backward : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+  val compare : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
+  val to_aval : ('v,'t) value_man -> 'r aval -> 'v -> 'r option
+  val from_aval : ('v,'t) value_man -> 'r aval -> 'r -> 'v option
 end
 
 (*==========================================================================*)
 (**                          {2 Registration}                               *)
 (*==========================================================================*)
 
-let values : (module VALUE) list ref = ref []
+val register_value_abstraction : (module VALUE) -> unit
 
-let register_value_abstraction dom =
-  values := dom :: !values
+val find_value_abstraction : string -> (module VALUE)
 
-let find_value_abstraction name =
-  List.find (fun dom ->
-      let module D = (val dom : VALUE) in
-      compare D.name name = 0
-    ) !values
+val mem_value_abstraction : string -> bool
 
-let mem_value_abstraction name =
-  List.exists (fun dom ->
-      let module D = (val dom : VALUE) in
-      compare D.name name = 0
-    ) !values
-
-let value_abstraction_names () =
-  List.map (fun dom ->
-      let module D = (val dom : VALUE) in
-      D.name
-    ) !values
+val value_abstraction_names : unit -> string list

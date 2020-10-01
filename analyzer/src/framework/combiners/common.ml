@@ -188,3 +188,15 @@ let cascade_call targets f1 domains1 f2 domains2 =
            (* Call [D2] on not-handled cases *)
            let ret2 = not_handled1' >>=? fun _ flow -> ff2 cmd (snd_pair_man man) flow in
            OptionExt.neutral2 Cases.join handled1 ret2)
+
+let combine_pair_eval man man1 man2 bot1 bot2 f1 f2 =
+  let open Sig.Abstraction.Value in
+  let r1 = f1 man1 in
+  let r2 = f2 man2 in
+  match r1, r2 with
+  | None, None       -> None
+  | Some r1, None    -> Some (man2.set bot2 r1)
+  | None, Some r2    -> Some (man1.set bot1 r2)
+  | Some r1, Some r2 -> Some (man.meet
+                                (man2.set (man2.get r2) r1)
+                                (man1.set (man1.get r1) r2))

@@ -22,13 +22,13 @@
 (** Reduced product of value abstractions with n-ary reduction rules *)
 
 open Core.All
-open Sig.Combiner.Value
+open Sig.Abstraction.Value
 open Sig.Reduction.Value
 open Common
 
 
 
-module MakeValuePair(V1:VALUE_COMBINER)(V2:VALUE_COMBINER) : VALUE_COMBINER with type t = V1.t * V2.t =
+module MakeValuePair(V1:VALUE)(V2:VALUE) : VALUE with type t = V1.t * V2.t =
 struct
 
   include Lattices.Pair.Make(V1)(V2)
@@ -42,7 +42,7 @@ struct
     | V_empty -> V1.display
     | _ ->  "(" ^ V1.display ^ " ∧ " ^ V2.display ^ ")"
 
-  let accept_type t = V1.accept_type t || V2.accept_type t
+  let accept_type t = V1.accept_type t && V2.accept_type t
 
   let print printer (v1,v2) =
       pp_obj_list printer
@@ -51,7 +51,7 @@ struct
          ~lopen:"" ~lsep:"∧" ~lclose:""
 
 
-  let hdman (man:('a,'v,t) value_man) : (('a,'v,V1.t) value_man) = {
+  let hdman (man:('v,t) value_man) : (('v,V1.t) value_man) = {
     man with
     get  = (fun a -> man.get a |> fst);
     set  = (fun x a ->
@@ -59,7 +59,7 @@ struct
         if x == v1 then a else man.set (x,v2) a);
   }
 
-  let tlman (man:('a,'v,t) value_man) : (('a,'v,V2.t) value_man) = {
+  let tlman (man:('v,t) value_man) : (('v,V2.t) value_man) = {
     man with
     get  = (fun a -> man.get a |> snd);
     set  = (fun x a ->
@@ -67,71 +67,40 @@ struct
         if x == v2 then a else man.set (v1,x) a);
   }
 
-  let constant t c =
-    let v1 = if V1.accept_type t then Some (V1.constant t c) else None in
-    let v2 = if V2.accept_type t then Some (V2.constant t c) else None in
-    match v1, v2 with
-    | None, None       -> assert false
-    | Some v1, Some v2 -> (v1,v2)
-    | Some v1, None    -> (v1,V2.top)
-    | None, Some v2    -> (V1.top,v2)
+  let eval man e =
+    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
+      (fun man1 -> V1.eval man1 e)
+      (fun man2 -> V2.eval man2 e)
 
-  let unop man t op (a,e) =
-    apply
-      (fun _ -> V1.unop (hdman man) t op (a,e))
-      (fun _ -> V2.unop (tlman man) t op (a,e))
-      (man.get a)
+  let filter man b e =
+    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
+      (fun man1 -> V1.filter man1 b e)
+      (fun man2 -> V2.filter man2 b e)
 
-  let binop man t op (a1,e1) (a2,e2) =
-    apply2
-      (fun _ _ -> V1.binop (hdman man) t op (a1,e1) (a2,e2))
-      (fun _ _ -> V2.binop (tlman man) t op (a1,e1) (a2,e2))
-      (man.get a1) (man.get a2)
+  let backward man e ve r =
+    let r1 = V1.backward (hdman man) e ve r in
+    let r2 = V2.backward (tlman man) e ve r in
+    OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
 
-  let filter t b =
-    apply (V1.filter t b) (V2.filter t b)
+  let compare man op b e1 v1 e2 v2 =
+    let r1 = V1.compare (hdman man) op b e1 v1 e2 v2 in
+    let r2 = V2.compare (tlman man) op b e1 v1 e2 v2 in
+    OptionExt.neutral2 (fun (v1,v2) (w1,w2) -> (man.meet v1 w1,man.meet v1 w1)) r1 r2
 
-  let bwd_unop man t op (a,e) (r1,r2) =
-    let aa = V1.bwd_unop (hdman man) t op (a,e) r1 in
-    V2.bwd_unop (tlman man) t op (aa,e) r2
-
-  let bwd_binop man op t (a1,e1) (a2,e2) (r1,r2) =
-    let aa1,aa2 = V1.bwd_binop (hdman man) op t (a1,e1) (a2,e2) r1 in
-    V2.bwd_binop (tlman man) op t (aa1,e1) (aa2,e2) r2
-
-  let predicate t op b =
-    apply
-      (V1.predicate t op b) (V2.predicate t op b)
-
-  let compare t op b (v1,v2) (w1,w2) =
-    let x1,y1 = V1.compare t op b v1 w1 in
-    let x2,y2 = V2.compare t op b v2 w2 in
-    ((x1,x2),(y1,y2))
-
-  let ask man q =
+  let to_aval man aval v =
     OptionExt.neutral2
-      (meet_query q
-         ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
-      (V1.ask (hdman man) q)
-      (V2.ask (tlman man) q)
+      (meet_aval aval)
+      (V1.to_aval (hdman man) aval v)
+      (V2.to_aval (tlman man) aval v)
 
-  let refine msg ((v1,v2) as v) =
-    let r1 = V1.refine msg v1 in
-    let r2 = V2.refine msg v2 in
-    match r1,r2 with
-    | None,None -> None
-    | Some r1,Some r2 ->
-      if r1 == v1 && r2 == v2 then Some v else Some (r1,r2)
-    | Some r1, None ->
-      if r1 == v1 then Some v else Some (r1,v2)
-    | None, Some r2 ->
-      if r2 == v2 then Some v else Some (v1,r2)
-
-
+  let from_aval man aval av =
+    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
+      (fun man1 -> V1.from_aval man1 aval av)
+      (fun man2 -> V2.from_aval man2 aval av)
 
 end
 
-module Make(V:VALUE_COMBINER)(R:sig val rules: (module VALUE_REDUCTION) list end) : VALUE_COMBINER with type t = V.t =
+module Make(V:VALUE)(R:sig val rules: (module VALUE_REDUCTION) list end) : VALUE with type t = V.t =
 struct
 
   include V
@@ -186,42 +155,46 @@ struct
     in
     lfp v
 
+  let reduce_man (man:('v,t) value_man) a =
+    man.set (reduce (man.get a)) a
+
+  let reduce_vexpr ve =
+    map_vexpr reduce ve
+
+  let reduce_man_vexpr man ve =
+    map_vexpr (reduce_man man) ve
+
   let reduce_pair ((v1,v2) as v) =
     let v1' = reduce v1 in
     let v2' = reduce v2 in
     if v1 == v1' && v2 == v2' then v else (v1',v2')
 
-  let reduce_man (man:('a,'v,t) value_man) a =
-    man.set (reduce (man.get a)) a
+  let reduce_man_pair (man:('v,t) value_man) (a1,a2) =
+    let v1 = man.get a1 in
+    let v2 = man.get a2 in
+    let (v1',v2') = reduce_pair (v1,v2) in
+    man.set v1' a1, man.set v2' a2
 
-  let reduce_man_pair (man:('a,'v,t) value_man) (a1,a2) =
-    let v = man.get a1, man.get a2 in
-    let (v1,v2) = reduce_pair v in
-    man.set v1 a1, man.set v2 a2
-
-  let constant t c = V.constant t c |> reduce
-  let unop man t op v = V.unop man t op v |> reduce
-  let binop man t op v1 v2 = V.binop man t op v1 v2 |> reduce
-  let filter t b v = V.filter t b v |> reduce
-  let bwd_unop man t op v r = V.bwd_unop man t op v r |> reduce_man man
-  let bwd_binop man t op v1 v2 r = V.bwd_binop man t op v1 v2 r |> reduce_man_pair man
-  let predicate t op b v = V.predicate t op b v |> reduce
-  let compare t op b v1 v2 = V.compare t op b v1 v2 |> reduce_pair
+  let eval man e = V.eval man e |> OptionExt.lift (reduce_man man)
+  let filter man b e = V.filter man b e |> OptionExt.lift (reduce_man man)
+  let backward man e ve r = V.backward man e ve r |> OptionExt.lift (reduce_man_vexpr man)
+  let compare man op b e1 v1 e2 v2 = V.compare man op b e1 v1 e2 v2 |> OptionExt.lift (reduce_man_pair man)
+  let from_aval man aval av = V.from_aval man aval av |> OptionExt.lift (reduce_man man)
 
 end
 
 
 let make
-    (values: (module VALUE_COMBINER) list)
+    (values: (module VALUE) list)
     (rules: (module VALUE_REDUCTION) list)
-  : (module VALUE_COMBINER) =
+  : (module VALUE) =
 
   let rec aux = function
     | [] -> assert false
     | [v] -> v
     | hd::tl ->
       let v = aux tl in
-      (module MakeValuePair(val hd : VALUE_COMBINER)(val v : VALUE_COMBINER) : VALUE_COMBINER)
+      (module MakeValuePair(val hd : VALUE)(val v : VALUE) : VALUE)
   in
   let v = aux values in
   (module Make(val v)(struct let rules = rules end))

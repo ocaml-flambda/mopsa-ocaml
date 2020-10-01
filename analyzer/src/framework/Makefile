@@ -22,7 +22,7 @@
 
 # Framework packs
 framework = core lattices sig combiners toplevel engines output config runner
-framework.core = semantic route ast print query hint context alarm token log \
+framework.core = semantic route ast print query aval context alarm token log \
 		 lattice flow cases eval post id manager hook cache all
 framework.core.ast = program frontend typ operator constant var expr stmt visitor
 framework.lattices = partial_map partial_inversible_map_sig \
@@ -33,15 +33,14 @@ framework.sig.abstraction = stacked stacked_functor \
 			    domain functor \
 			    simplified simplified_functor \
 			    stateless \
-			    value value_functor
+			    value value_functor simplified_value
 framework.sig.combiner = stacked stacked_functor \
 			 domain functor \
 			 simplified simplified_functor \
-			 stateless \
-			 value
+			 stateless
 framework.sig.reduction = eval exec simplified value
 framework.combiners = common value domain
-framework.combiners.value = union product nonrel
+framework.combiners.value = nonrel union product
 framework.combiners.domain = switch compose product simplified_product stateless_switch
 framework.abstraction.json = syntax visitor parser
 framework.engines = engine automatic interactive

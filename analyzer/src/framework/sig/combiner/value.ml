@@ -29,7 +29,6 @@ type ('a,'v,'t) value_man =  ('a,'v,'t) Abstraction.Value.value_man = {
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
   ask  : 'r. ('a,'r) query -> 'r;
-  refine : hint -> 'v -> 'v;
 }
 
 module type VALUE_COMBINER =
@@ -90,17 +89,17 @@ sig
   val constant : typ -> constant -> t
   (** Forward evaluation of constants *)
 
-  val unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t
+  val unop : ('a,'v,t) value_man -> typ -> operator -> (expr * t option) -> 'v option
   (** Forward evaluation of unary expressions *)
 
-  val binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t
+  val binop : ('a,'v,t) value_man -> typ -> operator -> (expr * t option) -> (expr * t option) -> 'v option
   (** Forward evaluation of binary expressions *)
 
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
-  val bwd_unop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> t -> 'v
+  val bwd_unop : ('a,'v,t) value_man -> typ -> operator -> (expr * t option) -> t -> 'v
   (** Backward evaluation of unary operators.
       [bwd_unop man op x r] returns x':
        - x' abstracts the set of v in x such as op v is in r
@@ -108,7 +107,7 @@ sig
        the operation on x
      *)
 
-  val bwd_binop : ('a,'v,t) value_man -> typ -> operator -> ('v*expr) -> ('v*expr) -> t -> ('v * 'v)
+  val bwd_binop : ('a,'v,t) value_man -> typ -> operator -> (expr * t option) -> (expr*'v) -> t -> ('v * 'v)
   (** Backward evaluation of binary operators.
       [bwd_binop man op x y r] returns (x',y') where
       - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
@@ -139,8 +138,6 @@ sig
   val ask : ('a,'v,t) value_man -> ('a,'r) query -> 'r option
   (** Query handler *)
 
-  val refine : hint -> t -> t option
-  (** Refinement handler *)
 
   (** {2 Pretty printer} *)
   (** ****************** *)
@@ -159,29 +156,30 @@ module ValueToCombiner(Value:VALUE) : VALUE_COMBINER with type t = Value.t =
 struct
   include Value
 
-  let unop man t op (a,e) =
+  let unop man t op (e,a) =
     if accept_type e.etyp then
       Value.unop t op (man.get a)
     else
-      Value.het_unop man t op (a,e)
+      Value.het_unop man t op (e,a)
 
-  let binop man t op (a1,e1) (a2,e2) =
+  let binop man t op (e1,a1) (e2,a2) =
     if accept_type e1.etyp && accept_type e2.etyp then
-      Value.binop t op (man.get a1) (man.get a2)
+      let v = Value.binop t op (man.get a1) (man.get a2) in
+      man.set v
     else
-      Value.het_binop man t op (a1,e1) (a2,e2)
+      Value.het_binop man t op (e1,a1) (e2,a2)
 
-  let bwd_unop man t op (a,e) r =
+  let bwd_unop man t op (e,a) r =
     if accept_type e.etyp then
       let v = Value.bwd_unop t op (man.get a) r in
       man.set v a
     else
-      Value.bwd_het_unop man t op (a,e) r
+      Value.bwd_het_unop man t op (e,a) r
 
-  let bwd_binop man t op (a1,e1) (a2,e2) r =
+  let bwd_binop man t op (e1,a1) (e2,a2) r =
     if accept_type e1.etyp && accept_type e2.etyp then
       let v1,v2 = Value.bwd_binop t op (man.get a1) (man.get a2) r in
       man.set v1 a1, man.set v2 a2
     else
-      Value.bwd_het_binop man t op (a1,e1) (a2,e2) r
+      Value.bwd_het_binop man t op (e1,a1) (e2,a2) r
 end

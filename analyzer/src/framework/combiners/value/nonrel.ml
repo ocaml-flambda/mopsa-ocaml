@@ -24,13 +24,13 @@
 *)
 
 open Core.All
-open Sig.Combiner.Value
+open Sig.Abstraction.Value
 
 
 (** {2 Identifier for the non-relation domain} *)
 (** ****************************************** *)
 
-type _ id += D_nonrel : (module VALUE_COMBINER with type t = 'v) -> (var,'v) Lattices.Partial_map.map id
+type _ id += D_nonrel : (module VALUE with type t = 'v) -> (var,'v) Lattices.Partial_map.map id
 
 let () =
   let open Eq in
@@ -134,7 +134,7 @@ let find_var_bounds_ctx_opt v ctx =
 (** {2 Non-relational domain} *)
 (** ************************* *)
 
-module Make(Value: VALUE_COMBINER) : Sig.Abstraction.Simplified.SIMPLIFIED =
+module Make(Value: VALUE) : Sig.Abstraction.Simplified.SIMPLIFIED =
 struct
 
 
@@ -166,14 +166,32 @@ struct
       ) a1' a2'
     with Bot.Found_BOT -> VarMap.bottom
 
+  (* This value manager isn't able to perform sub-evaluations.
+     It is used only to compute values of constants used as bounds of variables. *)
+  let imprecise_value_man = {
+    bottom = Value.bottom;
+    top    = Value.top;
+    is_bottom = Value.is_bottom;
+    subset = Value.subset;
+    join = Value.join;
+    meet = Value.meet;
+    get = (fun v -> v);
+    set = (fun v _ -> v);
+    eval = (fun e -> Value.top);
+    to_aval = (fun aval v -> top_aval aval);
+    from_aval = (fun aval av -> Value.top);
+  }
+
+  let bound_range = Location.mk_fresh_range ()
 
   (* Constrain the value of a variable with its bounds *)
   let meet_with_bound_constraints ctx var v =
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
-      let vv = Value.constant var.vtyp bounds in
-      Value.meet v vv
+      match Value.eval imprecise_value_man (mk_constant bounds bound_range) with
+      | None    -> v
+      | Some vv -> Value.meet v vv
 
   let widen ctx a1 a2 =
     let open Bot_top in
@@ -202,7 +220,6 @@ struct
             m1 m2
         )
 
-
   let add ctx var v a =
     let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
@@ -211,87 +228,82 @@ struct
   (** {2 Evaluation of expressions} *)
   (** ***************************** *)
 
-  (** Expressions annotated with abstract values; useful for assignment and compare. *)
-  type aexpr =
-    | A_var   of Value.t
-    | A_cst   of Value.t
-    | A_unop  of aexpr * Value.t
-    | A_binop of aexpr * Value.t * aexpr * Value.t
-    | A_unsupported
-
-
-
   (** Value manager *)
-  let rec value_man (map:t) : ('a,Value.t,Value.t) value_man = {
-    get = (fun v -> v);
-    set = (fun v _ -> v);
-    eval = (fun e -> match eval e map with Some (_,v) -> v | None -> Value.top);
-    ask = (fun q -> match Value.ask (value_man map) q with Some r -> r | _ -> raise Not_found);
-    refine = (fun msg v -> match Value.refine msg v with Some r -> r | None -> v);
+  let rec value_man (cache: Value.t vexpr) (map:t) : (Value.t,Value.t) value_man = {
+    imprecise_value_man with
+    eval = (fun e ->
+        match find_vexpr_opt e cache with
+        | Some (v,_) -> v
+        | None ->
+          match eval e map with
+          | Some (v,_) -> v
+          | None -> Value.top
+      );
+    to_aval = (fun aval v ->
+        match Value.to_aval (value_man cache map) aval v with
+        | Some r -> r
+        | _ -> top_aval aval
+      );
+    from_aval = (fun aval av ->
+        match Value.from_aval (value_man cache map) aval av with
+        | Some r -> r
+        | None   -> Value.top
+      );
   }
 
 
   (** Forward evaluation returns the abstract value of the expression,
      but also a tree annotated by the intermediate abstract
      values for each sub-expression *)
-  and eval (e:expr) (a:t) : (aexpr * Value.t) option =
-    match ekind e with
-    | E_constant(c) when Value.accept_type e.etyp ->
-      let v = Value.constant e.etyp c in
-      (A_cst v, v) |>
-      OptionExt.return
+  and eval (e:expr) (a:t) : (Value.t * Value.t vexpr) option =
+    if not (Value.accept_type e.etyp) then None
+    else
+      match ekind e with
+      | E_var(var, mode) ->
+        let v = find var a in
+        (v, empty_vexpr) |>
+        OptionExt.return
 
-    | E_var(var, mode) when Value.accept_type var.vtyp ->
-       let v = find var a in
-       (A_var v, v) |>
-       OptionExt.return
+      | _
+        when for_all_expr
+            (fun ee -> Value.accept_type ee.etyp)
+            (fun s -> false) e
+        ->
+        let parts,build = structure_of_expr e in
+        let rec iter = function
+          | [] -> Some empty_vexpr
+          | ee::tl ->
+            eval ee a |> OptionExt.bind @@ fun (vv,vee) ->
+            iter tl |> OptionExt.lift @@ fun tl ->
+            add_vexpr ee vv vee tl
+        in
+        iter parts.exprs |> OptionExt.lift @@ fun ve ->
+        begin match Value.eval (value_man ve a) e with
+          | Some v -> (v,ve)
+          | None -> (Value.top,ve)
+        end
 
-    | E_unop (op,e1) ->
-      eval e1 a |> OptionExt.lift @@ fun (ae1, v1) ->
-      let v = Value.unop (value_man a) e.etyp op (v1,e1) in
-      (A_unop (ae1, v1), v)
-
-    | E_binop (op,e1,e2) ->
-      eval e1 a |> OptionExt.bind @@ fun (ae1, v1) ->
-      eval e2 a |> OptionExt.lift @@ fun (ae2, v2) ->
-      let v = Value.binop (value_man a) e.etyp op (v1,e1) (v2,e2) in
-      (A_binop (ae1, v1, ae2, v2), v)
-
-    | _ -> None
-
+      | _ -> None
 
 
   (** Backward refinement of expressions; given an annotated tree, and
       a target value, refine the environment using the variables in the
       expression *)
-  let rec refine ctx (e:expr) (ae:aexpr) (v:Value.t) (r:Value.t) (a:t) : t =
-    let r' = Value.meet v r in
-    match e.ekind,ae with
-    | E_constant _, A_cst _ ->
-      if Value.is_bottom r'
-      then bottom
-      else a
+  let rec refine ctx (e:expr) (ve:Value.t vexpr) (r:Value.t) (a:t) : t =
+    if Value.is_bottom r then bottom else
+    match e.ekind with
+    | E_var(var,mode) ->
+      if var_mode var mode = WEAK then a
+      else add ctx var (Value.meet (find var a) r) a
 
-    | E_var(var,mode), A_var _ ->
-      if Value.is_bottom r'
-      then bottom
-
-      else
-      if var_mode var mode = STRONG
-      then add ctx var r' a
-
-      else a
-
-    | E_unop(op,e1), A_unop (ae1, v1) ->
-      let w = Value.bwd_unop (value_man a) e.etyp op (v1,e1) r' in
-      refine ctx e1 ae1 v1 w a
-
-    | E_binop(op,e1,e2), A_binop (ae1, v1, ae2, v2) ->
-      let w1, w2 = Value.bwd_binop (value_man a) e.etyp op (v1,e1) (v2,e2) r' in
-      let a1 = refine ctx e1 ae1 v1 w1 a in
-      refine ctx e2 ae2 v2 w2 a1
-
-    | _ -> a
+    | _ ->
+      let ve' =
+        match Value.backward (value_man ve a) e ve r with
+        | Some x -> x
+        | None   -> ve in
+      fold_root_vexpr
+        (fun acc ee vv eev -> refine ctx ee eev vv acc)
+        a ve'
 
 
   (* utility function to reduce the complexity of testing boolean expressions;
@@ -303,7 +315,6 @@ struct
   *)
   let rec filter ctx (e:expr) (b:bool) (a:t) : t option =
     match ekind e with
-
     | E_unop (O_log_not, e) ->
       filter ctx e (not b) a
 
@@ -319,46 +330,29 @@ struct
       (if b then join else meet) a1 a2 |>
       OptionExt.return
 
-    | E_constant c when Value.accept_type e.etyp ->
-      let v = Value.constant e.etyp c in
-      let w = Value.filter e.etyp b v in
-      (if Value.is_bottom w then bottom else a) |>
-      OptionExt.return
-
-    | E_var(var, mode) when Value.accept_type var.vtyp ->
-      let v = find var a in
-      let w = Value.filter e.etyp b v in
-      ( if Value.is_bottom w then bottom else
-        if var_mode var mode = STRONG then add ctx var w a
-        else a ) |>
-      OptionExt.return
-
     (* arithmetic comparison part, handled by Value *)
-    | E_binop (op, e1, e2) ->
+    | E_binop (op, e1, e2) when is_comparison_op op ->
       (* evaluate forward each argument expression *)
-      eval e1 a |> OptionExt.bind @@ fun (ae1,v1) ->
-      eval e2 a |> OptionExt.bind @@ fun (ae2,v2) ->
+      eval e1 a |> OptionExt.bind @@ fun (v1,ve1) ->
+      eval e2 a |> OptionExt.bind @@ fun (v2,ve2) ->
 
       (* apply comparison *)
-      let r1, r2 = Value.compare e1.etyp op b v1 v2 in (* FIXME: both types should be given to Value.compare? *)
-
+      let r1,r2 =
+        match Value.compare (value_man empty_vexpr a) op b e1 v1 e2 v2 with
+        | Some x -> x
+        | None   -> (v1,v2) in
       (* propagate backward on both argument expressions *)
-      refine ctx e2 ae2 v2 r2 @@ refine ctx e1 ae1 v1 r1 a |>
+      refine ctx e1 ve1 (Value.meet v1 r1) a |>
+      refine ctx e2 ve2 (Value.meet v2 r2) |>
       OptionExt.return
 
-    (* unary boolean predicate, handled by Value *)
-    | E_unop (op, e) ->
-      (* evaluate forward the expression *)
-      eval e a |> OptionExt.bind @@ fun (ae,v) ->
-
-      (* apply the predicate *)
-      let r = Value.predicate e.etyp op b v in
-
-      (* propagate backward on the argument *)
-      refine ctx e ae v r a |>
-      OptionExt.return
-
-    | _ -> None
+    | _ ->
+      eval e a |> OptionExt.lift @@ fun (v,ve) ->
+      let w =
+        match Value.filter (value_man ve a) b e with
+        | Some x -> Value.meet v x
+        | None   -> v in
+      refine ctx e ve w a
 
 
   (** {2 Transfer functions} *)
@@ -403,7 +397,7 @@ struct
       OptionExt.return
 
     | S_assign ({ ekind= E_var (var, mode) }, e) when Value.accept_type var.vtyp ->
-      eval e map |> OptionExt.lift @@ fun (_, v) ->
+      eval e map |> OptionExt.lift @@ fun (v,_) ->
       let map' = add ctx var v map in
       begin
         match var_mode var mode with
@@ -456,10 +450,17 @@ struct
 
     | _ -> None
 
+  let ask : type r.
+    ('a,r) query ->
+    ('a,t) Sig.Abstraction.Simplified.simplified_man ->
+    'a ctx -> t -> r option =
+    fun query man ctx map ->
+    match query with
+    | Q_expr_aval(e,av) when Value.accept_type e.etyp ->
+      eval e map |> OptionExt.bind @@ fun (v,ve) ->
+      Value.to_aval (value_man ve map) av v
 
-
-  let ask query man ctx map =
-    Value.ask (value_man map) query
+    | _ -> None
 
   let print_state printer a =
     Print.pprint printer ~path:[Key Value.display]
@@ -468,7 +469,7 @@ struct
   let print_expr man ctx a printer exp =
     match eval exp a with
     | None -> ()
-    | Some (_,v) ->
+    | Some (v,_) ->
       Print.pprint printer
         ~path:[ Key Value.display;
                 fkey "%a" pp_expr exp ]

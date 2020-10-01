@@ -22,21 +22,25 @@
 (** Interval abstraction of float values. *)
 
 open Mopsa
-open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified_value
 open Rounding
 open Ast
 open Bot
 open Common
 
+module I = ItvUtils.FloatItvNan
+module FI = ItvUtils.FloatItv
+module II = ItvUtils.IntItv
 
-module Value =
+
+let prec_of_type = function
+  | T_float p -> p
+  | _ -> assert false
+
+module SimplifiedValue =
 struct
 
   (** Types *)
-
-  module I = ItvUtils.FloatItvNan
-  module FI = ItvUtils.FloatItv
-  module II = ItvUtils.IntItv
 
   type t = I.t
 
@@ -83,57 +87,44 @@ struct
 
   (** Arithmetic operators *)
 
-  let constant t c =
-    match t, c with
-    | T_float p, C_float i ->
+  let constant c tr =
+    let p = prec_of_type tr in
+    match c with
+    | C_float i ->
       I.of_float_prec (prec p) (round ()) i i
 
-    | T_float p, C_float_interval (lo,up) ->
+    | C_float_interval (lo,up) ->
       I.of_float_prec (prec p) (round ()) lo up
 
-    | T_float p, C_int_interval (lo,up) ->
+    | C_int_interval (lo,up) ->
       I.of_z (prec p) (round ()) lo up
 
-    | T_float p, C_int i ->
+    | C_int i ->
       I.of_z (prec p) (round ()) i i
 
-    | T_float _, C_bool false ->
+    | C_bool false ->
       I.zero
 
-    | T_float _, C_bool true ->
+    | C_bool true ->
       I.one
 
-    | T_float p, C_top (T_float pp) when p = pp ->
+    | C_top (T_float p) ->
       top_of_prec p
 
-    | _ -> top
+    | _ -> top_of_prec p
 
 
-  let apply_float t default f =
-    match t with
-    | T_float p -> f p
-    | _ -> default
-
-  let unop t op a =
-    apply_float t bottom @@ fun p ->
+  let unop op t a tr =
+    let p = prec_of_type tr in
     match op with
     | O_minus -> I.neg a
     | O_plus  -> a
     | O_sqrt  -> I.sqrt (prec p) (round ()) a
     | _ -> top_of_prec p
 
-  let het_unop man t op (a,e) =
-    match t, op, e.etyp with
-    | T_float p, O_cast, (T_int | T_bool) ->
-      let int_itv = man.ask (Common.Q_int_interval e) in
-      I.of_int_itv_bot (prec p) (round ()) int_itv
 
-    | T_float p, _, _ -> top_of_prec p
-
-    | _ -> top
-
-  let binop t op a1 a2 =
-    apply_float t bottom @@ fun p ->
+  let binop op t1 a1 t2 a2 tr =
+    let p = prec_of_type tr in
     match op with
     | O_plus  -> I.add (prec p) (round ()) a1 a2
     | O_minus -> I.sub (prec p) (round ()) a1 a2
@@ -142,57 +133,29 @@ struct
     | O_mod   -> I.fmod (prec p) (round ()) a1 a2
     | _       -> top_of_prec p
 
-  let het_binop man t op (a1,e1) (a2,e2) = top
+  let filter = default_filter
 
-  let filter t b a = a
-
-  let bwd_unop t op a r =
-    apply_float t a @@ fun p ->
+  let backward_unop op t a tr r =
+    let p = prec_of_type tr in
     match op with
     | O_minus -> I.bwd_neg a r
     | O_plus  -> I.meet a r
     | O_sqrt  -> I.bwd_sqrt (prec p) (round ()) a r
-    | _       -> default_bwd_unop t op a r
-  
-  let bwd_het_unop man t op (a,e) r =
-    match t, op, e.etyp with
-    | T_float p, O_cast, (T_int | T_bool) ->
-      let iitv = man.ask (Common.Q_int_interval e) in
-      begin match iitv with
-        | BOT    -> a
-        | Nb itv ->
-          let iitv' = ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv r in
-          man.refine (H_int_interval iitv') a
-      end
-     
-    | _ -> default_bwd_het_unop man t op (a,e) r
+    | _       -> a
 
-
-  let bwd_binop t op a1 a2 r =
-    apply_float t (a1,a2) @@ fun p ->
+  let backward_binop op t1 a1 t2 a2 tr r =
+    let p = prec_of_type tr in
     match op with
     | O_plus  -> I.bwd_add (prec p) (round ()) a1 a2 r
     | O_minus -> I.bwd_sub (prec p) (round ()) a1 a2 r
     | O_mult  -> I.bwd_mul (prec p) (round ()) a1 a2 r
     | O_div   -> I.bwd_div (prec p) (round ()) a1 a2 r
     | O_mod   -> I.bwd_fmod (prec p) (round ()) a1 a2 r
-    | _       -> default_bwd_binop t op a1 a2 r
+    | _       -> default_backward_binop op t1 a1 t2 a2 tr r
 
-  let bwd_het_binop = default_bwd_het_binop
 
-  let predicate t op b a =
-    match op with
-    | O_float_class c ->
-      let c = if b then c else inv_float_class c in
-      { I.itv  = if c.float_valid then a.I.itv  else BOT;
-        I.pinf = if c.float_inf   then a.I.pinf else false;
-        I.minf = if c.float_inf   then a.I.minf else false;
-        I.nan  = if c.float_nan   then a.I.nan  else false;
-      }
-    | _ -> default_predicate t op b a
-
-  let compare t op b a1 a2 =
-    apply_float t (a1,a2) @@ fun p ->
+  let compare op b t1 a1 t2 a2 =
+    let p = prec_of_type t1 in
     match b, op with
     | true, O_eq | false, O_ne -> I.filter_eq  (prec p) a1 a2
     | true, O_ne | false, O_eq -> I.filter_neq (prec p) a1 a2
@@ -206,19 +169,65 @@ struct
     | false, O_gt -> I.filter_gt_false  (prec p) a1 a2
     | _ -> a1,a2
 
-  let ask : type r. ('a,'v,t) value_man -> ('a,r) query -> r option = fun man q ->
-    match q with
-    | Common.Q_float_interval e ->
-      man.eval e |>
-      man.get |>
+
+  let to_aval : type r. r aval -> t -> r option = fun aval a ->
+    match aval with
+    | Common.A_float_interval -> Some a
+    | _ -> None
+
+  let from_aval : type r. r aval -> r -> t option =
+    fun aval av ->
+    match aval with
+    | Common.A_float_interval -> Some av
+    | _ -> None
+
+  
+end
+
+
+open Sig.Abstraction.Value
+module Value =
+struct
+
+  module V = MakeValue(SimplifiedValue)
+
+  include V
+
+  let cast man e =
+    match e.etyp with
+    | T_int | T_bool ->
+      let v = man.eval e in
+      let int_itv = man.to_aval (A_int_interval true) v in
+      let float_itv = I.of_int_itv_bot (prec @@ prec_of_type e.etyp) (round ()) int_itv in
+      man.set float_itv v |>
       OptionExt.return
 
     | _ -> None
 
-  let refine hint a =
-    match hint with
-    | H_float_interval b -> Some (meet a b)
+  let eval man e =
+    match ekind e with
+    | E_unop(O_cast,ee) -> cast man ee
+    | _ -> V.eval man e
+
+  let backward_cast man p e ve r =
+    match e.etyp with
+    | T_int | T_bool ->
+      let v,_ = find_vexpr e ve in
+      let iitv = man.to_aval (Common.A_int_interval true) v in
+      begin match iitv with
+        | BOT    -> None
+        | Nb itv ->
+          let iitv' = ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv r in
+          let v' = man.from_aval (A_int_interval true) iitv' in
+          refine_vexpr e (man.meet v v') ve |>
+          OptionExt.return
+      end
     | _ -> None
+
+  let backward man e ve r =
+    match ekind e with
+    | E_unop(O_cast,ee) -> backward_cast man (prec_of_type e.etyp) ee ve (man.get r)
+    | _ -> V.backward man e ve r
 
 end
 

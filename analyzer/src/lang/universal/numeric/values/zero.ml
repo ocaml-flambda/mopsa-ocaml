@@ -22,7 +22,7 @@
 (** Abstraction of zero and non-zero integer values. *)
 
 open Mopsa
-open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified_value
 open Ast
 
 
@@ -89,7 +89,10 @@ struct
     | ZERO -> pp_string printer "0"
     | NON_ZERO -> pp_string printer "≠ 0"
 
-  let constant t = function
+  include DefaultValueFunctions
+
+  let constant c t =
+    match c with
     | C_bool true -> NON_ZERO
     | C_bool false -> ZERO
     | C_int i when Z.equal i Z.zero -> ZERO
@@ -102,7 +105,7 @@ struct
       NON_ZERO
     | _ -> TOP
       
-  let unop t op a =
+  let unop op t a tr =
     match op with
     | O_log_not -> begin match a with
         | TOP -> TOP
@@ -114,7 +117,7 @@ struct
     | O_plus  -> a
     | _ -> top
 
-  let binop t op a1 a2 =
+  let binop op t1 a1 t2 a2 tr =
     match op with
     | O_plus | O_minus ->
       begin match a1, a2 with
@@ -133,28 +136,14 @@ struct
       end
     | _     -> top
 
-  let het_unop man t op (a,e) = top
-
-  let het_binop man t op (a1,e1) (a2,e2) = top
-
-  let filter t b a =
+  let filter b t a =
     match a with
     | TOP -> TOP
     | BOT -> BOT
     | ZERO -> if b then BOT else a
     | NON_ZERO -> if b then a else BOT
 
-  let bwd_unop = default_bwd_unop
-
-  let bwd_binop = default_bwd_binop
-
-  let bwd_het_unop = default_bwd_het_unop
-
-  let bwd_het_binop = default_bwd_het_binop
-
-  let predicate = default_predicate
-
-  let compare t op b a1 a2 =
+  let compare op b t1 a1 t2 a2 =
     let op = if b then op else negate_comparison_op op in
     match op with
     | O_eq ->
@@ -170,12 +159,9 @@ struct
         | _ -> a1, a2
       end
 
-    | _ -> default_compare op b t a1 a2
+    | _ -> default_compare op b t1 a1 t2 a2
 
-  let ask man q = None
-
-  let refine hint a = None
 end
 
 let () =
-  register_value_abstraction (module Value)
+  register_simplified_value_abstraction (module Value)

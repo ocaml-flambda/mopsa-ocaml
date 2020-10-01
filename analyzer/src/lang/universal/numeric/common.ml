@@ -34,43 +34,13 @@ module C = CongUtils.IntCong
 (** Integer intervals *)
 type int_itv = I.t_with_bot
 
-type ('a,_) query +=
-  | Q_int_interval : expr -> ('a,int_itv) query (** Query to evaluate the integer interval of an expression *)
-  | Q_fast_int_interval : expr -> ('a,int_itv) query (** Query handled by non-relational domains only *)
+type _ aval += A_int_interval : bool -> int_itv aval     (** Query to evaluate the integer interval of an expression *)
 
-type hint +=
-  | H_int_interval of int_itv
-
-let mk_int_interval_query ?(fast=true) e =
-  if fast then Q_fast_int_interval e else Q_int_interval e
+let mk_int_interval_query ?(fast=true) e = Q_expr_aval (e,A_int_interval fast)
 
 let pp_int_interval fmt itv = I.fprint_bot fmt itv
 
 let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
-
-let () =
-  register_query {
-    join = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query join a b ->
-          match query with
-          | Q_int_interval _ -> I.join_bot a b
-          | Q_fast_int_interval _ -> I.join_bot a b
-          | _ -> next.apply query join a b
-      in
-      f
-    );
-    meet = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query meet a b ->
-          match query with
-          | Q_int_interval e -> I.meet_bot a b
-          | Q_fast_int_interval e -> I.meet_bot a b
-          | _ -> next.apply query meet a b
-      in
-      f
-    );
-  }
 
 
 
@@ -82,42 +52,9 @@ type int_congr_itv = int_itv * C.t
 
 
 (** Query to evaluate the integer interval of an expression *)
-type ('a,_) query += Q_int_congr_interval : expr -> ('a,int_congr_itv) query
+type _ aval += A_int_congr_interval : int_congr_itv aval
 
-
-let () =
-  register_query {
-    join = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query join a b ->
-          match query with
-          | Q_int_congr_interval e ->
-            let (i1,c1), (i2,c2) = a, b in
-            (I.join_bot i1 i2, C.join c1 c2)
-
-          | _ -> next.apply query join a b
-      in
-      f
-    );
-    meet = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query meet a b ->
-          match query with
-          | Q_int_congr_interval e ->
-            let (i1,c1), (i2,c2) = a, b in
-            let i = I.meet_bot i1 i2 in
-            let c = C.meet c1 c2 in
-            Bot.bot_absorb2 C.meet_inter c i |>
-            Bot.bot_dfl1
-              (Bot.BOT, C.minf_inf)
-              (fun (c,i) -> (Bot.Nb i, c))
-
-          | _ -> next.apply query meet a b
-      in
-      f
-    );
-  }
-
+let mk_int_congr_interval_query e = Q_expr_aval (e,A_int_congr_interval)
 
 
 (** {2 Float intervals} *)
@@ -130,45 +67,13 @@ module F = ItvUtils.FloatItvNan
 (** Float intervals *)
 type float_itv = F.t
 
-type ('a,_) query +=
-  | Q_float_interval : expr -> ('a,float_itv) query (** Query to evaluate the float interval of an expression, with infinities and NaN *)
-  | VQ_to_float_interval : ('a,float_itv) query (** Value query to cast an abstract value to a float interval *)
+type _ aval += A_float_interval : float_itv aval (** Query to evaluate the float interval of an expression, with infinities and NaN *)
 
-type hint +=
-  | H_float_interval of float_itv
-
-let mk_float_interval_query e =
-  Q_float_interval e
+let mk_float_interval_query e = Q_expr_aval (e,A_float_interval)
 
 let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
 
 let compare_float_interval itv1 itv2 = F.compare itv1 itv2
-
-let () =
-  register_query {
-    join = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query join a b ->
-          match query with
-          | Q_float_interval _ -> F.join a b
-          | VQ_to_float_interval -> F.join a b
-          | _ -> next.apply query join a b
-      in
-      f
-    );
-    meet = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query meet a b ->
-          match query with
-          | Q_float_interval e -> F.meet a b
-          | VQ_to_float_interval -> F.meet a b
-          | _ -> next.apply query meet a b
-      in
-      f
-    );
-  }
-
-
 
 let prec : Ast.float_prec -> ItvUtils.FloatItvNan.prec = function
     | F_SINGLE -> `SINGLE

@@ -686,15 +686,15 @@ struct
                                      [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
                                   (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
                                 else if compare_addr (OptionExt.none_to_exn !addr_integers) addr = 0 then
-                                    let itv = man.ask (Universal.Numeric.Common.Q_int_interval (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
+                                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
                                       let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
                                       (s, int_info) :: acc
                                 else if compare_addr (OptionExt.none_to_exn !addr_float) addr = 0 then
-                                  let itv = man.ask (Universal.Numeric.Common.Q_float_interval (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
+                                  let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
                                   let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
                                   (s, float_info) :: acc
                                 else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
-                                  let str =  man.ask (Universal.Strings.Powerset.Q_strings_powerset (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                                  let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
                                   let str_info =
                                     {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
                                      var_value_type = T_string;

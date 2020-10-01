@@ -19,4 +19,21 @@
 (*                                                                          *)
 (****************************************************************************)
 
-type hint = ..
+(** Abstract value representation *)
+
+open Query
+open Ast.Expr
+
+type _ aval = ..
+
+let bottom_aval aval = assert false
+
+let top_aval aval = assert false
+
+let join_aval aval av1 av2 = assert false
+
+let meet_aval aval av1 av2 = assert false
+
+type ('a,_) query += Q_expr_aval : expr * 'r aval-> ('a,'r) query
+
+let mk_expr_aval_query e av = Q_expr_aval(e,av)

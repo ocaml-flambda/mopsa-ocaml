@@ -59,13 +59,14 @@
             "python.objects.dict",
             "python.objects.set",
             "python.objects.iterable",
-            "universal.strings.powerset",
             {
                 "nonrel":
                 {
                     "union":
                     [ "universal.numeric.values.intervals.integer",
-                      "universal.numeric.values.intervals.float" ]
+                      "universal.numeric.values.intervals.float",
+		      "universal.strings.powerset"
+		    ]
                 }
             }
         ]

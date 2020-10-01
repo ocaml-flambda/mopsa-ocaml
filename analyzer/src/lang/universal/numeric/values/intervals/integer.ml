@@ -24,11 +24,11 @@
 open Mopsa
 open Ast
 open Bot
-open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified_value
 open Common
 
-
-module Value =
+(** Use the simplified signature for handling homogenous operators *)
+module SimplifiedValue =
 struct
 
   type t = Common.int_itv
@@ -82,12 +82,8 @@ struct
 
   let print printer (a:t) = unformat I.fprint_bot printer a
 
-  let apply_int t default f =
-    match t with
-    | T_int | T_bool -> f ()
-    | _              -> default
-
-  let constant t = function
+  let constant c t =
+    match c with
     | C_bool true ->
       Nb (I.cst_int 1)
 
@@ -105,14 +101,7 @@ struct
 
     | _ -> top
 
-
-  let zero = Nb (I.zero)
-  let one = Nb (I.one)
-  let of_z z1 z2 : t = Nb (I.of_z z1 z2)
-  let of_int n1 n2 : t = Nb (I.of_int n1 n2)
-
-  let unop t op a =
-    apply_int t bottom @@ fun () ->
+  let unop op t a tr =
     match op with
     | O_log_not -> bot_lift1 I.log_not a
     | O_minus  -> bot_lift1 I.neg a
@@ -121,21 +110,7 @@ struct
     | O_bit_invert -> bot_lift1 I.bit_not a
     | _ -> top
 
-  let het_unop man t op (a,e) =
-    match op with
-    | O_cast ->
-      begin match e.etyp with
-        | T_float _ ->
-          let float_itv = man.ask (Common.Q_float_interval e) in
-          ItvUtils.FloatItvNan.to_int_itv float_itv
-
-        | _ -> top
-      end
-
-    | _ -> top
-
-  let binop t op a1 a2 =
-    apply_int t bottom @@ fun () ->
+  let binop op t1 a1 t2 a2 tr =
     match op with
     | O_plus   -> bot_lift2 I.add a1 a2
     | O_minus  -> bot_lift2 I.sub a1 a2
@@ -158,14 +133,12 @@ struct
     | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
     | _     -> top
 
-  let het_binop man t op a1 a2 = top
-  
-  let filter t b a =
+
+  let filter b t a =
     if b then bot_absorb1 I.meet_nonzero a
     else bot_absorb1 I.meet_zero a
 
-  let bwd_unop t op a r =
-    apply_int t a @@ fun () ->
+  let backward_unop op t a t r =
     try
       let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
@@ -178,23 +151,7 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_het_unop man t op (a,e) (r:t) =
-    match op, e.etyp with
-    | O_cast, T_float _ ->
-      begin match r with
-        | BOT -> a
-        | Nb iitv ->
-          (* Compute the interval of the integer expression cast(t,e) *)
-          let fitv = man.ask (Common.Q_float_interval e) in
-          let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
-          man.refine (H_float_interval fitv') a
-      end
-
-    | _ -> a
-
-
-  let bwd_binop t op a1 a2 r =
-    apply_int t (a1,a2) @@ fun () ->
+  let backward_binop op t1 a1 t2 a2 tr r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -222,12 +179,8 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let bwd_het_binop = default_bwd_het_binop
 
-  let predicate = default_predicate
-
-  let compare t op b a1 a2 =
-    apply_int t (a1,a2) @@ fun () ->
+  let compare op b t1 a1 t2 a2 =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
       let op = if b then op else negate_comparison_op op in
@@ -245,35 +198,78 @@ struct
     with Found_BOT ->
       bottom, bottom
 
+  let to_aval : type r. r aval -> t -> r option =
+    fun aval a ->
+    match aval with
+    | Common.A_int_interval _ -> Some a
+    | Common.A_int_congr_interval -> Some (a, Common.C.minf_inf)
+    | _ -> None
 
-  (** {2 Query handlers} *)
+  let from_aval : type r. r aval -> r -> t option =
+    fun aval av ->
+    match aval, av with
+    | Common.A_int_interval _, _ -> Some av
+    | Common.A_int_congr_interval, (a,_) -> Some a
+    | _ -> None
 
-  let ask : type r. ('a,'v,t) value_man -> ('a,r) query -> r option =
-    fun man q ->
-    match q with
-    | Common.Q_int_interval e ->
-      man.eval e |>
-      man.get |>
+    
+end
+
+
+(** We lift now to the advanced signature to handle casts and queries *)
+open Sig.Abstraction.Value
+module Value =
+struct
+
+  include SimplifiedValue
+
+  module V = MakeValue(SimplifiedValue)
+
+  include V
+
+  let cast man e =
+    match e.etyp with
+    | T_float _ ->
+      let v = man.eval e in
+      let float_itv = man.to_aval Common.A_float_interval v in
+      let v = ItvUtils.FloatItvNan.to_int_itv float_itv in
+      man.set v man.top |>
       OptionExt.return
-
-    | Common.Q_fast_int_interval e ->
-      man.eval e |>
-      man.get |>
-      OptionExt.return
-
-    | Common.Q_int_congr_interval e ->
-      (man.eval e |> man.get, Common.C.minf_inf) |> OptionExt.return
 
     | _ -> None
 
-
-  let refine hint a =
-    match hint with
-    | H_int_interval itv -> Some (meet itv a)
+  let eval man e =
+    match ekind e with
+    | E_unop(O_cast,ee) -> cast man ee
+    | _ -> V.eval man e
+  
+  let backward_cast man e ve r =
+    match e.etyp with
+    | T_float _ ->
+      begin match r with
+        | BOT -> None
+        | Nb iitv ->
+          let v,_ = find_vexpr e ve in
+          let fitv = man.to_aval Common.A_float_interval v in
+          let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
+          let v' = man.from_aval Common.A_float_interval fitv' in
+          refine_vexpr e (man.meet v v') ve |>
+          OptionExt.return
+      end
     | _ -> None
+
+  let backward man e ve r =
+    match ekind e with
+    | E_unop(O_cast,ee) -> backward_cast man ee ve (man.get r)
+    | _ -> V.backward man e ve r
+
 
   (** {2 Utility functions} *)
 
+  let zero = Nb (I.zero)
+  let one = Nb (I.one)
+  let of_z z1 z2 : t = Nb (I.of_z z1 z2)
+  let of_int n1 n2 : t = Nb (I.of_int n1 n2)
 
   let z_of_z2 z z' round =
     let open Z in
@@ -359,7 +355,8 @@ struct
     bot_compare (I.compare) itv1 itv2
 
   let map (f: Z.t -> 'a) (itv:t) : 'a list =
-    if not (is_bounded itv) then panic ~loc:__LOC__ "map: unbounded interval %a" (format print) itv
+    if not (is_bounded itv) then
+      panic ~loc:__LOC__ "map: unbounded interval %a" (format print) itv
     else if is_bottom itv then []
     else
       let a, b = bounds itv in

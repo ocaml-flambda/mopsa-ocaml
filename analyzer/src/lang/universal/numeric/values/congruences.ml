@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified_value
 open Ast
 open Bot
 
@@ -64,23 +64,24 @@ struct
 
   let print printer (a:t) = unformat C.fprint_bot printer a
 
-  let constant t = function
+  include DefaultValueFunctions
+
+  let constant c t =
+    match c with
     | C_bool true -> Nb (C.cst_int 1)
     | C_bool false -> Nb (C.cst_int 0)
     | C_int i -> Nb (C.cst i)
     | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
     | _ -> top
 
-  let unop t op a =
+  let unop op t a tr =
     match op with
     | O_log_not -> bot_lift1 C.log_not a
     | O_minus  -> bot_lift1 C.neg a
     | O_plus  -> a
     | _ -> top
 
-  let het_unop man t op (a,e) = top
-
-  let binop t op a1 a2 =
+  let binop op t1 a1 t2 a2 tr =
     match op with
     | O_plus   -> bot_lift2 C.add a1 a2
     | O_minus  -> bot_lift2 C.sub a1 a2
@@ -93,13 +94,11 @@ struct
     | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
     | _     -> top
 
-  let het_binop man t op (a1,e1) (a2,e2) = top
-
-  let filter t b a =
+  let filter b t a =
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
 
-  let bwd_unop t op a r =
+  let bwd_unop op t a tr r =
     try
       let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
@@ -110,9 +109,7 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_het_unop = default_bwd_het_unop
-
-  let bwd_binop t op a1 a2 r =
+  let bwd_binop op t1 a1 t2 a2 tr r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -130,11 +127,7 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let bwd_het_binop = default_bwd_het_binop
-
-  let predicate = default_predicate
-
-  let compare t op b a1 a2 =
+  let compare op b t1 a1 t2 a2 =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
       let op = if b then op else negate_comparison_op op in
@@ -153,10 +146,9 @@ struct
       bottom, bottom
 
 
-  let ask : type r. ('a,'v,t) value_man -> ('a,r) query -> r option = fun man query ->
-    match query with
-    | Common.Q_int_congr_interval e ->
-      let c = man.eval e |> man.get in
+  let to_aval : type r. r aval -> t -> r option = fun aval c ->
+    match aval with
+    | Common.A_int_congr_interval ->
       let ret =
         match c with
         | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
@@ -166,9 +158,7 @@ struct
 
     | _ -> None
 
-  let refine hint a = None
-
 end
 
 let () =
-  register_value_abstraction (module Value)
+  register_simplified_value_abstraction (module Value)

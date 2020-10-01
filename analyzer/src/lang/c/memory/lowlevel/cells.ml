@@ -622,7 +622,7 @@ struct
       eval_base_size base range man flow >>$ fun size flow ->
 
       (* Compute the interval and create a finite number of cells *)
-      let itv, (stride,_) = man.ask (Universal.Numeric.Common.Q_int_congr_interval offset) flow in
+      let itv, (stride,_) = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       let step = if Z.equal stride Z.zero then Z.one else stride in
 
       let l, u = Itv.bounds_opt itv in

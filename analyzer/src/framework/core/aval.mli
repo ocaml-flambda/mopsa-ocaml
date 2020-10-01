@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2017-2020 The MOPSA Project.                               *)
+(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -19,57 +19,21 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Mopsa
-open Sig.Abstraction.Stateless
-open Ast
-open MapExt
-open Addr
-open Universal.Ast
+(** Abstract value representation *)
 
-(** A dummy numerical domain for the type-only analysis. *)
+open Query
+open Ast.Expr
 
-module Domain =
-  struct
+type _ aval = ..
 
-    include GenStatelessDomainId(struct
-                let name = "python.types.dummy_numeric"
-              end)
+val bottom_aval : 'r aval -> 'r
 
-    let checks = []
+val top_aval : 'r aval -> 'r
 
-    let init _ _ flow = flow
+val join_aval : 'r aval -> 'r -> 'r -> 'r
 
-    let exec stmt man flow =
-      match skind stmt with
-      | S_remove { ekind = E_var _ }
-        | S_invalidate { ekind = E_var _ }
-        | S_add { ekind = E_var _ }
-        | S_project _
-        | S_rename ({ ekind = E_var _ }, { ekind = E_var _ })
-        | S_forget { ekind = E_var _ }
-        | S_assign ({ ekind= E_var _ }, _)
-        | S_expand ({ekind = E_var _ }, _)
-        | S_fold ({ekind = E_var _}, _) ->
-         Some (Post.return flow)
+val meet_aval : 'r aval -> 'r -> 'r -> 'r
 
-      | S_assume e when is_numeric_type @@ etyp e ->
-         Some (Post.return flow)
+type ('a,_) query += Q_expr_aval : expr * 'r aval-> ('a,'r) query
 
-      | _ -> None
-
-    let eval exp man flow = None
-
-    let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
-      fun query man flow ->
-      match query with
-      | Q_expr_aval(e, Universal.Numeric.Common.A_int_interval _) ->
-         Some (Nb Universal.Numeric.Common.I.minf_inf)
-      | Q_expr_aval(e, Universal.Numeric.Common.A_float_interval) ->
-         Some (Universal.Numeric.Common.F.infinities)
-      | _ -> None
-
-    let print_expr _ _ _ _ = ()
-
-  end
-
-let () = register_stateless_domain (module Domain)
+val mk_expr_aval_query : expr -> 'r aval -> ('a,'r) query
