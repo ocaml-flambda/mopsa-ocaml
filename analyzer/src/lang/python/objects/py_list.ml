@@ -156,7 +156,7 @@ struct
       debug "Skipping list.__new__, list.__init__ for now@\n";
 
       let addr_list = mk_alloc_addr A_py_list range in
-      man.eval   addr_list flow >>$
+      man.eval addr_list flow >>$
         (fun eaddr_list flow ->
             let addr_list = addr_of_expr eaddr_list in
             let els_var = var_of_addr addr_list in
@@ -813,17 +813,19 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("enumerate.__next__", _))}, _)}, [iterator], []) ->
        (* FIXME: new py_iterator + values *)
       man.eval   iterator flow >>$
- (fun iterator flow ->
-            man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
- (fun list_eobj flow ->
-                  let var_els = var_of_eobj list_eobj in
-                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range;
-                                                           mk_var var_els range]) range) flow in
-                  let flow = Flow.set_ctx (Cases.get_ctx els) flow in
-                  let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
-                  Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els::stopiteration::[])
-                )
-          )
+        (fun iterator flow ->
+          man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
+            (fun list_eobj flow ->
+              let var_els = var_of_eobj list_eobj in
+              let els = Utils.mk_positive_integer man flow range
+                          (fun posint flow ->
+                            man.eval (mk_expr ~etyp:(T_py None)
+                                        (E_py_tuple [posint; mk_var var_els range])
+                                        range) flow ) in
+              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+              Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
+            )
+        )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("zip.__new__" as f, _))}, _)}, args, []) ->
@@ -1123,6 +1125,15 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
+    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr)} as e) ->
+       let range = erange e in
+       let content_var = var_of_addr addr in
+       let length_var = length_var_of_addr addr in
+       man.ask (Q_variables_linked_to (mk_var content_var range)) flow |>
+         VarSet.add length_var |>
+         VarSet.add content_var |>
+         OptionExt.return
+
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
        let open Framework.Engines.Interactive in
        let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in

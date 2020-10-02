@@ -306,10 +306,10 @@ test-py 7/16:
     PY_FILE: 'function_tests.py'
   extends: .test-py
 
-# test-py 8/16:
-#   variables:
-#     PY_FILE: 'generator_tests.py'
-#   extends: .test-py
+test-py 8/16:
+  variables:
+    PY_FILE: 'generator_tests.py'
+  extends: .test-py
 
 test-py 9/16:
   variables:

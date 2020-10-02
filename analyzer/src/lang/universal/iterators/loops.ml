@@ -303,8 +303,7 @@ struct
         Flow.join man.lattice flow_init |>
         Post.return
     else if delay = 0 then
-      let wcur = man.lattice.widen (Flow.get_ctx flow') cur cur' in
-      let wflow = Flow.set T_cur wcur man.lattice flow' in
+      let wflow = Flow.widen man.lattice flow flow' in
       let () = debug
           "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
           pp_range body.srange
