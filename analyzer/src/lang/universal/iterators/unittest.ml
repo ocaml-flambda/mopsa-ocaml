@@ -184,11 +184,6 @@ struct
             raise_assert_fail cond man fail_flow |>
             Post.return
         )
-        ~fnone:(fun none_flow ->
-          warn_at stmt.srange "unreachable assertion %a: will raise assertion fail" pp_expr cond;
-          raise_assert_fail ~force:true cond man none_flow |>
-            Post.return
-        )
         man flow
       |> OptionExt.return
 
