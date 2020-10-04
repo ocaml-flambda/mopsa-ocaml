@@ -189,7 +189,7 @@ struct
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
-      match Value.eval imprecise_value_man (mk_constant bounds bound_range) with
+      match Value.eval imprecise_value_man (mk_constant bounds bound_range ~etyp:var.vtyp) with
       | None    -> v
       | Some vv -> Value.meet v vv
 
