@@ -622,61 +622,64 @@ struct
       eval_base_size base range man flow >>$ fun size flow ->
 
       (* Compute the interval and create a finite number of cells *)
-      let itv, (stride,_) = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
-      let step = if Z.equal stride Z.zero then Z.one else stride in
+      let itv, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
+      match c with
+      | Bot.BOT -> Cases.empty flow
+      | Bot.Nb (stride,_) ->
+        let step = if Z.equal stride Z.zero then Z.one else stride in
 
-      let l, u = Itv.bounds_opt itv in
+        let l, u = Itv.bounds_opt itv in
 
-      let l =
-        match l with
-        | None -> Z.zero
-        | Some l -> Z.max l Z.zero
-      in
-
-      let u =
-        match u, expr_to_z size with
-        | None, Some size -> Z.sub size elm
-        | Some u, Some size -> Z.min u (Z.sub size elm)
-        | Some u, None -> u
-        | None, None ->
-          (* No bound found for the offset and the size is not constant, so
-             get an upper bound of the size.
-          *)
-          let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
-          let ll, uu = Itv.bounds_opt size_itv in
-          match uu with
-          | Some size -> Z.sub size elm
-          | None ->
-            (* We are in trouble: the size is not bounded!
-               So we assume that it does not exceed the range of unsigned long long
-            *)
-            let _, uuu = rangeof ull in
-            Z.sub uuu elm
-      in
-
-      let nb = Z.div (Z.sub u l) step in
-      if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
-        (* too many cases -> top *)
-        let region = Region (base, l, u ,step) in
-        man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
-        if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-        then Cases.empty flow
-        else Cases.singleton region flow
-      else
-        (* few cases -> iterate fully over [l, u] *)
-        let rec aux o =
-          if Z.gt o u
-          then []
-          else
-            let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
-            if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-            then aux (Z.add o step)
-            else
-              let c = mk_cell base o typ in
-              Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+        let l =
+          match l with
+          | None -> Z.zero
+          | Some l -> Z.max l Z.zero
         in
-        let evals = aux l in
-        Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
+
+        let u =
+          match u, expr_to_z size with
+          | None, Some size -> Z.sub size elm
+          | Some u, Some size -> Z.min u (Z.sub size elm)
+          | Some u, None -> u
+          | None, None ->
+            (* No bound found for the offset and the size is not constant, so
+               get an upper bound of the size.
+            *)
+            let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+            let ll, uu = Itv.bounds_opt size_itv in
+            match uu with
+            | Some size -> Z.sub size elm
+            | None ->
+              (* We are in trouble: the size is not bounded!
+                 So we assume that it does not exceed the range of unsigned long long
+              *)
+              let _, uuu = rangeof ull in
+              Z.sub uuu elm
+        in
+
+        let nb = Z.div (Z.sub u l) step in
+        if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+          (* too many cases -> top *)
+          let region = Region (base, l, u ,step) in
+          man.exec (mk_assume (mk_binop offset O_ge (mk_z l range) range) range) flow >>% fun flow ->
+          if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+          then Cases.empty flow
+          else Cases.singleton region flow
+        else
+          (* few cases -> iterate fully over [l, u] *)
+          let rec aux o =
+            if Z.gt o u
+            then []
+            else
+              let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
+              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
+              then aux (Z.add o step)
+              else
+                let c = mk_cell base o typ in
+                Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+          in
+          let evals = aux l in
+          Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
 
 
   (** Summarize a set of cells into a single smashed cell *)

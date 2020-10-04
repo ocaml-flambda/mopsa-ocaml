@@ -64,7 +64,7 @@ module Domain =
       match query with
       | Q_avalue(e, Universal.Numeric.Common.V_int_interval _) ->
          Some (Nb Universal.Numeric.Common.I.minf_inf)
-      | Q_avalue(e, Universal.Numeric.Common.V_float_interval) ->
+      | Q_avalue(e, Universal.Numeric.Common.V_float_interval _) ->
          Some (Universal.Numeric.Common.F.infinities)
       | _ -> None
 

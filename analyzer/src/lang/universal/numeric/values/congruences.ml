@@ -72,7 +72,7 @@ struct
     | C_bool false -> Nb (C.cst_int 0)
     | C_int i -> Nb (C.cst i)
     | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
-    | C_avalue(Common.V_int_congr_interval,(_,c)) -> Nb c
+    | C_avalue(Common.V_int_congr_interval,(_,c)) -> c
     | _ -> top
 
   let unop op t a tr =
@@ -153,8 +153,8 @@ struct
     | Common.V_int_congr_interval ->
       let ret =
         match c with
-        | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
-        | Nb cc -> Intervals.Integer.Value.top, cc
+        | BOT -> Intervals.Integer.Value.bottom, bottom
+        | _ -> Intervals.Integer.Value.top, c
       in
       OptionExt.return ret
 

@@ -108,7 +108,7 @@ struct
     | C_bool true ->
       I.one
 
-    | C_avalue(V_float_interval, itv) -> (itv:t)
+    | C_avalue(V_float_interval _, itv) -> (itv:t)
 
     | C_top (T_float p) ->
       top_of_prec p
@@ -174,7 +174,7 @@ struct
 
   let avalue : type r. r avalue_kind -> t -> r option = fun aval a ->
     match aval with
-    | V_float_interval -> Some a
+    | V_float_interval _ -> Some a
     | _ -> None
 
   
@@ -189,12 +189,12 @@ struct
 
   include V
 
-  let cast man e =
+  let cast man p e =
     match e.etyp with
     | T_int | T_bool ->
       let v = man.eval e in
       let int_itv = man.avalue (V_int_interval true) v in
-      let float_itv = I.of_int_itv_bot (prec @@ prec_of_type e.etyp) (round ()) int_itv in
+      let float_itv = I.of_int_itv_bot (prec p) (round ()) int_itv in
       man.set float_itv v |>
       OptionExt.return
 
@@ -202,7 +202,7 @@ struct
 
   let eval man e =
     match ekind e with
-    | E_unop(O_cast,ee) -> cast man ee
+    | E_unop(O_cast,ee) -> cast man (prec_of_type e.etyp) ee
     | _ -> V.eval man e
 
   let backward_cast man p e ve r =

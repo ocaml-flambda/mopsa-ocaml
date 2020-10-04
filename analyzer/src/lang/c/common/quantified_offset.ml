@@ -86,7 +86,7 @@ let is_aligned e sz man flow =
        let i , c = man.ask (mk_int_congr_interval_query ee) flow in
        match i with
        | Bot.Nb(I.B.Finite a, I.B.Finite b) when  a = b && Z.rem a sz = Z.zero -> true
-       | _ -> Universal.Numeric.Common.C.included c (sz,Z.zero)
+       | _ -> Universal.Numeric.Common.C.included_bot c (Bot.Nb (sz,Z.zero))
      )
   )
 

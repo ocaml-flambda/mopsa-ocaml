@@ -204,7 +204,7 @@ struct
     fun aval a ->
     match aval with
     | Common.V_int_interval _ -> Some a
-    | Common.V_int_congr_interval -> Some (a, Common.C.minf_inf)
+    | Common.V_int_congr_interval -> Some (a, Bot.Nb Common.C.minf_inf)
     | _ -> None
 
     
@@ -224,9 +224,9 @@ struct
 
   let cast man e =
     match e.etyp with
-    | T_float _ ->
+    | T_float p ->
       let v = man.eval e in
-      let float_itv = man.avalue Common.V_float_interval v in
+      let float_itv = man.avalue (Common.V_float_interval p) v in
       let v = ItvUtils.FloatItvNan.to_int_itv float_itv in
       man.set v man.top |>
       OptionExt.return
@@ -240,14 +240,14 @@ struct
   
   let backward_cast man e ve r =
     match e.etyp with
-    | T_float _ ->
+    | T_float p ->
       begin match r with
         | BOT -> None
         | Nb iitv ->
           let v,_ = find_vexpr e ve in
-          let fitv = man.avalue Common.V_float_interval v in
+          let fitv = man.avalue (Common.V_float_interval p) v in
           let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
-          let v' = man.eval (mk_avalue_expr Common.V_float_interval fitv' e.erange) in
+          let v' = man.eval (mk_avalue_expr (Common.V_float_interval p) fitv' e.erange) in
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return
       end
