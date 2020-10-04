@@ -69,7 +69,7 @@ sig
 
   val widen : 'a lattice -> 'a ctx -> 'a t -> 'a t -> 'a t
 
-  val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val print : (Print.printer -> 'a -> unit) -> Print.printer -> 'a t -> unit
 
   val mem : token -> 'a t -> bool
 

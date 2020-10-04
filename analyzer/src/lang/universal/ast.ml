@@ -565,8 +565,11 @@ type stmt_kind +=
    | S_satisfy of expr
    (** Unit tests satisfiability check *)
 
-   | S_print
+   | S_print_state
    (** Print the abstract flow map at current location *)
+
+   | S_print_expr of expr list
+   (** Pretty print the values of expressions *)
 
    | S_free of addr
    (** Release a heap address *)
@@ -605,6 +608,8 @@ let () =
 
         | S_free(a1), S_free(a2) -> compare_addr a1 a2
 
+        | S_print_expr el1, S_print_expr el2 -> Compare.list compare_expr el1 el2
+
         | _ -> next s1 s2
       );
 
@@ -632,7 +637,8 @@ let () =
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
-        | S_print -> fprintf fmt "print();"
+        | S_print_state -> fprintf fmt "print();"
+        | S_print_expr el -> fprintf fmt "print_expr(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -682,8 +688,12 @@ let () =
              {stmt with skind = S_unit_tests(tests)}
           )
 
-        | S_print -> leaf stmt
+        | S_print_state -> leaf stmt
 
+        | S_print_expr el ->
+          {exprs = el; stmts = []},
+          (function {exprs} -> {stmt with skind = S_print_expr exprs})
+          
         | S_free _ -> leaf stmt
 
         | _ -> default stmt
@@ -1035,7 +1045,7 @@ module Addr =
 struct
   type t = addr
   let compare = compare_addr
-  let print = pp_addr
+  let print = unformat pp_addr
   let from_expr e =
     match ekind e with
     | E_addr addr -> addr
@@ -1045,15 +1055,6 @@ end
 module AddrSet =
 struct
   include SetExt.Make(Addr)
-
-  let print fmt s =
-    if is_empty s then pp_print_string fmt "∅"
-    else
-      let l = elements s in
-      fprintf fmt "@[<h>{";
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-        pp_addr fmt l
-      ;
-      fprintf fmt "}@]"
+  let print printer s =
+    pp_list Addr.print printer (elements s) ~lopen:"{" ~lsep:"," ~lclose:"}"
 end

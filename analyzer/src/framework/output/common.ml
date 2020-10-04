@@ -19,79 +19,39 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Ast.Constant
-include Ast.Expr
-include Ast.Stmt
-include Ast.Typ
-include Ast.Program
-include Ast.Frontend
-include Ast.Operator
-include Ast.Var
-include Ast.Visitor
+(** Definitions common to output engines *)
 
-module Var =
-struct
-  type t = var
-  let compare = compare_var
-  let print = Print.unformat pp_var
+open Core.All
+
+
+(* Signature of an output engine *)
+(* ----------------------------- *)
+
+module type OUTPUT =
+sig
+  val report : ('a,'b) man -> 'a flow -> time:float -> files:string list -> out:string option -> unit
+  val panic : exn -> btrace:string -> time:float -> files:string list -> out:string option -> unit
+  val help : ArgExt.arg list -> out:string option -> unit
+  val print  : printer -> range:Location.range -> out:string option -> unit
+  val list_domains : string list -> out:string option -> unit
+  val list_hooks : string list -> out:string option -> unit
+  val list_checks : check list -> out:string option -> unit
 end
 
-include Alarm
-module Alarm = Alarm
 
-include Context
-module Context = Context
+(* Output formats *)
+(* -------------- *)
 
-module Cases = Cases
+type format =
+  | F_text (* Textual output *)
+  | F_json (* Formatted output in JSON *)
 
-type 'r case = 'r Cases.case
-type ('a,'r) cases = ('a,'r) Cases.cases
 
-let bind = Cases.bind
-let (>>=) = Cases.(>>=)
+(* Command line option *)
+(* ------------------- *)
 
-let bind_opt = Cases.bind_opt
-let (>>=?) = Cases.(>>=?)
+let opt_format = ref F_text
+let opt_file : string option ref = ref None
+let opt_display_lastflow = ref false
+let opt_silent = ref false
 
-let bind_result = Cases.bind_result
-let (>>$) = Cases.(>>$)
-
-let bind_result_opt = Cases.bind_result_opt
-let (>>$?) = Cases.(>>$?)
-
-let bind_list = Cases.bind_list
-let bind_list_opt = Cases.bind_list_opt
-
-module Eval = Eval
-type 'a eval = 'a Eval.eval
-
-module Flow = Flow
-type 'a flow = 'a Flow.flow
-
-module Post = Post
-type 'a post = 'a Post.post
-
-let (>>%) = Post.(>>%)
-let (>>%?) = Post.(>>%?)
-
-module Log = Log
-include Log
-
-include Query
-
-include Token
-
-include Semantic
-
-include Route
-
-include Lattice
-
-include Id
-
-include Manager
-
-module Hook = Hook
-
-include Print
-module Print = Print

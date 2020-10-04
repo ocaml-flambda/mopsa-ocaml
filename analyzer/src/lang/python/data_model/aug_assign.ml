@@ -75,6 +75,8 @@ module Domain = struct
 
   let ask _ _ _ = None
 
+  let print_expr _ _ _ _ = ()
+
 end
 
 let () =

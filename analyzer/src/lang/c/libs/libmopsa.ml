@@ -163,7 +163,7 @@ struct
                pp_base base
                (Cases.print_result (fun fmt e flow ->
                     let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
-                    Universal.Numeric.Values.Intervals.Integer.Value.print fmt itv
+                    (format Universal.Numeric.Values.Intervals.Integer.Value.print) fmt itv
                   )
                ) evl
 
@@ -258,12 +258,12 @@ struct
       Exceptions.panic "%s" s
 
     | E_c_builtin_call("_mopsa_print", []) ->
-       Framework.Output.Factory.print (erange exp) (Flow.print man.lattice.print) flow;
-       Eval.singleton (mk_int 0 exp.erange) flow |>
-       OptionExt.return
+      man.exec (mk_stmt S_print_state exp.erange) flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
 
     | E_c_builtin_call("_mopsa_print", args) ->
-      Framework.Output.Factory.print (erange exp) (print_values args man) flow;
+      man.exec (mk_stmt (S_print_expr args) exp.erange) flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
@@ -327,6 +327,8 @@ struct
     | _ -> None
 
   let ask _ _ _  = None
+
+  let print_expr _ _ _ _ = ()
 
 end
 

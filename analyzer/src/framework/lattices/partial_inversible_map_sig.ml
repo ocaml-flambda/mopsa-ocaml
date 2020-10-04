@@ -28,7 +28,7 @@
 
 
 open Top
-open Core.Context
+open Core.All
 
 
 module type S =
@@ -58,7 +58,7 @@ sig
   val is_bottom : t -> bool
   (** [is_bottom a] checks whether [a] is ⊥ *)
 
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
   (** Pretty printer. *)
 
   val empty : t

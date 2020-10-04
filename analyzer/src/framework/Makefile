@@ -22,8 +22,8 @@
 
 # Framework packs
 framework = core lattices sig combiners toplevel engines output config runner
-framework.core = semantic route ast query context alarm token log lattice \
-	 	 flow cases eval post id manager hook cache all
+framework.core = semantic route ast print query context alarm token log \
+		 lattice flow cases eval post id manager hook cache all
 framework.core.ast = program frontend typ operator constant var expr stmt visitor
 framework.lattices = partial_map partial_inversible_map_sig \
 		     partial_inversible_map powerset_sig powerset \
@@ -44,7 +44,7 @@ framework.combiners.value = union product nonrel
 framework.combiners.domain = switch compose product simplified_product stateless_switch
 framework.abstraction.json = syntax visitor parser
 framework.engines = engine automatic interactive
-framework.output = text json factory
+framework.output = common text json factory
 framework.config = abstraction paths options
 framework.config.abstraction = syntax visitor parser builder
 

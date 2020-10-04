@@ -52,4 +52,3 @@ let apron_to_var bindings v =
 
 
 let concat b1 b2 = Equiv.concat b1 b2
-    

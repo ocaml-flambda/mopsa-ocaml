@@ -66,9 +66,6 @@ sig
   val is_bottom: t -> bool
   (** [is_bottom a] tests whether [a] is bottom or not. *)
 
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -109,6 +106,16 @@ sig
   val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
   (** Handler of queries *)
 
+
+  (** {2 Printing} *)
+  (** ************ *)
+
+  val print_state : printer -> t -> unit
+  (** Printer of an abstract element. *)
+
+  val print_expr  : ('a,t) man -> 'a flow -> printer -> expr -> unit
+  (** Printer of an expression's value *)
+
 end
 
 
@@ -126,7 +133,7 @@ val find_stacked_domain : string -> (module STACKED)
 val mem_stacked_domain : string -> bool
 (** [mem_stacked_domain name] checks whether a stacked domain with name
     [name] is registered *)
- 
+
 val stacked_domain_names : unit -> string list
 (** Return the names of registered stacked domains *) 
 

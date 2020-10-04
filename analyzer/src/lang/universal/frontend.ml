@@ -383,7 +383,7 @@ let rec from_stmt (s: U.stat) (ext: U.extent) (var_ctx: var_context) (fun_ctx: f
 
 
   | AST_print ->
-    mk_stmt S_print range
+    mk_stmt S_print_state range
 
   | AST_expr(e, ext) ->
     let e' = from_expr e ext var_ctx fun_ctx in

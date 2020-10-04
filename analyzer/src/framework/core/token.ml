@@ -136,16 +136,16 @@ struct
       )
       tmap1 tmap2
 
-  let print pp fmt (tmap : 'a t) : unit =
-    top_fprint (fun fmt m ->
-        if Map.is_empty m then Format.pp_print_string fmt "⊥"
-        else
-          Format.fprintf fmt "@[<v>%a@]"
-            (Format.pp_print_list
-               ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-               (fun fmt (k, v) -> Format.fprintf fmt "⏵ %a ↦@\n@[<hov4>    %a@]" pp_token k pp v)
-            ) (Map.bindings m)
-      ) fmt tmap
+  let print pp printer (tmap : 'a t) : unit =
+    let open Print in
+    match tmap with
+    | TOP ->
+      pp_string printer "⊤"
+    | Nt m when Map.is_empty m ->
+      pp_string printer "⊥"
+    | Nt m ->
+      pp_map (unformat pp_token) pp
+        printer (Map.bindings m)
 
   let get (tk: token) (lattice: 'a lattice) (tmap: 'a t) : 'a =
     try

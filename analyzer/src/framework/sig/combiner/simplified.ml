@@ -32,6 +32,8 @@ sig
   val routing_table : routing_table
   val exec : domain list -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
+  val print_state : domain list -> printer -> t -> unit
+  val print_expr  : domain list -> ('a,t) simplified_man -> 'a ctx -> t -> printer -> expr -> unit
 end
 
 
@@ -44,6 +46,8 @@ struct
   let routing_table = empty_routing_table
   let exec domains = D.exec
   let ask domains  = D.ask
+  let print_state targets = D.print_state
+  let print_expr  targets = D.print_expr
 end
 
 module CombinerToSimplified(T:SIMPLIFIED_COMBINER) : SIMPLIFIED with type t = T.t =
@@ -51,6 +55,8 @@ struct
   include T
   let exec stmt man ctx a = T.exec [] stmt man ctx a
   let ask query man ctx a = T.ask [] query man ctx a
+  let print_state printer a = T.print_state [] printer a
+  let print_expr man ctx a printer e = T.print_expr [] man ctx a printer e
 end
 
 
@@ -110,6 +116,14 @@ struct
        f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow)
     )
 
+  let print_expr domains =
+    let f = D.print_expr domains in
+    (fun man flow printer e ->
+       let a = get_env T_cur man flow in
+       if D.is_bottom a
+       then ()
+       else f (simplified_man man flow) (Flow.get_ctx flow) a printer e
+    )
 end
 
 

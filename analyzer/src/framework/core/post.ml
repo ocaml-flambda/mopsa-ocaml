@@ -39,11 +39,6 @@ include Cases
 let return ?(cleaners=[]) flow : 'a post =
   Cases.return () ~cleaners flow
 
-let print pp fmt post =
-  Cases.print (fun fmt _ flow ->
-      Flow.print pp fmt flow
-    ) fmt post
-
 let bind_opt f post =
   Cases.bind_opt
     (fun case flow ->

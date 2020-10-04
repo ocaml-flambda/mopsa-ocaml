@@ -26,6 +26,7 @@ open ArgExt
 open Core.All
 open Callstack
 open Location
+open Common
 
 let print out json =
   let channel =
@@ -115,7 +116,8 @@ let render_env (var,value)  =
   ]
 
 
-let report ?(flow=None) man rep time files out : unit =
+let report man flow ~time ~files ~out : unit =
+  let rep = Flow.get_report flow in
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
@@ -129,7 +131,7 @@ let report ?(flow=None) man rep time files out : unit =
   print out json
 
 
-let panic ~btrace exn files time out =
+let panic exn ~btrace ~time ~files ~out =
   let open Exceptions in
   let error,range,cs =
     match exn with
@@ -158,7 +160,7 @@ let panic ~btrace exn files time out =
   print out (`Assoc assoc)
 
 
-let help (args:arg list) out =
+let help (args:arg list) ~out =
   let json  = `List (
       args |>
       List.map (fun arg ->
@@ -189,7 +191,7 @@ let help (args:arg list) out =
   in
   print out json
 
-let list_domains (domains:string list) out =
+let list_domains (domains:string list) ~out =
   let json = `List (
       domains |>
       List.map (fun d -> `String d)
@@ -197,14 +199,14 @@ let list_domains (domains:string list) out =
   in
   print out json
 
-let list_checks checks out =
+let list_checks checks ~out =
   let json = `List (
       List.map render_check checks
     )
   in
   print out json
 
-let list_hooks hooks out =
+let list_hooks hooks ~out =
   let json = `List (
       hooks |>
       List.map (fun d -> `String d)
@@ -212,14 +214,11 @@ let list_hooks hooks out =
   in
   print out json
 
-let print range printer flow out =
-  printer Format.str_formatter flow;
-  let str = Format.flush_str_formatter () in
+let print printer ~range ~out =
   let json =
     `Assoc [
-       "channel", `String "print";
+       "print", print_object_to_json (get_printed_object printer);
        "range", render_range range;
-       "msg", `String str;
      ]
   in
   print out json

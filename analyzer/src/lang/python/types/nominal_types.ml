@@ -163,6 +163,7 @@ struct
 
   let exec _ _ _ = None
   let ask _ _ _ = None
+  let print_expr _ _ _ _ = ()
 
 end
 

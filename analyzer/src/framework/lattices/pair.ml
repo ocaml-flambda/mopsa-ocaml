@@ -22,7 +22,7 @@
 
 (** Lattice of pairs *)
 
-open Core.Lattice
+open Core.All
 
 
 (** Signature of ordered types with printers *)
@@ -30,7 +30,7 @@ module type ORDER =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
 end
 
 
@@ -84,7 +84,10 @@ struct
     if v1 == w1 && v2 == w2 then v else
     apply2 (First.widen ctx) (Second.widen ctx) v w
 
-  let print fmt ((a,b):t) : unit =
-    Format.fprintf fmt "(%a, %a)" First.print a Second.print b
+  let print printer ((a,b):t) : unit =
+    pp_obj_list ~lopen:"(" ~lsep:"," ~lclose:")"
+      printer
+      [ pbox First.print a;
+        pbox Second.print b ]
 
 end

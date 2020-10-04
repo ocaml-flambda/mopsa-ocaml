@@ -40,12 +40,16 @@ struct
 
   let display = V1.display ^ " ∪ " ^ V2.display
 
-  let print fmt (v1,v2) =
+  let print printer (v1,v2) =
     match V1.is_bottom v1, V2.is_bottom v2 with
-    | true, true -> Format.pp_print_string fmt Bot.bot_string
-    | false, true -> V1.print fmt v1
-    | true, false -> V2.print fmt v2
-    | false, false -> Format.fprintf fmt "%a ∨ %a" V1.print v1 V2.print v2
+    | true, true -> pp_string printer Bot.bot_string
+    | false, true -> V1.print printer v1
+    | true, false -> V2.print printer v2
+    | false, false ->
+      pp_obj_list printer
+        [ pbox V1.print v1;
+          pbox V2.print v2 ]
+        ~lopen:"" ~lsep:"∨" ~lclose:""
 
 
   (** {2 Lattice operators} *)

@@ -31,8 +31,7 @@
 
 open Bot_top
 open Top
-open Core.Lattice
-open Core.Context
+open Core.All
 open Partial_inversible_map_sig
 
 
@@ -41,7 +40,7 @@ module type ORDER =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Core.Print.printer -> t -> unit
 end
 
 

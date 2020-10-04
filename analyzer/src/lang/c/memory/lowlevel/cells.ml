@@ -240,13 +240,13 @@ struct
   module Cell = struct
       type t = cell
       let compare = compare_cell
-      let print = pp_cell
+      let print = unformat pp_cell
     end
 
   module Off = struct
     type t = Z.t
     let compare = Z.compare
-    let print = Z.pp_print
+    let print = unformat Z.pp_print
   end
 
   module Cells = Framework.Lattices.Powerset.Make(Cell)
@@ -360,10 +360,6 @@ struct
     cells = CellSet.top;
     bases = BaseSet.top;
   }
-
-  let print fmt a =
-    Format.fprintf fmt "cells: @[%a@]@\n"
-      CellSet.print a.cells
 
 
   (** Domain identifier *)
@@ -1155,6 +1151,46 @@ struct
   (** ************************** *)
 
   let ask query man flow = None
+
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  let print_state printer a =
+    pprint printer (pbox CellSet.print a.cells) ~path:[Key "cells"]
+
+  let print_expr man flow printer exp =
+    let exp = remove_casts exp in
+    (* Process only C lvalues *)
+    if not (is_c_type exp.etyp && is_c_lval exp) then () else
+    (* Don't process scalar variables *)
+    if is_c_scalar_type exp.etyp && is_var_base_expr exp then ()
+    else
+      (* Iterate over bases and offsets *)
+      resolve_pointer (mk_c_address_of exp exp.erange) man flow |>
+      Cases.iter_result
+        (fun pt _ ->
+           match pt with
+           | P_block(base,offset,_) when base.base_valid ->
+             (* Get the interval of the offset *)
+             let itv = man.ask (mk_int_interval_query offset) flow |>
+                       Itv.meet (let l,u=rangeof ull in Itv.of_z l u)
+             in
+             let l,u = Itv.bounds itv in
+             (* Get the cells within [l, u+|typ|-1] *)
+             let lo = l in
+             let hi = Z.(u + (sizeof_type exp.etyp) - one) in
+             let a = get_env T_cur man flow in
+             OffCells.iter_slice
+               (fun o s -> Cells.iter
+                   (fun c ->
+                      let v = mk_cell_var c in
+                      let ve = mk_var v exp.erange in
+                      man.print_expr ~route:scalar flow printer ve
+                   ) s)
+               (CellSet.find base a.cells) lo hi
+           | _ -> ()
+        )
 
 end
 

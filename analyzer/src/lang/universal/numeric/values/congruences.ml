@@ -58,7 +58,7 @@ struct
 
   let widen ctx (a1:t) (a2:t) : t = join a1 a2
 
-  let print fmt (a:t) = C.fprint_bot fmt a
+  let print printer (a:t) = unformat C.fprint_bot printer a
 
   let constant t c =
     match t with

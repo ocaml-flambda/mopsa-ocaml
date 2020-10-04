@@ -35,6 +35,7 @@ open Context
 open Cases
 open Route
 open Query
+open Print
 
 (*==========================================================================*)
 (**                             {2 Managers}                                *)
@@ -54,6 +55,7 @@ type ('a, 't) man = {
   exec : ?route:route -> stmt -> 'a flow -> 'a post;
   eval : ?route:route -> expr -> 'a flow -> 'a eval;
   ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
+  print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
 
   (* Accessors to the domain's logs *)
   get_log : log -> log;

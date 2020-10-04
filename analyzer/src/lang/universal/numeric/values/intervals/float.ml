@@ -75,7 +75,7 @@ struct
 
   let widen ctx (a1:t) (a2:t) : t = I.widen a1 a2
 
-  let print fmt (a:t) = I.fprint I.dfl_fmt fmt a
+  let print printer (a:t) = unformat (I.fprint I.dfl_fmt) printer a
 
 
   (** Arithmetic operators *)

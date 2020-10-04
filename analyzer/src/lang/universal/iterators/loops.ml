@@ -208,11 +208,11 @@ struct
   module LastFixpointCtx = GenContextKey(
     struct
         type 'a t = 'a flow LoopHeadMap.t
-        let print (l: Format.formatter -> 'a -> unit) fmt ctx = Format.fprintf fmt "Lfp cache context: %a"
+        let print l fmt ctx = Format.fprintf fmt "Lfp cache context: %a"
             (LoopHeadMap.fprint
                MapExt.printer_default
                (fun fmt (cs, r) -> pp_callstack fmt cs; pp_range fmt r)
-               (fun fmt flow -> TokenMap.print l fmt (Flow.get_token_map flow))) ctx
+               (fun fmt flow -> format (TokenMap.print l) fmt (Flow.get_token_map flow))) ctx
       end
     )
 
@@ -247,7 +247,7 @@ struct
       Flow.add T_continue (Flow.get T_continue man.lattice flow) man.lattice |>
       Flow.add T_break (Flow.get T_break man.lattice flow) man.lattice
     in
-    Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range pp_callstack cs (Flow.print man.lattice.print) stripped_flow;
+    Debug.debug ~channel:(name ^ ".cache") "@(%a, %a): adding %a" pp_range range pp_callstack cs (format (Flow.print man.lattice.print)) stripped_flow;
     let lfp_ctx = LoopHeadMap.add (cs, range) stripped_flow old_lfp_ctx in
     Flow.set_ctx (add_ctx LastFixpointCtx.key lfp_ctx (Flow.get_ctx flow)) flow
 
@@ -257,7 +257,7 @@ struct
     | None -> None
     | Some old_lfp ->
       let res = Flow.join man.lattice old_lfp flow in
-      Debug.debug ~channel:"universal.iterators.loops.cache" "cache: %a join %a = %a@\n" (Flow.print man.lattice.print) old_lfp (Flow.print man.lattice.print) flow (Flow.print man.lattice.print) res;
+      Debug.debug ~channel:"universal.iterators.loops.cache" "cache: %a join %a = %a@\n" (format (Flow.print man.lattice.print)) old_lfp (format (Flow.print man.lattice.print)) flow (format (Flow.print man.lattice.print)) res;
       Some res
     (* flow *)
 
@@ -304,13 +304,6 @@ struct
         Post.return
     else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow' in
-      let () = debug
-          "widening: %a@\n abs =@\n@[  %a@]@\n abs' =@\n@[  %a@]@\n res =@\n@[  %a@]"
-          pp_range body.srange
-          (Flow.print man.lattice.print) flow
-          (Flow.print man.lattice.print) flow'
-          (Flow.print man.lattice.print) wflow
-      in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
       lfp (count+1) (delay - 1) cond body man flow_init flow'
@@ -344,14 +337,12 @@ struct
         Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
 
   let decr_iteration cond body man flow_init flow =
-    debug "starting decreasing iterations, flow = %a" (Flow.print man.lattice.print) flow;
     Flow.remove T_continue flow |>
     Flow.remove T_break |>
     man.exec (mk_assume cond cond.erange) >>%
     man.exec body >>% fun flow ->
     let flow = merge_cur_and_continue man flow |>
                Flow.join man.lattice flow_init in
-    debug "after decreasing iteration, flow = %a" (Flow.print man.lattice.print) flow;
     Post.return flow
 
 
@@ -374,13 +365,6 @@ struct
           unroll (get_range_unrolling stmt.srange) cond body man flow0
       end >>$? fun (is_fp, flow_out) flow_init ->
 
-      debug "post unroll %a (is_fp=%b):@\n flow_init = @[%a@]@\n flow_out = @[%a@]"
-        pp_range stmt.srange
-        is_fp
-        (Flow.print man.lattice.print) flow_init
-        (Flow.print man.lattice.print) flow_out
-      ;
-
       begin
         if is_fp then
           Post.return flow_init
@@ -392,7 +376,6 @@ struct
             else Post.return flow_lfp
           end >>% fun flow_lfp ->
           let flow_lfp = if !opt_loop_use_cache then
-                           let () = Debug.debug ~channel:(name ^ ".cache") "storing fixpoint %a" (Flow.print man.lattice.print) flow_lfp in
                            store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           Post.return flow_lfp
       end >>%? fun flow_lfp ->
@@ -428,6 +411,8 @@ struct
   let eval _ _ _ = None
 
   let ask _ _ _ = None
+
+  let print_expr man flow printer exp = ()
 
 end
 

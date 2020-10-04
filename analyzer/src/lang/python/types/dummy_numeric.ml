@@ -68,6 +68,7 @@ module Domain =
          Some (Universal.Numeric.Common.F.infinities)
       | _ -> None
 
+    let print_expr _ _ _ _ = ()
 
   end
 

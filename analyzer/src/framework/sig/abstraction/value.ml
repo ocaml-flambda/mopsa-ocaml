@@ -62,9 +62,6 @@ sig
   val top: t
   (** Greatest abstract element of the lattice. *)
 
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -155,6 +152,12 @@ sig
 
   val ask : ('a,t) value_man -> ('a,'r) query -> 'r option
   (** Query handler *)
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  val print: printer -> t -> unit
+  (** Printer of an abstract element. *)
 
 end
 

@@ -21,7 +21,14 @@
 
 (** Relation with printing builder *)
 
-module Make(L : ValueSig.S)(R : ValueSig.S) =
+module type OrderedType =
+  sig
+    type t
+    val compare : t -> t -> int
+  end
+
+
+module Make(L : OrderedType)(R : OrderedType) =
 struct
   exception Already_Paired
   module LR = MapExt.Make(L)
@@ -31,12 +38,6 @@ struct
       lr : R.t LR.t ;
       rl : L.t RL.t ;
     }
-  let print ?(pp_sep=(fun fmt () -> Format.fprintf fmt ", ")) fmt (e : t) =
-    Format.fprintf fmt "@[{%a}@]"
-      (Format.pp_print_list
-         ~pp_sep:pp_sep
-         (fun fmt (z,t) -> Format.fprintf fmt "%a ↔ %a" L.print z R.print t)
-      ) (LR.bindings e.lr)
   let compare (e : t) (e' : t) : int =
     try
       let r = LR.fold (fun k v acc ->
@@ -97,22 +98,18 @@ struct
     | Not_found -> false
 
   let concat (e1:t) (e2:t) =
-    let patch compare ppk ppv k v1 v2 =
+    let patch compare k v1 v2 =
       match v1, v2 with
       | None, None -> None
       | Some vv, None | None, Some vv -> Some vv
       | Some vv1, Some vv2 ->
         if compare vv1 vv2 = 0
         then Some vv1
-        else Exceptions.panic
-            "Equiva.concat: key %a points to different values %a and %a"
-            ppk k
-            ppv vv1
-            ppv vv2
+        else Exceptions.panic "Equiva.concat: key points to different values"
     in
     {
-      lr = LR.merge (patch R.compare L.print R.print) e1.lr e2.lr;
-      rl = RL.merge (patch L.compare R.print L.print) e1.rl e2.rl;
+      lr = LR.merge (patch R.compare) e1.lr e2.lr;
+      rl = RL.merge (patch L.compare) e1.rl e2.rl;
     }
 
   let mem_l (l : L.t) (e: t) =

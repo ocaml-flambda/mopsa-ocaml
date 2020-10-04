@@ -189,6 +189,12 @@ val fold : ('b -> 'r case -> 'a flow -> 'b) -> 'b -> ('a,'r) cases -> 'b
 val fold_result : ('b -> 'r -> 'a flow -> 'b) -> 'b -> ('a,'r) cases -> 'b
 (** Fold over the flattened list of results *)
 
+val iter : ('r case -> 'a flow -> unit) -> ('a,'r) cases -> unit
+(** Iterate over the flattened list of cases *)
+
+val iter_result : ('r -> 'a flow -> unit) -> ('a,'r) cases -> unit
+(** Iterate over the flattened list of results *)
+
 val partition : ('r case -> 'a flow -> bool) -> ('a,'r) cases -> ('a,'r) cases option * ('a,'r) cases option
 (** [partition f cases] separates cases that verify or not predicate [f]  *)
 

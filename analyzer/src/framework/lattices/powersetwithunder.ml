@@ -20,12 +20,13 @@
 (****************************************************************************)
 
 open Bot
+open Core.All
 
 module type ELT =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
 end
 
 (** Powerset with lower and upper approximations *)
@@ -101,24 +102,26 @@ struct
 
   (* let fold_uo f s init = fold_o f s (fold_u f s init) (\* FIXME: double iteration on underapproximated elements *\) *)
 
-  open Format
-  let print fmt (su:t) =
-    bot_fprint (fun fmt (l, u) (* lower, upper *) ->
-        let le = Set.elements l in
-        fprintf fmt "@[<h>{U=";
-        if le = [] then fprintf fmt "∅"
-        else
-          fprintf fmt "@[<h>{%a}@]"
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-               Elt.print
-            ) le
-        ;
-        let ud = USet.diff u (Nt l) in
-        if USet.cardinal ud = 0 then
-          fprintf fmt ", O=U}@]"
-        else
-          fprintf fmt ", O=U ∪ %a}@]"
-            USet.print ud) fmt su
+  let print printer (su:t) =
+    match su with
+    | BOT -> pp_string printer "⊥"
+    | Nb (l, u) (* lower, upper *) ->
+      let le = Set.elements l in
+      pprint ~path:[Key "U"] printer
+        (pbox
+           (fun printer le ->
+              if le = [] then pp_string printer "∅"
+              else
+                pp_list Elt.print printer le ~lopen:"{" ~lsep:"," ~lclose:"}"
+           ) le)
+      ;
+      let ud = USet.diff u (Nt l) in
+      if USet.is_empty ud then
+        pp_string ~path:[Key "O"] printer "U"
+      else
+        pprint ~path:[Key "O"] printer
+          (List ([ String "U";
+                   pbox USet.print ud ],
+                 { lopen =""; lsep = "∪"; lclose = ""} ))
 
 end

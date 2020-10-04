@@ -45,8 +45,6 @@ sig
 
   val is_bottom: t -> bool
 
-  val print: Format.formatter -> t -> unit
-
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -72,6 +70,14 @@ sig
   val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
+
+
+  (** {2 Pretty printing} *)
+  (** ******************* *)
+
+  val print_state : ?route:route -> printer -> t -> unit
+
+  val print_expr  : ?route:route -> (t,t) man -> t flow -> printer -> expr -> unit
 
 end
 
@@ -102,7 +108,6 @@ struct
 
   let is_bottom = Domain.is_bottom
 
-  let print = Domain.print
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -290,6 +295,16 @@ struct
           RouteMap.add route (Domain.eval domains) map
       ) map
 
+  (** Get the actual route of the expression in case of a
+       variable, since variable can have an intrinsic semantic *)
+  let refine_route_with_var_semantic route e =
+    if compare_route route toplevel = 0 then
+      match ekind e with
+      | E_var (v,_) -> Semantic v.vsemantic
+      | _ -> route
+    else
+      route
+
   (** Evaluation of expressions. *)
   let eval ?(route=toplevel) exp man flow =
     let flow =
@@ -300,17 +315,6 @@ struct
         let x = Hook.on_before_eval route exp man flow in
         let () = exit_hook() in
         match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
-    in
-
-    (* Get the actual route of the expression in case of a
-       variable, since variable can have an intrinsic semantic *)
-    let refine_route_with_var_semantic route e =
-      if compare_route route toplevel = 0 then
-        match ekind e with
-        | E_var (v,_) -> Semantic v.vsemantic
-        | _ -> route
-      else
-        route
     in
 
     let route = refine_route_with_var_semantic route exp in
@@ -382,5 +386,63 @@ struct
     | None -> raise Not_found
     | Some r -> r
 
+
+  (** {2 Pretty printer of states} *)
+  (** **************************** *)
+
+  (** Build the map of [print_state] functions *)
+  let print_state_map : (printer -> t -> unit) RouteMap.t =
+    (* Add the implicit printer for toplevel *)
+    let map = RouteMap.singleton toplevel (Domain.print_state []) in
+
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.print_state domains) map
+      ) map
+
+  (** Pretty print of states *)
+  let print_state ?(route=toplevel) printer a =
+    match RouteMap.find_opt route print_state_map with
+    | Some f ->
+      f printer a
+
+    | None ->
+      Exceptions.panic "pretty printer for %a not found" pp_route route
+
+
+  (** {2 Pretty printer of expressions} *)
+  (** ********************************* *)
+
+  (** Build the map of [print_expr] functions *)
+  let print_expr_map : ((t,t) man -> t flow -> printer -> expr -> unit) RouteMap.t =
+    (* Add the implicit printer for toplevel *)
+    let map = RouteMap.singleton toplevel (Domain.print_expr []) in
+
+    (* Iterate over all routes *)
+    get_routes Domain.routing_table |>
+    List.fold_left (fun map route ->
+        if RouteMap.mem route map then
+          map
+        else
+          let domains = resolve_route route Domain.routing_table in
+          RouteMap.add route (Domain.print_expr domains) map
+      ) map
+
+  (** Pretty print of expression values *)
+  let print_expr ?(route=toplevel) man flow printer exp =
+    if Print.mem_printed_expr printer exp then () else
+    let route = refine_route_with_var_semantic route exp in
+    match RouteMap.find_opt route print_expr_map with
+    | Some f ->
+      f man flow printer exp;
+      Print.add_printed_expr printer exp
+
+    | None ->
+      Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end

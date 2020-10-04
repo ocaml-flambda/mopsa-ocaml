@@ -43,8 +43,6 @@ val meet_list : empty:(unit -> 'a post) -> 'a post list -> 'a post
 
 val return : ?cleaners:block -> 'a flow -> 'a post
 
-val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a post -> unit
-
 val bind : ('a flow -> ('a,'r) cases) -> 'a post -> ('a,'r) cases
 val (>>%) : 'a post -> ('a flow -> ('a,'r) cases) -> ('a,'r) cases
 
