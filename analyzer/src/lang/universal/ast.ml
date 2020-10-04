@@ -532,7 +532,7 @@ let () =
           (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
 
         | E_len(e) ->
-          {exprs = []; stmts = []},
+          {exprs = [e]; stmts = []},
           (fun parts -> {exp with ekind = E_len(List.hd parts.exprs)})
 
         | _ -> default exp
