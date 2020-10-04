@@ -61,7 +61,9 @@
             "python.objects.dict",
             "python.objects.set",
             "python.objects.iterable",
-            "universal.strings.powerset",
+            {
+		"nonrel": "universal.strings.powerset"
+	    },
             "python.types.dummy_numeric"
         ]
     }
