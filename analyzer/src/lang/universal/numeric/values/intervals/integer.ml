@@ -99,6 +99,8 @@ struct
     | C_int_interval (i1,i2) ->
       Nb (I.of_z i1 i2)
 
+    | C_avalue(V_int_interval _, itv) -> itv
+
     | _ -> top
 
   let unop op t a tr =
@@ -198,18 +200,11 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let to_aval : type r. r aval -> t -> r option =
+  let avalue : type r. r avalue_kind -> t -> r option =
     fun aval a ->
     match aval with
-    | Common.A_int_interval _ -> Some a
-    | Common.A_int_congr_interval -> Some (a, Common.C.minf_inf)
-    | _ -> None
-
-  let from_aval : type r. r aval -> r -> t option =
-    fun aval av ->
-    match aval, av with
-    | Common.A_int_interval _, _ -> Some av
-    | Common.A_int_congr_interval, (a,_) -> Some a
+    | Common.V_int_interval _ -> Some a
+    | Common.V_int_congr_interval -> Some (a, Common.C.minf_inf)
     | _ -> None
 
     
@@ -231,7 +226,7 @@ struct
     match e.etyp with
     | T_float _ ->
       let v = man.eval e in
-      let float_itv = man.to_aval Common.A_float_interval v in
+      let float_itv = man.avalue Common.V_float_interval v in
       let v = ItvUtils.FloatItvNan.to_int_itv float_itv in
       man.set v man.top |>
       OptionExt.return
@@ -250,9 +245,9 @@ struct
         | BOT -> None
         | Nb iitv ->
           let v,_ = find_vexpr e ve in
-          let fitv = man.to_aval Common.A_float_interval v in
+          let fitv = man.avalue Common.V_float_interval v in
           let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
-          let v' = man.from_aval Common.A_float_interval fitv' in
+          let v' = man.eval (mk_avalue_expr Common.V_float_interval fitv' e.erange) in
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return
       end

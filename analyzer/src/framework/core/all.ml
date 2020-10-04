@@ -96,4 +96,4 @@ module Hook = Hook
 include Print
 module Print = Print
 
-include Aval
+include Avalue

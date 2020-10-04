@@ -87,16 +87,17 @@ struct
     let r2 = V2.compare (tlman man) op b e1 v1 e2 v2 in
     OptionExt.neutral2 (fun (v1,v2) (w1,w2) -> (man.meet v1 w1,man.meet v1 w1)) r1 r2
 
-  let to_aval man aval v =
+  let avalue man aval v =
     OptionExt.neutral2
-      (meet_aval aval)
-      (V1.to_aval (hdman man) aval v)
-      (V2.to_aval (tlman man) aval v)
+      (meet_avalue aval)
+      (V1.avalue (hdman man) aval v)
+      (V2.avalue (tlman man) aval v)
 
-  let from_aval man aval av =
-    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
-      (fun man1 -> V1.from_aval man1 aval av)
-      (fun man2 -> V2.from_aval man2 aval av)
+  let ask man query =
+    OptionExt.neutral2
+      (meet_query query)
+      (V1.ask (hdman man) query)
+      (V2.ask (tlman man) query)
 
 end
 
@@ -179,7 +180,6 @@ struct
   let filter man b e = V.filter man b e |> OptionExt.lift (reduce_man man)
   let backward man e ve r = V.backward man e ve r |> OptionExt.lift (reduce_man_vexpr man)
   let compare man op b e1 v1 e2 v2 = V.compare man op b e1 v1 e2 v2 |> OptionExt.lift (reduce_man_pair man)
-  let from_aval man aval av = V.from_aval man aval av |> OptionExt.lift (reduce_man man)
 
 end
 

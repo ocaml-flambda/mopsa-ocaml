@@ -345,7 +345,7 @@ struct
   let ask : type r. ('a,r) query -> ('a,t) simplified_man -> 'a ctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
       match query with
-      | Q_expr_aval(e, Common.A_int_interval false) ->
+      | Q_avalue(e, Common.V_int_interval false) ->
         eval_interval e (abs,bnd)
 
       | Q_related_vars v ->

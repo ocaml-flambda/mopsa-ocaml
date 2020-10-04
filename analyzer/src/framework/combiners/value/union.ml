@@ -136,16 +136,17 @@ struct
   (** {2 Communication handlers} *)
   (** ************************** *)
 
-  let to_aval man aval v =
+  let avalue man aval v =
     OptionExt.neutral2
-      (join_aval aval)
-      (V1.to_aval (v1_man man) aval v)
-      (V2.to_aval (v2_man man) aval v)
+      (join_avalue aval)
+      (V1.avalue (v1_man man) aval v)
+      (V2.avalue (v2_man man) aval v)
 
-  let from_aval man aval av =
-    combine_pair_eval man (v1_man man) (v2_man man) V1.bottom V2.bottom
-      (fun man1 -> V1.from_aval man1 aval av)
-      (fun man2 -> V2.from_aval man2 aval av)
+  let ask man query =
+    OptionExt.neutral2
+      (join_query query)
+      (V1.ask (v1_man man) query)
+      (V2.ask (v2_man man) query)
 end
 
 let rec make (values:(module VALUE) list) : (module VALUE) =

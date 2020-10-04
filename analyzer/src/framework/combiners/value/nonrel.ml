@@ -178,8 +178,8 @@ struct
     get = (fun v -> v);
     set = (fun v _ -> v);
     eval = (fun e -> Value.top);
-    to_aval = (fun aval v -> top_aval aval);
-    from_aval = (fun aval av -> Value.top);
+    avalue = (fun aval v -> top_avalue aval);
+    ask = (fun q -> Exceptions.panic "Queries not accessible");
   }
 
   let bound_range = Location.mk_fresh_range ()
@@ -239,15 +239,15 @@ struct
           | Some (v,_) -> v
           | None -> Value.top
       );
-    to_aval = (fun aval v ->
-        match Value.to_aval (value_man cache map) aval v with
+    avalue = (fun aval v ->
+        match Value.avalue (value_man cache map) aval v with
         | Some r -> r
-        | _ -> top_aval aval
+        | _ -> top_avalue aval
       );
-    from_aval = (fun aval av ->
-        match Value.from_aval (value_man cache map) aval av with
+    ask = (fun query ->
+        match Value.ask (value_man cache map) query with
         | Some r -> r
-        | None   -> Value.top
+        | None   -> raise Not_found
       );
   }
 
@@ -456,11 +456,11 @@ struct
     'a ctx -> t -> r option =
     fun query man ctx map ->
     match query with
-    | Q_expr_aval(e,av) when Value.accept_type e.etyp ->
+    | Q_avalue(e,av) when Value.accept_type e.etyp ->
       eval e map |> OptionExt.bind @@ fun (v,ve) ->
-      Value.to_aval (value_man ve map) av v
+      Value.avalue (value_man ve map) av v
 
-    | _ -> None
+    | _ -> Value.ask (value_man empty_vexpr map) query
 
   let print_state printer a =
     Print.pprint printer ~path:[Key Value.display]

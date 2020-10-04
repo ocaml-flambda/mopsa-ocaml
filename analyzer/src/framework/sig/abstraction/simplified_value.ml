@@ -86,6 +86,7 @@ sig
   val unop : operator -> typ -> t -> typ -> t
   val binop : operator -> typ -> t -> typ -> t -> typ -> t
   val filter : bool -> typ -> t -> t
+  val avalue : 'r avalue_kind -> t -> 'r option
 
 
   (** {2 Backward semantics} *)
@@ -95,12 +96,6 @@ sig
   val backward_binop : operator -> typ -> t -> typ -> t -> typ -> t -> t * t
   val compare : operator -> bool -> typ -> t -> typ -> t -> (t * t)
 
-
-  (** {2 AVal conversion} *)
-  (** ******************* *)
-
-  val to_aval : 'r aval -> t -> 'r option
-  val from_aval : 'r aval -> 'r -> t option
 
   (** {2 Pretty printer} *)
   (** ****************** *)
@@ -115,18 +110,15 @@ let default_filter b t a = a
 let default_backward_unop op t a rt r = a
 let default_backward_binop op t1 a1 t2 a2 rt r = (a1,a2)
 let default_compare op b t1 a1 t2 a2 = (a1,a2)
-let default_to_aval aval a = None
-let default_from_aval aval av = None
+let default_avalue avalue_kind a = None
   
-
 module DefaultValueFunctions =
 struct
   let filter = default_filter
   let backward_unop = default_backward_unop
   let backward_binop = default_backward_binop
   let compare = default_compare
-  let to_aval = default_to_aval
-  let from_aval = default_from_aval
+  let avalue = default_avalue
 end
 
 
@@ -169,6 +161,9 @@ struct
       man.set v man.top |>
       OptionExt.return
 
+  let avalue man aval v =
+    V.avalue aval (man.get v)
+
   let backward man e ve r =
     if not (accept_type e.etyp) then
       None
@@ -197,12 +192,7 @@ struct
     else
       None
 
-  let to_aval man aval v =
-    V.to_aval aval (man.get v)
-
-  let from_aval man aval av =
-    V.from_aval aval av |>
-    OptionExt.lift (fun v -> man.set v man.top)
+  let ask man q = None
 
 end
 

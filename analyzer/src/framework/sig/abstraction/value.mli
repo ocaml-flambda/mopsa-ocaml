@@ -38,8 +38,8 @@ type ('v,'t) value_man = {
   get  : 'v -> 't;
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
-  to_aval   : 'r. 'r aval -> 'v -> 'r;
-  from_aval : 'r. 'r aval -> 'r -> 'v;
+  avalue : 'r. 'r avalue_kind -> 'v -> 'r;
+  ask : 'a 'r. ('a,'r) query -> 'r;
 }
 
 (*==========================================================================*)
@@ -125,6 +125,9 @@ sig
   val filter : ('v,t) value_man -> bool -> expr -> 'v option
   (** Keep values that may represent the argument truth value of an expression *)
 
+  val avalue : ('v,t) value_man -> 'r avalue_kind -> 'v -> 'r option
+  (** Handler of reduction hints *)
+
 
   (** {2 Backward semantics} *)
   (** ********************** *)
@@ -149,11 +152,8 @@ sig
   (** {2 Communication handlers } *)
   (** *************************** *)
 
-  val to_aval : ('v,t) value_man -> 'r aval -> 'v -> 'r option
+  val ask : ('v,t) value_man -> ('a,'r) query -> 'r option
   (** Handler of reduction hints *)
-
-  val from_aval : ('v,t) value_man -> 'r aval -> 'r -> 'v option
-  (** Handler queries *)
 
 
   (** {2 Pretty printer} *)
@@ -176,8 +176,8 @@ sig
   val filter : ('v,'t) value_man -> bool -> expr -> 'v option
   val backward : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
   val compare : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
-  val to_aval : ('v,'t) value_man -> 'r aval -> 'v -> 'r option
-  val from_aval : ('v,'t) value_man -> 'r aval -> 'r -> 'v option
+  val avalue : ('v,'t) value_man -> 'r avalue_kind -> 'v -> 'r option
+  val ask : ('v,'t) value_man -> ('a,'r) query -> 'r option
 end
 
 (*==========================================================================*)

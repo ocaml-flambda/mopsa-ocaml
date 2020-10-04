@@ -108,6 +108,8 @@ struct
     | C_bool true ->
       I.one
 
+    | C_avalue(V_float_interval, itv) -> (itv:t)
+
     | C_top (T_float p) ->
       top_of_prec p
 
@@ -170,15 +172,9 @@ struct
     | _ -> a1,a2
 
 
-  let to_aval : type r. r aval -> t -> r option = fun aval a ->
+  let avalue : type r. r avalue_kind -> t -> r option = fun aval a ->
     match aval with
-    | Common.A_float_interval -> Some a
-    | _ -> None
-
-  let from_aval : type r. r aval -> r -> t option =
-    fun aval av ->
-    match aval with
-    | Common.A_float_interval -> Some av
+    | V_float_interval -> Some a
     | _ -> None
 
   
@@ -197,7 +193,7 @@ struct
     match e.etyp with
     | T_int | T_bool ->
       let v = man.eval e in
-      let int_itv = man.to_aval (A_int_interval true) v in
+      let int_itv = man.avalue (V_int_interval true) v in
       let float_itv = I.of_int_itv_bot (prec @@ prec_of_type e.etyp) (round ()) int_itv in
       man.set float_itv v |>
       OptionExt.return
@@ -213,12 +209,12 @@ struct
     match e.etyp with
     | T_int | T_bool ->
       let v,_ = find_vexpr e ve in
-      let iitv = man.to_aval (Common.A_int_interval true) v in
+      let iitv = man.avalue (V_int_interval true) v in
       begin match iitv with
         | BOT    -> None
         | Nb itv ->
           let iitv' = ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv r in
-          let v' = man.from_aval (A_int_interval true) iitv' in
+          let v' = man.eval (mk_avalue_expr (V_int_interval true) iitv' e.erange) in
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return
       end

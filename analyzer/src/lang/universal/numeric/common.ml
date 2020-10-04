@@ -34,9 +34,9 @@ module C = CongUtils.IntCong
 (** Integer intervals *)
 type int_itv = I.t_with_bot
 
-type _ aval += A_int_interval : bool -> int_itv aval     (** Query to evaluate the integer interval of an expression *)
+type _ avalue_kind += V_int_interval : bool -> int_itv avalue_kind     (** Query to evaluate the integer interval of an expression *)
 
-let mk_int_interval_query ?(fast=true) e = Q_expr_aval (e,A_int_interval fast)
+let mk_int_interval_query ?(fast=true) e = Q_avalue (e,V_int_interval fast)
 
 let pp_int_interval fmt itv = I.fprint_bot fmt itv
 
@@ -52,9 +52,9 @@ type int_congr_itv = int_itv * C.t
 
 
 (** Query to evaluate the integer interval of an expression *)
-type _ aval += A_int_congr_interval : int_congr_itv aval
+type _ avalue_kind += V_int_congr_interval : int_congr_itv avalue_kind
 
-let mk_int_congr_interval_query e = Q_expr_aval (e,A_int_congr_interval)
+let mk_int_congr_interval_query e = Q_avalue (e,V_int_congr_interval)
 
 
 (** {2 Float intervals} *)
@@ -67,9 +67,9 @@ module F = ItvUtils.FloatItvNan
 (** Float intervals *)
 type float_itv = F.t
 
-type _ aval += A_float_interval : float_itv aval (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+type _ avalue_kind += V_float_interval : float_itv avalue_kind (** Query to evaluate the float interval of an expression, with infinities and NaN *)
 
-let mk_float_interval_query e = Q_expr_aval (e,A_float_interval)
+let mk_float_interval_query e = Q_avalue (e,V_float_interval)
 
 let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
 

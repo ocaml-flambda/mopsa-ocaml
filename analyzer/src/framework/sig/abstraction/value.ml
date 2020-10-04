@@ -38,8 +38,8 @@ type ('v,'t) value_man = {
   get  : 'v -> 't;
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
-  to_aval   : 'r. 'r aval -> 'v -> 'r;
-  from_aval : 'r. 'r aval -> 'r -> 'v;
+  avalue : 'r. 'r avalue_kind -> 'v -> 'r;
+  ask : 'a 'r. ('a,'r) query -> 'r;
 }
 
 type 'v vexpr =
@@ -188,6 +188,9 @@ sig
   val filter : ('v,t) value_man -> bool -> expr -> 'v option
   (** Keep values that may represent the argument truth value of an expression *)
 
+  val avalue : ('v,t) value_man -> 'r avalue_kind -> 'v -> 'r option
+  (** Handler of reduction hints *)
+
 
   (** {2 Backward semantics} *)
   (** ********************** *)
@@ -202,7 +205,7 @@ sig
 
   val compare : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
   (** Backward evaluation of boolean comparisons.
-      [compare man true op e1 v1 e2 v2] returns (v1',v2') where:
+      [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
        - v1' abstracts the set of v  in v1 such that v1' op v' is true for some v' in v2'
        - v2' abstracts the set of v' in v2 such that v2' op v' is true for some v  in v1'
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
@@ -212,11 +215,8 @@ sig
   (** {2 Communication handlers } *)
   (** *************************** *)
 
-  val to_aval : ('v,t) value_man -> 'r aval -> 'v -> 'r option
+  val ask : ('v,t) value_man -> ('a,'r) query -> 'r option
   (** Handler of reduction hints *)
-
-  val from_aval : ('v,t) value_man -> 'r aval -> 'r -> 'v option
-  (** Handler queries *)
 
 
   (** {2 Pretty printer} *)
@@ -239,8 +239,8 @@ struct
   let filter = default_filter
   let backward = default_backward
   let compare = default_compare
-  let to_aval man aval v = None
-  let from_aval man aval av = None
+  let avalue man aval v = None
+  let ask man q = None
 end
 
 (*==========================================================================*)

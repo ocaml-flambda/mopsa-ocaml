@@ -85,6 +85,7 @@ sig
   val unop : operator -> typ -> t -> typ -> t
   val binop : operator -> typ -> t -> typ -> t -> typ -> t
   val filter : bool -> typ -> t -> t
+  val avalue : 'r avalue_kind -> t -> 'r option
 
 
   (** {2 Backward semantics} *)
@@ -93,13 +94,6 @@ sig
   val backward_unop  : operator -> typ -> t -> typ -> t -> t
   val backward_binop : operator -> typ -> t -> typ -> t -> typ -> t -> t * t
   val compare : operator -> bool -> typ -> t -> typ -> t -> (t * t)
-
-
-  (** {2 AVal conversion} *)
-  (** ******************* *)
-
-  val to_aval : 'r aval -> t -> 'r option
-  val from_aval : 'r aval -> 'r -> t option
 
 
   (** {2 Pretty printer} *)
@@ -115,8 +109,7 @@ val default_filter : bool -> typ -> 't -> 't
 val default_backward_unop : operator -> typ -> 't -> typ -> 't -> 't
 val default_backward_binop : operator -> typ -> 't -> typ -> 't -> typ -> 't -> 't * 't
 val default_compare : operator -> bool -> typ -> 't -> typ -> 't -> ('t * 't)
-val default_to_aval : 'r aval -> 't -> 'r option
-val default_from_aval : 'r aval -> 'r -> 't option
+val default_avalue : 'r avalue_kind -> 't -> 'r option
 
 module DefaultValueFunctions :
 sig
@@ -124,8 +117,7 @@ sig
   val backward_unop : operator -> typ -> 't -> typ -> 't -> 't
   val backward_binop : operator -> typ -> 't -> typ -> 't -> typ -> 't -> 't * 't
   val compare : operator -> bool -> typ -> 't -> typ -> 't -> ('t * 't)
-  val to_aval : 'r aval -> 't -> 'r option
-  val from_aval : 'r aval -> 'r -> 't option
+  val avalue : 'r avalue_kind -> 't -> 'r option
 end
 
 module MakeValue(V:SIMPLIFIED_VALUE) : Value.VALUE with type t = V.t

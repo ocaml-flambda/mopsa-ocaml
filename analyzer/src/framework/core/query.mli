@@ -35,6 +35,6 @@ type query_info = {
 
 val register_query : query_info -> unit
 
-val join_query : ('a,'r) query -> join:('a->'a->'a) -> 'r -> 'r -> 'r
+val join_query : ?join:('a->'a->'a) -> ('a,'r) query ->'r -> 'r -> 'r
 
-val meet_query : ('a,'r) query -> meet:('a->'a->'a) -> 'r -> 'r -> 'r
+val meet_query : ?meet:('a->'a->'a) -> ('a,'r) query -> 'r -> 'r -> 'r

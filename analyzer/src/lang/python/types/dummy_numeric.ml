@@ -62,9 +62,9 @@ module Domain =
     let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
       fun query man flow ->
       match query with
-      | Q_expr_aval(e, Universal.Numeric.Common.A_int_interval _) ->
+      | Q_avalue(e, Universal.Numeric.Common.V_int_interval _) ->
          Some (Nb Universal.Numeric.Common.I.minf_inf)
-      | Q_expr_aval(e, Universal.Numeric.Common.A_float_interval) ->
+      | Q_avalue(e, Universal.Numeric.Common.V_float_interval) ->
          Some (Universal.Numeric.Common.F.infinities)
       | _ -> None
 
