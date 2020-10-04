@@ -112,9 +112,23 @@ struct
     | S_assign ({ekind = E_addr _}, _) ->
       debug "nothing to do@\n";
       Post.return flow |>
-      OptionExt.return
+        OptionExt.return
+
+    | S_project addrs when List.for_all (fun e -> match ekind e with E_addr _ -> true
+                                                                   | _ -> false) addrs ->
+       let cur = get_env T_cur man flow in
+       let ncur = List.fold_left (fun ncur eaddr ->
+                      match ekind eaddr with
+                      | E_addr a -> begin match find_opt a cur with
+                                    | None -> ncur
+                                    | Some attrset -> add a attrset ncur
+                                    end
+                      | _ -> assert false
+                    ) empty addrs in
+       set_env T_cur ncur man flow |> Post.return |> OptionExt.return
 
     | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+       (* FIXME: and A_py_class too? *)
        let cur = get_env T_cur man flow in
        let attrs = find a cur in
        let addrs = List.map (fun eaddr -> match ekind eaddr with
@@ -409,58 +423,76 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-      match query with
-      | Q_exn_string_query t ->
-        let range = erange t in
-        let cur = get_env T_cur man flow in
-        let iaddr, addr = match ekind t with
-          | E_py_object ({addr_kind = A_py_instance a} as ad, _) -> ad, a
-          | _ -> assert false in
-        let exc, message =
-          let name = match akind addr with
-            | A_py_class (c, b) ->
-              begin match c with
-                | C_builtin name | C_unsupported name -> name
-                | C_user c -> get_orig_vname c.py_cls_var
-                | C_annot c -> get_orig_vname c.py_cls_a_var
-              end
-            | _ -> assert false
-          in
-          let message =
-            if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
-              man.eval (mk_var (mk_addr_attr iaddr "args" (T_py None)) range) flow |>
-              (* FIXME *)
-              Cases.reduce_result (fun etuple flow ->
-                  let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
-                  (* FIXME *)
-                   let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
-                  if Universal.Strings.Powerset.Value.is_top pset then "T"
-                  else Universal.Strings.Powerset.StringPower.choose pset
-                )
-                ~join:(fun _ _ -> assert false)
-                ~meet:(fun _ _ -> assert false)
-                ~bottom:""
-            else
-              ""
-          in
-          name, message in
-        let () = debug "answer to query is %s %s@\n" exc message in
-        Some (exc, message)
+    match query with
+    | Q_variables_linked_to ({ekind = E_addr a} as e) ->
+       if List.exists (fun a' -> compare_addr a (OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
+       else
+       let range = erange e in
+       let cur = get_env T_cur man flow in
+       let oas = find_opt a cur in
+       OptionExt.lift
+         (fun attrset ->
+           AttrSet.fold_u
+             (fun attr acc ->
+               let v = mk_addr_attr a attr (T_py None) in
+               let linked_to_v = man.ask (Q_variables_linked_to (mk_var v range)) flow in
+               VarSet.union (VarSet.add v acc) linked_to_v
+             )
+             attrset VarSet.empty
+         )
+         oas
 
-      | Universal.Ast.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
-         let open Framework.Engines.Interactive in
-         let cur = get_env T_cur man flow in
-         let attrset = AMap.find addr cur in
-         let attrs_descr = AttrSet.fold_o (fun attr acc ->
-                               let attr =
-                                   if not @@ AttrSet.mem_u attr attrset then
-                                     attr ^ " (optional)"
-                                   else attr in
-                                 let attr_var = mk_addr_attr addr attr (T_py None) in
-                                 debug "asking for var %a" pp_var attr_var;
-                                 let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
-                                 (attr, value_attr) :: acc) attrset [] in
-           Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
+    | Q_exn_string_query t ->
+       let range = erange t in
+       let cur = get_env T_cur man flow in
+       let iaddr, addr = match ekind t with
+         | E_py_object ({addr_kind = A_py_instance a} as ad, _) -> ad, a
+         | _ -> assert false in
+       let exc, message =
+         let name = match akind addr with
+           | A_py_class (c, b) ->
+              begin match c with
+              | C_builtin name | C_unsupported name -> name
+              | C_user c -> get_orig_vname c.py_cls_var
+              | C_annot c -> get_orig_vname c.py_cls_a_var
+              end
+           | _ -> assert false
+         in
+         let message =
+           if AttrSet.mem_o "args" (match AMap.find_opt iaddr cur with None -> AttrSet.empty | Some x -> x) then
+             man.eval (mk_var (mk_addr_attr iaddr "args" (T_py None)) range) flow |>
+               (* FIXME *)
+               Cases.reduce_result (fun etuple flow ->
+                   let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
+                   (* FIXME *)
+                   let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
+                   if Universal.Strings.Powerset.Value.is_top pset then "T"
+                   else Universal.Strings.Powerset.StringPower.choose pset
+                 )
+                 ~join:(fun _ _ -> assert false)
+                 ~meet:(fun _ _ -> assert false)
+                 ~bottom:""
+           else
+             ""
+         in
+         name, message in
+       let () = debug "answer to query is %s %s@\n" exc message in
+       Some (exc, message)
+
+    | Universal.Ast.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
+       let open Framework.Engines.Interactive in
+       let cur = get_env T_cur man flow in
+       let attrset = AMap.find addr cur in
+       let attrs_descr = AttrSet.fold_o (fun attr acc ->
+                             let attr =
+                               if not @@ AttrSet.mem_u attr attrset then
+                                 attr ^ " (optional)"
+                               else attr in
+                             let attr_var = mk_addr_attr addr attr (T_py None) in
+                             debug "asking for var %a" pp_var attr_var;
+                             let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
+                             (attr, value_attr) :: acc) attrset [] in
+       Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
 
       | _ -> None
 

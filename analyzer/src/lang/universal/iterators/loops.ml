@@ -303,8 +303,7 @@ struct
         Flow.join man.lattice flow_init |>
         Post.return
     else if delay = 0 then
-      let wcur = man.lattice.widen (Flow.get_ctx flow') cur cur' in
-      let wflow = Flow.set T_cur wcur man.lattice flow' in
+      let wflow = Flow.widen man.lattice flow flow' in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
       lfp (count+1) (delay - 1) cond body man flow_init flow'

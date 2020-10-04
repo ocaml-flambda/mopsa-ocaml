@@ -16,9 +16,12 @@ _T = int
 class array(MutableSequence[_T]):
     typecode: str
     itemsize: int
-    # @overload
+    @overload
     def __init__(self, typecode: str,
-                 __initializer: Union[bytes, List[_T]] = ...) -> None: ...
+                 __initializer: List[_T] = ...) -> None: ...
+    @overload
+    def __init__(self, typecode: str,
+                 __initializer: bytes = ...) -> None: ...
     # @overload
     # def __init__(self, typecode: str,
     #              __initializer: Union[bytes, Iterable[_T]] = ...) -> None: ...
