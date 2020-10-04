@@ -81,10 +81,36 @@ let () =
             (fun () -> Compare.list compare_expr v1 v2);
           ]
 
-      | E_py_generator_comprehension _, E_py_generator_comprehension _
-      | E_py_list_comprehension _, E_py_list_comprehension _
-      | E_py_set_comprehension _, E_py_set_comprehension _
-      | E_py_dict_comprehension _, E_py_dict_comprehension _ -> Exceptions.panic "compare comprehensions"
+      | E_py_generator_comprehension (e, comprs) , E_py_generator_comprehension (e', comprs')
+      | E_py_list_comprehension (e, comprs), E_py_list_comprehension (e', comprs')
+      | E_py_set_comprehension (e, comprs), E_py_set_comprehension (e', comprs') ->
+         Compare.compose
+           [
+             (fun () -> compare_expr e e');
+             (fun () -> Compare.list (fun (target, iter, conds) (target', iter', conds') ->
+                            Compare.compose [
+                                (fun () -> compare_expr target target');
+                                (fun () -> compare_expr iter iter');
+                                (fun () -> Compare.list compare_expr conds conds');
+                              ]
+                          ) comprs comprs');
+           ]
+
+      | E_py_dict_comprehension (k, v, comprs), E_py_dict_comprehension (k', v', comprs') ->
+         Compare.compose
+           [
+             (fun () -> compare_expr k k');
+             (fun () -> compare_expr v v');
+             (fun () -> Compare.list (fun (target, iter, conds) (target', iter', conds') ->
+                            Compare.compose [
+                                (fun () -> compare_expr target target');
+                                (fun () -> compare_expr iter iter');
+                                (fun () -> Compare.list compare_expr conds conds');
+                              ]
+                          ) comprs comprs');
+           ]
+
+
 
       | E_py_call (f1, args1, kwargs1), E_py_call (f2, args2, kwargs2) ->
         Compare.compose

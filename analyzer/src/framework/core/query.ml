@@ -61,3 +61,24 @@ let register_query info =
   let old_meet = !meet_chain in
   join_chain := { apply = (fun q join a b -> info.join old_join q join a b) };
   meet_chain := { apply = (fun q meet a b -> info.meet old_meet q meet a b) }
+
+
+type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
+
+let () =
+  register_query {
+      join = (
+        let f : type a r. query_operator -> (a, r) query -> (a -> a -> a) -> r -> r -> r =
+          fun next query join a b ->
+          match query with
+          | Q_variables_linked_to _ -> Ast.Var.VarSet.union a b
+          | _ -> next.apply query join a b in f
+      );
+      meet = (
+        let f : type a r. query_operator -> (a, r) query -> (a -> a -> a) -> r -> r -> r =
+          fun next query meet a b ->
+          match query with
+          | Q_variables_linked_to _ -> Ast.Var.VarSet.inter a b
+          | _ -> next.apply query meet a b in f
+      );
+    }

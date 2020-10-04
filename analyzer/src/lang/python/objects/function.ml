@@ -92,9 +92,9 @@ module Domain =
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("method.__new__", _))}, _)}, [meth; func; inst], []) ->
          (* FIXME: meth should be a subtype of method *)
-         man.eval   func flow >>$
+         man.eval func flow >>$
            (fun func flow ->
-               man.eval   inst flow >>$
+               man.eval inst flow >>$
                  (fun inst flow ->
                      eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
                        bind_result (fun addr flow ->

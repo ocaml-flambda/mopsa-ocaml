@@ -105,6 +105,7 @@ module Domain =
            man flow
            ~fthen:(check man (mk_true range) range)
            ~felse:(check man (mk_false range) range)
+           ~fnone:(check man (mk_false range) range)
          |> OptionExt.return
 
       (* Calls to mopsa assert function *)
@@ -113,6 +114,7 @@ module Domain =
          assume x man flow
            ~fthen:(check man (mk_true range) range)
            ~felse:(check man (mk_false range) range)
+           ~fnone:(check man (mk_false range) range)
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exists", _))}, _)}, [cond], [])  ->
@@ -184,7 +186,7 @@ module Domain =
          end
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exception", _))}, _)}, [{ekind = cls} as assert_exn], []) ->
-        debug "begin assert_exception";
+        debug "begin assert_exception, flow=%a" (format @@ Flow.print man.lattice.print) flow;
         let ctx = Flow.get_ctx flow in
         let report = Flow.get_report flow in
         let this_error_env, good_exns = Flow.fold (fun (acc_env, acc_good_exn) tk env ->
@@ -213,7 +215,7 @@ module Domain =
         let flow = Flow.set T_cur man.lattice.top man.lattice flow in
         let flow = man.exec stmt flow |> post_to_flow man |>
                    Flow.filter (fun tk _ -> match tk with T_py_exception (exn, _, _) when List.mem exn good_exns -> debug "Foundit@\n"; false | _ -> true) |>
-                   Flow.set T_cur cur man.lattice
+                     Flow.set T_cur (man.lattice.join ctx cur this_error_env) man.lattice
         in
         debug "flow = %a@\n" (format (Flow.print man.lattice.print)) flow;
         man.eval (mk_py_false exp.erange) flow
