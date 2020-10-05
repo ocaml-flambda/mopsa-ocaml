@@ -175,12 +175,11 @@ struct
            let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
            assume (mk_py_isinstance_builtin list "list" range) man flow
              ~fthen:(fun flow ->
-               assume (mk_py_hasattr index "__index__" range) man flow
+               assume (mk_py_isinstance_builtin index "int" range) man flow
                  ~fthen:(fun flow ->
-                   Cases.bind_list [list; mk_py_call (mk_py_attr index "__index__" range) [] range] (man.eval  ) flow |>
+                   Cases.bind_list [list; index] man.eval flow |>
                      Cases.bind_result (fun eargs flow ->
                          let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
-                         debug "list = %a, index = %a" pp_expr list pp_expr index;
                          let var_els = var_of_eobj list in
                          let length_list = length_var_of_eobj list in
                          assume
@@ -199,105 +198,130 @@ struct
                        )
                  )
                  ~felse:(fun flow ->
-                   assume (mk_py_isinstance_builtin index "slice" range) man flow
+                   assume (mk_py_hasattr index "__index__" range) man flow
                      ~fthen:(fun flow ->
-                       debug "slice!";
-                       let addr_list = mk_alloc_addr A_py_list range in
-                       man.eval   addr_list flow >>$
-                         (fun eaddr_list flow ->
-                             let addr_list = addr_of_expr eaddr_list in
-                             let slicedlist_var = var_of_addr addr_list in
-                             man.eval list   flow >>$
-                               (fun list flow ->
-                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range)   flow >>$
-                                     (fun tuple_indices flow ->
-                                         let get_nth n =
-                                           mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int ~typ:(T_py None) n range] range in
-                                          Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
-                                           Cases.bind_result (fun sss flow ->
-                                                 let start, stop, step = match List.map Utils.extract_oobject sss with
-                                                   | [a;b;c] -> a, b, c
-                                                   | _ -> assert false in
-                                                 let var_els = var_of_eobj list in
-                                                 let new_length = mk_var (length_var_of_addr addr_list) range in
-                                                 flow |>
-                                                   man.exec (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
-                                                   switch
-                                                     [
-                                                       [
-                                                         mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range;
-                                                         mk_binop ~etyp:T_bool stop O_lt start range
-                                                       ],
-                                                       (fun flow -> man.exec
-                                                          (mk_assign new_length (mk_binop ~etyp:T_int
-                                                                                   (
-                                                                                     mk_binop ~etyp:T_int
-                                                                                       (mk_binop ~etyp:T_int
-                                                                                          start
-                                                                                          O_minus
-                                                                                          (mk_binop ~etyp:T_int stop O_plus (mk_one ~typ:T_int range) range)
-                                                                                          range)
-                                                                                       O_div
-                                                                                       (mk_unop O_minus ~etyp:T_int step range)
-                                                                                       range
-                                                                                   )
-                                                                                   O_plus
-                                                                                   (mk_one ~typ:T_int range)
-                                                                                   range
-                                                             ) range) flow);
-
-                                                       [
-                                                         mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range;
-                                                         mk_binop ~etyp:T_bool start O_lt stop range
-                                                       ],
-                                                       (fun flow -> man.exec
-                                                          (mk_assign new_length (mk_binop ~etyp:T_int
-                                                                                   (
-                                                                                     mk_binop ~etyp:T_int
-                                                                                       (mk_binop ~etyp:T_int
-                                                                                          stop
-                                                                                          O_minus
-                                                                                          (mk_binop ~etyp:T_int
-                                                                                             start
-                                                                                             O_plus
-                                                                                             (mk_one ~typ:T_int range)
-                                                                                             range)
-                                                                                          range)
-                                                                                       O_div
-                                                                                       step
-                                                                                       range
-                                                                                   )
-                                                                                   O_plus
-                                                                                   (mk_one ~typ:T_int range)
-                                                                                   range)
-                                                             range) flow
-                                                       );
-
-                                                       [mk_binop ~etyp:T_bool
-                                                          (mk_binop ~etyp:T_bool (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool stop O_lt start range) range) range)
-                                                          O_log_or
-                                                          (mk_binop ~etyp:T_bool (mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool start O_lt stop range) range) range)
-                                                          range
-                                                       ],
-                                                       (fun flow -> man.exec
-                                                           (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
-                                                       )
-                                                     ]
-                                                      man
-                                                     >>$ fun () flow ->
-                                                   Eval.singleton (mk_py_object (addr_list, None) range) flow
-                                             )
-                                       )
-                                 )
+                       Cases.bind_list [list; mk_py_call (mk_py_attr index "__index__" range) [] range] (man.eval  ) flow |>
+                         Cases.bind_result (fun eargs flow ->
+                             let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
+                             debug "list = %a, index = %a" pp_expr list pp_expr index;
+                             let var_els = var_of_eobj list in
+                             let length_list = length_var_of_eobj list in
+                             assume
+                               (mk_binop ~etyp:T_bool
+                                  (mk_binop ~etyp:T_bool (Utils.extract_oobject index) O_lt (mk_var length_list range) range)
+                                  O_log_and
+                                  (mk_binop ~etyp:T_bool (mk_unop O_minus (mk_var length_list range) ~etyp:T_int range) O_le (Utils.extract_oobject index)  range)
+                                  range
+                               )
+                               man flow
+                               ~fthen:(man.eval (mk_var var_els range))
+                               ~felse:(fun flow ->
+                                 man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
+                                   Eval.empty
+                               )
                            )
                      )
                      ~felse:(fun flow ->
-                       man.eval index   flow >>$
-                         (fun index flow ->
-                             let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
-                             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
-                               Eval.empty
-                           )
+                       assume (mk_py_isinstance_builtin index "slice" range) man flow
+                         ~fthen:(fun flow ->
+                           debug "slice!";
+                           let addr_list = mk_alloc_addr A_py_list range in
+                           man.eval   addr_list flow >>$
+                             (fun eaddr_list flow ->
+                               let addr_list = addr_of_expr eaddr_list in
+                               let slicedlist_var = var_of_addr addr_list in
+                               man.eval list   flow >>$
+                                 (fun list flow ->
+                                   man.eval (mk_py_call (mk_py_attr index "indices" range) [mk_py_call (mk_py_attr list "__len__" range) [] range] range)   flow >>$
+                                     (fun tuple_indices flow ->
+                                       let get_nth n =
+                                         mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int ~typ:(T_py None) n range] range in
+                                       Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
+                                         Cases.bind_result (fun sss flow ->
+                                             let start, stop, step = match List.map Utils.extract_oobject sss with
+                                               | [a;b;c] -> a, b, c
+                                               | _ -> assert false in
+                                             let var_els = var_of_eobj list in
+                                             let new_length = mk_var (length_var_of_addr addr_list) range in
+                                             flow |>
+                                               man.exec (mk_assign (mk_var slicedlist_var range) (mk_var var_els range) range) >>%
+                                               switch
+                                                 [
+                                                   [
+                                                     mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range;
+                                                     mk_binop ~etyp:T_bool stop O_lt start range
+                                                   ],
+                                                   (fun flow -> man.exec
+                                                                  (mk_assign new_length (mk_binop ~etyp:T_int
+                                                                                           (
+                                                                                             mk_binop ~etyp:T_int
+                                                                                               (mk_binop ~etyp:T_int
+                                                                                                  start
+                                                                                                  O_minus
+                                                                                                  (mk_binop ~etyp:T_int stop O_plus (mk_one ~typ:T_int range) range)
+                                                                                                  range)
+                                                                                               O_div
+                                                                                               (mk_unop O_minus ~etyp:T_int step range)
+                                                                                               range
+                                                                                           )
+                                                                                           O_plus
+                                                                                           (mk_one ~typ:T_int range)
+                                                                                           range
+                                                                     ) range) flow);
+
+                                                   [
+                                                     mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range;
+                                                     mk_binop ~etyp:T_bool start O_lt stop range
+                                                   ],
+                                                   (fun flow -> man.exec
+                                                                  (mk_assign new_length (mk_binop ~etyp:T_int
+                                                                                           (
+                                                                                             mk_binop ~etyp:T_int
+                                                                                               (mk_binop ~etyp:T_int
+                                                                                                  stop
+                                                                                                  O_minus
+                                                                                                  (mk_binop ~etyp:T_int
+                                                                                                     start
+                                                                                                     O_plus
+                                                                                                     (mk_one ~typ:T_int range)
+                                                                                                     range)
+                                                                                                  range)
+                                                                                               O_div
+                                                                                               step
+                                                                                               range
+                                                                                           )
+                                                                                           O_plus
+                                                                                           (mk_one ~typ:T_int range)
+                                                                                           range)
+                                                                     range) flow
+                                                   );
+
+                                                   [mk_binop ~etyp:T_bool
+                                                      (mk_binop ~etyp:T_bool (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool stop O_lt start range) range) range)
+                                                      O_log_or
+                                                      (mk_binop ~etyp:T_bool (mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool start O_lt stop range) range) range)
+                                                      range
+                                                   ],
+                                                   (fun flow -> man.exec
+                                                                  (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
+                                                   )
+                                                 ]
+                                                 man
+                                             >>$ fun () flow ->
+                                                 Eval.singleton (mk_py_object (addr_list, None) range) flow
+                                           )
+                                     )
+                                 )
+                             )
+                         )
+                         ~felse:(fun flow ->
+                           man.eval index   flow >>$
+                             (fun index flow ->
+                               let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
+                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
+                                 Eval.empty
+                             )
+                         )
                      )
                  )
              )
