@@ -35,6 +35,7 @@ type ('v,'t) value_man = {
   subset : 'v -> 'v -> bool;
   join : 'v -> 'v -> 'v;
   meet : 'v -> 'v -> 'v;
+  print : printer -> 'v -> unit;
   get  : 'v -> 't;
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
@@ -179,23 +180,16 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Forward semantics} *)
-  (** ********************* *)
+  (** {2 Local semantics} *)
+  (** ******************* *)
 
-  val eval : ('v,t) value_man -> expr -> 'v option
+  val eval : ('v,t) value_man -> expr -> t
   (** Forward evaluation of expressions *)
 
-  val filter : ('v,t) value_man -> bool -> expr -> 'v option
+  val filter : ('v,t) value_man -> bool -> expr -> t option
   (** Keep values that may represent the argument truth value of an expression *)
 
-  val avalue : ('v,t) value_man -> 'r avalue_kind -> 'v -> 'r option
-  (** Handler of reduction hints *)
-
-
-  (** {2 Backward semantics} *)
-  (** ********************** *)
-
-  val backward : ('v,t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+  val backward : ('v,t) value_man -> expr -> t vexpr -> 'v -> t vexpr
   (** Backward evaluation of expressions.
       [backward man e ve r] returns the values of the sub-expressions such that
       the evaluation of the expression is in [r]
@@ -203,13 +197,24 @@ sig
       applying the evaluating the expression, the result is in [r]
   *)
 
-  val compare : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
+  val compare : ('v,t) value_man -> operator -> bool -> expr -> t -> expr -> t -> (t * t)
   (** Backward evaluation of boolean comparisons.
       [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
        - v1' abstracts the set of v  in v1 such that v1' op v' is true for some v' in v2'
        - v2' abstracts the set of v' in v2 such that v2' op v' is true for some v  in v1'
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
   *)
+
+  val avalue : 'r avalue_kind -> t -> 'r option
+
+  (** {2 Extended semantics} *)
+  (** ********************** *)
+
+  val eval_ext : ('v,t) value_man -> expr -> 'v option
+
+  val backward_ext : ('v,t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+
+  val compare_ext : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
 
 
   (** {2 Communication handlers } *)
@@ -228,18 +233,14 @@ sig
 end
 
 
-let default_filter man b e = None
-let default_eval man e = None
-let default_backward man e ve r = None
-let default_compare man op b e1 v1 e2 v2 = None
 
 module DefaultValueFunctions =
 struct
-  let eval = default_eval
-  let filter = default_filter
-  let backward = default_backward
-  let compare = default_compare
-  let avalue man aval v = None
+  let filter man b e = None
+  let eval_ext man e = None
+  let backward_ext man e ve r = None
+  let compare_ext man op b e1 v1 e2 v2 = None
+  let avalue avk v = None
   let ask man q = None
 end
 

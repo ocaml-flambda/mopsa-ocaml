@@ -35,6 +35,7 @@ type ('v,'t) value_man = {
   subset : 'v -> 'v -> bool;
   join : 'v -> 'v -> 'v;
   meet : 'v -> 'v -> 'v;
+  print : printer -> 'v -> unit;
   get  : 'v -> 't;
   set  : 't -> 'v -> 'v;
   eval : expr -> 'v;
@@ -57,7 +58,7 @@ val find_vexpr_opt : expr -> 'v vexpr -> ('v * 'v vexpr) option
 val map_vexpr : ('v -> 's) -> 'v vexpr -> 's vexpr
 val fold_root_vexpr : ('a -> expr -> 'v -> 'v vexpr -> 'a) -> 'a -> 'v vexpr -> 'a
 val fold_vexpr : ('a -> expr -> 'v -> 'v vexpr -> 'a) -> 'a -> 'v vexpr -> 'a
-val map2_vexpr : ('v -> 's) -> ('v -> 's) -> ('v -> 'v -> 's) -> 'v vexpr -> 'v vexpr -> 's vexpr
+val map2_vexpr : ('v -> 't) -> ('s -> 't) -> ('v -> 's -> 't) -> 'v vexpr -> 's vexpr -> 't vexpr
 val merge_vexpr : ('v -> 'v -> 'v) -> 'v vexpr -> 'v vexpr -> 'v vexpr
 
 
@@ -116,23 +117,16 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Forward semantics} *)
-  (** ********************* *)
+  (** {2 Local semantics} *)
+  (** ******************* *)
 
-  val eval : ('v,t) value_man -> expr -> 'v option
+  val eval : ('v,t) value_man -> expr -> t
   (** Forward evaluation of expressions *)
 
-  val filter : ('v,t) value_man -> bool -> expr -> 'v option
+  val filter : ('v,t) value_man -> bool -> expr -> t option
   (** Keep values that may represent the argument truth value of an expression *)
 
-  val avalue : ('v,t) value_man -> 'r avalue_kind -> 'v -> 'r option
-  (** Handler of reduction hints *)
-
-
-  (** {2 Backward semantics} *)
-  (** ********************** *)
-
-  val backward : ('v,t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+  val backward : ('v,t) value_man -> expr -> t vexpr -> 'v -> t vexpr
   (** Backward evaluation of expressions.
       [backward man e ve r] returns the values of the sub-expressions such that
       the evaluation of the expression is in [r]
@@ -140,13 +134,26 @@ sig
       applying the evaluating the expression, the result is in [r]
   *)
 
-  val compare : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
+  val compare : ('v,t) value_man -> operator -> bool -> expr -> t -> expr -> t -> (t * t)
   (** Backward evaluation of boolean comparisons.
       [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
        - v1' abstracts the set of v  in v1 such that v1' op v' is true for some v' in v2'
        - v2' abstracts the set of v' in v2 such that v2' op v' is true for some v  in v1'
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
   *)
+
+  val avalue : 'r avalue_kind -> t -> 'r option
+  (** Creation of avalues *)
+
+
+  (** {2 Extended semantics} *)
+  (** ********************** *)
+
+  val eval_ext : ('v,t) value_man -> expr -> 'v option
+
+  val backward_ext : ('v,t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+
+  val compare_ext : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
 
 
   (** {2 Communication handlers } *)
@@ -165,18 +172,13 @@ sig
 end
 
 
-val default_eval : ('v,'t) value_man -> expr -> 'v option
-val default_filter : ('v,'t) value_man -> bool -> expr -> 'v option
-val default_backward : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
-val default_compare : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
-
 module DefaultValueFunctions :
 sig
-  val eval : ('v,'t) value_man -> expr -> 'v option
-  val filter : ('v,'t) value_man -> bool -> expr -> 'v option
-  val backward : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
-  val compare : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
-  val avalue : ('v,'t) value_man -> 'r avalue_kind -> 'v -> 'r option
+  val eval_ext : ('v,'t) value_man -> expr -> 'v option
+  val filter : ('v,'t) value_man -> bool -> expr -> 't option
+  val backward_ext : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+  val compare_ext : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
+  val avalue : 'r avalue_kind -> 't -> 'r option
   val ask : ('v,'t) value_man -> ('a,'r) query -> 'r option
 end
 

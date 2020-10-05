@@ -105,11 +105,10 @@ sig
 end
 
 
-val default_filter : bool -> typ -> 't -> 't
 val default_backward_unop : operator -> typ -> 't -> typ -> 't -> 't
 val default_backward_binop : operator -> typ -> 't -> typ -> 't -> typ -> 't -> 't * 't
+val default_filter : bool -> typ -> 't -> 't
 val default_compare : operator -> bool -> typ -> 't -> typ -> 't -> ('t * 't)
-val default_avalue : 'r avalue_kind -> 't -> 'r option
 
 module DefaultValueFunctions :
 sig

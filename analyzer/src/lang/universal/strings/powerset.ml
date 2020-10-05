@@ -164,8 +164,8 @@ open Sig.Abstraction.Value
 module Value =
 struct
 
-  include SimplifiedValue
   module V = MakeValue(SimplifiedValue)
+  include SimplifiedValue
   include V
 
   let rec repeat s nb =
@@ -183,20 +183,21 @@ struct
                    man.avalue (Numeric.Common.V_int_interval true) in
       (* FIXME: arbitrary constants... *)
       if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && not @@ is_top strings_e1 && cardinal strings_e1 <= 3 then
-        let r =
-          fold (fun str acc ->
-              List.fold_left (fun acc nb ->
-                  if Z.to_int nb <= 0 then (* FIXME to_int *)
-                    add "" acc
-                  else
-                    add (repeat str (Z.to_int nb)) acc
-                ) acc (ItvUtils.IntItv.to_list @@ Bot.bot_to_exn itv_e2)
-            ) strings_e1 empty in
-        man.set r man.top |>
-        OptionExt.return
+        fold (fun str acc ->
+            List.fold_left (fun acc nb ->
+                if Z.to_int nb <= 0 then (* FIXME to_int *)
+                  add "" acc
+                else
+                  add (repeat str (Z.to_int nb)) acc
+              ) acc (ItvUtils.IntItv.to_list @@ Bot.bot_to_exn itv_e2)
+          ) strings_e1 empty
       else
-        None
+        top
 
+    | _ -> eval man e
+
+  let eval_ext man e =
+    match ekind e with
     | E_len ee ->
       let strings_e = man.eval ee |> man.get  in
       let () = debug "here %a %b" (format StringPower.print) strings_e (is_top strings_e) in
@@ -211,7 +212,7 @@ struct
         man.eval (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) |>
         OptionExt.return
 
-    | _ -> V.eval man e
+    | _ -> None
 end
 
 let () =

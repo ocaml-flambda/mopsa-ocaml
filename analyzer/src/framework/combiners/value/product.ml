@@ -51,7 +51,7 @@ struct
          ~lopen:"" ~lsep:"∧" ~lclose:""
 
 
-  let hdman (man:('v,t) value_man) : (('v,V1.t) value_man) = {
+  let v1_man (man:('v,t) value_man) : (('v,V1.t) value_man) = {
     man with
     get  = (fun a -> man.get a |> fst);
     set  = (fun x a ->
@@ -59,7 +59,7 @@ struct
         if x == v1 then a else man.set (x,v2) a);
   }
 
-  let tlman (man:('v,t) value_man) : (('v,V2.t) value_man) = {
+  let v2_man (man:('v,t) value_man) : (('v,V2.t) value_man) = {
     man with
     get  = (fun a -> man.get a |> snd);
     set  = (fun x a ->
@@ -68,36 +68,59 @@ struct
   }
 
   let eval man e =
-    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
-      (fun man1 -> V1.eval man1 e)
-      (fun man2 -> V2.eval man2 e)
+    let r1 = V1.eval (v1_man man) e in
+    let r2 = V2.eval (v2_man man) e in
+    (r1,r2)
 
   let filter man b e =
-    combine_pair_eval man (hdman man) (tlman man) V1.bottom V2.bottom
-      (fun man1 -> V1.filter man1 b e)
-      (fun man2 -> V2.filter man2 b e)
+    let r1 = V1.filter (v1_man man) b e in
+    let r2 = V2.filter (v2_man man) b e in
+    match r1,r2 with
+    | None, None       -> None
+    | Some v1, Some v2 -> Some (v1,v2)
+    | Some v1, None    -> Some (v1,V2.bottom)
+    | None, Some v2    -> Some (V1.bottom,v2)
 
   let backward man e ve r =
-    let r1 = V1.backward (hdman man) e ve r in
-    let r2 = V2.backward (tlman man) e ve r in
-    OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
+    let r1 = V1.backward (v1_man man) e (map_vexpr fst ve) r in
+    let r2 = V2.backward (v2_man man) e (map_vexpr snd ve) r in
+    map2_vexpr
+      (fun v1 -> assert false)
+      (fun v2 -> assert false)
+      (fun v1 v2 -> (v1, v2))
+      r1 r2
 
   let compare man op b e1 v1 e2 v2 =
-    let r1 = V1.compare (hdman man) op b e1 v1 e2 v2 in
-    let r2 = V2.compare (tlman man) op b e1 v1 e2 v2 in
-    OptionExt.neutral2 (fun (v1,v2) (w1,w2) -> (man.meet v1 w1,man.meet v1 w1)) r1 r2
+    let (r11,r12) = V1.compare (v1_man man) op b e1 (fst v1) e2 (fst v2) in
+    let (r21,r22) = V2.compare (v2_man man) op b e1 (snd v1) e2 (snd v2) in
+    (r11,r21), (r12,r22)
 
-  let avalue man aval v =
+  let eval_ext man e =
+    let r1 = V1.eval_ext (v1_man man) e in
+    let r2 = V2.eval_ext (v2_man man) e in
+    OptionExt.neutral2 man.meet r1 r2
+
+  let backward_ext man e ev r =
+    let r1 = V1.backward_ext (v1_man man) e ev r in
+    let r2 = V2.backward_ext (v2_man man) e ev r in
+    OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
+
+  let compare_ext man op b e1 v1 e2 v2 =
+    let r1 = V1.compare_ext (v1_man man) op b e1 v1 e2 v2 in
+    let r2 = V2.compare_ext (v2_man man) op b e1 v1 e2 v2 in
+    OptionExt.neutral2 (fun (r11,r12) (r21,r22) -> (man.meet r11 r21),(man.meet r12 r22)) r1 r2
+
+  let avalue aval v =
     OptionExt.neutral2
       (meet_avalue aval)
-      (V1.avalue (hdman man) aval v)
-      (V2.avalue (tlman man) aval v)
+      (V1.avalue aval (fst v))
+      (V2.avalue aval (snd v))
 
   let ask man query =
     OptionExt.neutral2
       (meet_query query)
-      (V1.ask (hdman man) query)
-      (V2.ask (tlman man) query)
+      (V1.ask (v1_man man) query)
+      (V2.ask (v2_man man) query)
 
 end
 
@@ -176,10 +199,13 @@ struct
     let (v1',v2') = reduce_pair (v1,v2) in
     man.set v1' a1, man.set v2' a2
 
-  let eval man e = V.eval man e |> OptionExt.lift (reduce_man man)
-  let filter man b e = V.filter man b e |> OptionExt.lift (reduce_man man)
-  let backward man e ve r = V.backward man e ve r |> OptionExt.lift (reduce_man_vexpr man)
-  let compare man op b e1 v1 e2 v2 = V.compare man op b e1 v1 e2 v2 |> OptionExt.lift (reduce_man_pair man)
+  let eval man e = V.eval man e |> reduce
+  let filter man b e = V.filter man b e |> OptionExt.lift reduce
+  let backward man e ve r = V.backward man e ve r |> reduce_vexpr
+  let compare man op b e1 v1 e2 v2 = V.compare man op b e1 v1 e2 v2 |> reduce_pair
+  let eval_ext man e = V.eval_ext man e |> OptionExt.lift (reduce_man man)
+  let backward_ext man e ve r = V.backward_ext man e ve r |> OptionExt.lift (reduce_man_vexpr man)
+  let compare_ext man op b e1 v1 e2 v2 = V.compare_ext man op b e1 v1 e2 v2 |> OptionExt.lift (reduce_man_pair man)
 
 end
 

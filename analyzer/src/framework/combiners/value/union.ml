@@ -80,67 +80,143 @@ struct
   }
 
 
-  (** {2 Forward semantics} *)
-  (** ********************* *)
-
-  let apply_on_acceptable_expr f man accept e =
-    if exists_expr (fun ee -> accept e.etyp) (fun s -> false) e then
-      f man e
-    else
-      None
-
-  let combine man f1 f2 e =
-    combine_pair_eval man (v1_man man) (v2_man man) V1.bottom V2.bottom
-      (fun man1 -> apply_on_acceptable_expr f1 man1 V1.accept_type e)
-      (fun man2 -> apply_on_acceptable_expr f2 man2 V2.accept_type e)
-
-  let eval man e =
-    combine man V1.eval V2.eval e
-
-  let filter man b e =
-    combine man
-      (fun man e -> V1.filter man b e)
-      (fun man e -> V2.filter man b e)
-      e
-    
+  (** {2 Local semantics} *)
+  (** ******************* *)
 
 
-  (** {2 Backward semantics} *)
-  (** ********************** *)    
-
-  let backward man e ve r =
-    let doit f man other_man accept =
-      if exists_expr (fun ee -> accept e.etyp) (fun s -> false) e then
-        f man e ve r
-      else
-        None
-    in
+  let eval man e : t =
     let man1 = v1_man man in
     let man2 = v2_man man in
-    let r1 = doit V1.backward man1 man2 V1.accept_type in
-    let r2 = doit V2.backward man2 man1 V2.accept_type in
+    let accept1 = V1.accept_type e.etyp in
+    let accept2 = V2.accept_type e.etyp in
+    if accept1 && accept2 then
+      let r1 = V1.eval man1 e in
+      let r2 = V2.eval man2 e in
+      (r1, r2)
+    else
+    if accept1 then
+      let r1 = V1.eval man1 e in
+      let r2 = V2.eval_ext man2 e in
+      match r2 with
+      | None   -> (r1,V2.bottom)
+      | Some v -> (V1.meet r1 (man1.get v), V2.bottom)
+    else
+    if accept2 then
+      let r1 = V1.eval_ext man1 e in
+      let r2 = V2.eval man2 e in
+      match r1 with
+      | None   -> (V1.bottom,r2)
+      | Some v -> (V1.bottom,V2.meet r2 (man2.get v))
+    else
+      assert false
+
+  let filter man b e =
+    let r1 = V1.filter (v1_man man) b e in
+    let r2 = V2.filter (v2_man man) b e in
+    match r1,r2 with
+    | None, None       -> None
+    | Some v1, Some v2 -> Some (v1,v2)
+    | Some v1, None    -> Some (v1,V2.bottom)
+    | None, Some v2    -> Some (V1.bottom,v2)
+
+
+  let backward man e ve r : t vexpr =
+    let man1 = v1_man man in
+    let man2 = v2_man man in
+    let accept1 = for_all_child_expr (fun ee -> V1.accept_type ee.etyp) (fun s -> false) e in
+    let accept2 = for_all_child_expr (fun ee -> V2.accept_type ee.etyp) (fun s -> false) e in
+    if accept1 && accept2 then
+      let r1 = V1.backward man1 e (map_vexpr fst ve) r in
+      let r2 = V2.backward man2 e (map_vexpr snd ve) r in
+      map2_vexpr
+        (fun v1 -> assert false)
+        (fun v2 -> assert false)
+        (fun v1 v2 -> (v1, v2))
+        r1 r2
+    else
+    if accept1 then
+      let r1 = V1.backward man1 e (map_vexpr fst ve) r in
+      let r2 = V2.backward_ext man2 e (map_vexpr (fun v -> man.set v man.top) ve) r in
+      match r2 with
+      | None   -> map_vexpr (fun v1 -> (v1,V2.bottom)) r1
+      | Some rr2 ->
+        map2_vexpr
+          (fun v1 -> assert false)
+          (fun v2 -> assert false)
+          (fun v1 v2 -> (V1.meet v1 (man1.get v2), V2.bottom))
+          r1 rr2
+    else
+    if accept2 then
+      let r1 = V1.backward_ext man1 e (map_vexpr (fun v -> man.set v man.top) ve) r in
+      let r2 = V2.backward man2 e (map_vexpr snd ve) r in
+      match r1 with
+      | None   -> map_vexpr (fun v2 -> (V1.bottom,v2)) r2
+      | Some rr1 ->
+        map2_vexpr
+          (fun v1 -> assert false)
+          (fun v2 -> assert false)
+          (fun v1 v2 -> (V1.bottom,V2.meet v2 (man2.get v1)))
+          rr1 r2
+    else
+      assert false
+
+  let compare man op b e1 v1 e2 v2 : t * t =
+    let man1 = v1_man man in
+    let man2 = v2_man man in
+    let accept1 = V1.accept_type e1.etyp && V1.accept_type e2.etyp in
+    let accept2 = V2.accept_type e1.etyp && V2.accept_type e2.etyp in
+    if accept1 && accept2 then
+      let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
+      let (r21,r22) = V2.compare man2 op b e1 (snd v1) e2 (snd v2) in
+      (r11,r21), (r12,r22)
+    else
+    if accept1 then
+      let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
+      let r2 = V2.compare_ext man2 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
+      match r2 with
+      | None   -> (r11,snd v1), (r12,snd v2)
+      | Some (r21,r22) ->
+        (V1.meet r11 (man1.get r21), man2.get r21),
+        (V1.meet r12 (man1.get r22), man2.get r22)
+    else
+    if accept2 then
+      let r1 = V1.compare_ext man1 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
+      let (r21,r22) = V2.compare man2 op b e1 (snd v1) e2 (snd v2) in
+      match r1 with
+      | None   -> (fst v1,r21), (fst v2,r22)
+      | Some (r11,r12) ->
+        (man1.get r11, V2.meet r21 (man2.get r11)),
+        (man1.get r12, V2.meet r22 (man2.get r12))
+    else
+      assert false
+
+
+  (** {2 Extended semantics} *)
+  (** ********************** *)
+
+  let eval_ext man e =
+    let r1 = V1.eval_ext (v1_man man) e in
+    let r2 = V2.eval_ext (v2_man man) e in
+    OptionExt.neutral2 man.meet r1 r2
+
+  let backward_ext man e ev r =
+    let r1 = V1.backward_ext (v1_man man) e ev r in
+    let r2 = V2.backward_ext (v2_man man) e ev r in
     OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
 
-  let compare man op b e1 v1 e2 v2 =
-    let doit vman compare accept =
-      if accept e1.etyp || accept e2.etyp then
-        compare vman op b e1 v1 e2 v2
-      else
-        None
-    in
-    let r1 = doit (v1_man man) V1.compare V1.accept_type in
-    let r2 = doit (v2_man man) V2.compare V2.accept_type in
-    OptionExt.neutral2 (fun (v1,v2) (w1,w2) -> (man.meet v1 w1,man.meet v1 w1)) r1 r2
-
+  let compare_ext man op b e1 v1 e2 v2 =
+    let r1 = V1.compare_ext (v1_man man) op b e1 v1 e2 v2 in
+    let r2 = V2.compare_ext (v2_man man) op b e1 v1 e2 v2 in
+    OptionExt.neutral2 (fun (r11,r12) (r21,r22) -> (man.meet r11 r21),(man.meet r12 r22)) r1 r2
 
   (** {2 Communication handlers} *)
   (** ************************** *)
 
-  let avalue man aval v =
+  let avalue aval (v1,v2) =
     OptionExt.neutral2
       (join_avalue aval)
-      (V1.avalue (v1_man man) aval v)
-      (V2.avalue (v2_man man) aval v)
+      (V1.avalue aval v1)
+      (V2.avalue aval v2)
 
   let ask man query =
     OptionExt.neutral2

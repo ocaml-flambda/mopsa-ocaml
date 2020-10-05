@@ -135,7 +135,7 @@ struct
     | O_mod   -> I.fmod (prec p) (round ()) a1 a2
     | _       -> top_of_prec p
 
-  let filter = default_filter
+  let filter = default_filter 
 
   let backward_unop op t a tr r =
     let p = prec_of_type tr in
@@ -186,7 +186,7 @@ module Value =
 struct
 
   module V = MakeValue(SimplifiedValue)
-
+  include SimplifiedValue
   include V
 
   let cast man p e =
@@ -194,11 +194,9 @@ struct
     | T_int | T_bool ->
       let v = man.eval e in
       let int_itv = man.avalue (V_int_interval true) v in
-      let float_itv = I.of_int_itv_bot (prec p) (round ()) int_itv in
-      man.set float_itv v |>
-      OptionExt.return
+      I.of_int_itv_bot (prec p) (round ()) int_itv
 
-    | _ -> None
+    | _ -> top_of_prec p
 
   let eval man e =
     match ekind e with
@@ -220,10 +218,26 @@ struct
       end
     | _ -> None
 
-  let backward man e ve r =
+  let backward_ext man e ve r =
     match ekind e with
     | E_unop(O_cast,ee) -> backward_cast man (prec_of_type e.etyp) ee ve (man.get r)
-    | _ -> V.backward man e ve r
+    | _ -> V.backward_ext man e ve r
+
+  let filter_float_class man b c a =
+    let c = if b then c else inv_float_class c in
+    { I.itv  = if c.float_valid then a.I.itv  else BOT;
+      I.pinf = if c.float_inf   then a.I.pinf else false;
+      I.minf = if c.float_inf   then a.I.minf else false;
+      I.nan  = if c.float_nan   then a.I.nan  else false;
+    }
+
+  let filter man b e =
+    match ekind e with
+    | E_unop(O_float_class c,ee) ->
+      filter_float_class man b c (man.eval ee |> man.get) |>
+      OptionExt.return
+
+    | _ -> None
 
 end
 

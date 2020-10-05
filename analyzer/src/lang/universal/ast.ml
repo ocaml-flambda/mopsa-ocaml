@@ -161,9 +161,6 @@ type operator +=
   (* Float predicates *)
   | O_float_class of float_class
 
-  (* String operators *)
-  | O_string_len
-
 let () =
   register_operator {
     compare = (fun next op1 op2 ->
@@ -197,7 +194,6 @@ let () =
             (if c.float_valid then "valid," else "")
             (if c.float_inf then "inf," else "")
             (if c.float_nan then "nan," else "")
-        | O_string_len -> pp_print_string fmt "len"
         | op           -> default fmt op
       );
   }
@@ -507,7 +503,7 @@ let () =
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
         | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
-        | E_len exp -> Format.fprintf fmt "len(%a)" pp_expr exp
+        | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
       );
 

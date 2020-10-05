@@ -175,10 +175,14 @@ struct
     subset = Value.subset;
     join = Value.join;
     meet = Value.meet;
+    print = Value.print;
     get = (fun v -> v);
     set = (fun v _ -> v);
     eval = (fun e -> Value.top);
-    avalue = (fun aval v -> top_avalue aval);
+    avalue = (fun avk v ->
+        match Value.avalue avk v with
+        | Some r -> r
+        | None -> top_avalue avk);
     ask = (fun q -> Exceptions.panic "Queries not accessible");
   }
 
@@ -189,9 +193,8 @@ struct
     match find_var_bounds_ctx_opt var ctx with
     | None        -> v
     | Some bounds ->
-      match Value.eval imprecise_value_man (mk_constant bounds bound_range ~etyp:var.vtyp) with
-      | None    -> v
-      | Some vv -> Value.meet v vv
+      let vv = Value.eval imprecise_value_man (mk_constant bounds bound_range ~etyp:var.vtyp) in
+      Value.meet v vv
 
   let widen ctx a1 a2 =
     let open Bot_top in
@@ -239,11 +242,6 @@ struct
           | Some (v,_) -> v
           | None -> Value.top
       );
-    avalue = (fun aval v ->
-        match Value.avalue (value_man cache map) aval v with
-        | Some r -> r
-        | _ -> top_avalue aval
-      );
     ask = (fun query ->
         match Value.ask (value_man cache map) query with
         | Some r -> r
@@ -278,10 +276,8 @@ struct
             add_vexpr ee vv vee tl
         in
         iter parts.exprs |> OptionExt.lift @@ fun ve ->
-        begin match Value.eval (value_man ve a) e with
-          | Some v -> (v,ve)
-          | None -> (Value.top,ve)
-        end
+        let v = Value.eval (value_man ve a) e in
+        (v,ve)
 
       | _ -> None
 
@@ -297,10 +293,7 @@ struct
       else add ctx var (Value.meet (find var a) r) a
 
     | _ ->
-      let ve' =
-        match Value.backward (value_man ve a) e ve r with
-        | Some x -> x
-        | None   -> ve in
+      let ve' = Value.backward (value_man ve a) e ve r in
       fold_root_vexpr
         (fun acc ee vv eev -> refine ctx ee eev vv acc)
         a ve'
@@ -337,10 +330,7 @@ struct
       eval e2 a |> OptionExt.bind @@ fun (v2,ve2) ->
 
       (* apply comparison *)
-      let r1,r2 =
-        match Value.compare (value_man empty_vexpr a) op b e1 v1 e2 v2 with
-        | Some x -> x
-        | None   -> (v1,v2) in
+      let r1,r2 = Value.compare (value_man empty_vexpr a) op b e1 v1 e2 v2 in
       (* propagate backward on both argument expressions *)
       refine ctx e1 ve1 (Value.meet v1 r1) a |>
       refine ctx e2 ve2 (Value.meet v2 r2) |>
@@ -348,11 +338,11 @@ struct
 
     | _ ->
       eval e a |> OptionExt.lift @@ fun (v,ve) ->
-      let w =
+      let r =
         match Value.filter (value_man ve a) b e with
-        | Some x -> Value.meet v x
-        | None   -> v in
-      refine ctx e ve w a
+        | None -> v
+        | Some w -> Value.meet v w in
+      refine ctx e ve r a
 
 
   (** {2 Transfer functions} *)
@@ -458,7 +448,7 @@ struct
     match query with
     | Q_avalue(e,av) when Value.accept_type e.etyp ->
       eval e map |> OptionExt.bind @@ fun (v,ve) ->
-      Value.avalue (value_man ve map) av v
+      Value.avalue av v
 
     | _ -> Value.ask (value_man empty_vexpr map) query
 

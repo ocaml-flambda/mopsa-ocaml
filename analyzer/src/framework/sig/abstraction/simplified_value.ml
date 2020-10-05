@@ -29,7 +29,6 @@ open Value
 (**                          {2 Value domain}                               *)
 (*==========================================================================*)
 
-
 module type SIMPLIFIED_VALUE =
 sig
 
@@ -106,19 +105,18 @@ sig
 end
 
 
-let default_filter b t a = a
 let default_backward_unop op t a rt r = a
 let default_backward_binop op t1 a1 t2 a2 rt r = (a1,a2)
+let default_filter b t a = a
 let default_compare op b t1 a1 t2 a2 = (a1,a2)
-let default_avalue avalue_kind a = None
-  
+
 module DefaultValueFunctions =
 struct
   let filter = default_filter
   let backward_unop = default_backward_unop
   let backward_binop = default_backward_binop
   let compare = default_compare
-  let avalue = default_avalue
+  let avalue avk v = None
 end
 
 
@@ -129,70 +127,49 @@ end
 module MakeValue(V:SIMPLIFIED_VALUE) : VALUE with type t = V.t =
 struct
 
+  include Value.DefaultValueFunctions
+
   include V
 
   let eval man e =
-    if not (accept_type e.etyp) then
-      None
-    else
     match ekind e with
     | E_constant c ->
-      let r = constant c e.etyp in
-      man.set r man.top |>
-      OptionExt.return
+      constant c e.etyp
 
     | E_unop(op,ee) when accept_type ee.etyp->
-      let r = unop op ee.etyp (man.eval ee |> man.get) e.etyp in
-      man.set r man.top |>
-      OptionExt.return
+      unop op ee.etyp (man.eval ee |> man.get) e.etyp
 
     | E_binop(op,e1,e2) when accept_type e1.etyp && accept_type e2.etyp ->
-      let r = binop op e1.etyp (man.eval e1 |> man.get) e2.etyp (man.eval e2 |> man.get) e.etyp in
-      man.set r man.top |>
-      OptionExt.return
+      binop op e1.etyp (man.eval e1 |> man.get) e2.etyp (man.eval e2 |> man.get) e.etyp
 
-    | _ -> None
+    | _ -> top
 
   let filter man b e =
-    if not (accept_type e.etyp) then
-      None
-    else
-      let v = V.filter b e.etyp (man.eval e |> man.get) in
-      man.set v man.top |>
+    if accept_type e.etyp then
+      V.filter b e.etyp (man.eval e |> man.get) |>
       OptionExt.return
-
-  let avalue man aval v =
-    V.avalue aval (man.get v)
+    else
+      None
 
   let backward man e ve r =
-    if not (accept_type e.etyp) then
-      None
-    else
+    if not (accept_type e.etyp) then ve else
     match ekind e with
     | E_unop(op,ee) when accept_type ee.etyp ->
       let vv,_ = find_vexpr ee ve in
-      let vv' = backward_unop op ee.etyp (man.get vv) e.etyp (man.get r) in
-      refine_vexpr ee (man.set vv' vv) ve |>
-      OptionExt.return
+      let vv' = backward_unop op ee.etyp vv e.etyp (man.get r) in
+      refine_vexpr ee vv' ve
 
     | E_binop(op,e1,e2) when accept_type e1.etyp && accept_type e2.etyp ->
       let v1,_ = find_vexpr e1 ve in
       let v2,_ = find_vexpr e2 ve in
-      let v1',v2' = backward_binop op e1.etyp (man.get v1) e2.etyp (man.get v2) e.etyp (man.get r) in
-      refine_vexpr e1 (man.set v1' v1) ve |>
-      refine_vexpr e2 (man.set v2' v2) |>
-      OptionExt.return
+      let v1',v2' = backward_binop op e1.etyp v1 e2.etyp v2 e.etyp (man.get r) in
+      refine_vexpr e1 v1' ve |>
+      refine_vexpr e2 v2'
 
-    | _ -> None
+    | _ -> ve
 
   let compare man op b e1 v1 e2 v2 =
-    if accept_type e1.etyp && accept_type e2.etyp then
-      let v1',v2' = compare op b e1.etyp (man.get v1) e2.etyp (man.get v2) in
-      Some (man.set v1' v1, man.set v2' v2)
-    else
-      None
-
-  let ask man q = None
+    compare op b e1.etyp v1 e2.etyp v2
 
 end
 

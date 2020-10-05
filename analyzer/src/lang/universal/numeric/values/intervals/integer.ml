@@ -227,11 +227,9 @@ struct
     | T_float p ->
       let v = man.eval e in
       let float_itv = man.avalue (Common.V_float_interval p) v in
-      let v = ItvUtils.FloatItvNan.to_int_itv float_itv in
-      man.set v man.top |>
-      OptionExt.return
+      ItvUtils.FloatItvNan.to_int_itv float_itv
 
-    | _ -> None
+    | _ -> top
 
   let eval man e =
     match ekind e with
@@ -253,10 +251,10 @@ struct
       end
     | _ -> None
 
-  let backward man e ve r =
+  let backward_ext man e ve r =
     match ekind e with
     | E_unop(O_cast,ee) -> backward_cast man ee ve (man.get r)
-    | _ -> V.backward man e ve r
+    | _ -> V.backward_ext man e ve r
 
 
   (** {2 Utility functions} *)
