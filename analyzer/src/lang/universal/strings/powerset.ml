@@ -112,7 +112,7 @@ struct
 
   let binop op t1 a1 t2 a2 tr =
     match op with
-    | O_plus ->
+    | O_plus | O_concat ->
       begin match a1, a2 with
         | Top.TOP, _ | _, Top.TOP -> Top.TOP
         | _ ->
@@ -123,7 +123,6 @@ struct
       end
     | O_mult -> assert false
     | O_eq | O_lt | O_le | O_ge | O_gt | O_ne ->
-       debug "binop %a %a %a %a" pp_operator op pp_typ tr (format StringPower.print) a1 (format StringPower.print) a2;
        Top.TOP
     | _  ->
       panic "todo binop %a" pp_operator op
@@ -200,7 +199,6 @@ struct
     match ekind e with
     | E_len ee ->
       let strings_e = man.eval ee |> man.get  in
-      let () = debug "here %a %b" (format StringPower.print) strings_e (is_top strings_e) in
       if is_top strings_e then
         None
       else
@@ -208,7 +206,6 @@ struct
                   List.map
                     (fun s -> Numeric.Common.I.cst_int (String.length s)) |>
                     Numeric.Common.I.join_list in
-        let () = debug "itv = %a, expr = %a" Numeric.Common.I.fprint_bot itv pp_expr (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) in
         man.eval (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) |>
         OptionExt.return
 
