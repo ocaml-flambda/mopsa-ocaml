@@ -27,21 +27,64 @@ open Bot
 open Sig.Abstraction.Simplified_value
 open Sig.Abstraction.Simplified
 
-
 module StringPower = Framework.Lattices.Powerset.Make
-    (struct
-      type t = string
-      let compare = Stdlib.compare
-      let print = unformat Format.pp_print_string
-    end)
+                       (struct
+                         type t = string
+                         let compare = Stdlib.compare
+                         let print = unformat Format.pp_print_string
+                       end)
 
 type _ avalue_kind += V_strings_powerset : StringPower.t avalue_kind
 
+
 let mk_strings_powerset_query e = Q_avalue(e,V_strings_powerset)
+
+let () =
+  register_avalue {
+      typ = (fun (type a) next (avk: a avalue_kind) ->
+        match avk with
+        | V_strings_powerset -> T_string
+        | _ -> next.pool_typ avk);
+      bottom = (
+        let f : type a. avalue_pool -> a avalue_kind -> a =
+          fun next avk -> match avk with
+                          | V_strings_powerset -> StringPower.bottom
+                          | _ -> next.pool_bottom avk in f);
+      top = (
+        let f : type a. avalue_pool -> a avalue_kind -> a =
+          fun next avk -> match avk with
+                          | V_strings_powerset -> StringPower.top
+                          | _ -> next.pool_top avk in f);
+      join = (
+        let f : type a. avalue_pool -> a avalue_kind -> a -> a -> a =
+          fun next avk av1 av2 ->
+          match avk with
+          | V_strings_powerset -> StringPower.join av1 av2
+          | _ -> next.pool_join avk av1 av2 in f);
+      meet = (
+        let f : type a. avalue_pool -> a avalue_kind -> a -> a -> a =
+          fun next avk av1 av2 ->
+          match avk with
+          | V_strings_powerset -> StringPower.meet av1 av2
+          | _ -> next.pool_meet avk av1 av2 in f);
+      print = (
+        let f : type a. avalue_pool -> a avalue_kind -> Format.formatter -> a -> unit =
+          fun next avk fmt av ->
+          match avk with
+          | V_strings_powerset -> (format StringPower.print) fmt av
+          | _ -> next.pool_print avk fmt av in f);
+      compare = (
+        let f : type a b. avalue_pool -> a avalue_kind -> a -> b avalue_kind -> b -> int =
+          fun next avk1 av1 avk2 av2 ->
+          match avk1, avk2 with
+          | V_strings_powerset, V_strings_powerset -> StringPower.compare av1 av2
+          | _ -> next.pool_compare avk1 av1 avk2 av2
+          in f
+      )
+    }
 
 module SimplifiedValue =
 struct
-
 
   include StringPower
 
@@ -56,9 +99,10 @@ struct
 
   include DefaultValueFunctions
 
-  let constant c t =
+  let constant c t : t =
     match c with
     | C_string s -> singleton s
+    | C_avalue(V_strings_powerset, p) -> p
     | _          -> top
 
   let unop op t v tr =
@@ -155,13 +199,15 @@ struct
 
     | E_len ee ->
       let strings_e = man.eval ee |> man.get  in
+      let () = debug "here %a %b" (format StringPower.print) strings_e (is_top strings_e) in
       if is_top strings_e then
         None
       else
         let itv = elements strings_e |>
                   List.map
                     (fun s -> Numeric.Common.I.cst_int (String.length s)) |>
-                  Numeric.Common.I.join_list in
+                    Numeric.Common.I.join_list in
+        let () = debug "itv = %a, expr = %a" Numeric.Common.I.fprint_bot itv pp_expr (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) in
         man.eval (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) |>
         OptionExt.return
 
