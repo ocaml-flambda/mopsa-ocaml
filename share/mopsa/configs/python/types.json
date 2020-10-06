@@ -62,9 +62,13 @@
             "python.objects.set",
             "python.objects.iterable",
             {
-		"nonrel": "universal.strings.powerset"
-	    },
-            "python.types.dummy_numeric"
+	      "nonrel": {
+                "union": [
+                  "universal.strings.powerset",
+                  "python.types.dummy_numeric"
+                ]
+              }
+	    }
         ]
     }
 }
