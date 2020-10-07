@@ -110,15 +110,14 @@ struct
     else
       assert false
 
-  let filter man b e =
-    let r1 = V1.filter (v1_man man) b e in
-    let r2 = V2.filter (v2_man man) b e in
-    match r1,r2 with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.bottom)
-    | None, Some v2    -> Some (V1.bottom,v2)
-
+  let filter b t v =
+    let doit f accept v bot =
+      if accept t then f b t v
+      else bot
+    in
+    let r1 = doit V1.filter V1.accept_type (fst v) V1.bottom in
+    let r2 = doit V2.filter V2.accept_type (snd v) V2.bottom in
+    (r1,r2)
 
   let backward man e ve r : t vexpr =
     let man1 = v1_man man in

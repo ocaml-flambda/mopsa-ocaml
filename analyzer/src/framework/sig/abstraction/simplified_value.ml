@@ -144,13 +144,6 @@ struct
 
     | _ -> top
 
-  let filter man b e =
-    if accept_type e.etyp then
-      V.filter b e.etyp (man.eval e |> man.get) |>
-      OptionExt.return
-    else
-      None
-
   let backward man e ve r =
     if not (accept_type e.etyp) then ve else
     match ekind e with

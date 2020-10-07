@@ -72,14 +72,10 @@ struct
     let r2 = V2.eval (v2_man man) e in
     (r1,r2)
 
-  let filter man b e =
-    let r1 = V1.filter (v1_man man) b e in
-    let r2 = V2.filter (v2_man man) b e in
-    match r1,r2 with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.bottom)
-    | None, Some v2    -> Some (V1.bottom,v2)
+  let filter b t v =
+    let r1 = V1.filter b t (fst v) in
+    let r2 = V2.filter b t (snd v) in
+    (r1,r2)
 
   let backward man e ve r =
     let r1 = V1.backward (v1_man man) e (map_vexpr fst ve) r in
@@ -200,7 +196,7 @@ struct
     man.set v1' a1, man.set v2' a2
 
   let eval man e = V.eval man e |> reduce
-  let filter man b e = V.filter man b e |> OptionExt.lift reduce
+  let filter b t v = V.filter b t v |> reduce
   let backward man e ve r = V.backward man e ve r |> reduce_vexpr
   let compare man op b e1 v1 e2 v2 = V.compare man op b e1 v1 e2 v2 |> reduce_pair
   let eval_ext man e = V.eval_ext man e |> OptionExt.lift (reduce_man man)

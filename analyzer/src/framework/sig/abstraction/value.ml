@@ -180,14 +180,20 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Local semantics} *)
-  (** ******************* *)
+  (** {2 Forward semantics} *)
+  (** ********************* *)
 
   val eval : ('v,t) value_man -> expr -> t
   (** Forward evaluation of expressions *)
 
-  val filter : ('v,t) value_man -> bool -> expr -> t option
-  (** Keep values that may represent the argument truth value of an expression *)
+  val filter : bool -> typ -> t -> t
+
+  val avalue : 'r avalue_kind -> t -> 'r option
+  (** Creation of avalues *)
+
+
+  (** {2 Backward semantics} *)
+  (** ********************** *)
 
   val backward : ('v,t) value_man -> expr -> t vexpr -> 'v -> t vexpr
   (** Backward evaluation of expressions.
@@ -197,6 +203,7 @@ sig
       applying the evaluating the expression, the result is in [r]
   *)
 
+
   val compare : ('v,t) value_man -> operator -> bool -> expr -> t -> expr -> t -> (t * t)
   (** Backward evaluation of boolean comparisons.
       [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
@@ -205,7 +212,7 @@ sig
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
   *)
 
-  val avalue : 'r avalue_kind -> t -> 'r option
+
 
   (** {2 Extended semantics} *)
   (** ********************** *)
@@ -232,17 +239,24 @@ sig
 
 end
 
+let default_filter b t v = v
 
+let default_backward man e ve v = ve
+
+let default_compare man op b e1 v1 e2 v2 = (v1,v2)
 
 module DefaultValueFunctions =
 struct
-  let filter man b e = None
+  let filter = default_filter
+  let backward= default_backward
+  let compare = default_compare
   let eval_ext man e = None
-  let backward_ext man e ve r = None
+  let backward_ext man e ve v = None
   let compare_ext man op b e1 v1 e2 v2 = None
   let avalue avk v = None
   let ask man q = None
 end
+
 
 (*==========================================================================*)
 (**                          {2 Registration}                               *)

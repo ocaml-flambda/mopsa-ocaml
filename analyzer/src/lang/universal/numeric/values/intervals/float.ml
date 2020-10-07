@@ -203,6 +203,25 @@ struct
     | E_unop(O_cast,ee) -> cast man (prec_of_type e.etyp) ee
     | _ -> V.eval man e
 
+  let backward_float_class man c e ve (r:int_itv) =
+    match r with
+    | Bot.Nb (Finite lo, Finite hi) when Z.(lo = hi) ->
+      let b = Z.(lo <> zero) in
+      let a,_ = find_vexpr e ve in
+      let c = if b then c else inv_float_class c in
+      let a' = { I.itv  = if c.float_valid then a.I.itv  else BOT;
+                 I.pinf = if c.float_inf   then a.I.pinf else false;
+                 I.minf = if c.float_inf   then a.I.minf else false;
+                 I.nan  = if c.float_nan   then a.I.nan  else false;
+               } in
+      refine_vexpr e (meet a a') ve
+    | _ -> ve
+
+  let backward man e ve r =
+    match ekind e with
+    | E_unop(O_float_class cls, ee) -> backward_float_class man cls ee ve (man.avalue (V_int_interval true) r)
+    | _ -> backward man e ve r
+
   let backward_cast man p e ve r =
     match e.etyp with
     | T_int | T_bool ->
@@ -222,22 +241,6 @@ struct
     match ekind e with
     | E_unop(O_cast,ee) -> backward_cast man (prec_of_type e.etyp) ee ve (man.get r)
     | _ -> V.backward_ext man e ve r
-
-  let filter_float_class man b c a =
-    let c = if b then c else inv_float_class c in
-    { I.itv  = if c.float_valid then a.I.itv  else BOT;
-      I.pinf = if c.float_inf   then a.I.pinf else false;
-      I.minf = if c.float_inf   then a.I.minf else false;
-      I.nan  = if c.float_nan   then a.I.nan  else false;
-    }
-
-  let filter man b e =
-    match ekind e with
-    | E_unop(O_float_class c,ee) ->
-      filter_float_class man b c (man.eval ee |> man.get) |>
-      OptionExt.return
-
-    | _ -> None
 
 end
 

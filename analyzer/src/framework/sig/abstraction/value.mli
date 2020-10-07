@@ -117,14 +117,20 @@ sig
       ensures stabilization of ascending chains. *)
 
 
-  (** {2 Local semantics} *)
-  (** ******************* *)
+  (** {2 Forward semantics} *)
+  (** ********************* *)
 
   val eval : ('v,t) value_man -> expr -> t
   (** Forward evaluation of expressions *)
 
-  val filter : ('v,t) value_man -> bool -> expr -> t option
-  (** Keep values that may represent the argument truth value of an expression *)
+  val filter : bool -> typ -> t -> t
+
+  val avalue : 'r avalue_kind -> t -> 'r option
+  (** Creation of avalues *)
+
+
+  (** {2 Backward semantics} *)
+  (** ********************** *)
 
   val backward : ('v,t) value_man -> expr -> t vexpr -> 'v -> t vexpr
   (** Backward evaluation of expressions.
@@ -134,6 +140,7 @@ sig
       applying the evaluating the expression, the result is in [r]
   *)
 
+
   val compare : ('v,t) value_man -> operator -> bool -> expr -> t -> expr -> t -> (t * t)
   (** Backward evaluation of boolean comparisons.
       [compare man op true e1 v1 e2 v2] returns (v1',v2') where:
@@ -142,8 +149,6 @@ sig
        i.e., we filter the abstract values v1 and v2 knowing that the test is true
   *)
 
-  val avalue : 'r avalue_kind -> t -> 'r option
-  (** Creation of avalues *)
 
 
   (** {2 Extended semantics} *)
@@ -171,11 +176,16 @@ sig
 
 end
 
+val default_filter : bool -> typ -> 't -> 't
+val default_backward : ('v,'t) value_man -> expr -> 't vexpr -> 'v -> 't vexpr
+val default_compare : ('v,'t) value_man -> operator -> bool -> expr -> 't -> expr -> 't -> ('t * 't)
 
 module DefaultValueFunctions :
 sig
+  val filter : bool -> typ -> 't -> 't
+  val backward : ('v,'t) value_man -> expr -> 't vexpr -> 'v -> 't vexpr
+  val compare : ('v,'t) value_man -> operator -> bool -> expr -> 't -> expr -> 't -> ('t * 't)
   val eval_ext : ('v,'t) value_man -> expr -> 'v option
-  val filter : ('v,'t) value_man -> bool -> expr -> 't option
   val backward_ext : ('v,'t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
   val compare_ext : ('v,'t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
   val avalue : 'r avalue_kind -> 't -> 'r option

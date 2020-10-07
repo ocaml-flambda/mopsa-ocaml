@@ -338,11 +338,8 @@ struct
 
     | _ ->
       eval e a |> OptionExt.lift @@ fun (v,ve) ->
-      let r =
-        match Value.filter (value_man ve a) b e with
-        | None -> v
-        | Some w -> Value.meet v w in
-      refine ctx e ve r a
+      let w = Value.filter b e.etyp v in
+      refine ctx e ve (Value.meet v w) a
 
 
   (** {2 Transfer functions} *)
