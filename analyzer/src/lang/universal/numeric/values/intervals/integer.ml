@@ -51,6 +51,11 @@ struct
 
   let top = Nb (I.minf_inf)
 
+  let top_of_typ = function
+    | T_int  -> top
+    | T_bool -> Nb (I.of_int 0 1)
+    | _      -> assert false
+
   let is_bottom abs =
     bot_dfl1 true (fun itv -> not (I.is_valid itv)) abs
 
@@ -101,7 +106,7 @@ struct
 
     | C_avalue(V_int_interval _, itv) -> itv
 
-    | _ -> top
+    | _ -> top_of_typ t
 
   let unop op t a tr =
     match op with
@@ -110,7 +115,7 @@ struct
     | O_plus  -> a
     | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
     | O_bit_invert -> bot_lift1 I.bit_not a
-    | _ -> top
+    | _ -> top_of_typ tr
 
   let binop op t1 a1 t2 a2 tr =
     match op with
@@ -133,7 +138,7 @@ struct
     | O_bit_xor -> bot_lift2 I.bit_xor a1 a2
     | O_bit_rshift -> bot_absorb2 I.shift_right a1 a2
     | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
-    | _     -> top
+    | _     -> top_of_typ tr
 
 
   let filter b t a =
@@ -234,7 +239,11 @@ struct
   let eval man e =
     match ekind e with
     | E_unop(O_cast,ee) -> cast man ee
-    | _ -> V.eval man e
+    | _ ->
+      let r = V.eval man e in
+      match e.etyp with
+      | T_bool -> meet r (top_of_typ T_bool)
+      | _ -> r
   
   let backward_cast man e ve r =
     match e.etyp with
