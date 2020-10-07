@@ -173,7 +173,7 @@ struct
       let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
       let r2 = V2.compare_ext man2 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
       match r2 with
-      | None   -> (r11,snd v1), (r12,snd v2)
+      | None   -> (r11,V2.bottom), (r12,V2.bottom)
       | Some (r21,r22) ->
         (V1.meet r11 (man1.get r21), man2.get r21),
         (V1.meet r12 (man1.get r22), man2.get r22)
@@ -182,7 +182,7 @@ struct
       let r1 = V1.compare_ext man1 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
       let (r21,r22) = V2.compare man2 op b e1 (snd v1) e2 (snd v2) in
       match r1 with
-      | None   -> (fst v1,r21), (fst v2,r22)
+      | None   -> (V1.bottom,r21), (V1.bottom,r22)
       | Some (r11,r12) ->
         (man1.get r11, V2.meet r21 (man2.get r11)),
         (man1.get r12, V2.meet r22 (man2.get r12))
