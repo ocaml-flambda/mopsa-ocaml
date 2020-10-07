@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Signature of a value abstraction. *)
+(** Simplified signature of a value abstraction. *)
 
 open Core.All
 
@@ -82,19 +82,31 @@ sig
   (** ********************* *)
 
   val constant : constant -> typ -> t
-  val unop : operator -> typ -> t -> typ -> t
-  val binop : operator -> typ -> t -> typ -> t -> typ -> t
-  val filter : bool -> typ -> t -> t
-  val avalue : 'r avalue_kind -> t -> 'r option
+  (** Evaluation of constants *)
 
+  val unop : operator -> typ -> t -> typ -> t
+  (** Evaluation of unary operators *)
+
+  val binop : operator -> typ -> t -> typ -> t -> typ -> t
+  (** Evaluation of binary operators *)
+
+  val filter : bool -> typ -> t -> t
+  (** Filter of truth values *)
+
+  val avalue : 'r avalue_kind -> t -> 'r option
+  (** Cast to avalues *)
 
   (** {2 Backward semantics} *)
   (** ********************** *)
 
   val backward_unop  : operator -> typ -> t -> typ -> t -> t
-  val backward_binop : operator -> typ -> t -> typ -> t -> typ -> t -> t * t
-  val compare : operator -> bool -> typ -> t -> typ -> t -> (t * t)
+  (** Backward evaluation of unary operators *)
 
+  val backward_binop : operator -> typ -> t -> typ -> t -> typ -> t -> t * t
+  (** Backward evaluation of binary operators *)
+
+  val compare : operator -> bool -> typ -> t -> typ -> t -> (t * t)
+  (** Backward evalaution of comparisons *)
 
   (** {2 Pretty printer} *)
   (** ****************** *)
@@ -105,11 +117,13 @@ sig
 end
 
 
+(** Some default transfer functions *)
 val default_backward_unop : operator -> typ -> 't -> typ -> 't -> 't
 val default_backward_binop : operator -> typ -> 't -> typ -> 't -> typ -> 't -> 't * 't
 val default_filter : bool -> typ -> 't -> 't
 val default_compare : operator -> bool -> typ -> 't -> typ -> 't -> ('t * 't)
 
+(** Template module with default transfer functions *)
 module DefaultValueFunctions :
 sig
   val filter : bool -> typ -> 't -> 't
@@ -119,6 +133,7 @@ sig
   val avalue : 'r avalue_kind -> 't -> 'r option
 end
 
+(** Functor to create a value abstraction from a simplified value abstraction *)
 module MakeValue(V:SIMPLIFIED_VALUE) : Value.VALUE with type t = V.t
 
 (*==========================================================================*)
@@ -126,3 +141,4 @@ module MakeValue(V:SIMPLIFIED_VALUE) : Value.VALUE with type t = V.t
 (*==========================================================================*)
 
 val register_simplified_value_abstraction : (module SIMPLIFIED_VALUE) -> unit
+(** Register a new simplifed value domain *)

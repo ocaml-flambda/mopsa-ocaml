@@ -37,6 +37,7 @@ let prec_of_type = function
   | T_float p -> p
   | _ -> assert false
 
+(* We first use the simplified signature to handle float operations *)
 module SimplifiedValue =
 struct
 
@@ -181,6 +182,7 @@ struct
 end
 
 
+(* We lift now to the advanced signature to handle mixed operations with integers *)
 open Sig.Abstraction.Value
 module Value =
 struct
@@ -189,57 +191,75 @@ struct
   include SimplifiedValue
   include V
 
+  (** Casts of integers to floats *)
   let cast man p e =
     match e.etyp with
     | T_int | T_bool ->
+      (* Get the value of the intger *)
       let v = man.eval e in
+      (* Convert it to an interval *)
       let int_itv = man.avalue (V_int_interval true) v in
+      (* Cast it to a float *)
       I.of_int_itv_bot (prec p) (round ()) int_itv
 
     | _ -> top_of_prec p
 
+  (** Evaluation of float expressions *)
   let eval man e =
     match ekind e with
     | E_unop(O_cast,ee) -> cast man (prec_of_type e.etyp) ee
     | _ -> V.eval man e
 
+  (** Backward evaluation of class predicates *)
   let backward_float_class man c e ve (r:int_itv) =
     match r with
+    (* Refine only when the truth value of the predicate is a constant *)
     | Bot.Nb (Finite lo, Finite hi) when Z.(lo = hi) ->
       let b = Z.(lo <> zero) in
+      (* Get the float value *)
       let a,_ = find_vexpr e ve in
       let c = if b then c else inv_float_class c in
+      (* Refine [a] depending on the class *)
       let a' = { I.itv  = if c.float_valid then a.I.itv  else BOT;
                  I.pinf = if c.float_inf   then a.I.pinf else false;
                  I.minf = if c.float_inf   then a.I.minf else false;
                  I.nan  = if c.float_nan   then a.I.nan  else false;
                } in
+      (* Refine [e] with the new value *)
       refine_vexpr e (meet a a') ve
     | _ -> ve
 
+  (* Backward evaluations of float expressions *)
   let backward man e ve r =
     match ekind e with
     | E_unop(O_float_class cls, ee) -> backward_float_class man cls ee ve (man.avalue (V_int_interval true) r)
     | _ -> backward man e ve r
 
-  let backward_cast man p e ve r =
+  (* Extended backward evaluation of casts of integers *)
+  let backward_ext_cast man p e ve r =
     match e.etyp with
     | T_int | T_bool ->
+      (* Get the intger value *)
       let v,_ = find_vexpr e ve in
+      (* Convert to an interval *)
       let iitv = man.avalue (V_int_interval true) v in
       begin match iitv with
         | BOT    -> None
         | Nb itv ->
+          (* Refine it knowing that the result of the cast is [r] *)
           let iitv' = ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv r in
+          (* Evaluate the new float value *)
           let v' = man.eval (mk_avalue_expr (V_int_interval true) iitv' e.erange) in
+          (* Put it in the evaluation tree *)
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return
       end
     | _ -> None
 
+  (** Extended backward evaluation of mixed-types expressions *)
   let backward_ext man e ve r =
     match ekind e with
-    | E_unop(O_cast,ee) -> backward_cast man (prec_of_type e.etyp) ee ve (man.get r)
+    | E_unop(O_cast,ee) -> backward_ext_cast man (prec_of_type e.etyp) ee ve (man.get r)
     | _ -> V.backward_ext man e ve r
 
 end

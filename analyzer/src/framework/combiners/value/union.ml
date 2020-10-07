@@ -84,24 +84,36 @@ struct
   (** ******************* *)
 
 
+  (** Forward evaluation of expressions handled by [V1] or [V2] *)
   let eval man e : t =
     let man1 = v1_man man in
     let man2 = v2_man man in
     let accept1 = V1.accept_type e.etyp in
     let accept2 = V2.accept_type e.etyp in
     if accept1 && accept2 then
+      (* Both domains can represent the value of the expression [e].
+         In this case, we just pair the returned values *)
       let r1 = V1.eval man1 e in
       let r2 = V2.eval man2 e in
       (r1, r2)
     else
     if accept1 then
+      (* Only [V1] can represent the value of [e]. However, [V2] can handle the
+         expression in its extended semantics. So we need to combine the results
+         of [V1.eval] and [V2.eval_ext]. *)
       let r1 = V1.eval man1 e in
       let r2 = V2.eval_ext man2 e in
       match r2 with
-      | None   -> (r1,V2.bottom)
-      | Some v -> (V1.meet r1 (man1.get v), V2.bottom)
+      | None   ->
+        (* Since [V2] can't represent the value of [e], its value is set to ⊥ *)
+        (r1,V2.bottom)
+      | Some v ->
+        (* When [V2.eval_ext] returns a value [v], we need to retrieve the part
+           of [V1] in [v] in order to refine it with the result of [V1.eval] *)
+        (V1.meet r1 (man1.get v), V2.bottom)
     else
     if accept2 then
+      (* Dual case of accept1 *)
       let r1 = V1.eval_ext man1 e in
       let r2 = V2.eval man2 e in
       match r1 with
@@ -110,6 +122,7 @@ struct
     else
       assert false
 
+  (** Filter of truth values *)
   let filter b t v =
     let doit f accept v bot =
       if accept t then f b t v
@@ -119,14 +132,20 @@ struct
     let r2 = doit V2.filter V2.accept_type (snd v) V2.bottom in
     (r1,r2)
 
+  (** Backward evaluation of expressions *)
   let backward man e ve r : t vexpr =
     let man1 = v1_man man in
     let man2 = v2_man man in
+    (** Sine we are refining the values of sub-expressions, we consider that a
+       domain accepts a backward evaluation iff all sub-expressions are accepted
+       *)
     let accept1 = for_all_child_expr (fun ee -> V1.accept_type ee.etyp) (fun s -> false) e in
     let accept2 = for_all_child_expr (fun ee -> V2.accept_type ee.etyp) (fun s -> false) e in
     if accept1 && accept2 then
+      (* Both domains accept, so call [backward] on both of them *)
       let r1 = V1.backward man1 e (map_vexpr fst ve) r in
       let r2 = V2.backward man2 e (map_vexpr snd ve) r in
+      (* Combine the values of each node in the tree *)
       map2_vexpr
         (fun v1 -> assert false)
         (fun v2 -> assert false)
@@ -134,11 +153,16 @@ struct
         r1 r2
     else
     if accept1 then
+      (* Similarly to [eval], when only one domain accepts the expression, we
+         need to call the dual extended function of the other domain *)
       let r1 = V1.backward man1 e (map_vexpr fst ve) r in
       let r2 = V2.backward_ext man2 e (map_vexpr (fun v -> man.set v man.top) ve) r in
       match r2 with
-      | None   -> map_vexpr (fun v1 -> (v1,V2.bottom)) r1
+      | None   ->
+        (* Always put the refusing domain to ⊥ *)
+        map_vexpr (fun v1 -> (v1,V2.bottom)) r1
       | Some rr2 ->
+        (* Use the returned value to refine the result of [V1.backward] *)
         map2_vexpr
           (fun v1 -> assert false)
           (fun v2 -> assert false)
@@ -159,9 +183,11 @@ struct
     else
       assert false
 
+  (** Backward refinement of values in a comparison *)
   let compare man op b e1 v1 e2 v2 : t * t =
     let man1 = v1_man man in
     let man2 = v2_man man in
+    (* A domain needs to accepts both expressions *)
     let accept1 = V1.accept_type e1.etyp && V1.accept_type e2.etyp in
     let accept2 = V2.accept_type e1.etyp && V2.accept_type e2.etyp in
     if accept1 && accept2 then
@@ -170,6 +196,7 @@ struct
       (r11,r21), (r12,r22)
     else
     if accept1 then
+      (* Similar reasoning as [eval] and [backward] *)
       let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
       let r2 = V2.compare_ext man2 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
       match r2 with
@@ -193,16 +220,21 @@ struct
   (** {2 Extended semantics} *)
   (** ********************** *)
 
+  (** Extened evaluation of expressions, used when the expression can't be
+      repsented in neither [V1] not [V2] *)
   let eval_ext man e =
     let r1 = V1.eval_ext (v1_man man) e in
     let r2 = V2.eval_ext (v2_man man) e in
     OptionExt.neutral2 man.meet r1 r2
 
+  (** Extended backward evaluations, used when some sub-expressions can't be
+     represented by [V1] not [V2] *)
   let backward_ext man e ev r =
     let r1 = V1.backward_ext (v1_man man) e ev r in
     let r2 = V2.backward_ext (v2_man man) e ev r in
     OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
 
+  (** Extended comparison between expressions outside the scope of [V1] and [V2] *)
   let compare_ext man op b e1 v1 e2 v2 =
     let r1 = V1.compare_ext (v1_man man) op b e1 v1 e2 v2 in
     let r2 = V2.compare_ext (v2_man man) op b e1 v1 e2 v2 in
@@ -211,12 +243,14 @@ struct
   (** {2 Communication handlers} *)
   (** ************************** *)
 
+  (** Cast an abstract element to an avalue *)
   let avalue aval (v1,v2) =
     OptionExt.neutral2
       (join_avalue aval)
       (V1.avalue aval v1)
       (V2.avalue aval v2)
 
+  (** Handle queries *)
   let ask man query =
     OptionExt.neutral2
       (join_query query)
@@ -224,6 +258,7 @@ struct
       (V2.ask (v2_man man) query)
 end
 
+(** Create a union of a list of domains *)
 let rec make (values:(module VALUE) list) : (module VALUE) =
   match values with
   | [] -> assert false

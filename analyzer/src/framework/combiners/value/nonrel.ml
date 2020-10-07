@@ -258,6 +258,7 @@ struct
     else
       match ekind e with
       | E_var(var, mode) ->
+        (* Get the value of the variable from the map *)
         let v = find var a in
         (v, empty_vexpr) |>
         OptionExt.return
@@ -267,6 +268,9 @@ struct
             (fun ee -> Value.accept_type ee.etyp)
             (fun s -> false) e
         ->
+        (* Before asking the domain to evaluate the expression, evaluate each sub-expression
+           their evaluations in the manager. This will speedup the evaluation when the domain
+           [Value.eval] will request these values.  *)
         let parts,build = structure_of_expr e in
         let rec iter = function
           | [] -> Some empty_vexpr
@@ -337,8 +341,12 @@ struct
       OptionExt.return
 
     | _ ->
+      (* Filter on arbitrary expressions (variables, predicates, etc.).
+         First, evaluate the expression *)
       eval e a |> OptionExt.lift @@ fun (v,ve) ->
+      (* Then filter the obtained value to match the truth value [b] *)
       let w = Value.filter b e.etyp v in
+      (* Now refine the sub-expresions w.r.t. the filtered value *)
       refine ctx e ve (Value.meet v w) a
 
 

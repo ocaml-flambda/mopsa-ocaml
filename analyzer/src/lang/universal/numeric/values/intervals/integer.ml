@@ -227,42 +227,60 @@ struct
 
   include V
 
+  (** Cast a non-integer value to an integer *)
   let cast man e =
     match e.etyp with
     | T_float p ->
+      (* Get the value of the float *)
       let v = man.eval e in
+      (* Convert it to a float interval *)
       let float_itv = man.avalue (Common.V_float_interval p) v in
+      (* Perform the cast to an integer interval *)
       ItvUtils.FloatItvNan.to_int_itv float_itv
 
     | _ -> top
 
+  (* Evaluation of integer expressions *)
   let eval man e =
     match ekind e with
+    (* Casts *)
     | E_unop(O_cast,ee) -> cast man ee
     | _ ->
+      (* Other expressions are handled by the simplified domain *)
       let r = V.eval man e in
+      (* Ensure that boolean values are in [0,1] *)
       match e.etyp with
       | T_bool -> meet r (top_of_typ T_bool)
       | _ -> r
   
-  let backward_cast man e ve r =
+  (* Extended backward refinement of casts to integers. *)
+  let backward_ext_cast man e ve r =
     match e.etyp with
     | T_float p ->
       begin match r with
         | BOT -> None
         | Nb iitv ->
+          (* Get the float value *)
           let v,_ = find_vexpr e ve in
+          (* Convert it to a float interval *)
           let fitv = man.avalue (Common.V_float_interval p) v in
+          (* Refine it with the integer result *)
           let fitv' = ItvUtils.FloatItvNan.bwd_to_int_itv fitv iitv in
+          (* Evaluate the float interval to a float value *)
           let v' = man.eval (mk_avalue_expr (Common.V_float_interval p) fitv' e.erange) in
+          (* Refine the expression [e] with the new value [v'] *)
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return
       end
     | _ -> None
 
+  (* Extended backward evaluations *)
   let backward_ext man e ve r =
     match ekind e with
-    | E_unop(O_cast,ee) -> backward_cast man ee ve (man.get r)
+    | E_unop(O_cast,ee) ->
+      (* We use the extended transfer function because we need to refine
+         a non-integer value *)
+      backward_ext_cast man ee ve (man.get r)
     | _ -> V.backward_ext man e ve r
 
 
