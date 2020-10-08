@@ -74,8 +74,8 @@ type 'a post = 'a Post.post
 let (>>%) = Post.(>>%)
 let (>>%?) = Post.(>>%?)
 
-module Log = Log
-include Log
+module Effect = Effect
+include Effect
 
 include Query
 

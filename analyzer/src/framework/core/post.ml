@@ -24,11 +24,10 @@
 open Ast.Stmt
 open Token
 open Flow
-open Log
 open Context
 open Lattice
 open Cases
-open Log
+open Effect
 
 
 

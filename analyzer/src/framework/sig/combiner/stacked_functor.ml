@@ -49,10 +49,11 @@ struct
       let f = D.exec domains in
       (fun stmt man flow ->
          f stmt man flow |> OptionExt.lift @@ fun res ->
-         Cases.map_log (fun log ->
-             man.set_log (
-               man.get_log log |> Log.add_stmt_to_log stmt
-             ) log
+         Cases.map_effects (fun effects ->
+             man.set_effects (
+               man.get_effects effects |>
+               add_stmt_to_teffect stmt
+             ) effects
            ) res
       )
   end

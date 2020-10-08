@@ -28,7 +28,6 @@ open Token
 open Flow
 open Context
 open Cases
-open Log
 open Semantic
 
 type 'a eval  = ('a,expr) cases

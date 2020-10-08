@@ -728,12 +728,11 @@ struct
 
   let ask _ _ _ = None
 
-  let merge pre (a, log) (a', log') =
+  let merge pre (a, e) (a', e') =
     if a == a' then a
-    else if Log.is_empty_log log' then a
-    else if Log.is_empty_log log then a'
+    else if is_empty_effect e' then a
+    else if is_empty_effect e then a'
     else assert false
-
 
   let print_state printer m =
     pprint ~path:[Key "TypeVar annotations"] printer (pbox TVMap.print m)

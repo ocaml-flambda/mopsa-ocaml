@@ -30,7 +30,7 @@ open Token
 open Flow
 open Eval
 open Post
-open Log
+open Effect
 open Context
 open Cases
 open Route
@@ -57,9 +57,9 @@ type ('a, 't) man = {
   ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
   print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
 
-  (* Accessors to the domain's logs *)
-  get_log : log -> log;
-  set_log : log -> log -> log;
+  (* Accessors to the domain's effects tree *)
+  get_effects : teffect -> teffect;
+  set_effects : teffect -> teffect -> teffect;
 }
 
 

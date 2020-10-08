@@ -30,6 +30,7 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
+  val merge : t -> t * teffect -> t * teffect -> t
   val exec : domain list -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   val ask  : domain list -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
   val print_state : domain list -> printer -> t -> unit
@@ -44,6 +45,10 @@ struct
   let domains = DomainSet.singleton D.name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
+  let merge pre (a1,te1) (a2,te2) =
+    let e1 = get_root_effect te1 in
+    let e2 = get_root_effect te2 in
+    D.merge pre (a1,e1) (a2,e2)
   let exec domains = D.exec
   let ask domains  = D.ask
   let print_state targets = D.print_state
@@ -53,6 +58,10 @@ end
 module CombinerToSimplified(T:SIMPLIFIED_COMBINER) : SIMPLIFIED with type t = T.t =
 struct
   include T
+  let merge pre (a1,e1) (a2,e2) =
+    let te1 = mk_teffect e1 empty_teffect empty_teffect in
+    let te2 = mk_teffect e2 empty_teffect empty_teffect in
+    T.merge pre (a1,te1) (a2,te2)
   let exec stmt man ctx a = T.exec [] stmt man ctx a
   let ask query man ctx a = T.ask [] query man ctx a
   let print_state printer a = T.print_state [] printer a
@@ -65,12 +74,6 @@ module SimplifiedToStandard(D: SIMPLIFIED_COMBINER) : Domain.DOMAIN_COMBINER wit
 struct
 
   include D
-
-  let merge pre (post1, log1) (post2, log2) =
-    let stmts1 = Log.get_log_stmts log1
-    and stmts2 = Log.get_log_stmts log2 in
-    D.merge pre (post1, stmts1) (post2, stmts2)
-
 
   let init prog man flow =
     let a' = D.init prog in
@@ -101,10 +104,11 @@ struct
          OptionExt.lift @@ fun a' ->
          set_env T_cur a' man flow |>
          Post.return |>
-         Cases.map_log (fun log ->
-             man.set_log (
-               man.get_log log |> Log.add_stmt_to_log stmt
-             ) log
+         Cases.map_effects (fun effects ->
+             man.set_effects (
+               man.get_effects effects |>
+               add_stmt_to_teffect stmt
+             ) effects
            )
     )
 

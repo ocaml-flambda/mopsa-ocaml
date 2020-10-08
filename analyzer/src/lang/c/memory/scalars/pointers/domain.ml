@@ -74,33 +74,16 @@ struct
 
   let widen ctx = Map.join
 
-  let merge pre (a,log) (a',log') =
-    let block = Log.get_log_stmts log in
-    let block' = Log.get_log_stmts log' in
-
-    let patch_stmt stmt a acc =
-      match skind stmt with
-      | S_c_declaration (var,init,scope) ->
-        let v = Map.find var a in
-        Some (Map.set var v acc)
-
-      | _ -> None
-    in
-
-    let patch_block block a acc =
-      List.fold_left (fun (acc,block') stmt ->
-          match patch_stmt stmt a acc with
-          | None -> acc, stmt :: block'
-          | Some acc' -> acc', block'
-        ) (acc,[]) block
-    in
-
-    let a', block = patch_block block a a' in
-    let a, block' = patch_block block' a' a in
-
-    let aa, aa' = Log.generic_domain_merge (a,List.rev block) (a',List.rev block')
+  let merge pre (a,e) (a',e') =
+    let aa,aa' =
+      generic_domain_merge (a,e) (a',e')
         ~add:Map.set ~find:Map.find ~remove:Map.remove
-    in
+        ~custom:(fun stmt ->
+            match skind stmt with
+            | S_c_declaration (var,init,scope) ->
+              Some Effect.{ modified = VarSet.singleton var; removed = VarSet.empty }
+            | _ -> None
+          ) in
     Map.meet aa aa'
 
 

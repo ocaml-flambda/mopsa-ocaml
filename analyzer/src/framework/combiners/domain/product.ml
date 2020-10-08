@@ -107,9 +107,9 @@ struct
     let aa2, s, s', stable2 = P.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    S.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
-    P.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
+  let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
+    S.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
+    P.merge pre2 (a2, get_right_teffect te) (a2', get_right_teffect te')
 
   let init prog man flow =
     S.init prog (fst_pair_man man) flow |>
@@ -237,7 +237,7 @@ struct
       local state of every domain in all other post-states.
 
       2. When two domains change (independently) the state of a shared sub-abstraction.
-      In this case, we use logs to merge the two diverging states.
+      In this case, we use effects to merge the two diverging states.
   *)
   let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option list) cases =
     let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> check list list -> ('a,'r option list) cases =
@@ -282,7 +282,7 @@ struct
               Cases.return (None :: after_res) after_flow
 
             (* Both domains replied, so merge the results *)
-            | Result (res,log,cleaners), Result(after_res,after_log,after_cleaners) ->
+            | Result (res,effects,cleaners), Result(after_res,after_effects,after_cleaners) ->
               (* Merge only when the next domains provided some answers *)
               if after_res |> List.exists (function Some _ -> true | None -> false) then
                 (* Resolve the first conflict situation:
@@ -296,13 +296,13 @@ struct
                 in
                 (* Resolve the second conflict situation:
                    merge the post-states of any shared sub-abstraction *)
-                let flow = Flow.merge ~merge_report:(merge_report hdchecks (List.flatten tlchecks)) man.lattice pre (flow,log) (after_flow,after_log) in
-                let log = Log.meet_log log after_log in
+                let flow = Flow.merge ~merge_report:(merge_report hdchecks (List.flatten tlchecks)) man.lattice pre (flow,effects) (after_flow,after_effects) in
+                let effects = meet_teffect effects after_effects in
                 let cleaners = StmtSet.union cleaners after_cleaners in
-                Cases.case (Result (Some res :: after_res, log, cleaners)) flow
+                Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
               else
                 (* Next domains returned no answer, so no merging *)
-                Cases.case (Result (Some res :: after_res, log, cleaners)) flow
+                Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
 
             | _ -> assert false
           end
@@ -323,17 +323,17 @@ struct
       (fun conj ->
          let rec iter = function
            | [] -> assert false
-           | [case,flow] -> Cases.get_case_log case, Cases.get_case_cleaners case, flow
+           | [case,flow] -> Cases.get_case_effects case, Cases.get_case_cleaners case, flow
            | (case,flow)::tl ->
-             let log',cleaners',flow' = iter tl in
-             let log,cleaners = Cases.get_case_log case, Cases.get_case_cleaners case in
-             let flow'' = Flow.merge man.lattice ~merge_report:meet_report pre (flow,log) (flow',log') in
-             meet_log log log', StmtSet.union cleaners cleaners', flow''
+             let effects',cleaners',flow' = iter tl in
+             let effects,cleaners = Cases.get_case_effects case, Cases.get_case_cleaners case in
+             let flow'' = Flow.merge man.lattice ~merge_report:meet_report pre (flow,effects) (flow',effects') in
+             meet_teffect effects effects', StmtSet.union cleaners cleaners', flow''
          in
-         let log,cleaners,flow = iter conj in
+         let effects,cleaners,flow = iter conj in
          List.map
            (fun (case,_) ->
-              let case = Cases.set_case_log log case |>
+              let case = Cases.set_case_effects effects case |>
                          Cases.set_case_cleaners cleaners in
               case,flow
            ) conj
