@@ -22,7 +22,7 @@
 (** Toplevel abstraction
 
     There are two main differences with domains. First, transfer functions are
-    indexed by zones to enable a faster access. Second, transfer functions are
+    indexed by paths to enable a faster access. Second, transfer functions are
     not partial functions and return always a result.
 *)
 
