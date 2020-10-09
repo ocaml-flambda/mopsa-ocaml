@@ -446,17 +446,22 @@ struct
   (** Apply reduction rules on a post-conditions *)
   let reduce_post stmt man pre post =
     let rman = exec_reduction_man man in
-    post >>% fun flow ->
-    (* Iterate over rules *)
-    let rec iter = function
-      | [] -> Post.return flow
-      | rule::tl ->
-        let module R = (val rule : EXEC_REDUCTION) in
-        match R.reduce stmt man rman pre flow with
-        | None -> iter tl
-        | Some post -> post
-    in
-    iter Rules.srules
+    (* Reduce each case separately *)
+    post |> Cases.bind @@ fun case flow ->
+    match case with
+    | Empty -> Cases.empty flow
+    | NotHandled -> Cases.not_handled flow
+    | Result((),effects,_) ->
+      (* Iterate over rules *)
+      let rec iter = function
+        | [] -> Post.return flow
+        | rule::tl ->
+          let module R = (val rule : EXEC_REDUCTION) in
+          match R.reduce stmt man rman pre flow effects with
+          | None -> iter tl
+          | Some post -> post
+      in
+      iter Rules.srules
 
 
   (** Entry point of abstract transformers *)

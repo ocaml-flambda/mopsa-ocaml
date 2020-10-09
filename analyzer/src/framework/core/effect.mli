@@ -60,6 +60,8 @@ val join_effect : effect -> effect -> effect
 val meet_effect : effect -> effect -> effect
 (** Compute the intersection of two effects *)
 
+val fold_stmt_effect : ('a -> stmt -> 'a) -> 'a -> effect -> 'a
+(** Fold over the statements in the effect *)
 
 (** {1 Effect trees}*)
 
@@ -140,6 +142,8 @@ val meet_teffect : teffect -> teffect -> teffect
 val join_teffect : teffect -> teffect -> teffect
 (** [merge_teffect te1 te2] computes the effects of two joined post-states *)
 
+val fold_stmt_teffect : ('a -> stmt -> 'a) -> 'a -> teffect -> 'a
+(** Fold over the statements in the effects tree *)
 
 (** {1 Generic merge} *)
 

@@ -35,7 +35,9 @@ type 'a exec_reduction_man = {
 module type EXEC_REDUCTION =
 sig
   val name   : string
-  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man -> 'a flow -> 'a flow  -> 'a post option
+  val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man ->
+    'a flow -> 'a flow  -> teffect ->
+    'a post option
 end
 
 

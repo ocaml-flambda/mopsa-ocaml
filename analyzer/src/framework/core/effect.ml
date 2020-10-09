@@ -113,6 +113,15 @@ let rec concat_effect ~old ~recent =
     | x, Effect_seq l -> Effect_seq(x::l)
     | _ -> Effect_seq [old;recent]
 
+let rec fold_stmt_effect f acc = function
+  | Effect_empty -> acc
+  | Effect_stmt s -> f acc s
+  | Effect_seq l -> List.fold_left (fold_stmt_effect f) acc l
+  | Effect_join(e1,e2)
+  | Effect_meet(e1,e2) ->
+    let acc' = fold_stmt_effect f acc e1 in
+    fold_stmt_effect f acc' e2
+
 type teffect =
   | Teffect_empty
   | Teffect_node of effect * teffect * teffect
@@ -211,6 +220,12 @@ let join_teffect teffect1 teffect2 =
     (fun e1 e2 -> join_effect e1 e2)
     teffect1 teffect2
 
+let rec fold_stmt_teffect f acc = function
+  | Teffect_empty -> acc
+  | Teffect_node(e,l,r) ->
+    let acc' = fold_stmt_effect f acc e in
+    let acc'' = fold_stmt_teffect f acc' l in
+    fold_stmt_teffect f acc'' r
 
 (** {2 Generic merge} *)
 (** ***************** *)
