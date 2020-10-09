@@ -38,15 +38,15 @@ let rec pp_effect fmt = function
   | Effect_empty -> ()
   | Effect_stmt stmt -> pp_stmt fmt stmt
   | Effect_seq seq ->
-    Format.fprintf fmt "@[<hv>{ %a }@]"
+    Format.fprintf fmt "@[<hv2>{ %a }@]"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "⨟@ ") pp_effect)
       seq
   | Effect_join (e1,e2) ->
-    Format.fprintf fmt "@[<hv>(%a ∨ @ %a)@]"
+    Format.fprintf fmt "@[<hv2>( %a ∨ @ %a )@]"
       pp_effect e1
       pp_effect e2
   | Effect_meet (e1,e2) ->
-    Format.fprintf fmt "@[<hv>(%a ∧: @ %a)@]"
+    Format.fprintf fmt "@[<hv2>( %a ∧: @ %a )@]"
       pp_effect e1
       pp_effect e2
 
