@@ -53,8 +53,17 @@ let () =
   }
 
 
-(** {2 Variable context} *)
-(** ******************** *)
+(** {2 Variable's context} *)
+(** ********************** *)
+
+(** The context of a variable keeps (flow-insensitive) information about the
+   variable that can pushed by external domains and consumed by the value
+   abstraction.
+
+   This is useful to implement a widening with thresholds: external
+   heuristics discover the theresholds and put them in the context of the
+   variable. When [widen] is called on a the value of a variable, it is enriched
+   with its context. *)
 
 module K = GenContextKey(struct
     type 'a t = 'a ctx VarMap.t
@@ -97,6 +106,10 @@ let remove_var_ctx var k ctx =
 
 (** {2 Variable bounds} *)
 (** ******************* *)
+
+(** The bounds of a variable is an invariant about its value that is always valid.
+    It is put in the context of the variable and is used to refine its value whenever it
+    changes. *)
 
 module VarBoundsKey = GenContextKey(struct
     type 'a t = constant
