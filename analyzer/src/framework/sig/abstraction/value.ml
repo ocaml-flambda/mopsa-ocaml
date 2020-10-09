@@ -56,6 +56,9 @@ let empty_vexpr = Map ExprMap.empty
 let singleton_vexpr e v ve =
   Map (ExprMap.singleton e (v,ve))
 
+let root_vexpr = function
+  | Map map -> Map (ExprMap.map (fun (v,ve) -> (v,empty_vexpr)) map)
+
 let add_vexpr e v ve = function
   | Map map -> Map (ExprMap.add e (v,ve) map)
 

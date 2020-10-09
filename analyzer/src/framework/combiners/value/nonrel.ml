@@ -292,12 +292,19 @@ struct
   let rec refine ctx (e:expr) (ve:Value.t vexpr) (r:Value.t) (a:t) : t =
     if Value.is_bottom r then bottom else
     match e.ekind with
-    | E_var(var,mode) ->
+      | E_var(var,mode) ->
+        (* Refine the value of the variable in the map *)
       if var_mode var mode = WEAK then a
       else add ctx var (Value.meet (find var a) r) a
 
     | _ ->
-      let ve' = Value.backward (value_man ve a) e ve r in
+      (* Refine the sub-expressions by calling [Value.backward].
+       * Note that we need to apply this function to the root sub-expressions only *)
+      let veroot = root_vexpr ve in
+      let veroot' = Value.backward (value_man ve a) e veroot r in
+      (* Go back to the whole value expression by merging [veroot'] with [ve].
+         Missing sub-expressions in [veroot'] will be copied from [ve]. *)
+      let ve' = merge_vexpr Value.meet ve veroot' in
       fold_root_vexpr
         (fun acc ee vv eev -> refine ctx ee eev vv acc)
         a ve'

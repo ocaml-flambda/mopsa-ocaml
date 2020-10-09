@@ -58,6 +58,9 @@ val empty_vexpr : 'v vexpr
 val singleton_vexpr : expr -> 'v -> 'v vexpr -> 'v vexpr
 (** Singleton representing a leaf expression and its value *)
 
+val root_vexpr : 'v vexpr -> 'v vexpr
+(** Get the root value expressions *)
+
 val add_vexpr : expr -> 'v -> 'v vexpr -> 'v vexpr -> 'v vexpr
 (** Attache a value to a sub-expression in a value expression *)
 
