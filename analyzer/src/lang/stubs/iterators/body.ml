@@ -312,7 +312,9 @@ struct
   let init_params args params range man flow =
     List.combine args params |>
     List.fold_left (fun flow (arg, param) ->
-        man.exec (mk_assign (mk_var param range) arg range) flow |> post_to_flow man
+        let post = man.exec (mk_add_var param range) flow >>%
+                   man.exec (mk_assign (mk_var param range) arg range) in
+        post_to_flow man post
       ) flow
 
   (** Remove parameters from the returned flow *)
