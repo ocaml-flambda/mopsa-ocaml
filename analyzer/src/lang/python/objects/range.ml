@@ -368,8 +368,15 @@ struct
                  (mk_nop range) range
              in
              assume (mk_binop ~etyp:(T_py None) step O_gt (mk_zero ~typ:(T_py None) range) range) man flow
-               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow >>% Post.return)
+               ~fthen:(fun flow ->
+                 man.exec (gen_stmt O_lt) flow >>% Post.return
+               )
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
+               ~fboth:(fun f1 f2 ->
+                 (* FIXME: arbitrary hack to avoid executing both loops *)
+                 man.exec (gen_stmt O_lt) flow >>% Post.return
+               )
+
          )
                  |> OptionExt.return in
        Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
