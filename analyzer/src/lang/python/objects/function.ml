@@ -96,7 +96,7 @@ module Domain =
            (fun func flow ->
                man.eval inst flow >>$
                  (fun inst flow ->
-                     eval_alloc man (A_py_method (object_of_expr func, inst, "method")) range flow |>
+                     eval_alloc man (A_py_method (object_of_expr func, object_of_expr inst, "method")) range flow |>
                        bind_result (fun addr flow ->
                            let obj = (addr, None) in
                            Eval.singleton (mk_py_object obj range) flow
@@ -120,7 +120,7 @@ module Domain =
           ~fthen:(fun flow ->
               assume (mk_py_isinstance instance typeofinst range) man flow
                 ~fthen:(fun flow ->
-                  eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+                  eval_alloc man (A_py_method (object_of_expr descr, object_of_expr instance, "method-wrapper")) range flow |>
                   bind_result (fun addr flow ->
                       let obj = (addr, None) in
                       Eval.singleton (mk_py_object obj range) flow)
@@ -128,7 +128,7 @@ module Domain =
                 ~felse:(man.eval   descr)
             )
           ~felse:(fun flow ->
-              eval_alloc man (A_py_method (object_of_expr descr, instance, "method-wrapper")) range flow |>
+              eval_alloc man (A_py_method (object_of_expr descr, object_of_expr instance, "method-wrapper")) range flow |>
               bind_result (fun addr flow ->
                   let obj = (addr, None) in
                   Eval.singleton (mk_py_object obj range) flow)
@@ -140,7 +140,7 @@ module Domain =
         assume (mk_py_isinstance_builtin instance "NoneType" range) man flow
           ~fthen:(man.eval   descr)
           ~felse:(fun flow ->
-              eval_alloc man (A_py_method (object_of_expr descr, instance, "builtin_function_or_method")) range flow |>
+              eval_alloc man (A_py_method (object_of_expr descr, object_of_expr instance, "builtin_function_or_method")) range flow |>
               bind_result (fun addr flow ->
                   let obj = (addr, None) in
                   Eval.singleton (mk_py_object obj range) flow)
@@ -337,7 +337,7 @@ module Domain =
           )
       (* 𝔼⟦ f() | isinstance(f, method) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_method(f, e, t)}, _)}, args, kwargs) ->
-        let exp' = mk_py_kall (mk_py_object f range) (e :: args) kwargs range in
+        let exp' = mk_py_kall (mk_py_object f range) ((mk_py_object e range) :: args) kwargs range in
         man.eval   exp' flow |> OptionExt.return
 
 

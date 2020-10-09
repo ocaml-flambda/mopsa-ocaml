@@ -51,7 +51,7 @@ module Domain =
            let not_implemented_type = mk_py_object (find_builtin "NotImplementedType") range in
            mk_py_isinstance x not_implemented_type range in
 
-         bind_list [e1; e2] (man.eval  ) flow |>
+         bind_list [e1; e2] (man.eval) flow |>
            bind_result
              (fun el flow ->
                let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in

@@ -54,7 +54,7 @@ type module_address =
 type addr_kind +=
   | A_py_class of class_address (** class *) * py_object list (** mro *)
   | A_py_function of function_address (** function *)
-  | A_py_method of py_object (** address of the function to bind *) * expr (** method instance *) * string  (* type. method or method-wrapper or ... *)
+  | A_py_method of py_object (** address of the function to bind *) * py_object (** method instance *) * string  (* type. method or method-wrapper or ... *)
   | A_py_module of module_address
 
 
@@ -393,7 +393,7 @@ let () =
            | A_py_function(F_annot f) -> fprintf fmt "f-annot %a" pp_var f.py_funca_var (* Ast.pp_py_func_annot f*)
            | A_py_function(F_builtin (f, t)) -> fprintf fmt "%s %s" t f
            | A_py_function(F_unsupported f) -> fprintf fmt "unsupported-builtin %s" f
-           | A_py_method(f, e, t) -> fprintf fmt "%s %a of %a" t pp_addr (addr_of_object f) pp_expr e
+           | A_py_method(f, e, t) -> fprintf fmt "%s %a of %a" t pp_addr (addr_of_object f) Pp.pp_py_object e
            | A_py_module(M_builtin(m)) -> fprintf fmt "module %s" m
            | A_py_module(M_user(m, globals)) -> fprintf fmt "module %s[defined globals = %a]" m
                            (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_var) globals
@@ -431,7 +431,7 @@ let () =
              Compare.compose
                [ (fun () -> compare_addr addr1 addr2);
                  (fun () -> Compare.option compare_expr oexpr1 oexpr2);
-                 (fun () -> compare_expr expr1 expr2);
+                 (fun () -> compare_py_object expr1 expr2);
                  (fun () -> Stdlib.compare t1 t2);]
            | _ -> default a1 a2)
     }

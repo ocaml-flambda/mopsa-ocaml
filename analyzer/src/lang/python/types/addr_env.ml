@@ -480,8 +480,8 @@ struct
           let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
           let flow = List.fold_left (fun flow addr ->
                          match akind addr with
-                         | A_py_method(func, ({ekind = E_py_object(ainst, oe)} as inst), mclass) when compare_addr a ainst = 0 ->
-                            let addr' = {addr with addr_kind = A_py_method(func, {inst with ekind = E_py_object(a', oe)}, mclass)} in
+                         | A_py_method(func, (ainst, oe), mclass) when compare_addr a ainst = 0 ->
+                            let addr' = {addr with addr_kind = A_py_method(func, (a', oe), mclass)} in
                             let skind = match skind stmt with
                               | S_fold _ -> S_fold ({e2 with ekind = E_addr addr'}, [{e1 with ekind = E_addr addr}])
                               | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
