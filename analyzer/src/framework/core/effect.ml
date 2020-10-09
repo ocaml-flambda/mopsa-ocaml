@@ -108,10 +108,10 @@ let rec concat_effect ~old ~recent =
   else
     match old,recent with
     | Effect_empty, Effect_empty -> Effect_empty
-    | Effect_seq l1, Effect_seq l2 -> Effect_seq (l1@l2)
-    | Effect_seq l, x -> Effect_seq(l@[x])
-    | x, Effect_seq l -> Effect_seq(x::l)
-    | _ -> Effect_seq [old;recent]
+    | Effect_seq l1, Effect_seq l2 -> Effect_seq (l2@l1)
+    | Effect_seq l, x -> Effect_seq(x::l)
+    | x, Effect_seq l -> Effect_seq(l@[x])
+    | _ -> Effect_seq [recent;old]
 
 let rec fold_stmt_effect f acc = function
   | Effect_empty -> acc
