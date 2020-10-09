@@ -221,6 +221,11 @@ type var_effect = {
   removed: VarSet.t;
 }
 
+let compare_var_effect ve1 ve2 =
+  Compare.pair VarSet.compare VarSet.compare
+    (ve1.modified,ve1.removed)
+    (ve2.modified,ve2.removed)
+
 (** Get the effect of a statement *)
 let rec get_stmt_var_effect ~custom stmt : var_effect =
   match custom stmt with
@@ -341,13 +346,15 @@ let generic_domain_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1
     | _ -> e1,e2
   in
   let e1, e2 = remove_common_tail e1 e2 in
-  if e1 == e2 then a1,a2 else
-  if is_empty_effect e1 then a1,a2 else
-  if is_empty_effect e2 then a1,a2 else
-  if compare_effect e1 e2 = 0 then a1,a2
+  if e1 == e2 then a1,a1 else
+  if is_empty_effect e1 then a2,a2 else
+  if is_empty_effect e2 then a1,a1 else
+  if compare_effect e1 e2 = 0 then a1,a1
   else
     let ve1 = get_var_effect ~custom e1 in
     let ve2 = get_var_effect ~custom e2 in
-    let a2' = apply_var_effect ve1 a1 a2 ~add ~remove ~find in
-    let a1' = apply_var_effect ve2 a2 a1 ~add ~remove ~find in
-    a1',a2'
+    if compare_var_effect ve1 ve2 = 0 then a1,a2
+    else
+      let a2' = apply_var_effect ve1 a1 a2 ~add ~remove ~find in
+      let a1' = apply_var_effect ve2 a2 a1 ~add ~remove ~find in
+      a1',a2'
