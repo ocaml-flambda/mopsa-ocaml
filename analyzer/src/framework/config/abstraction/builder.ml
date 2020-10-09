@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 
-(** Build a domain from a configuration *) 
+(** Build a domain from a configuration *)
 
 open Core.Route
 open Syntax
@@ -39,9 +39,10 @@ let rec make_value (value:value) : (module VALUE) =
   | V_value v                     -> v
   | V_union values                -> Combiners.Value.Union.make (List.map make_value values)
   | V_product (values,reductions) -> Combiners.Value.Product.make (List.map make_value values) reductions
-  | V_functor(f, vv) ->
+  | V_functor(f, vv)              ->
     let module F = (val f) in
     (module F.Functor(val (make_value vv)))
+
 
 
 

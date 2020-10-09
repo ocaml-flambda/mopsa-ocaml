@@ -1,0 +1,13 @@
+void test_len_of_constant() {
+  string s = "hello";
+  int l = |s|;
+  assert(l == 5);
+}
+
+void test_len_of_concat() {
+  string s1 = "hello";
+  string s2 = " ";
+  string s3 = "world";
+  int l = |s1@s2@s3|;
+  assert(l == 11);
+}

@@ -62,7 +62,8 @@
                         "nonrel": {
 			    "union": [
 			        "universal.numeric.values.intervals.float",
-                                "universal.numeric.values.intervals.integer"
+                                "universal.numeric.values.intervals.integer",
+				"universal.strings.powerset"
 			    ]
 		        }
                     },
@@ -71,8 +72,7 @@
                 "reductions": [
                     "universal.numeric.reductions.intervals_rel"
                 ]
-            },
-            "universal.strings.powerset"
+            }
         ]
     }
 }

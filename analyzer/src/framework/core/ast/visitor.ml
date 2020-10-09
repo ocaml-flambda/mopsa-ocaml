@@ -377,6 +377,26 @@ and for_all_stmt fe fs s =
     List.for_all (for_all_stmt fe fs) parts.stmts
   )
 
+let exists_child_expr fe fs e =
+  let parts,_ = structure_of_expr e in
+  List.exists fe parts.exprs ||
+  List.exists fs parts.stmts
+
+let exists_child_stmt fe fs s =
+  let parts,_ = structure_of_stmt s in
+  List.exists fe parts.exprs ||
+  List.exists fs parts.stmts
+
+let for_all_child_expr fe fs e =
+  let parts,_ = structure_of_expr e in
+  List.for_all fe parts.exprs &&
+  List.for_all fs parts.stmts
+
+let for_all_child_stmt fe fs s =
+  let parts,_ = structure_of_stmt s in
+  List.for_all fe parts.exprs &&
+  List.for_all fs parts.stmts
+
 
 (** Extract variables from an expression *)
 let expr_vars (e: expr) : var list =

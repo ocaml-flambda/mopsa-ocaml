@@ -34,6 +34,7 @@ sig
   val is_top : t -> bool
   val subset : t -> t -> bool
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val join : t -> t -> t
   val meet : t -> t -> t
   val union : t -> t -> t

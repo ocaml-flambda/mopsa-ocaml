@@ -145,6 +145,9 @@ type expr_kind += E_constant of constant
 val mk_constant : ?etyp:typ -> constant -> range -> expr
 (** Create a constant expression *)
 
+val mk_top : typ -> range -> expr
+(** Create ⊤ expression of a given type *)
+
 
 (** {2 Unary expressions} *)
 

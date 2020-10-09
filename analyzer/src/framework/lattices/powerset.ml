@@ -52,6 +52,13 @@ struct
   let equal (abs1:t) (abs2:t) : bool =
     top_equal Set.equal abs1 abs2
 
+  let compare (abs1:t) (abs2:t) : int =
+    match abs1, abs2 with
+    | TOP, TOP -> 0
+    | TOP, _ -> -1
+    | _, TOP -> 1
+    | Nt x1, Nt x2 -> Set.compare x1 x2
+
   let join (abs1:t) (abs2:t) : t =
     if abs1 == abs2 then abs1 else
     top_lift2 Set.union abs1 abs2

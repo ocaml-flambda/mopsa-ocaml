@@ -80,3 +80,10 @@ val register_constant_compare : constant TypeExt.compare -> unit
 val register_constant_pp : constant TypeExt.print -> unit
 (** [register_constant_compare compare] registers a new pretty-printer for
     constants *)
+
+
+(****************************************************************************)
+(**                         {1 Common constants}                            *)
+(****************************************************************************)
+
+type constant += C_top of Typ.typ

@@ -261,19 +261,25 @@ let print_and_count_alarms rep out =
     ) rep.report_diagnostics (0,0,0,0,CheckMap.empty)
 
 let print_summary checks_map total safe error warning time out =
-  print out "@[<v 2>Analysis summary:@,Time: %.3fs@,@[<v2>Checks: %a, %a, %a, %a@,%a@]@]@.@."
+  let pp diag singluar plural fmt n =
+    if n = 0 then () else
+    if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
+    else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
+  in
+  print out "@[<v 2>Analysis summary:@,Time: %.3fs@,@[<v2>Checks: %a%a%a%a@,%a@]@]@.@."
     time
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
-    (Debug.color (color_of_diag Safe) (fun fmt safe -> fprintf fmt "%s %d safe" (icon_of_diag Safe) safe)) safe
-    (Debug.color (color_of_diag Error) (fun fmt error -> fprintf fmt "%s %d error%a" (icon_of_diag Error) error Debug.plurial_int error)) error
-    (Debug.color (color_of_diag Warning) (fun fmt warning -> fprintf fmt "%s %d warning%a" (icon_of_diag Warning) warning Debug.plurial_int warning)) warning
+    (pp Safe "safe" "safe") safe
+    (pp Error "error" "errors") error
+    (pp Warning "warning" "warnings") warning
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (check,(safe,error,warning)) ->
-          fprintf fmt "%a: %a, %a, %a"
+          fprintf fmt "%a: %d total%a%a%a"
             pp_check check
-            (Debug.color (color_of_diag Safe) (fun fmt safe -> fprintf fmt "%d safe" safe)) safe
-            (Debug.color (color_of_diag Error) (fun fmt error -> fprintf fmt "%d error%a" error Debug.plurial_int error)) error
-            (Debug.color (color_of_diag Warning) (fun fmt warning -> fprintf fmt "%d warning%a" warning Debug.plurial_int warning)) warning
+            (safe+error+warning)
+            (pp Safe "safe" "safe") safe
+            (pp Error "error" "errors") error
+            (pp Warning "warning" "warnings") warning
        )
     ) (CheckMap.bindings checks_map)
 
