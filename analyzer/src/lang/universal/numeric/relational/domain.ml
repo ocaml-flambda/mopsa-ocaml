@@ -345,11 +345,8 @@ struct
   let ask : type r. ('a,r) query -> ('a,t) simplified_man -> 'a ctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
       match query with
-      | Common.Q_int_interval e ->
+      | Q_avalue(e, Common.V_int_interval false) ->
         eval_interval e (abs,bnd)
-
-      | Common.Q_int_congr_interval e ->
-        eval_interval e (abs,bnd) |> OptionExt.lift (fun itv -> itv,Common.C.minf_inf)
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>

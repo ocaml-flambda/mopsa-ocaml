@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <math.h>
 
 /* Tests for sizeof built-in */
 /* ************************* */
@@ -90,5 +91,31 @@ void test_valid_ptr_on_offset_overflow() {
   int *p = a;
   p = p + 10;
   check_int_ptr(p);
+  _mopsa_assert_unsafe();
+}
+
+/*  Tests for valid_float built-in */
+/*  ****************************** */
+
+/*$
+ * requires: valid_float(f);
+ */
+void check_float(float f);
+
+void test_valid_float_on_initialized_float() {
+  float f = 2.3;
+  check_float(f);
+  _mopsa_assert_safe();
+}
+
+void test_valid_float_on_nan() {
+  float f = NAN;
+  check_float(f);
+  _mopsa_assert_unsafe();
+}
+
+void test_valid_float_on_infinity() {
+  float f = INFINITY;
+  check_float(f);
   _mopsa_assert_unsafe();
 }

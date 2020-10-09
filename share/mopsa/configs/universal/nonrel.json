@@ -17,7 +17,8 @@
                 "nonrel": {
 		    "union": [
 			"universal.numeric.values.intervals.integer",
-			"universal.numeric.values.intervals.float"
+			"universal.numeric.values.intervals.float",
+			"universal.strings.powerset"
 	            ]
                 }
 	    }
