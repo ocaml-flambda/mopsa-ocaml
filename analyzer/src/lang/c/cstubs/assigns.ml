@@ -106,15 +106,9 @@ struct
     match assigned_indices with
     | [] ->
       (* Prime the target *)
-      begin
-        match base.base_kind, expr_to_z offset with
-        | Var v, Some o when compare_typ v.vtyp typ = 0 && Z.(o = zero) ->
-          man.exec (mk_forget_var v range) flow
-        | _ ->
-          let primed_target = mk_primed_address base offset typ range in
-          let lval = mk_c_deref primed_target range in
-          man.exec (mk_forget lval range) flow
-      end
+      let primed_target = mk_primed_address base offset typ range in
+      let lval = mk_c_deref primed_target range in
+      man.exec (mk_forget lval range) flow
 
     | _ ->
 

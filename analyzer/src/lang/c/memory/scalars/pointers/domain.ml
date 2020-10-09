@@ -82,6 +82,14 @@ struct
             match skind stmt with
             | S_c_declaration (var,init,scope) ->
               Some Effect.{ modified = VarSet.singleton var; removed = VarSet.empty }
+
+            | S_assign ({ekind = E_c_deref _},_)
+            | S_forget ({ekind = E_c_deref _}) ->
+              (* We can ignore theses statements because we transform then into statements
+                 with variables, and we use the manager to execute them. Therefore, we are
+                 sure that the statements with variables are logged in the effects. *)
+              Some Effect.{ modified = VarSet.empty; removed = VarSet.empty }
+
             | _ -> None
           ) in
     Map.meet aa aa'
