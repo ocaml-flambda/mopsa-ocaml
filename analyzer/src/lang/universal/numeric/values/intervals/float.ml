@@ -52,6 +52,9 @@ struct
   let () =
     import_standalone_option Rounding.name ~into:name
 
+  let accept_type = function
+    | T_float _ -> true
+    | _ -> false
 
   (** Lattice operations *)
 

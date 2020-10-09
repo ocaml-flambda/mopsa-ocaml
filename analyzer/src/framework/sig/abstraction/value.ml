@@ -50,6 +50,9 @@ sig
   val id : t id
   (** Identifier of the value domain *)
 
+  val accept_type : typ -> bool
+  (** Predicate of types abstracted by the value domain *)
+
   val name : string
   (** Name of the value domain *)
 

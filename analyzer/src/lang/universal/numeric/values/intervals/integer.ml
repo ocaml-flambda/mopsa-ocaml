@@ -43,6 +43,10 @@ struct
       let display = "int-itv"
     end)
 
+  let accept_type = function
+    | T_int | T_bool -> true
+    | _ -> false
+
   let bottom = BOT
 
   let top = Nb (I.minf_inf)

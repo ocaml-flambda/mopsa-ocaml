@@ -141,6 +141,7 @@ struct
   let id = V_empty
   let name = ""
   let display = ""
+  let accept_type t = false
   let bottom = ()
   let top = ()
   let print printer () = ()

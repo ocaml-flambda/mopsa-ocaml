@@ -112,6 +112,9 @@ struct
   (** {2 Forward operators} *)
   (** ********************* *)
 
+  let accept_type = function
+    | T_int | T_bool -> true
+    | _ -> false
 
   let constant t c =
     match t with
