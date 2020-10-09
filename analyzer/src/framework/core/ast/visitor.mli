@@ -167,11 +167,12 @@ val for_all_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
 val exists_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
 val for_all_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
 
-val exists_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
-val for_all_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
+val exists_child_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
+val for_all_child_expr : (expr -> bool) -> (stmt -> bool) -> expr -> bool
 
-val exists_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
-val for_all_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
+val exists_child_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
+val for_all_child_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
+
 
 
 (****************************************************************************)

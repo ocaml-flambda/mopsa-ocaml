@@ -134,35 +134,6 @@ let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~t
 
 
 
-(** Empty (unit) value abstraction *)
-module EmptyValue : Sig.Abstraction.Value.VALUE =
-struct
-  type t = unit
-  let id = V_empty
-  let name = ""
-  let display = ""
-  let bottom = ()
-  let top = ()
-  let print printer () = ()
-  let is_bottom () = false
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen ctx () () = ()
-  let constant t c = None
-  let cast man t e = None
-  let unop op t () = ()
-  let binop op t () () = ()
-  let filter b t () = ()
-  let bwd_unop op t () () = ()
-  let bwd_binop op t () () () = ((),())
-  let bwd_cast man t e () = ()
-  let predicate op b t () = ()
-  let compare op b t () () = ((),())
-  let ask man q = None
-end
-
-
 (** Apply transfer functions [f1] and [f2] in cascade. Function [f1]
     is called first. When [f1] returns [None] or not-handled cases,
     [f2] is called. Note that not-handled cases are joined in order to

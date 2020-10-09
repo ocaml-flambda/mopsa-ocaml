@@ -56,7 +56,7 @@ struct
     | E_constant (C_top T_bool) -> e
     | E_var _ -> e
     | E_unop(O_log_not,e) -> negate_bool_expr (to_bool_expr e)
-    | E_unop(op,e) when is_predicate_op op -> e
+    | E_unop(op,_) when is_predicate_op op -> e
     | E_binop(op,_,_) when is_comparison_op op -> e
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
     | _ -> ne e zero e.erange

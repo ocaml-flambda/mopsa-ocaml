@@ -83,7 +83,6 @@ let () =
 (*  *********************** *)
 
 type constant +=
-  | C_top of typ
   | C_unit
   | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
@@ -97,7 +96,6 @@ let () =
   register_constant {
     compare = (fun next c1 c2 ->
         match c1, c2 with
-        | C_top t1, C_top t2 -> compare_typ t1 t2
         | C_int z1, C_int z2 -> Z.compare z1 z2
         | C_float f1, C_float f2 -> Stdlib.compare f1 f2
         | C_string s1, C_string s2 -> Stdlib.compare s1 s2
@@ -115,8 +113,6 @@ let () =
       );
 
     print = (fun default fmt -> function
-        | C_top T_any -> Format.fprintf fmt "⊤"
-        | C_top t -> Format.fprintf fmt "⊤:%a" pp_typ t
         | C_unit -> fprintf fmt "()"
         | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
         | C_string(s) -> fprintf fmt "\"%s\"" s
@@ -454,6 +450,7 @@ type expr_kind +=
   | E_len of expr
 
 
+
 let () =
   register_expr_with_visitor {
     compare = (fun next e1 e2 ->
@@ -527,7 +524,7 @@ let () =
           (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
 
         | E_len(e) ->
-          {exprs = []; stmts = []},
+          {exprs = [e]; stmts = []},
           (fun parts -> {exp with ekind = E_len(List.hd parts.exprs)})
 
         | _ -> default exp
@@ -713,8 +710,6 @@ let rec is_universal_type t =
   | T_array tt -> is_universal_type tt
 
   | _ -> false
-
-let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_int i ?(typ=T_int) erange =
   mk_constant ~etyp:typ (C_int (Z.of_int i)) erange

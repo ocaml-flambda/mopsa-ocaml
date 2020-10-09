@@ -20,56 +20,73 @@
 (****************************************************************************)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Abstraction.Simplified_value
 open Ast
 open MapExt
 open Addr
 open Universal.Ast
+open Bot
 
 (** A dummy numerical domain for the type-only analysis. *)
 
-module Domain =
+module Value =
   struct
 
-    include GenStatelessDomainId(struct
-                let name = "python.types.dummy_numeric"
-              end)
+  type t = unit with_bot
 
-    let checks = []
+  include GenValueId(
+    struct
+        type nonrec t = t
+        let name = "python.types.dummy_numeric"
+        let display = "dummy_numeric"
+    end
+    )
 
-    let init _ _ flow = flow
+  let accept_type = function
+    | T_int | T_bool | T_float _ -> true
+    | _ -> false
 
-    let exec stmt man flow =
-      match skind stmt with
-      | S_remove { ekind = E_var _ }
-        | S_invalidate { ekind = E_var _ }
-        | S_add { ekind = E_var _ }
-        | S_project _
-        | S_rename ({ ekind = E_var _ }, { ekind = E_var _ })
-        | S_forget { ekind = E_var _ }
-        | S_assign ({ ekind= E_var _ }, _)
-        | S_expand ({ekind = E_var _ }, _)
-        | S_fold ({ekind = E_var _}, _) ->
-         Some (Post.return flow)
+  let bottom = BOT
 
-      | S_assume e when is_numeric_type @@ etyp e ->
-         Some (Post.return flow)
+  let top = Nb ()
 
-      | _ -> None
+  let is_bottom = function
+    | BOT -> true
+    | _   -> false
 
-    let eval exp man flow = None
+  let subset (a1:t) (a2:t) : bool =
+    bot_included (fun _ _ -> true) a1 a2
 
-    let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
-      fun query man flow ->
-      match query with
-      | Universal.Numeric.Common.Q_int_interval e ->
-         Some (Nb Universal.Numeric.Common.I.minf_inf)
-      | Universal.Numeric.Common.Q_float_interval e ->
-         Some (Universal.Numeric.Common.F.infinities)
-      | _ -> None
+  let join (a1:t) (a2:t) : t =
+    bot_neutral2 (fun _ _ -> ()) a1 a2
 
-    let print_expr _ _ _ _ = ()
+  let meet (a1:t) (a2:t) : t =
+    bot_absorb2 (fun _ _ -> top) a1 a2
 
-  end
+  let widen ctx (a1:t) (a2:t) : t = join a1 a2
 
-let () = register_stateless_domain (module Domain)
+  let print printer (a:t) : unit =
+    match a with
+    | BOT   -> pp_string printer "⊥"
+    | Nb () -> pp_string printer "⊤:num"
+
+  include DefaultValueFunctions
+
+  let constant c t = top
+
+  let unop op t a tr = top
+
+  let binop op t1 a1 t2 a2 tr = top
+
+  let avalue : type r. r avalue_kind -> t -> r option =
+    fun avk a ->
+    match avk with
+    | Universal.Numeric.Common.V_float_interval _
+    | Universal.Numeric.Common.V_int_interval _
+    | Universal.Numeric.Common.V_int_congr_interval ->
+      Some (top_avalue avk)
+
+    | _ -> None
+end
+
+let () = register_simplified_value_abstraction (module Value)
