@@ -173,7 +173,8 @@ struct
       let r1 = V1.backward_ext man1 e (map_vexpr (fun v -> man.set v man.top) ve) r in
       let r2 = V2.backward man2 e (map_vexpr snd ve) r in
       match r1 with
-      | None   -> map_vexpr (fun v2 -> (V1.bottom,v2)) r2
+      | None   ->
+        map_vexpr (fun v2 -> (V1.bottom,v2)) r2
       | Some rr1 ->
         map2_vexpr
           (fun v1 -> assert false)

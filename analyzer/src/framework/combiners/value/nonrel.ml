@@ -223,6 +223,9 @@ struct
             m1 m2
         )
 
+  let top_of_typ typ range =
+    Value.eval imprecise_value_man (mk_top typ range)
+
   let add ctx var v a =
     let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
@@ -372,7 +375,9 @@ struct
       (* Check of the variable is already present *)
       if VarMap.mem v map
       then OptionExt.return map
-      else OptionExt.return @@ add ctx v Value.top map
+      else
+        add ctx v (top_of_typ v.vtyp stmt.srange) map |>
+        OptionExt.return
 
 
     | S_project vars
@@ -395,7 +400,7 @@ struct
       OptionExt.return
 
     | S_forget { ekind = E_var (var, _) } when Value.accept_type var.vtyp ->
-      add ctx var Value.top map |>
+      add ctx var (top_of_typ var.vtyp stmt.srange) map |>
       OptionExt.return
 
     | S_assign ({ ekind= E_var (var, mode) }, e) when Value.accept_type var.vtyp ->

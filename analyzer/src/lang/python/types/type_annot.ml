@@ -317,13 +317,13 @@ struct
           let name = get_orig_vname v in
           begin match name with
             | "bool" ->
-               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, OptionExt.return @@ Universal.Ast.mk_top T_bool range) range) flow
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, OptionExt.return @@ mk_top T_bool range) range) flow
             | "int" ->
-               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, OptionExt.return @@ Universal.Ast.mk_top T_int range) range) flow
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, OptionExt.return @@ mk_top T_int range) range) flow
             | "float" ->
-               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, OptionExt.return @@ Universal.Ast.mk_top (T_float F_DOUBLE) range) range) flow
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, OptionExt.return @@ mk_top (T_float F_DOUBLE) range) range) flow
             | "str" ->
-               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, OptionExt.return @@ Universal.Ast.mk_top T_string range) range) flow
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, OptionExt.return @@ mk_top T_string range) range) flow
             | "NotImplementedType" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_notimplemented, None) range) flow
             | "NoneType" ->
