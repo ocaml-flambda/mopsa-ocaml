@@ -628,15 +628,9 @@ struct
       | Bot.Nb (stride,_) ->
         let step = if Z.equal stride Z.zero then Z.one else stride in
         let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
-
         let lo, uo = Itv.bounds_opt offset_itv in
-        let ls, us = Itv.bounds_opt size_itv in
+        let _, us = Itv.bounds_opt size_itv in
 
-        let ls =
-          match ls with
-          | None -> Z.zero
-          | Some x -> Z.max x Z.zero
-        in
         let us =
           match us with
           | None ->
@@ -654,7 +648,7 @@ struct
         let uo =
           match uo with
           | None -> Z.sub us elm
-          | Some u -> Z.min u (Z.sub ls elm)
+          | Some u -> Z.min u (Z.sub us elm)
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
