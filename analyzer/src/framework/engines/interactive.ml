@@ -765,12 +765,11 @@ struct
           let errors,warnings = Alarm.count_alarms report in
           let nb = errors+warnings in
           printf "%d alarm%a found:@." nb Debug.plurial_int nb;
-          Alarm.alarms_of_report report |>
-          Alarm.group_alarms_by_check |>
-          Alarm.CheckMap.iter (fun check ss ->
-              let range_map = Alarm.group_alarms_by_range ss in
-              let sub_total = Alarm.RangeMap.cardinal range_map in
-              printf "  %a: %d@." Alarm.pp_check check sub_total
+          Alarm.diagnostics_of_report report |>
+          DiagnosticSet.filter (fun d -> d.diag_kind = Error || d.diag_kind = Warning) |>
+          Alarm.group_diagnostics_by_check |>
+          Alarm.CheckMap.iter (fun check ds ->
+              printf "  %a: %d@." Alarm.pp_check check (DiagnosticSet.cardinal ds)
             )
         )
       end;

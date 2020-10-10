@@ -388,6 +388,8 @@ module CheckMap = MapExt.Make(struct type t = check let compare = compare end)
 
 module AssumptionSet = SetExt.Make(struct type t = assumption let compare = compare_assumption end)
 
+module DiagnosticSet = SetExt.Make(struct type t = diagnostic let compare = compare_diagnostic end)
+
 type report = {
   report_diagnostics : diagnostic CheckMap.t RangeMap.t;
   report_assumptions : AssumptionSet.t;
@@ -546,32 +548,32 @@ let fold2zo_report f1 f2 f r1 r2 init =
     )
     r1.report_diagnostics r2.report_diagnostics init
 
-let alarms_of_report r =
+let diagnostics_of_report r =
   RangeMap.fold
     (fun range checks acc ->
        CheckMap.fold (fun check diag acc ->
-           AlarmSet.union acc diag.diag_alarms) checks acc)
-    r.report_diagnostics AlarmSet.empty
+           DiagnosticSet.add diag acc) checks acc)
+    r.report_diagnostics DiagnosticSet.empty
 
-let group_alarms_by_range s =
-  AlarmSet.fold
-    (fun a acc ->
-       let range = a.alarm_range in
+let group_diagnostics_by_range s =
+  DiagnosticSet.fold
+    (fun d acc ->
+       let range = d.diag_range in
        let s =
          try RangeMap.find range acc |>
-             AlarmSet.add a
-         with Not_found -> AlarmSet.singleton a in
+             DiagnosticSet.add d
+         with Not_found -> DiagnosticSet.singleton d in
        RangeMap.add range s acc
     ) s RangeMap.empty
 
-let group_alarms_by_check s =
-  AlarmSet.fold
-    (fun a acc ->
-       let check = check_of_alarm a in
+let group_diagnostics_by_check s =
+  DiagnosticSet.fold
+    (fun d acc ->
+       let check = d.diag_check in
        let s =
          try CheckMap.find check acc |>
-             AlarmSet.add a
-         with Not_found -> AlarmSet.singleton a in
+             DiagnosticSet.add d
+         with Not_found -> DiagnosticSet.singleton d in
        CheckMap.add check s acc
     ) s CheckMap.empty
 

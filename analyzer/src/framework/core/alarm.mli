@@ -256,6 +256,8 @@ module CheckMap : MapExtSig.S with type key = check
 
 module AssumptionSet : SetExtSig.S with type elt = assumption
 
+module DiagnosticSet : SetExtSig.S with type elt = diagnostic
+
 type report = {
   report_diagnostics : diagnostic CheckMap.t RangeMap.t;
   report_assumptions : AssumptionSet.t;
@@ -317,8 +319,8 @@ val find_diagnostic : range -> check -> report -> diagnostic
 (** [find_diagnostic range chk r] finds the diagnostic of check [chk] at
     location [range] in report [r] *)
 
-val alarms_of_report : report -> AlarmSet.t
-(** Return the set of alarms in a report *)
+val diagnostics_of_report : report -> DiagnosticSet.t
+(** Return the set of diagnostics in a report *)
 
 val exists_report : (diagnostic -> bool) -> report -> bool
 (** Check whether any diagnostic verifies a predicate *)
@@ -329,11 +331,11 @@ val forall_report : (diagnostic -> bool) -> report -> bool
 val count_alarms : report -> int * int
 (** Count the number of alarms and warnings in a report *)
 
-val group_alarms_by_range : AlarmSet.t -> AlarmSet.t RangeMap.t
-(** Group alarms by their range *)
+val group_diagnostics_by_range : DiagnosticSet.t -> DiagnosticSet.t RangeMap.t
+(** Group diagnostics by their range *)
 
-val group_alarms_by_check : AlarmSet.t -> AlarmSet.t CheckMap.t
-(** Group alarms by their check *)
+val group_diagnostics_by_check : DiagnosticSet.t -> DiagnosticSet.t CheckMap.t
+(** Group diagnostics by their check *)
 
 val add_assumption : assumption -> report -> report
 (** Add an assumption to a report *)
