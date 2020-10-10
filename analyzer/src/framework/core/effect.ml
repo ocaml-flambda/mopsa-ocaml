@@ -171,23 +171,23 @@ let get_right_teffect = function
   | Teffect_node(_,_,right) -> right
 
 let set_left_teffect left = function
-  | Teffect_empty               -> Teffect_node(Effect_empty, left, Teffect_empty)
+  | Teffect_empty           -> Teffect_node(Effect_empty, left, Teffect_empty)
   | Teffect_node(e,_,right) -> Teffect_node(e,left,right)
 
 let set_right_teffect right = function
-  | Teffect_empty              -> Teffect_node(Effect_empty, Teffect_empty, right)
+  | Teffect_empty          -> Teffect_node(Effect_empty, Teffect_empty, right)
   | Teffect_node(e,left,_) -> Teffect_node(e,left,right)
 
 let map_left_teffect f = function
-  | Teffect_empty                  -> Teffect_node(Effect_empty,f Teffect_empty,Teffect_empty)
+  | Teffect_empty              -> Teffect_node(Effect_empty,f Teffect_empty,Teffect_empty)
   | Teffect_node(e,left,right) -> Teffect_node(e,f left,right)
 
 let map_right_teffect f = function
-  | Teffect_empty                  -> Teffect_node(Effect_empty,Teffect_empty,f Teffect_empty)
+  | Teffect_empty              -> Teffect_node(Effect_empty,Teffect_empty,f Teffect_empty)
   | Teffect_node(e,left,right) -> Teffect_node(e,left,f right)
 
 let add_stmt_to_teffect stmt = function
-  | Teffect_empty                  -> Teffect_node(Effect_stmt stmt,Teffect_empty,Teffect_empty)
+  | Teffect_empty              -> Teffect_node(Effect_stmt stmt,Teffect_empty,Teffect_empty)
   | Teffect_node(e,left,right) -> Teffect_node(add_stmt_to_effect stmt e,left,right)
 
 let rec merge_teffect f1 f2 f teffect1 teffect2 =
