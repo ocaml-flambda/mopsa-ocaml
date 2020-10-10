@@ -29,14 +29,17 @@ open Ast.Expr
 
 type effect =
   | Effect_empty
-  | Effect_stmt of stmt
-  | Effect_seq of effect list
-  | Effect_join of effect * effect
-  | Effect_meet of effect * effect
+  | Effect_block of stmt list
+  | Effect_seq   of effect list
+  | Effect_join  of effect * effect
+  | Effect_meet  of effect * effect
 
 let rec pp_effect fmt = function
   | Effect_empty -> ()
-  | Effect_stmt stmt -> pp_stmt fmt stmt
+  | Effect_block b ->
+    Format.fprintf fmt "@[<hv2>{ %a }@]"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@ ") pp_stmt)
+      b
   | Effect_seq seq ->
     Format.fprintf fmt "@[<hv2>{ %a }@]"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "⨟@ ") pp_effect)
@@ -56,8 +59,8 @@ let rec compare_effect e1 e2 =
     match e1,e2 with
     | Effect_empty, Effect_empty -> 0
 
-    | Effect_stmt s1, Effect_stmt s2 ->
-      compare_stmt s1 s2
+    | Effect_block s1, Effect_block s2 ->
+      Compare.list compare_stmt s1 s2
 
     | Effect_seq s1, Effect_seq s2 ->
       Compare.list compare_effect s1 s2
@@ -74,7 +77,7 @@ let empty_effect = Effect_empty
 
 let rec is_empty_effect = function
   | Effect_empty -> true
-  | Effect_stmt _ -> false
+  | Effect_block _ -> false
   | Effect_seq l -> List.for_all is_empty_effect l
   | Effect_join(e1,e2) -> is_empty_effect e1 && is_empty_effect e2
   | Effect_meet(e1,e2) -> is_empty_effect e1 && is_empty_effect e2
@@ -98,9 +101,10 @@ let meet_effect e1 e2 =
     | _ -> Effect_meet(e1,e2)
 
 let add_stmt_to_effect s = function
-  | Effect_empty -> Effect_stmt s
-  | Effect_seq l -> Effect_seq (Effect_stmt s::l)
-  | e -> Effect_seq [Effect_stmt s;e]
+  | Effect_empty -> Effect_block [s]
+  | Effect_block b -> Effect_block (s::b)
+  | Effect_seq l -> Effect_seq (Effect_block [s]::l)
+  | e -> Effect_seq [Effect_block [s];e]
 
 let rec concat_effect ~old ~recent =
   if is_empty_effect old then recent else
@@ -108,6 +112,7 @@ let rec concat_effect ~old ~recent =
   else
     match old,recent with
     | Effect_empty, Effect_empty -> Effect_empty
+    | Effect_block b1, Effect_block b2 -> Effect_block (b2@b1)
     | Effect_seq l1, Effect_seq l2 -> Effect_seq (l2@l1)
     | Effect_seq l, x -> Effect_seq(x::l)
     | x, Effect_seq l -> Effect_seq(l@[x])
@@ -115,7 +120,7 @@ let rec concat_effect ~old ~recent =
 
 let rec fold_stmt_effect f acc = function
   | Effect_empty -> acc
-  | Effect_stmt s -> f acc s
+  | Effect_block s -> List.fold_left f acc s
   | Effect_seq l -> List.fold_left (fold_stmt_effect f) acc l
   | Effect_join(e1,e2)
   | Effect_meet(e1,e2) ->
@@ -187,7 +192,7 @@ let map_right_teffect f = function
   | Teffect_node(e,left,right) -> Teffect_node(e,left,f right)
 
 let add_stmt_to_teffect stmt = function
-  | Teffect_empty              -> Teffect_node(Effect_stmt stmt,Teffect_empty,Teffect_empty)
+  | Teffect_empty              -> Teffect_node(Effect_block [stmt],Teffect_empty,Teffect_empty)
   | Teffect_node(e,left,right) -> Teffect_node(add_stmt_to_effect stmt e,left,right)
 
 let rec merge_teffect f1 f2 f teffect1 teffect2 =
@@ -283,7 +288,15 @@ let rec get_stmt_var_effect ~custom stmt : var_effect =
 
 let rec get_var_effect ~custom = function
   | Effect_empty -> { modified = VarSet.empty; removed = VarSet.empty }
-  | Effect_stmt s -> get_stmt_var_effect ~custom s
+  | Effect_block b ->
+    (* Fold from the right because effects are stored in reverse order
+       (head of the list is the last recorded effect) *)
+    List.fold_right
+      (fun s acc ->
+         let effect = get_stmt_var_effect ~custom s in
+         { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
+           removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
+      ) b {modified = VarSet.empty; removed = VarSet.empty}
   | Effect_seq l ->
     (* Fold from the right because effects are stored in reverse order
        (head of the list is the last recorded effect) *)
@@ -319,48 +332,6 @@ let apply_var_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
 
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1) (a2, e2) =
-  (* Clean effects by removing successive duplicates *)
-  let rec remove_successive_duplicates e =
-    match e with
-    | Effect_empty | Effect_stmt _ | Effect_join _ | Effect_meet _ -> e
-    | Effect_seq l ->
-      match doit1 l with
-      | [] -> Effect_empty
-      | [e] -> e
-      | l' -> Effect_seq l'
-  and doit1 = function
-    | [] -> []
-    | hd::tl ->
-      let tl' = doit2 hd tl in
-      hd::tl'
-  and doit2 e = function
-    | [] -> []
-    | (hd::tl) as l ->
-      if compare_effect e hd = 0 then doit2 e tl else l
-  in
-  let e1 = remove_successive_duplicates e1
-  and e2 = remove_successive_duplicates e2 in
-  (* Remove common parts between e1 and e2 *)
-  let remove_common_tail e1 e2 =
-    match e1,e2 with
-    | Effect_stmt s1, Effect_stmt s2 ->
-      if compare_stmt s1 s2 = 0 then
-        Effect_empty,Effect_empty
-      else
-        e1,e2
-    | Effect_seq l1, Effect_seq l2 ->
-      let rec doit rev1 rev2 =
-        match rev1, rev2 with
-        | Effect_stmt s1::tl1, Effect_stmt s2::tl2 ->
-          if compare_stmt s1 s2 = 0 then doit tl1 tl2
-          else rev1, rev2
-        | _ -> rev1, rev2
-      in
-      let rev1', rev2' = doit (List.rev l1) (List.rev l2) in
-      Effect_seq (List.rev rev1'), Effect_seq (List.rev rev2')
-    | _ -> e1,e2
-  in
-  let e1, e2 = remove_common_tail e1 e2 in
   if e1 == e2 then a1,a1 else
   if is_empty_effect e1 then a2,a2 else
   if is_empty_effect e2 then a1,a1 else

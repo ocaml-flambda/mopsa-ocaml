@@ -36,7 +36,7 @@ open Location
 
 type effect =
   | Effect_empty
-  | Effect_stmt of stmt
+  | Effect_block of stmt list
   | Effect_seq of effect list
   | Effect_join of effect * effect
   | Effect_meet of effect * effect
