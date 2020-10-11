@@ -141,8 +141,7 @@ struct
       let f2 = D2.ask targets in
       (fun q man ctx (a1,a2) ->
          OptionExt.neutral2
-           (meet_query q
-              ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from simplified domains"))
+           (meet_query q)
            (f1 q (hdman man) ctx a1)
            (f2 q (tlman man) ctx a2))
 

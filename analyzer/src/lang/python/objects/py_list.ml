@@ -1148,19 +1148,19 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
-    match query with
+    match qkind query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr)} as e) ->
        let range = erange e in
        let content_var = var_of_addr addr in
        let length_var = length_var_of_addr addr in
-       man.ask (Q_variables_linked_to (mk_var content_var range)) flow |>
+       man.ask (mk_query (Q_variables_linked_to (mk_var content_var range))) flow |>
          VarSet.add length_var |>
          VarSet.add content_var |>
          OptionExt.return
 
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
        let open Framework.Engines.Interactive in
-       let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
+       let content_list = man.ask (mk_query (Q_debug_variable_value (var_of_addr addr))) flow in
        let length_list =
          let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (mk_var (length_var_of_addr addr) (Location.mk_fresh_range ()))) flow in
          {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv);

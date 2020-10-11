@@ -1011,7 +1011,7 @@ struct
   (** ====================== *)
 
   let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
-    match query with
+    match qkind query with
     | Q_c_points_to e -> eval_points_to e man flow
     | _ -> None
 

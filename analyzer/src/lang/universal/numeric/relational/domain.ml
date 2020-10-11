@@ -32,30 +32,30 @@ open Apron_transformer
 
 (** Query to retrieve relational variables *)
 
-type ('a,_) query +=
-    | Q_related_vars : var -> ('a,var list) query
-    | Q_constant_vars : ('a,var list) query
+type ('a,_) query_kind +=
+    | Q_related_vars : var -> ('a,var list) query_kind
+    | Q_constant_vars : ('a,var list) query_kind
 
 
 let () =
   register_query {
     join = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query join a b ->
-          match query with
+      let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+        fun next query a b ->
+          match qkind query with
           | Q_related_vars _ -> a @ b
           | Q_constant_vars -> a @ b
-          | _ -> next.apply query join a b
+          | _ -> next.pool_join query a b
         in
         f
       );
       meet = (
-        let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-          fun next query meet a b ->
-            match query with
+        let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+          fun next query a b ->
+            match qkind query with
             | Q_related_vars _ -> a @ b
             | Q_constant_vars -> a @ b
-            | _ -> next.apply query meet a b
+            | _ -> next.pool_meet query a b
         in
         f
       );
@@ -344,7 +344,7 @@ struct
 
   let ask : type r. ('a,r) query -> ('a,t) simplified_man -> 'a ctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
-      match query with
+      match qkind query with
       | Q_avalue(e, Common.V_int_interval false) ->
         eval_interval e (abs,bnd)
 

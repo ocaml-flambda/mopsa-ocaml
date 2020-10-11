@@ -29,21 +29,21 @@ open MapExt
 open SetExt
 open Universal.Ast
 
-type ('a, _) query += Q_exn_string_query : expr -> ('a, string * string) query
+type ('a, _) query_kind += Q_exn_string_query : expr -> ('a, string * string) query_kind
 
 let () = register_query {
-    join = (let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
-              fun next query join a b ->
-                match query with
+    join = (let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+              fun next query a b ->
+                match qkind query with
                 | Q_exn_string_query _ -> (fst a ^ fst b, snd a ^ snd b)
-                | _ -> next.apply query join a b in
+                | _ -> next.pool_join query a b in
             f
            );
-    meet = (let f : type a r. query_operator -> (a, r) query -> (a->a->a) -> r -> r -> r =
-              fun next query meet a b ->
-                match query with
+    meet = (let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+              fun next query a b ->
+                match qkind query with
                 | Q_exn_string_query _ -> assert false
-                | _ -> next.apply query meet a b in
+                | _ -> next.pool_meet query a b in
             f)
   }
 
@@ -423,7 +423,7 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-    match query with
+    match qkind query with
     | Q_variables_linked_to ({ekind = E_addr a} as e) ->
        if List.exists (fun a' -> compare_addr a (OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
        else
@@ -435,7 +435,7 @@ struct
            AttrSet.fold_u
              (fun attr acc ->
                let v = mk_addr_attr a attr (T_py None) in
-               let linked_to_v = man.ask (Q_variables_linked_to (mk_var v range)) flow in
+               let linked_to_v = man.ask (mk_query (Q_variables_linked_to (mk_var v range))) flow in
                VarSet.union (VarSet.add v acc) linked_to_v
              )
              attrset VarSet.empty
@@ -465,7 +465,7 @@ struct
                Cases.reduce_result (fun etuple flow ->
                    let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                    (* FIXME *)
-                   let pset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow in
+                   let pset = man.ask (mk_query (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range))) flow in
                    if Universal.Strings.Powerset.Value.is_top pset then "T"
                    else Universal.Strings.Powerset.StringPower.choose pset
                  )
@@ -490,7 +490,7 @@ struct
                                else attr in
                              let attr_var = mk_addr_attr addr attr (T_py None) in
                              debug "asking for var %a" pp_var attr_var;
-                             let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
+                             let value_attr = man.ask (mk_query (Q_debug_variable_value attr_var)) flow in
                              (attr, value_attr) :: acc) attrset [] in
        Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
 

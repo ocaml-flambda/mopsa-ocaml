@@ -21,22 +21,56 @@
 
 (** Generic query mechanism for extracting information from domains. *)
 
+open Lattice
 
-type ('a,_) query = ..
+(** Extensible type of query kinds *)
+type ('a,_) query_kind = ..
 
-type query_operator = {
-  apply : 'a 'r.  ('a,'r) query -> ('a -> 'a -> 'a) -> 'r -> 'r -> 'r;
+(** Queries *)
+type ('a,'r) query = {
+  query_kind : ('a,'r) query_kind;   (** Kind of the query *)
+  query_lattice : 'a lattice option; (** Lattice of the abstract element
+                                         overwhich the query was performed.
+                                         This is necessary for queries that
+                                         embed abstract elements in their
+                                         replies. *)
 }
 
+val mk_query : ?lattice:'a lattice option -> ('a,'r) query_kind -> ('a,'r) query
+(** Create a query from a kind and an optional lattice *)
+
+val qkind : ('a,'r) query -> ('a,'r) query_kind
+(** Get the kind of the query *)
+
+val qlattice : ('a,'r) query -> 'a lattice option
+(** Get the lattice of the query *)
+
+
+(** {1 Registration} *)
+
+(** Pool of registered queries *)
+type query_pool = {
+  pool_join : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
+  pool_meet : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
+}
+
+(** Registraction info for new queries *)
 type query_info = {
-  join : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
-  meet : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
+  join : 'a 'r. query_pool -> ('a,'r) query -> 'r -> 'r -> 'r;
+  meet : 'a 'r. query_pool -> ('a,'r) query -> 'r -> 'r -> 'r;
 }
 
 val register_query : query_info -> unit
+(** Register a new query *)
 
-val join_query : ?join:('a->'a->'a) -> ('a,'r) query ->'r -> 'r -> 'r
+val join_query : ('a,'r) query ->'r -> 'r -> 'r
+(** Join two queries *)
 
-val meet_query : ?meet:('a->'a->'a) -> ('a,'r) query -> 'r -> 'r -> 'r
+val meet_query : ('a,'r) query -> 'r -> 'r -> 'r
+(** Meet two queries *)
 
-type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
+
+(** {1 Common queries} *)
+
+type ('a, _) query_kind += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query_kind
+(** Query to extract the auxiliary variables related to an expression *)

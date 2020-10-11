@@ -162,6 +162,6 @@ let mk_avalue_constant avk av =  C_avalue(avk,av)
 
 let mk_avalue_expr avk av range = mk_constant (mk_avalue_constant avk av) ~etyp:(type_of_avalue avk) range
 
-type ('a,_) query += Q_avalue : expr * 'v avalue_kind -> ('a,'v) query
+type ('a,_) query_kind += Q_avalue : expr * 'v avalue_kind -> ('a,'v) query_kind
 
-let mk_avalue_query e avk = Q_avalue(e,avk)
+let mk_avalue_query e avk = mk_query (Q_avalue(e,avk))

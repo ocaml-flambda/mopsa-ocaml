@@ -176,7 +176,7 @@ struct
        let vars = List.fold_left (fun acc v ->
                       debug "asking for variables linked to %a" pp_expr v;
                       let acc = VarSet.add (match ekind v with E_var (v, _) -> v | _ -> assert false) acc in
-                      VarSet.union acc (man.ask (Q_variables_linked_to v) flow)
+                      VarSet.union acc (man.ask (mk_query (Q_variables_linked_to v)) flow)
                     ) VarSet.empty vs in
        let cur = get_env T_cur man flow in
        let addrs = VarSet.fold (fun var acc ->
@@ -469,7 +469,7 @@ struct
        | A_py_instance _ ->
           debug "instance encountered, renaming methods too";
           (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
-          let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
+          let aaddr = man.ask (mk_query Universal.Heap.Recency.Q_allocated_addresses) flow in
           let flow = List.fold_left (fun flow addr ->
                          match akind addr with
                          | A_py_method(func, (ainst, oe), mclass) when compare_addr a ainst = 0 ->
@@ -700,7 +700,7 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-      match query with
+      match qkind query with
       | Universal.Heap.Recency.Q_alive_addresses ->
            let cur = get_env T_cur man flow in
            let aset = AMap.fold (fun var aset acc ->
@@ -734,7 +734,7 @@ struct
                    match pyaddr with
                    | Def a ->
                       debug "asking for %a" pp_addr a;
-                      VarSet.union acc (man.ask (Q_variables_linked_to (mk_addr a e.erange)) flow)
+                      VarSet.union acc (man.ask (mk_query (Q_variables_linked_to (mk_addr a e.erange))) flow)
                    | _ -> acc) aset VarSet.empty in
 
              let check_baddr a  = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
@@ -767,14 +767,14 @@ struct
                                   let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
                                   (s, float_info) :: acc
                                 else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
-                                  let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                                  let str =  man.ask (mk_query (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ()))))) flow in
                                   let str_info =
                                     {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
                                      var_value_type = T_string;
                                      var_sub_value = None} in
                                   (s, str_info) :: acc
                                 else
-                                  let addr_info = man.ask (Universal.Ast.Q_debug_addr_value addr) flow in
+                                  let addr_info = man.ask (mk_query (Universal.Ast.Q_debug_addr_value addr)) flow in
                                   (s, addr_info) :: acc
                              | _ -> acc
                            ) aset [] in
