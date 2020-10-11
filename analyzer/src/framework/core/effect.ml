@@ -177,11 +177,13 @@ let get_right_teffect = function
 
 let set_left_teffect left = function
   | Teffect_empty           -> Teffect_node(Effect_empty, left, Teffect_empty)
-  | Teffect_node(e,_,right) -> Teffect_node(e,left,right)
+  | Teffect_node(e,l,right) as te ->
+    if l == left then te else Teffect_node(e,left,right)
 
 let set_right_teffect right = function
   | Teffect_empty          -> Teffect_node(Effect_empty, Teffect_empty, right)
-  | Teffect_node(e,left,_) -> Teffect_node(e,left,right)
+  | Teffect_node(e,left,r) as te ->
+    if right == r then te else Teffect_node(e,left,right)
 
 let map_left_teffect f = function
   | Teffect_empty              -> Teffect_node(Effect_empty,f Teffect_empty,Teffect_empty)
@@ -199,9 +201,19 @@ let rec merge_teffect f1 f2 f teffect1 teffect2 =
   if teffect1 == teffect2 then teffect1 else
   match teffect1, teffect2 with
   | Teffect_empty, Teffect_empty -> Teffect_empty
-  | Teffect_empty, Teffect_node(e,left,right) -> Teffect_node (f1 e, left, right)
-  | Teffect_node(e,left,right), Teffect_empty -> Teffect_node (f2 e, left, right)
-  | Teffect_node(e1,left1,right1), Teffect_node(e2,left2,right2) -> Teffect_node (f e1 e2, merge_teffect f1 f2 f left1 left2, merge_teffect f1 f2 f right1 right2)
+  | Teffect_empty, Teffect_node(e,left,right) ->
+    let ee = f1 e in
+    if ee == e then teffect2 else Teffect_node (ee, left, right)
+  | Teffect_node(e,left,right), Teffect_empty ->
+    let ee = f2 e in
+    if ee == e then teffect1 else Teffect_node (ee, left, right)
+  | Teffect_node(e1,left1,right1), Teffect_node(e2,left2,right2) ->
+    let e = f e1 e2 in
+    let l = merge_teffect f1 f2 f left1 left2 in
+    let r = merge_teffect f1 f2 f right1 right2 in
+    if e == e1 && l == left1 && r == right1 then teffect1 else
+    if e == e2 && l == left2 && r == right2 then teffect2
+    else Teffect_node (e, l, r)
 
 let concat_teffect ~old ~recent =
   merge_teffect
@@ -245,6 +257,10 @@ let compare_var_effect ve1 ve2 =
   Compare.pair VarSet.compare VarSet.compare
     (ve1.modified,ve1.removed)
     (ve2.modified,ve2.removed)
+
+let is_empty_var_effect e =
+  VarSet.is_empty e.modified &&
+  VarSet.is_empty e.removed
 
 (** Get the effect of a statement *)
 let rec get_stmt_var_effect ~custom stmt : var_effect =
@@ -333,14 +349,10 @@ let apply_var_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
 (** Generic merge operator for non-relational domains *)
 let generic_domain_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1) (a2, e2) =
   if e1 == e2 then a1,a1 else
-  if is_empty_effect e1 then a2,a2 else
-  if is_empty_effect e2 then a1,a1 else
-  if compare_effect e1 e2 = 0 then a1,a1
+  let ve1 = get_var_effect ~custom e1 in
+  let ve2 = get_var_effect ~custom e2 in
+  if compare_var_effect ve1 ve2 = 0 then a1,a2
   else
-    let ve1 = get_var_effect ~custom e1 in
-    let ve2 = get_var_effect ~custom e2 in
-    if compare_var_effect ve1 ve2 = 0 then a1,a2
-    else
-      let a2' = apply_var_effect ve1 a1 a2 ~add ~remove ~find in
-      let a1' = apply_var_effect ve2 a2 a1 ~add ~remove ~find in
-      a1',a2'
+    let a2' = apply_var_effect ve1 a1 a2 ~add ~remove ~find in
+    let a1' = apply_var_effect ve2 a2 a1 ~add ~remove ~find in
+    a1',a2'
