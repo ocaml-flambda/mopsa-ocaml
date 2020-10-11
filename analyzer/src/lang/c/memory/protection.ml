@@ -50,18 +50,36 @@ struct
   (** {2 Utility functions} *)
   (** ===================== *)
 
-  let check_offset_access base offset typ range man flow =
+  let mk_lval base offset typ mode range =
+    let base_addr = match base.base_kind with
+      | Var v -> mk_c_address_of (mk_var v ~mode range) range
+      | Addr a -> mk_addr a range
+      | String (s,kind,t) -> mk_c_string s ~kind range in
+    let addr =
+      mk_c_cast
+        ( add
+            (mk_c_cast base_addr (T_c_pointer s8) range)
+            offset
+            ~typ:(T_c_pointer s8)
+            range )
+        (T_c_pointer typ)
+        range in
+    mk_c_deref addr range
+
+  let check_offset_access base offset mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
     match eval_num_cond cond man flow with
-    | Some true  -> safe_c_memory_access_check range man flow |> Post.return
+    | Some true  -> safe_c_memory_access_check range man flow |>
+                    Cases.singleton (Some (mk_lval base offset typ mode range))
     | Some false -> raise_c_out_bound_alarm base offset size typ range man flow flow |>
-                    Post.return
+                    Cases.empty
     | None ->
       assume cond
-        ~fthen:(fun tflow -> safe_c_memory_access_check range man flow |> Post.return)
-        ~felse:(fun eflow -> raise_c_out_bound_alarm base offset size typ range man flow eflow |> Post.return)
-        ~fnone:(fun nflow -> unreachable_c_memory_access_check range man flow |> Post.return)
+        ~fthen:(fun tflow -> safe_c_memory_access_check range man flow |>
+                             Cases.singleton (Some (mk_lval base offset typ mode range)))
+        ~felse:(fun eflow -> raise_c_out_bound_alarm base offset size typ range man flow eflow |>
+                             Cases.empty)
         man flow
 
   let check_write_access lval man flow =
@@ -89,12 +107,12 @@ struct
       Cases.empty
 
     | P_block (base, offset, mode) ->
-      check_offset_access base offset lval.etyp lval.erange man flow
+      check_offset_access base offset mode lval.etyp lval.erange man flow
 
     | P_top ->
       raise_c_memory_access_warning lval.erange man flow |>
       Flow.add_local_assumption (Soundness.A_ignore_modification_undetermined_pointer ptr) lval.erange |>
-      Post.return
+      Cases.singleton None
 
     | P_fun _ ->
       assert false
@@ -120,11 +138,11 @@ struct
       Cases.empty
 
     | P_block (base, offset, mode) ->
-      check_offset_access base offset lval.etyp lval.erange man flow
+      check_offset_access base offset mode lval.etyp lval.erange man flow
 
     | P_top ->
       raise_c_memory_access_warning lval.erange man flow |>
-      Post.return
+      Cases.singleton None
 
     | P_fun _ ->
       assert false
@@ -140,9 +158,12 @@ struct
     | S_assign({ekind = E_var _},_) -> None
 
     | S_assign(lval,rval) when is_c_scalar_type lval.etyp ->
-      ( check_write_access lval man flow |>
-        Cases.remove_duplicate_results compare man.lattice >>%
-        man.exec stmt ~route:(Below name)
+      ( check_write_access lval man flow >>$ fun lval' flow ->
+        match lval' with
+        | None -> Post.return flow
+        | Some x ->
+          let stmt' = mk_assign x rval stmt.srange in
+          man.exec stmt' ~route:(Below name) flow
       ) |>
       OptionExt.return
 
@@ -154,9 +175,10 @@ struct
 
     | _ when is_c_lval exp
           && is_c_scalar_type exp.etyp ->
-      ( check_read_access exp man flow |>
-        Cases.remove_duplicate_results compare man.lattice  >>%
-        man.eval exp ~route:(Below name)
+      ( check_read_access exp man flow >>$ fun exp' flow ->
+        match exp' with
+        | None -> man.eval (mk_top exp.etyp exp.erange) flow
+        | Some x -> man.eval x ~route:(Below name) flow
       ) |>
       OptionExt.return
 
