@@ -86,7 +86,7 @@ struct
   (** {2 Command-line options} *)
   (** ************************ *)
   let () =
-    import_standalone_option Rounding.name ~into:name
+    import_shared_option Rounding.name name
 
 
   (** {2 Environment utility functions} *)

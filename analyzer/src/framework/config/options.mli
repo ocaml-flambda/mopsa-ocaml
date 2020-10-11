@@ -19,33 +19,43 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Rounding mode. *)
+(** Management of command-line options *)
 
-open Mopsa
+open ArgExt
 
-let name = "universal.numeric.rounding"
 
-(****************************************************************************)
-(**                      {2 Command line options}                           *)
-(****************************************************************************)
+(** {2 Registration} *)
+(** **************** *)
 
-let opt_float_rounding = ref Apron.Texpr1.Near
+(** Register a built-in option *)
+val register_builtin_option : arg -> unit
 
-let () =
-  register_shared_option name {
-    key = "-float-rounding-mode";
-    category = "Numeric";
-    spec = ArgExt.Symbol (
-        ["near"; "zero"; "up"; "down"; "rnd"],
-        (function
-          | "near" -> opt_float_rounding := Apron.Texpr1.Near
-          | "zero" -> opt_float_rounding := Apron.Texpr1.Zero
-          | "up"   -> opt_float_rounding := Apron.Texpr1.Up
-          | "down" -> opt_float_rounding := Apron.Texpr1.Down
-          | "rnd"  -> opt_float_rounding := Apron.Texpr1.Rnd
-          | x -> Exceptions.panic "unknown rounding mode %s" x
-        )
-      );
-    doc = "rounding mode of floating-point computations.";
-    default = "near";
-  }
+(** Register a language option. *)
+val register_language_option : string -> arg -> unit
+
+(** Register a domain option. *)
+val register_domain_option : string -> arg -> unit
+
+(** Register a shared option *)
+val register_shared_option : string -> arg -> unit
+
+(** Import a shared option into a domain *)
+val import_shared_option : string -> string -> unit
+
+
+(** {2 Filters} *)
+(** *********** *)
+
+(** Return the list of options *)
+val get_options : unit -> arg list
+
+(** Return the list of built-in options *)
+val get_builtin_options : unit -> arg list
+
+(** Return the list of options of a language *)
+val get_language_options : string -> arg list
+
+(** Return the list of options of a domain *)
+val get_domain_options : string -> arg list
+
+val help : unit -> unit
