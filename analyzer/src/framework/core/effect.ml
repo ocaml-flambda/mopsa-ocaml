@@ -347,7 +347,7 @@ let apply_var_effect effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
   
 
 (** Generic merge operator for non-relational domains *)
-let generic_domain_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1) (a2, e2) =
+let generic_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1) (a2, e2) =
   if e1 == e2 then a1,a1 else
   let ve1 = get_var_effect ~custom e1 in
   let ve2 = get_var_effect ~custom e2 in

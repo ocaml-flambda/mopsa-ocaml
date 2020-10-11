@@ -73,7 +73,10 @@ struct
   let merge pre (a1,te1) (a2,te2) =
     let e1 = get_root_effect te1 in
     let e2 = get_root_effect te2 in
-    D.merge pre (a1,e1) (a2,e2)
+    if e1 == e2 then a1 else
+    if is_empty_effect e1 then a2 else
+    if is_empty_effect e2 then a1
+    else D.merge pre (a1,e1) (a2,e2)
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask
@@ -94,54 +97,3 @@ struct
   let print_state printer a = T.print_state [] printer a
   let print_expr man flow printer e = T.print_expr [] man flow printer e
 end
-
-
-module AutoLogger(T:STACKED_COMBINER) : STACKED_COMBINER with type t = T.t =
-struct
-  include T
-
-  let merge pre (a1,te1) (a2,te2) =
-    if a1 == a2 then a1 else
-    if is_empty_teffect te1 then a2 else
-    if is_empty_teffect te2 then a1 else
-    if compare_teffect te1 te2 = 0 then a1
-    else T.merge pre (a1,te1) (a2,te2)
-
-  let exec domains =
-    let f = T.exec domains in
-    (fun stmt man flow ->
-       f stmt man flow |>
-       OptionExt.lift @@ fun res ->
-       Cases.map_effects (fun effects ->
-           man.set_effects (
-             man.get_effects effects |>
-             add_stmt_to_teffect stmt
-           ) effects
-         ) res
-    )
-end
-
-
-let domains : (module STACKED_COMBINER) list ref = ref []
-
-let register_stacked_combiner dom =
-  let module D = (val dom : STACKED_COMBINER) in
-  domains := (module AutoLogger(D)) :: !domains
-
-let find_stacked_combiner name =
-  List.find (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
-
-let mem_stacked_combiner name =
-  List.exists (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
-
-let stacked_combiner_names () =
-  List.map (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      D.name
-    ) !domains

@@ -176,7 +176,7 @@ struct
        and removed variables, which is sound, but inefficient. This should be
        improved by return intervals in [find] and use them in [add]. *)
     let x1,x2 =
-      generic_domain_merge
+      generic_merge
         ~add:(fun v () x -> add_missing_vars x [v] |> forget_var v)
         ~find:(fun v x -> ())
         ~remove:(fun v x -> remove_var v x)

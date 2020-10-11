@@ -48,7 +48,10 @@ struct
   let merge pre (a1,te1) (a2,te2) =
     let e1 = get_root_effect te1 in
     let e2 = get_root_effect te2 in
-    D.merge pre (a1,e1) (a2,e2)
+    if e1 == e2 then a1 else
+    if is_empty_effect e1 then a2 else
+    if is_empty_effect e2 then a1
+    else D.merge pre (a1,e1) (a2,e2)
   let exec domains = D.exec
   let ask domains  = D.ask
   let print_state targets = D.print_state
@@ -130,43 +133,3 @@ struct
     )
 end
 
-
-
-
-
-let combiners : (module SIMPLIFIED_COMBINER) list ref = ref []
-
-
-let register_simplified_combiner dom =
-  let module Dom = (val dom : SIMPLIFIED_COMBINER) in
-  let rec iter = function
-    | [] -> [dom]
-    | hd :: tl ->
-      let module Hd = (val hd : SIMPLIFIED_COMBINER) in
-      if Hd.name = Dom.name
-      then dom :: tl
-      else hd :: iter tl
-  in
-  combiners := iter !combiners
-
-
-
-let find_simplified_combiner name =
-  List.find (fun dom ->
-      let module D = (val dom : SIMPLIFIED_COMBINER) in
-      compare D.name name = 0
-    ) !combiners
-
-
-let mem_simplified_combiner name =
-  List.exists (fun dom ->
-      let module D = (val dom : SIMPLIFIED_COMBINER) in
-      compare D.name name = 0
-    ) !combiners
-
-
-let simplified_combiner_names () =
-  List.map (fun dom ->
-      let module D = (val dom : SIMPLIFIED_COMBINER) in
-      D.name
-    ) !combiners

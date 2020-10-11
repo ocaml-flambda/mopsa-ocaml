@@ -76,7 +76,7 @@ struct
 
   let merge pre (a,e) (a',e') =
     let aa,aa' =
-      generic_domain_merge (a,e) (a',e')
+      generic_merge (a,e) (a',e')
         ~add:Map.set ~find:Map.find ~remove:Map.remove
         ~custom:(fun stmt ->
             match skind stmt with

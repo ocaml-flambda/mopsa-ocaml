@@ -153,11 +153,20 @@ type var_effect = {
   removed: VarSet.t;
 }
 
-val generic_domain_merge :
+val generic_merge :
   add:(var->'b->'a->'a) ->
   find:(var->'a->'b) ->
   remove:(var->'a->'a) ->
   ?custom:(stmt -> var_effect option) ->
   ('a*effect) -> ('a*effect) -> 'a*'a
-(** Generic merge operator *)
-
+(** Generic merge operator.
+    [generic_merge ~add ~find ~remove ~custom (a1,e1) (a2,e2)] applies a generic
+    merge of states [a1] and [a2]:
+    - It searches for modified variables in one state's effects, gets their
+    value using [find] and adds them to the other state using [add].
+    - It searches for removed variables in one state's effects and remove them
+    from the other state using [remove].
+    This function handles common statements (assign,assume,add,remove,fold,expand
+    and rename). Other statements can be handled using the [custom] function that
+    returns the [var_effect] of a given statement.
+*)

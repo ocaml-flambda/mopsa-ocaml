@@ -50,14 +50,6 @@ struct
 
     include D
 
-    let merge pre (a1,e1) (a2,e2) =
-      if a1 == a2 then a1 else
-      if is_empty_effect e1 then a2 else
-      if is_empty_effect e2 then a1 else
-      if compare_effect e1 e2 = 0 then a1
-      else D.merge pre (a1,e1) (a2,e2)
-
-
     (* Add stmt to the effects of the domain *)
     let exec stmt man flow =
       D.exec stmt man flow |>

@@ -169,7 +169,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   let merge pre (a1, e1) (a2, e2) =
-    let a1', a2' = generic_domain_merge ~add ~remove ~find (a1, e1) (a2, e2) in
+    let a1', a2' = generic_merge ~add ~remove ~find (a1, e1) (a2, e2) in
     try VarMap.map2zo
       (fun _ v1 -> v1)
       (fun _ v2 -> v2)
