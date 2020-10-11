@@ -125,7 +125,7 @@ struct
     others = Table.widen ctx a1.others a2.others;
   }
 
-  let merge pre (post,log) (post',log') =
+  let merge pre (post,e) (post',e') =
     assert false
 
 

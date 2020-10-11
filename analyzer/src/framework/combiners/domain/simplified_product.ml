@@ -80,10 +80,10 @@ struct
     if v1 == w1 && v2 == w2 then v else
       apply2 (D1.widen ctx) (D2.widen ctx) v w
 
-  let merge (p1,p2) (a1,log1) (a2,log2) =
+  let merge (p1,p2) (a1,e1) (a2,e2) =
     apply2
-      (fun v1 w1 -> D1.merge p1 (v1,log1) (w1,log2))
-      (fun v2 w2 -> D2.merge p2 (v2,log1) (w2,log2))
+      (fun v1 w1 -> D1.merge p1 (v1,e1) (w1,e2))
+      (fun v2 w2 -> D2.merge p2 (v2,e1) (w2,e2))
       a1 a2
 
   let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {

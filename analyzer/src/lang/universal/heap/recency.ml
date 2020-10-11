@@ -135,7 +135,7 @@ struct
 
   let widen ctx = Pool.join
 
-  let merge pre (a,log) (a',log') =
+  let merge pre (a,e) (a',e') =
     assert false
 
 
