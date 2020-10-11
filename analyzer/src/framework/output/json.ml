@@ -184,6 +184,8 @@ let help (args:arg list) ~out =
               | ArgExt.Int _ -> "int"
               | ArgExt.Set_int _ -> "int"
               | ArgExt.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
+              | ArgExt.Symbol_delayed (l, _) -> "symbol:" ^ (String.concat "," l)
+              | ArgExt.Symbol_exit (l, _) -> "symbol:" ^ (String.concat "," l)
             )
           ]
         )

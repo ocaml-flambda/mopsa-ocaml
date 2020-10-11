@@ -221,45 +221,33 @@ let () =
   register_builtin_option {
     key = "-list";
     category = "Help";
-    doc = " list available domains; if a configuration is specified, only used domains are listed";
-    spec = ArgExt.Unit_delayed (fun () ->
-        let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
-        Output.Factory.list_domains domains
-      );
-    default = "";
-  }
+    doc = " list available domains/checks/hooks; if a configuration is specified, only used domains are listed";
+    spec = ArgExt.Symbol_exit (
+        ["domains"; "checks"; "hooks"],
+        (fun selection ->
+           match selection with
+           | "domains" ->
+             let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
+             Output.Factory.list_domains domains
 
-(** List of alarms *)
-let () =
-  register_builtin_option {
-    key = "-checks";
-    category = "Help";
-    doc = " list the checks performed by selected configuration";
-    spec = ArgExt.Unit_delayed (fun () ->
-        let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
-        let domain = Abstraction.Builder.from_json abstraction.domain in
-        let module Domain = (val domain) in
-        Output.Factory.list_checks Domain.checks
-      );
-    default = "";
-  }
+           | "checks" ->
+             let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
+             let domain = Abstraction.Builder.from_json abstraction.domain in
+             let module Domain = (val domain) in
+             Output.Factory.list_checks Domain.checks
 
-(** List of hooks *)
-let () =
-  register_builtin_option {
-    key = "-hooks";
-    category = "Help";
-    doc = " list the available hooks";
-    spec = ArgExt.Unit_exit (fun () ->
-        let d =
-          List.map
-            (fun (h:(module Core.Hook.HOOK)) ->
-               let module H = (val h) in
-               H.name
-            ) (Core.Hook.list_hooks ())
-        in
-        Output.Factory.list_hooks d
-      );
+           | "hooks" ->
+             let d =
+               List.map
+                 (fun (h:(module Core.Hook.HOOK)) ->
+                    let module H = (val h) in
+                    H.name
+                 ) (Core.Hook.list_hooks ())
+             in
+             Output.Factory.list_hooks d
+
+           | _ -> assert false
+        ));
     default = "";
   }
 
