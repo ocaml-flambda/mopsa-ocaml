@@ -61,11 +61,11 @@ and var_sub_value =
 
 
 (** Query to retrieve the list of variables in the current scope *)
-type ('a,_) query_kind += Q_debug_variables : ('a,var list) query_kind
+type ('a,_) query += Q_debug_variables : ('a,var list) query
 
 
 (** Query to retrieve the value of a given variable *)
-type ('a,_) query_kind += Q_debug_variable_value : var -> ('a,var_value) query_kind
+type ('a,_) query += Q_debug_variable_value : var -> ('a,var_value) query
 
 
 (** Compare two var values *)
@@ -780,7 +780,7 @@ struct
       interact action flow
 
     | Info Variables ->
-      let vars = man.ask (mk_query Q_debug_variables) flow in
+      let vars = man.ask Q_debug_variables flow in
       printf "@[<v>%a@]@."
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
            (fun fmt v -> pp_var_with_type fmt (v,v.vtyp))
@@ -789,7 +789,7 @@ struct
       interact action flow
 
     | PrintVar vname ->
-      let vars = man.ask (mk_query Q_debug_variables) flow in
+      let vars = man.ask Q_debug_variables flow in
       begin try
           let var = List.find
               (fun var' ->
@@ -797,7 +797,7 @@ struct
                  vname = vname'
               ) vars
           in
-          let value = man.ask (mk_query (Q_debug_variable_value var)) flow in
+          let value = man.ask (Q_debug_variable_value var) flow in
           printf "%a = %a@." pp_var_with_type (var,value.var_value_type) pp_var_value value;
           interact action flow
         with Not_found ->

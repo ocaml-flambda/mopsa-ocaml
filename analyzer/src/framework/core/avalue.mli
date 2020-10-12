@@ -72,6 +72,6 @@ val mk_avalue_expr : 'v avalue_kind -> 'v -> range -> expr
 
 val mk_avalue_constant : 'v avalue_kind -> 'v -> constant
 
-type ('a,_) query_kind += Q_avalue : expr * 'v avalue_kind-> ('a,'v) query_kind
+type ('a,_) query += Q_avalue : expr * 'v avalue_kind-> ('a,'v) query
 
 val mk_avalue_query : expr -> 'v avalue_kind -> ('a,'v) query

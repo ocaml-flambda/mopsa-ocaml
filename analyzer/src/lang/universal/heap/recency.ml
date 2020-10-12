@@ -37,17 +37,17 @@ module Pool =
       let print = unformat pp_addr
     end)
 
-type ('a,_) query_kind +=
-  | Q_allocated_addresses : ('a,addr list) query_kind
-  | Q_alive_addresses : ('a,addr list) query_kind
-  | Q_alive_addresses_aspset : ('a,Pool.t) query_kind
+type ('a,_) query +=
+  | Q_allocated_addresses : ('a,addr list) query
+  | Q_alive_addresses : ('a,addr list) query
+  | Q_alive_addresses_aspset : ('a,Pool.t) query
 
 let () =
   register_query {
     join = (
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
-          match qkind query with
+          match query with
           | Q_allocated_addresses -> a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
@@ -57,7 +57,7 @@ let () =
     meet = (
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
-          match qkind query with
+          match query with
           | Q_allocated_addresses ->
             assert false
           | Q_alive_addresses -> assert false
@@ -181,7 +181,7 @@ struct
     | S_perform_gc ->
        let startt = Sys.time () in
        let all = get_env T_cur man flow in
-       let alive = man.ask (mk_query (Q_alive_addresses_aspset)) flow in
+       let alive = man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) (format Pool.print) dead;
        let trange = tag_range range "agc" in
@@ -251,7 +251,7 @@ struct
 
   let ask : type r. ('a,r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
-    match qkind query with
+    match query with
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       Some (Pool.elements pool)

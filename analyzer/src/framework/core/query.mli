@@ -22,31 +22,21 @@
 (** Generic query mechanism for extracting information from domains. *)
 
 open Lattice
+open Context
 
-(** Extensible type of query kinds *)
-type ('a,_) query_kind = ..
 
-(** Queries *)
-type ('a,'r) query = {
-  query_kind : ('a,'r) query_kind;   (** Kind of the query *)
-  query_lattice : 'a lattice option; (** Lattice of the abstract element
-                                         overwhich the query was performed.
-                                         This is necessary for queries that
-                                         embed abstract elements in their
-                                         replies. *)
-}
+(** Extensible type of queries *)
+type ('a,_) query = ..
 
-val mk_query : ?lattice:'a lattice option -> ('a,'r) query_kind -> ('a,'r) query
-(** Create a query from a kind and an optional lattice *)
+val join_query : ?ctx:'a ctx option -> ?lattice:'a lattice option -> (('a,'r) query -> 'r -> 'r -> 'r)
+(** Join two queries *)
 
-val qkind : ('a,'r) query -> ('a,'r) query_kind
-(** Get the kind of the query *)
-
-val qlattice : ('a,'r) query -> 'a lattice option
-(** Get the lattice of the query *)
+val meet_query : ?ctx:'a ctx option -> ?lattice:'a lattice option -> (('a,'r) query -> 'r -> 'r -> 'r)
+(** Meet two queries *)
 
 
 (** {1 Registration} *)
+(** **************** *)
 
 (** Pool of registered queries *)
 type query_pool = {
@@ -63,14 +53,30 @@ type query_info = {
 val register_query : query_info -> unit
 (** Register a new query *)
 
-val join_query : ('a,'r) query ->'r -> 'r -> 'r
-(** Join two queries *)
+(** Pool of registered lattice queries.
+    Lattice queries are queries that return elements of the global abstract
+    state lattice.
+    Join/meet operators are enriched with the lattice and the context so that
+    we can compute join/meet over the abstract elements.
+*)
+type lattice_query_pool = {
+  pool_join : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  pool_meet : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
 
-val meet_query : ('a,'r) query -> 'r -> 'r -> 'r
-(** Meet two queries *)
+(** Registration info for new lattice queries *)
+type lattice_query_info = {
+  join : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  meet : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
+
+val register_lattice_query : lattice_query_info -> unit
+(** Register a new lattice query *)
+
 
 
 (** {1 Common queries} *)
+(** ****************** *)
 
-type ('a, _) query_kind += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query_kind
+type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
 (** Query to extract the auxiliary variables related to an expression *)

@@ -475,7 +475,7 @@ struct
     ('a,t) Sig.Abstraction.Simplified.simplified_man ->
     'a ctx -> t -> r option =
     fun query man ctx map ->
-    match qkind query with
+    match query with
     | Q_avalue(e,av) when Value.accept_type e.etyp ->
       eval e map |> OptionExt.bind @@ fun (v,ve) ->
       Value.avalue av v

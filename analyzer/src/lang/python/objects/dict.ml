@@ -512,14 +512,14 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
-    match qkind query with
+    match query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_dict} as addr)} as e) ->
        let range = erange e in
        let keys_var = kvar_of_addr addr in
        let values_var = vvar_of_addr addr in
        VarSet.union
-           (man.ask (mk_query (Q_variables_linked_to (mk_var keys_var range))) flow)
-           (man.ask (mk_query (Q_variables_linked_to (mk_var values_var range))) flow) |>
+           (man.ask (Q_variables_linked_to (mk_var keys_var range)) flow)
+           (man.ask (Q_variables_linked_to (mk_var values_var range)) flow) |>
          VarSet.add keys_var |>
          VarSet.add values_var |>
          OptionExt.return
@@ -527,8 +527,8 @@ struct
 
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_dict} as addr) ->
        let open Framework.Engines.Interactive in
-       let keys_dict = man.ask (mk_query (Q_debug_variable_value (kvar_of_addr addr))) flow in
-       let values_dict = man.ask (mk_query (Q_debug_variable_value (vvar_of_addr addr))) flow in
+       let keys_dict = man.ask (Q_debug_variable_value (kvar_of_addr addr)) flow in
+       let values_dict = man.ask (Q_debug_variable_value (vvar_of_addr addr)) flow in
        Some {var_value = None;
              var_value_type = T_any;
              var_sub_value = Some (Named_sub_value

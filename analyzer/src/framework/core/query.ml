@@ -25,37 +25,56 @@
 
 
 open Lattice
+open Context
 
-type ('a,_) query_kind = ..
 
-type ('a,'r) query = {
-  query_kind : ('a,'r) query_kind;
-  query_lattice : 'a lattice option;
-}
-
-let mk_query ?(lattice=None) query_kind = {
-  query_kind;
-  query_lattice = lattice;
-}
-
-let qkind q = q.query_kind
-
-let qlattice q = q.query_lattice
+type ('a,_) query = ..
 
 type query_pool = {
   pool_join : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
   pool_meet : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
 }
 
-
-let pool = ref {
-    pool_join = (fun _ _ _ -> Exceptions.panic "query_join: unknown query");
-    pool_meet = (fun _ _ _ -> Exceptions.panic "query_meet: unknown query");
+let simple_pool = ref {
+    pool_join = (fun _ _ _ -> raise Not_found);
+    pool_meet = (fun _ _ _ -> raise Not_found);
   }
 
-let join_query q a b = !pool.pool_join q a b
+type lattice_query_pool = {
+  pool_join : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  pool_meet : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
 
-let meet_query q a b = !pool.pool_meet q a b
+let lattice_pool = ref {
+    pool_join = (fun _ _ _ _ _ -> raise Not_found);
+    pool_meet = (fun _ _ _ _ _ -> raise Not_found);
+  }
+
+let join_query ?(ctx=None) ?(lattice=None) q a b =
+  try
+    !simple_pool.pool_join q a b
+  with Not_found ->
+  match ctx,lattice with
+  | Some ctx, Some lattice ->
+    begin
+      try !lattice_pool.pool_join ctx lattice q a b
+      with Not_found -> Exceptions.panic "join_query: query not found"
+    end
+  | _ -> Exceptions.panic "join_query: query not found"
+
+
+let meet_query ?(ctx=None) ?(lattice=None) q a b =
+  try
+    !simple_pool.pool_meet q a b
+  with Not_found ->
+  match ctx,lattice with
+  | Some ctx, Some lattice ->
+    begin
+      try !lattice_pool.pool_meet ctx lattice q a b
+      with Not_found -> Exceptions.panic "meet_query: query not found"
+    end
+  | _ -> Exceptions.panic "meet_query: query not found"
+
 
 type query_info = {
   join : 'a 'r. query_pool -> ('a,'r) query -> 'r -> 'r -> 'r;
@@ -63,27 +82,40 @@ type query_info = {
 }
 
 let register_query info =
-  let old_pool = !pool in
-  pool := {
+  let old_pool = !simple_pool in
+  simple_pool := {
     pool_join = (fun q a b -> info.join old_pool q a b);
     pool_meet = (fun q a b -> info.meet old_pool q a b);
   }
 
-type ('a, _) query_kind += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query_kind
+type lattice_query_info = {
+  join : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  meet : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
+
+let register_lattice_query info =
+  let old_pool = !lattice_pool in
+  lattice_pool := {
+    pool_join = (fun ctx lattice q a b -> info.join old_pool ctx lattice q a b);
+    pool_meet = (fun ctx lattice q a b -> info.meet old_pool ctx lattice q a b);
+  }
+
+
+type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
 
 let () =
   register_query {
       join = (
         let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
           fun next query a b ->
-          match query.query_kind with
+          match query with
           | Q_variables_linked_to _ -> Ast.Var.VarSet.union a b
           | _ -> next.pool_join query a b in f
       );
       meet = (
         let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
           fun next query a b ->
-          match query.query_kind with
+          match query with
           | Q_variables_linked_to _ -> Ast.Var.VarSet.inter a b
           | _ -> next.pool_meet query a b in f
       );

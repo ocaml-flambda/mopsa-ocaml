@@ -70,13 +70,13 @@ let compare_points_to p1 p2 =
 (* Points-to query *)
 (* =============== *)
 
-type ('a,_) query_kind += Q_c_points_to : expr -> ('a,('a,points_to) cases) query_kind
+type ('a,_) query += Q_c_points_to : expr -> ('a,('a,points_to) cases) query
 
 let () = register_query {
     join = (
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
-          match qkind query with
+          match query with
           | Q_c_points_to _ -> Cases.join a b
           | _ -> next.pool_join query a b
       in
@@ -85,7 +85,7 @@ let () = register_query {
     meet = (
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
-          match qkind query with
+          match query with
           | Q_c_points_to _ -> Cases.meet a b
           | _ -> next.pool_meet query a b
       in
@@ -94,4 +94,4 @@ let () = register_query {
   }
 
 
-let resolve_pointer p man flow = man.ask (mk_query (Q_c_points_to p)) flow
+let resolve_pointer p man flow = man.ask (Q_c_points_to p) flow

@@ -276,12 +276,12 @@ struct
 
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
-    match qkind query with
+    match query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_tuple _} as addr)} as e) ->
        let range = erange e in
        OptionExt.return @@
          List.fold_left (fun vset var ->
-             VarSet.union (VarSet.add var vset) (man.ask (mk_query (Q_variables_linked_to (mk_var var range))) flow)
+             VarSet.union (VarSet.add var vset) (man.ask (Q_variables_linked_to (mk_var var range)) flow)
            ) VarSet.empty (var_of_addr addr)
 
     | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_tuple _} as addr) ->
@@ -289,7 +289,7 @@ struct
        let vars_tuple = var_of_addr addr in
        let contents = List.map (fun var ->
                           match vkind var with
-                          | V_addr_attr (_, attr) -> (attr, man.ask (mk_query (Q_debug_variable_value var)) flow)
+                          | V_addr_attr (_, attr) -> (attr, man.ask (Q_debug_variable_value var) flow)
                           | _ -> assert false) vars_tuple in
        Some {var_value = None;
              var_value_type = (T_py None);

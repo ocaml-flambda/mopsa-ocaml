@@ -37,7 +37,7 @@ struct
   module R = Relational.Domain
 
   (** Get a list of variables related numerically to [v] *)
-  let get_related_vars v man ctx a = man.ask (mk_query (R.Q_related_vars v)) ctx a
+  let get_related_vars v man ctx a = man.ask (R.Q_related_vars v) ctx a
 
 
   (** Get the list of modified variables *)

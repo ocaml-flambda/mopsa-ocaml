@@ -522,7 +522,7 @@ struct
 
   let ask : type r. ('a,r) query -> _ man -> _ flow -> r option = fun query man flow ->
     let open Framework.Engines.Interactive in
-    match qkind query with
+    match query with
     (* Get the list of variables in the current scope *)
     | Q_debug_variables ->
       let prog = get_c_program flow in

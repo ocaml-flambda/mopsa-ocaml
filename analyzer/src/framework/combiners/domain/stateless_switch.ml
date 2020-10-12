@@ -146,7 +146,7 @@ struct
       let f2 = D2.ask domains in
       (fun q man flow ->
          OptionExt.neutral2
-           (join_query q)
+           (join_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) q)
            (f1 q man flow)
            (f2 q man flow)
       )

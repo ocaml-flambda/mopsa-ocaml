@@ -296,13 +296,13 @@ let compare_addr a b =
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
 
-type ('a,_) query_kind += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interactive.var_value) query_kind
+type ('a,_) query += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interactive.var_value) query
 
 let () =
   register_query {
       join = (let doit : type a r. query_pool -> (a,r) query -> r -> r -> r =
           fun next query a b ->
-          match qkind query with
+          match query with
           | Q_debug_addr_value addr ->
              let open Framework.Engines.Interactive in
              assert (a.var_value = None && b.var_value = None);
