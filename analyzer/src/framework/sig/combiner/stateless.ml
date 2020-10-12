@@ -34,6 +34,7 @@ sig
   val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
+  val print_expr : domain list -> ('a,unit) man -> 'a flow -> printer -> expr -> unit
 end
 
 
@@ -47,6 +48,7 @@ struct
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask
+  let print_expr targets = D.print_expr
 end
 
 module CombinerToStateless(T:STATELESS_COMBINER) : STATELESS =
@@ -55,6 +57,7 @@ struct
   let exec stmt man flow = T.exec [] stmt man flow
   let eval exp man flow  = T.eval [] exp man flow
   let ask query man flow = T.ask [] query man flow
+  let print_expr man flow printer e = T.print_expr [] man flow printer e
 end
 
 
@@ -77,6 +80,8 @@ struct
   let join () () = ()
   let meet () () = ()
   let widen _ () () = ()
+
+  let print_state _ _ () = ()
 
 end
 

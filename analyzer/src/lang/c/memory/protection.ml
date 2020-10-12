@@ -164,6 +164,8 @@ struct
 
   let ask query man flow  = None
 
+  let print_expr man flow printer exp = ()
+
 end
 
 let () =

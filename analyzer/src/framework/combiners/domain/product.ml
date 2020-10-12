@@ -56,7 +56,6 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let print fmt () = ()
   let subset _ _ _ ((),s) ((),s') = true,s,s'
   let join _ _ _ ((),s) ((),s') = (),s,s'
   let meet _ _ _ ((),s) ((),s') = (),s,s'
@@ -66,6 +65,8 @@ struct
   let exec _ _ _ flow = []
   let eval _ _ _ flow = []
   let ask _ _ _ _ = None
+  let print_state _ _ () = ()
+  let print_expr _ _ _ _ _ = ()
 end
 
 
@@ -80,12 +81,6 @@ struct
   let routing_table = join_routing_table S.routing_table P.routing_table
   let checks = S.checks :: P.checks
   let name = S.name ^ " ∧ " ^ P.name
-
-  let print fmt (s,p) =
-    match P.id with
-    | C_empty  -> Format.fprintf fmt "%a" S.print s
-    | C_pair _ -> Format.fprintf fmt "%a@\n%a" S.print s P.print p
-    | _ -> assert false
 
   let bottom = S.bottom, P.bottom
   let top = S.top, P.top
@@ -163,6 +158,32 @@ struct
            (meet_query query ~meet:(fun a b -> man.lattice.meet (Flow.get_ctx flow) a b))
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
+
+  let print_state targets =
+    let f2 = P.print_state targets in
+    if not (sat_targets ~targets ~domains:S.domains) then
+      (fun printer (s,p) ->
+         f2 printer p
+      )
+    else
+      let f1 = S.print_state targets in
+      (fun printer (s,p) ->
+         f1 printer s;
+         f2 printer p
+      )
+
+  let print_expr targets =
+    let f2 = P.print_expr targets in
+    if not (sat_targets ~targets ~domains:S.domains) then
+      (fun man flow printer e ->
+         f2 (snd_pair_man man) flow printer e
+      )
+    else
+      let f1 = S.print_expr targets in
+      (fun man flow printer e ->
+         f1 (fst_pair_man man) flow printer e;
+         f2 (snd_pair_man man) flow printer e
+      )
 end
 
 
@@ -388,7 +409,7 @@ struct
     in
     match not_handled with
     | None -> pointwise
-    | Some cases -> 
+    | Some cases ->
       (* Merge all cases in one before calling successor domain *)
       let successor_res =
         Cases.remove_duplicates compare man.lattice cases >>= fun _ flow ->

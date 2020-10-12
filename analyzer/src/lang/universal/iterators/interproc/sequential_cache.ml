@@ -67,8 +67,8 @@ struct
                 Format.pp_print_list
                   (fun fmt (in_flow, oexpr, out_flow, cleaners) ->
                      Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\ncleaners = %a@\n"
-                       (Flow.print p) in_flow
-                       (Flow.print p) out_flow
+                       (format (Flow.print p)) in_flow
+                       (format (Flow.print p)) out_flow
                        (OptionExt.print pp_expr) oexpr
                        (Format.pp_print_list pp_stmt) cleaners
                   )
@@ -160,7 +160,6 @@ struct
 
         | Some (_, oout_expr, out_flow, cleaners) ->
           Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
-          debug "reusing something in function %s@\nchanging in_flow=%a@\ninto out_flow=%a@\n" func.fun_orig_name (Flow.print man.lattice.print) in_flow (Flow.print man.lattice.print) out_flow;
           match oout_expr with
           | None -> Cases.empty (Flow.join man.lattice in_flow_other out_flow)
           | Some e -> Cases.singleton e (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
@@ -174,6 +173,7 @@ struct
 
   let exec _ _ _ = None
   let ask _ _ _ = None
+  let print_expr _ _ _ _ = ()
 
 end
 

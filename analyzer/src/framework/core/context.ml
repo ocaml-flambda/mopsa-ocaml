@@ -36,7 +36,7 @@ type 'a ctx = {
 
 type ctx_pool = {
   ctx_pool_equal: 'a 'v 'w. ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
-  ctx_pool_print: 'a 'v. (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+  ctx_pool_print: 'a 'v. (Print.printer -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
 }
 
 let pool = ref {
@@ -120,7 +120,7 @@ let pp_ctx pp fmt ctx =
 
 type ctx_info = {
   ctx_equal : 'a 'v 'w. ctx_pool -> ('a,'v) ctx_key -> ('a,'w) ctx_key -> ('v,'w) eq option;
-  ctx_print : 'a 'v. ctx_pool -> (Format.formatter -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
+  ctx_print : 'a 'v. ctx_pool -> (Print.printer -> 'a -> unit) -> Format.formatter -> ('a,'v) ctx_key -> 'v -> unit;
 }
 
 
@@ -138,7 +138,7 @@ let register_ctx info =
 module GenContextKey
     (Value:sig
        type 'a t
-       val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+       val print : (Print.printer -> 'a -> unit) -> Format.formatter -> 'a t -> unit
      end)
   : sig
     val key : ('a,'a Value.t) ctx_key
@@ -158,7 +158,7 @@ struct
         in f
       );
       ctx_print = (
-        let f : type a v. ctx_pool -> (Format.formatter -> a -> unit) -> Format.formatter -> (a,v) ctx_key -> v -> unit =
+        let f : type a v. ctx_pool -> (Print.printer -> a -> unit) -> Format.formatter -> (a,v) ctx_key -> v -> unit =
           fun pool pp fmt k v ->
             match k with
             | MyKey -> Value.print pp fmt v

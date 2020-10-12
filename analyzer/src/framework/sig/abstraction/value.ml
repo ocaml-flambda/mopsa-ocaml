@@ -28,10 +28,111 @@ open Core.All
 (**                          {2 Value manager}                              *)
 (*==========================================================================*)
 
-type ('a,'t) value_man = {
-  eval : expr -> 't; 
-  ask  : 'r. ('a,'r) query -> 'r;
+type ('v,'t) value_man = {
+  bottom : 'v;
+  top    : 'v;
+  is_bottom : 'v -> bool;
+  subset : 'v -> 'v -> bool;
+  join : 'v -> 'v -> 'v;
+  meet : 'v -> 'v -> 'v;
+  print : printer -> 'v -> unit;
+  get  : 'v -> 't;
+  set  : 't -> 'v -> 'v;
+  eval : expr -> 'v;
+  avalue : 'r. 'r avalue_kind -> 'v -> 'r;
+  ask : 'a 'r. ('a,'r) query -> 'r;
 }
+
+
+(*==========================================================================*)
+(**                        {2 Valued expressions}                           *)
+(*==========================================================================*)
+
+type 'v vexpr =
+  | Map of ('v * 'v vexpr) ExprMap.t
+
+let empty_vexpr = Map ExprMap.empty
+
+let singleton_vexpr e v ve =
+  Map (ExprMap.singleton e (v,ve))
+
+let root_vexpr = function
+  | Map map -> Map (ExprMap.map (fun (v,ve) -> (v,empty_vexpr)) map)
+
+let add_vexpr e v ve = function
+  | Map map -> Map (ExprMap.add e (v,ve) map)
+
+let refine_vexpr e v = function
+  | Map map ->
+    let r =
+      match ExprMap.find_opt e map with
+      | Some (_,ve) -> (v,ve)
+      | None -> (v,empty_vexpr)
+    in
+    Map (ExprMap.add e r map)
+
+let rec find_vexpr e = function
+  | Map map ->
+    try ExprMap.find e map
+    with Not_found ->
+      let rec iter = function
+        | [] -> raise Not_found
+        | (_,(_,vee))::tl ->
+          try find_vexpr e vee
+          with Not_found -> iter tl
+      in
+      iter (ExprMap.bindings map)
+
+let find_vexpr_opt e ve =
+  try Some (find_vexpr e ve)
+  with Not_found -> None
+
+let rec map_vexpr f = function
+  | Map map ->
+    let map' =
+      ExprMap.map
+        (fun (v,ve) -> (f v,map_vexpr f ve))
+        map
+    in
+    Map map'
+
+let fold_root_vexpr f init = function
+  | Map map ->
+    ExprMap.fold
+      (fun e (v,ve) acc -> f acc e v ve)
+      map init
+
+let rec fold_vexpr f init = function
+  | Map map ->
+    ExprMap.fold
+      (fun e (v,ve) acc -> fold_vexpr f (f acc e v ve) ve)
+      map init
+
+let rec map2_vexpr f1 f2 f ve1 ve2 =
+  match ve1,ve2 with
+  | Map m1, Map m2 ->
+    let m =
+      ExprMap.map2o
+        (fun e (v1,ve1) -> f1 v1, map_vexpr f1 ve1)
+        (fun e (v2,ve2) -> f2 v2, map_vexpr f2 ve2)
+        (fun e (v1,ve1) (v2,ve2) ->
+           (f v1 v2, map2_vexpr f1 f2 f ve1 ve2)
+        )
+        m1 m2 in
+    Map m
+
+let rec merge_vexpr vmerge ve1 ve2 =
+  match ve1,ve2 with
+  | Map m1, Map m2 ->
+    let m =
+      ExprMap.map2zo
+        (fun e ve1 -> ve1)
+        (fun e ve2 -> ve2)
+        (fun e (v1,ve1) (v2,ve2) ->
+           (vmerge v1 v2, merge_vexpr vmerge ve1 ve2)
+        )
+        m1 m2 in
+    Map m
 
 (*==========================================================================*)
 (**                          {2 Value domain}                               *)
@@ -40,130 +141,45 @@ type ('a,'t) value_man = {
 
 module type VALUE =
 sig
-
-  (** {2 Header of the abstraction} *)
-  (** ***************************** *)
-
   type t
-  (** Type of the abstract value. *)
-
   val id : t id
-  (** Identifier of the value domain *)
-
+  val accept_type : typ -> bool
   val name : string
-  (** Name of the value domain *)
-
   val display : string
-  (** Display name used in debug messages *)
-
   val bottom: t
-  (** Least abstract element of the lattice. *)
-
   val top: t
-  (** Greatest abstract element of the lattice. *)
-
-  val print: Format.formatter -> t -> unit
-  (** Printer of an abstract element. *)
-
-
-  (** {2 Lattice operators} *)
-  (** ********************* *)
-
   val is_bottom: t -> bool
-  (** [is_bottom a] tests whether [a] is bottom or not. *)
-
   val subset: t -> t -> bool
-  (** Partial order relation. [subset a1 a2] tests whether [a1] is
-      related to (or included in) [a2]. *)
-
   val join: t -> t -> t
-  (** [join a1 a2] computes an upper bound of [a1] and [a2]. *)
-
   val meet: t -> t -> t
-  (** [meet a1 a2] computes a lower bound of [a1] and [a2]. *)
-
   val widen: 'a ctx -> t -> t -> t
-  (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
-      ensures stabilization of ascending chains. *)
-
-
-  (** {2 Forward semantics} *)
-  (** ********************* *)
-
-  val constant : typ -> constant -> t option
-  (** Forward evaluation of constants *)
-
-  val cast : ('a,t) value_man -> typ -> expr -> t option
-  (** Cast an expression into a value *)
-
-  val unop : operator -> typ -> t -> t
-  (** Forward evaluation of unary expressions *)
-
-  val binop : operator -> typ -> t -> t -> t
-  (** Forward evaluation of binary expressions *)
-
+  val eval : ('v,t) value_man -> expr -> t
+  val avalue : 'r avalue_kind -> t -> 'r option
+  val backward : ('v,t) value_man -> expr -> t vexpr -> 'v -> t vexpr
   val filter : bool -> typ -> t -> t
-  (** Keep values that may represent the argument truth value *)
-
-
-  (** {2 Backward semantics} *)
-  (** ********************** *)
-
-  val bwd_unop : operator -> typ -> t -> t -> t
-  (** Backward evaluation of unary operators.
-      [bwd_unop op x r] returns x':
-       - x' abstracts the set of v in x such as op v is in r
-       i.e., we fiter the abstract values x knowing the result r of applying
-       the operation on x
-     *)
-
-  val bwd_binop : operator -> typ -> t -> t -> t -> (t * t)
-  (** Backward evaluation of binary operators.
-      [bwd_binop op x y r] returns (x',y') where
-      - x' abstracts the set of v  in x such that v op v' is in r for some v' in y
-      - y' abstracts the set of v' in y such that v op v' is in r for some v  in x
-      i.e., we filter the abstract values x and y knowing that, after
-      applying the operation op, the result is in r
-  *)
-
-  val bwd_cast : ('a,t) value_man -> typ -> expr -> t -> t
-  (** Backward evaluation of casts.
-      [bwd_cast man t e x] returns x':
-       - x' abstracts the set of v in x such cast(t,v) is in the evaluation 𝔼[cast(t,e)]
-       i.e., we fitter the abstract values x of expression e knowing the evaluation of cast(t,e)
-     *)
-
-  val predicate : operator -> bool -> typ -> t -> t
-  (** Backward evaluation of unary boolean predicates.
-      [predicate op x true] returns the subset of x such that x is
-      true.
-      [predicate op x false] is similar, but assumes that the predicate is false
-  *)
-
-  val compare : operator -> bool -> typ -> t -> t -> t * t
-  (** Backward evaluation of boolean comparisons. [compare op x y true] returns (x',y') where:
-       - x' abstracts the set of v  in x such that v op v' is true for some v' in y
-       - y' abstracts the set of v' in y such that v op v' is true for some v  in x
-       i.e., we filter the abstract values x and y knowing that the test is true
-
-       [compare op x y false] is similar, but assumes that the test is false
-  *)
-
-
-  (** {2 Query handler } *)
-  (** ****************** *)
-
-  val ask : ('a,t) value_man -> ('a,'r) query -> 'r option
-  (** Query handler *)
-
+  val compare : ('v,t) value_man -> operator -> bool -> expr -> t -> expr -> t -> (t * t)
+  val eval_ext : ('v,t) value_man -> expr -> 'v option
+  val backward_ext : ('v,t) value_man -> expr -> 'v vexpr -> 'v -> 'v vexpr option
+  val compare_ext : ('v,t) value_man -> operator -> bool -> expr -> 'v -> expr -> 'v -> ('v * 'v) option
+  val ask : ('v,t) value_man -> ('a,'r) query -> 'r option
+  val print: printer -> t -> unit
 end
 
+let default_filter b t v = v
+let default_backward man e ve v = ve
+let default_compare man op b e1 v1 e2 v2 = (v1,v2)
 
-let default_bwd_unop op t v r = v
-let default_bwd_binop op t v1 v2 r = (v1,v2)
-let default_predicate op b t v = v
-let default_compare op b t v1 v2 = (v1,v2)
-let default_bwd_cast man t e v = v
+module DefaultValueFunctions =
+struct
+  let filter = default_filter
+  let backward= default_backward
+  let compare = default_compare
+  let eval_ext man e = None
+  let backward_ext man e ve v = None
+  let compare_ext man op b e1 v1 e2 v2 = None
+  let avalue avk v = None
+  let ask man q = None
+end
 
 
 (*==========================================================================*)

@@ -22,6 +22,7 @@
 (** Powerset lattice with finite cardinality elements or ⊺. *)
 
 open Top
+open Core
 
 module type S =
 sig
@@ -33,13 +34,14 @@ sig
   val is_top : t -> bool
   val subset : t -> t -> bool
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val join : t -> t -> t
   val meet : t -> t -> t
   val union : t -> t -> t
   val inter : t -> t -> t
   val diff : t -> t -> t
   val widen : 'a Core.Context.ctx -> t -> t -> t
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
   val add : Set.elt -> t -> t
   val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   val remove : elt -> t -> t

@@ -115,13 +115,13 @@ let meet s1 s2 =
   | MaybeFree a1, MaybeFree a2 -> MaybeFree (AddrSet.inter a1 a2) |>
                                   canonize
 
-let print fmt s =
+let print printer s =
   match s with
-  | Bot -> Format.fprintf fmt "⊥"
-  | Top -> Format.fprintf fmt "⊤"
-  | Free -> Format.fprintf fmt "🔓"
-  | NotFree a -> Format.fprintf fmt "🔒 : %a" AddrSet.print a
-  | MaybeFree a -> Format.fprintf fmt "❓ : %a" AddrSet.print a
+  | Bot -> pp_string printer "⊥"
+  | Top -> pp_string printer "⊤"
+  | Free -> pp_string printer "🔓"
+  | NotFree a -> pprint printer (pbox AddrSet.print a) ~path:[Key "🔒"]
+  | MaybeFree a -> pprint printer (pbox AddrSet.print a) ~path:[Key "❓"]
 
 
 let add addr s =

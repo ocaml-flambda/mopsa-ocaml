@@ -68,17 +68,19 @@ struct
 
     let widen _ _ _ = failwith "ni widen"
     let subset _ _ = failwith "ni subset"
-    let print =
-      bot_top_fprint (fun fmt p ->
-          Format.fprintf fmt "[%a]"
-          (Format.pp_print_list (fun fmt (vs, aks) ->
-               Format.fprintf fmt "%a ~ %a@."
-                 (VarSet.fprint SetExt.printer_default pp_var) vs
-                 (AKS.fprint SetExt.printer_default pp_addr_kind) aks
-             )) p
-        )
+    let print printer = function
+      | Bot_top.BOT -> pp_string printer "⊥"
+      | Bot_top.TOP -> pp_string printer "⊤"
+      | Bot_top.Nbt p ->
+        pp_list
+          (fun printer (vs, aks) ->
+             pp_obj_list printer
+               [ pbox (pp_list (unformat pp_var) ~lopen:"{" ~lsep:"," ~lclose:"}") (VarSet.elements vs);
+                 pbox (pp_list (unformat pp_addr_kind) ~lopen:"{" ~lsep:"," ~lclose:"}") (AKS.elements aks) ]
+               ~lopen:"(" ~lsep:"~" ~lclose:")"
+          ) printer p
 
-    let join l r = panic "ni join@.l=%a@.r=%a@." print l print r
+    let join l r = panic "ni join"
 
     let add_var v aks p =
       bot_top_lift1 (fun p ->
@@ -98,7 +100,6 @@ struct
   let meet = Partitions.meet
   let widen = Partitions.widen
   let subset = Partitions.subset
-  let print fmt a = Format.fprintf fmt "partitions: %a@." Partitions.print a
 
   include Framework.Core.Id.GenDomainId(struct
       type nonrec t = t
@@ -120,6 +121,11 @@ struct
   let rec eval exp man flow = None
 
   let ask _ _ _ = None
+
+  let print_state printer a =
+    pprint ~path:[Key "partitions"] printer (pbox Partitions.print a)
+
+  let print_expr _ _ _ _ = ()
 
 end
 

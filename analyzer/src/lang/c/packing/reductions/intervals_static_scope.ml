@@ -101,12 +101,6 @@ struct
     if I.subset itv itv' then a
     else
       let itv'' = I.meet itv itv' in
-      let () = debug "reducing the interval of %a from (%a,%a) to %a"
-          pp_var var
-          I.print itv
-          I.print itv'
-          I.print itv''
-      in
       man.set_value I.id var itv'' a
 
 

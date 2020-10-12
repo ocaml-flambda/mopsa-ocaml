@@ -39,9 +39,17 @@ let meet_chain = ref {
     apply = (fun _ _ _ _ -> Exceptions.panic "query_meet: unknown query");
   }
 
-let join_query q ~join a b = !join_chain.apply q join a b
+let join_query
+    ?(join=(fun x y ->
+        Exceptions.panic "join_query: state join not provided"))
+    q a b =
+  !join_chain.apply q join a b
 
-let meet_query q ~meet a b = !meet_chain.apply q meet a b
+let meet_query
+    ?(meet=(fun x y ->
+        Exceptions.panic "meet_query: state join not provided"))
+    q a b =
+  !meet_chain.apply q meet a b
 
 type query_info = {
   join : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;

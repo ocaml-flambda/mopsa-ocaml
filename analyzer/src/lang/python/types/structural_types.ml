@@ -55,14 +55,14 @@ struct
     struct
       type t = string
       let compare = Stdlib.compare
-      let print = Format.pp_print_string
+      let print printer s = pp_string printer s
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
       (struct
         type t = addr
         let compare = compare_addr
-        let print = pp_addr
+        let print = unformat pp_addr
       end)
       (AttrSet)
 
@@ -77,15 +77,11 @@ struct
 
   let checks = []
 
-  let print fmt d =
-    Format.fprintf fmt "attributes: @[%a@]@\n"
-      AMap.print d
-
   let merge pre (a, log) (a', log') =
     if a == a' then a
     else if Log.is_empty_log log' then a
     else if Log.is_empty_log log then a'
-    else let () = debug "pre=%a@.a=%alog=%a@.a'=%alog'=%a@." print pre print a Log.pp_log log print a' Log.pp_log log' in assert false
+    else assert false
 
 
   let init progr man flow =
@@ -360,7 +356,7 @@ struct
           let attr_var = mk_addr_attr addr attr (T_py None) in
           man.eval   (mk_var attr_var range) flow
 
-        | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (Flow.print man.lattice.print) flow
+        | _ -> Exceptions.panic_at range "ll_getattr: todo %a, attr=%s in@\n%a" pp_addr addr attr (format (Flow.print man.lattice.print)) flow
       end
       |> OptionExt.return
 
@@ -469,7 +465,7 @@ struct
                Cases.reduce_result (fun etuple flow ->
                    let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                    (* FIXME *)
-                   let pset = man.ask (Universal.Strings.Powerset.Q_strings_powerset (mk_var (Utils.change_var_type T_string var) range)) flow in
+                   let pset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow in
                    if Universal.Strings.Powerset.Value.is_top pset then "T"
                    else Universal.Strings.Powerset.StringPower.choose pset
                  )
@@ -499,6 +495,12 @@ struct
        Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
 
       | _ -> None
+
+
+  let print_state printer d =
+    pprint ~path:[Key "attributes"] printer (pbox AMap.print d)
+
+  let print_expr _ _ _ _ = ()
 
 end
 

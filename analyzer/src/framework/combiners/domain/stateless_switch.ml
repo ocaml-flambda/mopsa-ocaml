@@ -71,19 +71,19 @@ struct
           sat_targets ~targets:domains ~domains:D2.domains
     with
     | false, false ->
-      (* Both domains do not provide an [exec] for such zone *)
+      (* Both domains don't satisfy the targets *)
       raise Not_found
 
     | true, false ->
-      (* Only [D1] provides an [exec] for such zone *)
+      (* Only [D1] satisfies the targets *)
       D1.exec domains
 
     | false, true ->
-      (* Only [D2] provides an [exec] for such zone *)
+      (* Only [D2] satisfies the targets *)
       D2.exec domains
 
     | true, true ->
-      (* Both [D1] and [D2] provide an [exec] for such zone *)
+      (* Both [D1] and [D2] satisfy the targets*)
       let f1 = D1.exec domains in
       let f2 = D2.exec domains in
       (fun stmt man flow ->
@@ -100,19 +100,19 @@ struct
           sat_targets ~targets:domains ~domains:D2.domains
     with
     | false, false ->
-      (* Both domains do not provide an [eval] for such zone *)
+      (* Both domains don't satisfy the targets *)
       raise Not_found
 
     | true, false ->
-      (* Only [D1] provides an [eval] for such zone *)
+      (* Only [D1] satisfies the targets *)
       D1.eval domains
 
     | false, true ->
-      (* Only [D2] provides an [eval] for such zone *)
+      (* Only [D2] satisfies the targets *)
       D2.eval domains
 
     | true, true ->
-      (* Both [D1] and [D2] provide an [eval] for such zone *)
+      (* Both [D1] and [D2] satisfy the targets*)
       let f1 = D1.eval domains in
       let f2 = D2.eval domains in
       (fun exp man flow ->
@@ -129,19 +129,19 @@ struct
           sat_targets ~targets:domains ~domains:D2.domains
     with
     | false, false ->
-      (* Both domains do not provide an [eval] for such zone *)
+      (* Both domains don't satisfy the targets *)
       raise Not_found
 
     | true, false ->
-      (* Only [D1] provides an [eval] for such zone *)
+      (* Only [D1] satisfies the targets *)
       D1.ask domains
 
     | false, true ->
-      (* Only [D2] provides an [eval] for such zone *)
+      (* Only [D2] satisfies the targets *)
       D2.ask domains
 
     | true, true ->
-      (* Both [D1] and [D2] provide an [eval] for such zone *)
+      (* Both [D1] and [D2] satisfy the targets*)
       let f1 = D1.ask domains in
       let f2 = D2.ask domains in
       (fun q man flow ->
@@ -149,6 +149,28 @@ struct
            (join_query q ~join:(fun a b -> man.lattice.join (Flow.get_ctx flow) a b))
            (f1 q man flow)
            (f2 q man flow)
+      )
+
+
+  (** Pretty printer of expressions *)
+  let print_expr targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D2.domains
+    with
+    | false, false -> raise Not_found
+
+    | true, false ->
+      D1.print_expr targets
+
+    | false, true ->
+      D2.print_expr targets
+
+    | true, true ->
+      let f1 = D1.print_expr targets in
+      let f2 = D2.print_expr targets in
+      (fun man flow printer e ->
+         f1 man flow printer e;
+         f2 man flow printer e
       )
 
 end

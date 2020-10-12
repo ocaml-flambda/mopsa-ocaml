@@ -413,12 +413,9 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__len__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["str"]
           (fun eargs flow ->
-             man.eval   (mk_expr ~etyp:T_string (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
-               (fun l flow -> match ekind l with
-                              | E_constant (C_top T_int) ->
-                                 man.eval {l with ekind = E_constant (C_top (T_py (Some Int))); etyp=(T_py (Some (Int)))} flow
-                              | _ ->
-                                 man.eval {l with etyp=(T_py (Some Int))} flow)
+            man.eval   (mk_expr ~etyp:T_int (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
+              fun l flow ->
+              Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some l) range) flow
           )
         |> OptionExt.return
 
@@ -427,6 +424,7 @@ module Domain =
 
     let exec _ _ _ = None
     let ask _ _ _ = None
+    let print_expr _ _ _ _ = ()
   end
 
 let () =  register_stateless_domain (module Domain)

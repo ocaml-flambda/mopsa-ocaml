@@ -34,7 +34,7 @@ module MakeDomainPair(D1:SIMPLIFIED_COMBINER)(D2:SIMPLIFIED_COMBINER)
 struct
 
   type t = D1.t * D2.t
-  
+
   let id = C_pair(Product,D1.id,D2.id)
 
   let name = D1.name ^ " ∧ " ^ D2.name
@@ -70,15 +70,15 @@ struct
 
   let join ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 D1.join D2.join v w
+      apply2 D1.join D2.join v w
 
   let meet ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 D1.meet D2.meet v w
+      apply2 D1.meet D2.meet v w
 
   let widen ctx ((v1,v2) as v:t) ((w1,w2) as w:t) : t =
     if v1 == w1 && v2 == w2 then v else
-    apply2 (D1.widen ctx) (D2.widen ctx) v w
+      apply2 (D1.widen ctx) (D2.widen ctx) v w
 
   let merge (p1,p2) (a1,log1) (a2,log2) =
     apply2
@@ -86,11 +86,6 @@ struct
       (fun v2 w2 -> D2.merge p2 (v2,log1) (w2,log2))
       a1 a2
 
-  let print fmt (a1,a2) =
-    match D2.id with
-    | C_empty -> D1.print fmt a1
-    | _ ->  Format.fprintf fmt "%a@\n%a" D1.print a1 D2.print a2
-  
   let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {
     man with
     exec = (fun stmt -> man.exec stmt |> fst);
@@ -128,8 +123,8 @@ struct
          recompose_pair a
            (f1 stmt (hdman man) ctx a1)
            (f2 stmt (tlman man) ctx a2))
-    
-    
+
+
   let ask targets =
     match sat_targets ~targets ~domains:D1.domains,
           sat_targets ~targets ~domains:D1.domains
@@ -149,7 +144,47 @@ struct
            (meet_query q
               ~meet:(fun _ _ -> Exceptions.panic "abstract queries called from simplified domains"))
            (f1 q (hdman man) ctx a1)
-           (f2 q (tlman man) ctx a2))    
+           (f2 q (tlman man) ctx a2))
+
+  let print_state targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
+    with
+    | false, false -> raise Not_found
+    | true, false ->
+      let f1 = D1.print_state targets in
+      (fun printer (a1,_) ->
+         f1 printer a1)
+    | false, true ->
+      let f2 = D2.print_state targets in
+      (fun printer (_,a2) ->
+         f2 printer a2)
+    | true, true ->
+      let f1 = D1.print_state targets in
+      let f2 = D2.print_state targets in
+      (fun printer (a1,a2) ->
+         f1 printer a1;
+         f2 printer a2)
+
+  let print_expr targets =
+    match sat_targets ~targets ~domains:D1.domains,
+          sat_targets ~targets ~domains:D1.domains
+    with
+    | false, false -> raise Not_found
+    | true, false ->
+      let f1 = D1.print_expr targets in
+      (fun man ctx (a1,_) printer e ->
+         f1 (hdman man) ctx a1 printer e)
+    | false, true ->
+      let f2 = D2.print_expr targets in
+      (fun man ctx (_,a2) printer e ->
+         f2 (tlman man) ctx a2 printer e)
+    | true, true ->
+      let f1 = D1.print_expr targets in
+      let f2 = D2.print_expr targets in
+      (fun man ctx (a1,a2) printer e ->
+         f1 (hdman man) ctx a1 printer e;
+         f2 (tlman man) ctx a2 printer e)
 
 end
 
@@ -221,7 +256,7 @@ struct
                 | BOT -> V.bottom
                 | Nbt map -> PMap.find var map
               in
-              
+
               (* Iterate over combiners to find the required id *)
               let rec iter : type w. w id -> w -> v =
                 fun id' v' ->
@@ -298,7 +333,7 @@ struct
         aux id a
       );
 
-    ask = (fun q ctx a -> match D.ask [] q man ctx a with None -> raise Not_found | Some r -> r);  
+    ask = (fun q ctx a -> match D.ask [] q man ctx a with None -> raise Not_found | Some r -> r);
   }
 
   let reduce stmt man ctx pre post =
@@ -314,7 +349,7 @@ struct
        match f stmt man ctx a with
        | None -> None
        | Some r -> Some (reduce stmt man ctx a r))
-  
+
 end
 
 

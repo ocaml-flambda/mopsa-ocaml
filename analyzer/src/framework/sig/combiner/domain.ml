@@ -34,6 +34,8 @@ sig
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val print_state : domain list -> printer -> t -> unit
+  val print_expr  : domain list -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
 
 
@@ -47,6 +49,8 @@ struct
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask
+  let print_state targets = D.print_state
+  let print_expr  targets = D.print_expr
 end
 
 module CombinerToDomain(T:DOMAIN_COMBINER) : DOMAIN with type t = T.t =
@@ -55,6 +59,8 @@ struct
   let exec stmt man flow = T.exec [] stmt man flow
   let eval exp man flow  = T.eval [] exp man flow
   let ask query man flow = T.ask [] query man flow
+  let print_state printer a = T.print_state [] printer a
+  let print_expr man flow printer e = T.print_expr [] man flow printer e
 end
 
 

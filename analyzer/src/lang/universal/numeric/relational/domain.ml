@@ -148,11 +148,6 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
-  let print fmt (abs,_) =
-    Format.fprintf fmt "%s:@,  @[%a@]@\n"
-      ApronManager.name
-      Apron.Abstract1.print abs
-
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -350,11 +345,8 @@ struct
   let ask : type r. ('a,r) query -> ('a,t) simplified_man -> 'a ctx -> t -> r option =
     fun query man ctx (abs,bnd) ->
       match query with
-      | Common.Q_int_interval e ->
+      | Q_avalue(e, Common.V_int_interval false) ->
         eval_interval e (abs,bnd)
-
-      | Common.Q_int_congr_interval e ->
-        eval_interval e (abs,bnd) |> OptionExt.lift (fun itv -> itv,Common.C.minf_inf)
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>
@@ -366,5 +358,13 @@ struct
 
 
       | _ -> None
+
+
+  let print_state printer (a,_) =
+    unformat Apron.Abstract1.print printer a
+      ~path:[Key "numeric-relations"]
+
+  let print_expr man ctx a printer exp =
+    print_state printer a
 
 end

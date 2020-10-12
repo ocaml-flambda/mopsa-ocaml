@@ -56,7 +56,7 @@ struct
     | E_constant (C_top T_bool) -> e
     | E_var _ -> e
     | E_unop(O_log_not,e) -> negate_bool_expr (to_bool_expr e)
-    | E_unop(op,e) when is_predicate_op op -> e
+    | E_unop(op,_) when is_predicate_op op -> e
     | E_binop(op,_,_) when is_comparison_op op -> e
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
     | _ -> ne e zero e.erange
@@ -142,9 +142,18 @@ struct
       Post.join then_post else_post |>
       OptionExt.return
 
-    | S_print ->
-      Framework.Output.Factory.print (srange stmt) (Flow.print man.lattice.print) flow;
+    | S_print_state ->
+      let printer = empty_printer () in
+      Flow.print man.lattice.print printer flow;
+      Framework.Output.Factory.print printer (srange stmt);
       Some (Post.return flow)
+
+    | S_print_expr el ->
+      let printer = empty_printer () in
+      List.iter (man.print_expr flow printer) el;
+      Framework.Output.Factory.print printer (srange stmt);
+      Some (Post.return flow)
+
 
     | _ -> None
 
@@ -198,6 +207,8 @@ struct
 
 
   let ask query man flow = None
+
+  let print_expr man flow printer exp = ()
 
 end
 

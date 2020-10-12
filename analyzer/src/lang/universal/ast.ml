@@ -83,7 +83,6 @@ let () =
 (*  *********************** *)
 
 type constant +=
-  | C_top of typ
   | C_unit
   | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
@@ -97,7 +96,6 @@ let () =
   register_constant {
     compare = (fun next c1 c2 ->
         match c1, c2 with
-        | C_top t1, C_top t2 -> compare_typ t1 t2
         | C_int z1, C_int z2 -> Z.compare z1 z2
         | C_float f1, C_float f2 -> Stdlib.compare f1 f2
         | C_string s1, C_string s2 -> Stdlib.compare s1 s2
@@ -115,8 +113,6 @@ let () =
       );
 
     print = (fun default fmt -> function
-        | C_top T_any -> Format.fprintf fmt "⊤"
-        | C_top t -> Format.fprintf fmt "⊤:%a" pp_typ t
         | C_unit -> fprintf fmt "()"
         | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
         | C_string(s) -> fprintf fmt "\"%s\"" s
@@ -454,6 +450,7 @@ type expr_kind +=
   | E_len of expr
 
 
+
 let () =
   register_expr_with_visitor {
     compare = (fun next e1 e2 ->
@@ -527,7 +524,7 @@ let () =
           (fun parts -> {exp with ekind = E_call(List.hd parts.exprs, List.tl parts.exprs)})
 
         | E_len(e) ->
-          {exprs = []; stmts = []},
+          {exprs = [e]; stmts = []},
           (fun parts -> {exp with ekind = E_len(List.hd parts.exprs)})
 
         | _ -> default exp
@@ -565,8 +562,11 @@ type stmt_kind +=
    | S_satisfy of expr
    (** Unit tests satisfiability check *)
 
-   | S_print
+   | S_print_state
    (** Print the abstract flow map at current location *)
+
+   | S_print_expr of expr list
+   (** Pretty print the values of expressions *)
 
    | S_free of addr
    (** Release a heap address *)
@@ -605,6 +605,8 @@ let () =
 
         | S_free(a1), S_free(a2) -> compare_addr a1 a2
 
+        | S_print_expr el1, S_print_expr el2 -> Compare.list compare_expr el1 el2
+
         | _ -> next s1 s2
       );
 
@@ -632,7 +634,8 @@ let () =
         | S_unit_tests (tests) -> pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") (fun fmt (name, test) -> fprintf fmt "test %s:@\n  @[%a@]" name pp_stmt test) fmt tests
         | S_assert e -> fprintf fmt "assert(%a);" pp_expr e
         | S_satisfy e -> fprintf fmt "sat(%a);" pp_expr e
-        | S_print -> fprintf fmt "print();"
+        | S_print_state -> fprintf fmt "print();"
+        | S_print_expr el -> fprintf fmt "print_expr(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
         | _ -> default fmt stmt
       );
@@ -682,8 +685,12 @@ let () =
              {stmt with skind = S_unit_tests(tests)}
           )
 
-        | S_print -> leaf stmt
+        | S_print_state -> leaf stmt
 
+        | S_print_expr el ->
+          {exprs = el; stmts = []},
+          (function {exprs} -> {stmt with skind = S_print_expr exprs})
+          
         | S_free _ -> leaf stmt
 
         | _ -> default stmt
@@ -703,8 +710,6 @@ let rec is_universal_type t =
   | T_array tt -> is_universal_type tt
 
   | _ -> false
-
-let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_int i ?(typ=T_int) erange =
   mk_constant ~etyp:typ (C_int (Z.of_int i)) erange
@@ -1035,7 +1040,7 @@ module Addr =
 struct
   type t = addr
   let compare = compare_addr
-  let print = pp_addr
+  let print = unformat pp_addr
   let from_expr e =
     match ekind e with
     | E_addr addr -> addr
@@ -1045,15 +1050,6 @@ end
 module AddrSet =
 struct
   include SetExt.Make(Addr)
-
-  let print fmt s =
-    if is_empty s then pp_print_string fmt "∅"
-    else
-      let l = elements s in
-      fprintf fmt "@[<h>{";
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-        pp_addr fmt l
-      ;
-      fprintf fmt "}@]"
+  let print printer s =
+    pp_list Addr.print printer (elements s) ~lopen:"{" ~lsep:"," ~lclose:"}"
 end

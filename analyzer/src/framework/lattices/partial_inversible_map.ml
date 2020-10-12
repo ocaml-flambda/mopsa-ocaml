@@ -31,7 +31,7 @@
 
 open Bot_top
 open Top
-open Core.Lattice
+open Core.All
 
 
 
@@ -40,7 +40,7 @@ module type ORDER =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
 end
 
 
@@ -93,35 +93,26 @@ struct
 
 
   (** Printing. *)
-  let print fmt (a:t) : unit =
+  let print printer (a:t) : unit =
     match a with
     | BOT ->
-      Format.pp_print_string fmt "⊥"
+      pp_string printer "⊥"
 
     | TOP ->
-      Format.pp_print_string fmt "⊤"
+      pp_string printer "⊤"
 
     | Nbt m when Relation.is_empty m.relations
               && KeySet.is_empty m.top_keys ->
-      Format.fprintf fmt "∅"
+      pp_string printer "∅"
 
     | Nbt m ->
-      Format.fprintf fmt "@[<v>%a@,%a@]"
-        (fun fmt rel ->
-           if Relation.is_empty rel then ()
-           else
-             Relation.iter_domain (fun k vs ->
-                 Format.fprintf fmt "%a ⇀ @[<h>%a@],@,"
-                   Key.print k
-                   (ValueSet.fprint SetExt.printer_default Value.print) vs
-               ) rel
-        ) m.relations
-        (fun fmt top_keys ->
-           if KeySet.is_empty top_keys then ()
-           else
-             KeySet.iter (fun k ->
-                 Format.fprintf fmt "%a ⇀ ⊤,@," Key.print k
-               ) top_keys
+      Relation.iter_domain (fun k vs ->
+          pprint printer ~path:[pkey Key.print k]
+            (pbox (pp_list Value.print ~lopen:"{" ~lsep:"," ~lclose:"}") (ValueSet.elements vs))
+        ) m.relations;
+      KeySet.iter (fun k ->
+          pp_string printer "⊤"
+            ~path:[pkey Key.print k]
         ) m.top_keys
 
 

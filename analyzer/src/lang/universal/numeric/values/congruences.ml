@@ -22,7 +22,7 @@
 (** Congruence abstraction of integer values. *)
 
 open Mopsa
-open Sig.Abstraction.Value
+open Sig.Abstraction.Simplified_value
 open Ast
 open Bot
 
@@ -43,6 +43,10 @@ struct
     end
     )
 
+  let accept_type = function
+    | T_int | T_bool -> true
+    | _ -> false
+
   let bottom = BOT
 
   let top = Nb (C.minf_inf)
@@ -58,44 +62,27 @@ struct
 
   let widen ctx (a1:t) (a2:t) : t = join a1 a2
 
-  let print fmt (a:t) = C.fprint_bot fmt a
+  let print printer (a:t) = unformat C.fprint_bot printer a
 
-  let constant t c =
-    match t with
-    | T_int | T_bool ->
-      let v = match c with
-        | C_bool true -> Nb (C.cst_int 1)
-        | C_bool false -> Nb (C.cst_int 0)
-        | C_int i -> Nb (C.cst i)
-        | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
-        | _ -> top
-      in
-      Some v
-    | _ -> None
+  include DefaultValueFunctions
 
-  let cast man t e =
-    match t, e.etyp with
-    | (T_int | T_bool), T_float _ ->
-      let float_itv = man.ask (Common.Q_float_interval e) in
-      let itv = ItvUtils.FloatItvNan.to_int_itv float_itv in
-      begin match itv with
-        | BOT -> Some bottom
-        | Nb(a,b) -> Some (C.of_bound_bot a b)
-      end
+  let constant c t =
+    match c with
+    | C_bool true -> Nb (C.cst_int 1)
+    | C_bool false -> Nb (C.cst_int 0)
+    | C_int i -> Nb (C.cst i)
+    | C_int_interval (i1,i2) -> Nb (C.of_range i1 i2)
+    | C_avalue(Common.V_int_congr_interval,(_,c)) -> c
+    | _ -> top
 
-    | (T_int | T_bool), _ -> Some top
-
-    | _ -> None
-
-  let unop op t a =
+  let unop op t a tr =
     match op with
     | O_log_not -> bot_lift1 C.log_not a
     | O_minus  -> bot_lift1 C.neg a
     | O_plus  -> a
     | _ -> top
 
-
-  let binop op t a1 a2 =
+  let binop op t1 a1 t2 a2 tr =
     match op with
     | O_plus   -> bot_lift2 C.add a1 a2
     | O_minus  -> bot_lift2 C.sub a1 a2
@@ -112,8 +99,7 @@ struct
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
 
-
-  let bwd_unop op t a r =
+  let bwd_unop op t a tr r =
     try
       let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
@@ -124,7 +110,7 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_binop op t a1 a2 r =
+  let bwd_binop op t1 a1 t2 a2 tr r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =
@@ -142,11 +128,7 @@ struct
     with Found_BOT ->
       bottom, bottom
 
-  let bwd_cast = default_bwd_cast
-
-  let predicate = default_predicate
-
-  let compare op b t a1 a2 =
+  let compare op b t1 a1 t2 a2 =
     try
       let a1, a2 = bot_to_exn a1, bot_to_exn a2 in
       let op = if b then op else negate_comparison_op op in
@@ -165,14 +147,14 @@ struct
       bottom, bottom
 
 
-  let ask : type r. ('a,t) value_man -> ('a,r) query -> r option = fun man query ->
-    match query with
-    | Common.Q_int_congr_interval e ->
-      let c = man.eval e in
+  let avalue : type r. r avalue_kind -> t -> r option =
+    fun aval c ->
+    match aval with
+    | Common.V_int_congr_interval ->
       let ret =
         match c with
-        | BOT -> Intervals.Integer.Value.bottom, C.minf_inf
-        | Nb cc -> Intervals.Integer.Value.top, cc
+        | BOT -> Intervals.Integer.Value.bottom, bottom
+        | _ -> Intervals.Integer.Value.top, c
       in
       OptionExt.return ret
 
@@ -181,4 +163,4 @@ struct
 end
 
 let () =
-  register_value_abstraction (module Value)
+  register_simplified_value_abstraction (module Value)

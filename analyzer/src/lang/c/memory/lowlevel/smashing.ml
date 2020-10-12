@@ -152,7 +152,7 @@ struct
   (** ****************** *)
 
   module STypeSet = Framework.Lattices.Powerset.Make
-      (struct type t = styp let compare = compare_styp let print = pp_styp end)
+      (struct type t = styp let compare = compare_styp let print = unformat pp_styp end)
 
   (** Initialization state with shortcut states to avoid useless tests on `uninit` *)
   module Init =
@@ -175,12 +175,18 @@ struct
 
     let top = Partial STypeSet.top
 
-    let print fmt x =
+    let print printer x =
       match x with
-      | Bot        -> fprintf fmt "⊥"
-      | None       -> fprintf fmt "none"
-      | Full ts    -> fprintf fmt "full(%a)" STypeSet.print ts
-      | Partial ts -> fprintf fmt "partial(%a)" STypeSet.print ts
+      | Bot        -> pp_string printer "⊥"
+      | None       -> pp_string printer "none"
+      | Full ts    -> pp_obj_list printer
+                        [ pbox pp_string "full";
+                          pbox STypeSet.print ts ]
+                        ~lopen:"(" ~lsep:"," ~lclose:")"
+      | Partial ts -> pp_obj_list printer
+                        [ pbox pp_string "partial";
+                          pbox STypeSet.print ts ]
+                        ~lopen:"(" ~lsep:"," ~lclose:")"
 
     let is_bottom x = (x = Bot)
 
@@ -258,9 +264,6 @@ struct
       type nonrec t = t
       let name = name
     end)
-
-  let print fmt (a:t) =
-    fprintf fmt "smashes: @[%a@]@\n" State.print a
 
 
   (** {2 Smash variables} *)
@@ -421,9 +424,9 @@ struct
       man.eval ~route e flow |>
       Cases.for_all_result (fun ee flow ->
           (* Compute the step-interval of ee *)
-          let _, c = man.ask (Universal.Numeric.Common.Q_int_congr_interval ee) flow in
-          let c' = (s,Z.zero) in
-          Universal.Numeric.Common.C.included c c'
+          let _, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query ee) flow in
+          let c' = Bot.Nb (s,Z.zero) in
+          Universal.Numeric.Common.C.included_bot c c'
         )
 
   (** Synthesis function of integer smashes *)
@@ -1349,6 +1352,14 @@ struct
 
   let ask query man flow = None
 
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  let print_state printer (a:t) =
+    pprint printer ~path:[Key "smash"] (pbox State.print a)
+
+  let print_expr man flow printer exp = ()
 
 end
 

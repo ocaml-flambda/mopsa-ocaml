@@ -48,13 +48,6 @@ struct
       | Bot.Nb (a', b') ->
         let c' = Bot.Nb a'
         and i' = Bot.Nb b' in
-
-        debug "reduce %a and %a => result: %a and %a"
-          I.print i
-          C.print c
-          I.print i'
-          C.print c'
-        ;
         (c', i')
 
   (* Reduction operator *)

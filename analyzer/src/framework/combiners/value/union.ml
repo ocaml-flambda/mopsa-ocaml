@@ -26,7 +26,7 @@ open Sig.Abstraction.Value
 open Common
 
 
-module Make(V1:VALUE)(V2:VALUE) : VALUE =
+module Make(V1:VALUE)(V2:VALUE) : VALUE with type t = V1.t * V2.t =
 struct
 
   (** {2 Header of the abstraction} *)
@@ -40,12 +40,18 @@ struct
 
   let display = V1.display ^ " ∪ " ^ V2.display
 
-  let print fmt (v1,v2) =
+  let accept_type t = V1.accept_type t || V2.accept_type t
+
+  let print printer (v1,v2) =
     match V1.is_bottom v1, V2.is_bottom v2 with
-    | true, true -> Format.pp_print_string fmt Bot.bot_string
-    | false, true -> V1.print fmt v1
-    | true, false -> V2.print fmt v2
-    | false, false -> Format.fprintf fmt "%a ∨ %a" V1.print v1 V2.print v2
+    | true, true -> pp_string printer Bot.bot_string
+    | false, true -> V1.print printer v1
+    | true, false -> V2.print printer v2
+    | false, false ->
+      pp_obj_list printer
+        [ pbox V1.print v1;
+          pbox V2.print v2 ]
+        ~lopen:"" ~lsep:"∨" ~lclose:""
 
 
   (** {2 Lattice operators} *)
@@ -57,97 +63,205 @@ struct
   (** {2 Value managers} *)
   (** ****************** *)
 
-  let v1_man (man:('a,t) value_man) : ('a,V1.t) value_man = {
+  let v1_man (man:('v,t) value_man) : ('v,V1.t) value_man = {
     man with
-    eval = (fun e -> man.eval e |> fst);
+    get  = (fun a -> man.get a |> fst);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v1 then a else man.set (x,v2) a);
   }
 
-  let v2_man (man:('a,t) value_man) : ('a,V2.t) value_man = {
+  let v2_man (man:('v,t) value_man) : ('v,V2.t) value_man = {
     man with
-    eval = (fun e -> man.eval e |> snd);
+    get  = (fun a -> man.get a |> snd);
+    set  = (fun x a ->
+        let (v1,v2) = man.get a in
+        if x == v2 then a else man.set (v1,x) a);
   }
 
 
-  (** {2 Forward semantics} *)
-  (** ********************* *)
+  (** {2 Local semantics} *)
+  (** ******************* *)
 
-  let constant t c =
-    match V1.constant t c, V2.constant t c with
-    | None, None -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None -> Some (v1,V2.bottom)
-    | None, Some v2 -> Some (V1.bottom,v2)
 
-  let cast man t e =
-    match V1.cast (v1_man man) t e, V2.cast (v2_man man) t e with
-    | None, None       -> None
-    | Some v1, Some v2 -> Some (v1,v2)
-    | Some v1, None    -> Some (v1,V2.bottom)
-    | None, Some v2    -> Some (V1.bottom,v2)
+  (** Forward evaluation of expressions handled by [V1] or [V2] *)
+  let eval man e : t =
+    let man1 = v1_man man in
+    let man2 = v2_man man in
+    let accept1 = V1.accept_type e.etyp in
+    let accept2 = V2.accept_type e.etyp in
+    if accept1 && accept2 then
+      (* Both domains can represent the value of the expression [e].
+         In this case, we just pair the returned values *)
+      let r1 = V1.eval man1 e in
+      let r2 = V2.eval man2 e in
+      (r1, r2)
+    else
+    if accept1 then
+      (* Only [V1] can represent the value of [e]. However, [V2] can handle the
+         expression in its extended semantics. So we need to combine the results
+         of [V1.eval] and [V2.eval_ext]. *)
+      let r1 = V1.eval man1 e in
+      let r2 = V2.eval_ext man2 e in
+      match r2 with
+      | None   ->
+        (* Since [V2] can't represent the value of [e], its value is set to ⊥ *)
+        (r1,V2.bottom)
+      | Some v ->
+        (* When [V2.eval_ext] returns a value [v], we need to retrieve the part
+           of [V1] in [v] in order to refine it with the result of [V1.eval] *)
+        (V1.meet r1 (man1.get v), V2.bottom)
+    else
+    if accept2 then
+      (* Dual case of accept1 *)
+      let r1 = V1.eval_ext man1 e in
+      let r2 = V2.eval man2 e in
+      match r1 with
+      | None   -> (V1.bottom,r2)
+      | Some v -> (V1.bottom,V2.meet r2 (man2.get v))
+    else
+      assert false
 
-  let unop op t a =
-    apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.unop op t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.unop op t v2)
-      a
+  (** Filter of truth values *)
+  let filter b t v =
+    let doit f accept v bot =
+      if accept t then f b t v
+      else bot
+    in
+    let r1 = doit V1.filter V1.accept_type (fst v) V1.bottom in
+    let r2 = doit V2.filter V2.accept_type (snd v) V2.bottom in
+    (r1,r2)
 
-  let binop op t =
-    apply2
-      (fun v1 w1 -> if V1.(is_bottom v1 || is_bottom w1) then V1.bottom else V1.binop op t v1 w1)
-      (fun v2 w2 -> if V2.(is_bottom v2 || is_bottom w2) then V2.bottom else V2.binop op t v2 w2)
+  (** Backward evaluation of expressions *)
+  let backward man e ve r : t vexpr =
+    let man1 = v1_man man in
+    let man2 = v2_man man in
+    (** Sine we are refining the values of sub-expressions, we consider that a
+       domain accepts a backward evaluation iff all sub-expressions are accepted
+       *)
+    let accept1 = for_all_child_expr (fun ee -> V1.accept_type ee.etyp) (fun s -> false) e in
+    let accept2 = for_all_child_expr (fun ee -> V2.accept_type ee.etyp) (fun s -> false) e in
+    if accept1 && accept2 then
+      (* Both domains accept, so call [backward] on both of them *)
+      let r1 = V1.backward man1 e (map_vexpr fst ve) r in
+      let r2 = V2.backward man2 e (map_vexpr snd ve) r in
+      (* Combine the values of each node in the tree *)
+      map2_vexpr
+        (fun v1 -> assert false)
+        (fun v2 -> assert false)
+        (fun v1 v2 -> (v1, v2))
+        r1 r2
+    else
+    if accept1 then
+      (* Similarly to [eval], when only one domain accepts the expression, we
+         need to call the dual extended function of the other domain *)
+      let r1 = V1.backward man1 e (map_vexpr fst ve) r in
+      let r2 = V2.backward_ext man2 e (map_vexpr (fun v -> man.set v man.top) ve) r in
+      match r2 with
+      | None   ->
+        (* Always put the refusing domain to ⊥ *)
+        map_vexpr (fun v1 -> (v1,V2.bottom)) r1
+      | Some rr2 ->
+        (* Use the returned value to refine the result of [V1.backward] *)
+        map2_vexpr
+          (fun v1 -> assert false)
+          (fun v2 -> assert false)
+          (fun v1 v2 -> (V1.meet v1 (man1.get v2), V2.bottom))
+          r1 rr2
+    else
+    if accept2 then
+      let r1 = V1.backward_ext man1 e (map_vexpr (fun v -> man.set v man.top) ve) r in
+      let r2 = V2.backward man2 e (map_vexpr snd ve) r in
+      match r1 with
+      | None   ->
+        map_vexpr (fun v2 -> (V1.bottom,v2)) r2
+      | Some rr1 ->
+        map2_vexpr
+          (fun v1 -> assert false)
+          (fun v2 -> assert false)
+          (fun v1 v2 -> (V1.bottom,V2.meet v2 (man2.get v1)))
+          rr1 r2
+    else
+      assert false
 
-  let filter b t =
-    apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.filter b t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.filter b t v2)
+  (** Backward refinement of values in a comparison *)
+  let compare man op b e1 v1 e2 v2 : t * t =
+    let man1 = v1_man man in
+    let man2 = v2_man man in
+    (* A domain needs to accepts both expressions *)
+    let accept1 = V1.accept_type e1.etyp && V1.accept_type e2.etyp in
+    let accept2 = V2.accept_type e1.etyp && V2.accept_type e2.etyp in
+    if accept1 && accept2 then
+      let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
+      let (r21,r22) = V2.compare man2 op b e1 (snd v1) e2 (snd v2) in
+      (r11,r21), (r12,r22)
+    else
+    if accept1 then
+      (* Similar reasoning as [eval] and [backward] *)
+      let (r11,r12) = V1.compare man1 op b e1 (fst v1) e2 (fst v2) in
+      let r2 = V2.compare_ext man2 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
+      match r2 with
+      | None   -> (r11,V2.bottom), (r12,V2.bottom)
+      | Some (r21,r22) ->
+        (V1.meet r11 (man1.get r21), man2.get r21),
+        (V1.meet r12 (man1.get r22), man2.get r22)
+    else
+    if accept2 then
+      let r1 = V1.compare_ext man1 op b e1 (man.set v1 man.top) e2 (man.set v2 man.top) in
+      let (r21,r22) = V2.compare man2 op b e1 (snd v1) e2 (snd v2) in
+      match r1 with
+      | None   -> (V1.bottom,r21), (V1.bottom,r22)
+      | Some (r11,r12) ->
+        (man1.get r11, V2.meet r21 (man2.get r11)),
+        (man1.get r12, V2.meet r22 (man2.get r12))
+    else
+      assert false
 
-  (** {2 Backward semantics} *)
+
+  (** {2 Extended semantics} *)
   (** ********************** *)
 
-  let bwd_unop op t =
-    apply2
-      (fun v1 r1 -> if V1.is_bottom v1 then v1 else V1.bwd_unop op t v1 r1)
-      (fun v2 r2 -> if V2.is_bottom v2 then v2 else V2.bwd_unop op t v2 r2)
+  (** Extened evaluation of expressions, used when the expression can't be
+      repsented in neither [V1] not [V2] *)
+  let eval_ext man e =
+    let r1 = V1.eval_ext (v1_man man) e in
+    let r2 = V2.eval_ext (v2_man man) e in
+    OptionExt.neutral2 man.meet r1 r2
 
-  let bwd_binop op t (v1,v2) (w1,w2) (r1,r2) =
-    let x1,y1 = if V1.(is_bottom v1 || is_bottom w1) then V1.bottom,V1.bottom else V1.bwd_binop op t v1 w1 r1 in
-    let x2,y2 = if V2.(is_bottom v2 || is_bottom w2) then V2.bottom,V2.bottom else V2.bwd_binop op t v2 w2 r2 in
-    ((x1,x2),(y1,y2))
+  (** Extended backward evaluations, used when some sub-expressions can't be
+     represented by [V1] not [V2] *)
+  let backward_ext man e ev r =
+    let r1 = V1.backward_ext (v1_man man) e ev r in
+    let r2 = V2.backward_ext (v2_man man) e ev r in
+    OptionExt.neutral2 (merge_vexpr man.meet) r1 r2
 
-  let bwd_cast man t e =
-    apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.bwd_cast (v1_man man) t e v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.bwd_cast (v2_man man) t e v2)
+  (** Extended comparison between expressions outside the scope of [V1] and [V2] *)
+  let compare_ext man op b e1 v1 e2 v2 =
+    let r1 = V1.compare_ext (v1_man man) op b e1 v1 e2 v2 in
+    let r2 = V2.compare_ext (v2_man man) op b e1 v1 e2 v2 in
+    OptionExt.neutral2 (fun (r11,r12) (r21,r22) -> (man.meet r11 r21),(man.meet r12 r22)) r1 r2
 
+  (** {2 Communication handlers} *)
+  (** ************************** *)
 
-  let predicate op b t =
-    apply
-      (fun v1 -> if V1.is_bottom v1 then v1 else V1.predicate op b t v1)
-      (fun v2 -> if V2.is_bottom v2 then v2 else V2.predicate op b t v2)
-
-  let compare op b t (v1,v2) (w1,w2) =
-    let x1,y1 = if V1.(is_bottom v1 || is_bottom w1) then V1.bottom,V1.bottom else V1.compare op b t v1 w1 in
-    let x2,y2 = if V2.(is_bottom v2 || is_bottom w2) then V2.bottom,V2.bottom else V2.compare op b t v2 w2 in
-    ((x1,x2),(y1,y2))
-
-
-  (** {2 Query handler} *)
-  (** ***************** *)
-
-  let ask man q =
+  (** Cast an abstract element to an avalue *)
+  let avalue aval (v1,v2) =
     OptionExt.neutral2
-      (join_query q
-         ~join:(fun _ _ -> Exceptions.panic "abstract queries called from value abstraction"))
-      (V1.ask (v1_man man) q)
-      (V2.ask (v2_man man) q)
+      (join_avalue aval)
+      (V1.avalue aval v1)
+      (V2.avalue aval v2)
 
-
-
-
+  (** Handle queries *)
+  let ask man query =
+    OptionExt.neutral2
+      (join_query query)
+      (V1.ask (v1_man man) query)
+      (V2.ask (v2_man man) query)
 end
 
+(** Create a union of a list of domains *)
 let rec make (values:(module VALUE) list) : (module VALUE) =
   match values with
-  | [] -> (module EmptyValue)
+  | [] -> assert false
   | [v] -> v
   | hd::tl -> (module Make(val hd : VALUE)(val (make tl) : VALUE) : VALUE)

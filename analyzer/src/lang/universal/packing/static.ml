@@ -57,7 +57,7 @@ sig
   val compare : pack -> pack -> int
   (** Total order of packs *)
 
-  val print : Format.formatter -> pack -> unit
+  val print : printer -> pack -> unit
   (** Pretty printer of packs *)
 
   val init : program -> unit
@@ -117,6 +117,7 @@ struct
         end)
         (struct
           include Domain
+          let print = print_state
           let widen x y = assert false
         end)
 
@@ -146,23 +147,6 @@ struct
 
     (** Identifier of the functor *)
     let id = D_static_packing (Strategy.id, Domain.id)
-
-    (** Pretty printer *)
-    let print fmt a =
-      match a with
-      | TOP -> Domain.print fmt Domain.top
-      | BOT -> Domain.print fmt Domain.bottom
-      | _ ->
-        fprintf fmt "@[<v>%a@]"
-          (pp_print_list
-             ~pp_sep:(fun fmt () -> fprintf fmt "")
-             (fun fmt (pack,aa) ->
-                fprintf fmt "@[{%a}::%a@]"
-                  Strategy.print pack
-                  Domain.print aa
-             )
-          ) (Map.bindings a)
-
 
 
     (** {2 Lattice operators} *)
@@ -440,6 +424,33 @@ struct
               (loop tl)
         in
         loop rep
+
+    (** State pretty printer *)
+    let print_state printer a =
+      match a with
+      | TOP -> Domain.print_state printer Domain.top
+      | BOT -> Domain.print_state printer Domain.bottom
+      | _ ->
+        Map.bindings a |>
+        List.map (fun (pack,aa) -> Format.asprintf "pack(%a)" (format Strategy.print) pack,aa) |>
+        pp_smap
+          Domain.print_state
+          printer
+          ~mopen:"" ~mclose:"" ~msep:"" ~mbind:":"
+
+    (** Pretty printer *)
+    let print_expr man ctx a printer exp =
+      let packs = packs_of_expr ctx exp in
+      Set.iter
+        (fun pack ->
+           match Map.find_opt pack a with
+           | None -> ()
+           | Some aa ->
+             let key = fkey "pack(%a)" (format Strategy.print) pack in
+             pprint printer ~path:[key]
+               (pbox (Domain.print_expr (pack_man pack man) ctx aa) exp)
+        ) packs
+
   end
 end
 

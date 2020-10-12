@@ -166,7 +166,7 @@ module Base =
 struct
   type t = base
   let compare = compare_base
-  let print = pp_base
+  let print = unformat pp_base
 end
 
 

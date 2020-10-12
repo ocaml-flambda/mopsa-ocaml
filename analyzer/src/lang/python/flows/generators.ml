@@ -183,7 +183,7 @@ module Domain = struct
            (* Keep the input cur environment *)
            let cur = Flow.get T_cur man.lattice flow in
 
-           debug "flow = %a" (Flow.print man.lattice.print) flow;
+           debug "flow = %a" (format @@ Flow.print man.lattice.print) flow;
 
            let ctx = Flow.get_ctx flow in
            (* Compute the next tokens *)
@@ -210,7 +210,7 @@ module Domain = struct
                               Flow.add T_cur env man.lattice acc
                          ) (Flow.bottom_from flow) flow
            in
-           debug "flow1 = %a" (Flow.print man.lattice.print) flow1;
+           debug "flow1 = %a" (format @@ Flow.print man.lattice.print) flow1;
 
            (* Filter flow by location reachability *)
            (* FIXME: add relational counter *)
@@ -221,7 +221,7 @@ module Domain = struct
                            | _ -> env
                          ) flow1
            in
-           debug "flow2 = %a" (Flow.print man.lattice.print) flow2;
+           debug "flow2 = %a" (format @@ Flow.print man.lattice.print) flow2;
 
            (* Modify the body of the generator by changing local variables into framed variables *)
            let is_local v = List.exists (fun v' -> compare_var v v' = 0) (func.py_func_locals @ func.py_func_parameters) in
@@ -242,7 +242,7 @@ module Domain = struct
            let flow2 = Flow.set_ctx (Context.add_ctx generator_key self (Flow.get_ctx flow2)) flow2 in
            let flow3 = man.exec body' flow2 |> post_to_flow man in
 
-           debug "flow3 = %a" (Flow.print man.lattice.print) flow3;
+           debug "flow3 = %a" (format @@ Flow.print man.lattice.print) flow3;
 
            (* Add the input stop flows  *)
            let flow3 = Flow.fold (fun acc tk env ->
@@ -368,6 +368,7 @@ module Domain = struct
 
   let ask _ _ _ = None
   let checks = []
+  let print_expr _ _ _ _ = ()
 end
 
 let () = register_stateless_domain (module Domain)

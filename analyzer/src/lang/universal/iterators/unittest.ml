@@ -124,6 +124,8 @@ let raise_assert_fail ?(force=false) cond man flow =
   let alarm = mk_alarm (A_assert_fail cond) cs cond.erange in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
 
+let safe_assert_check range man flow =
+  Flow.add_safe_check CHK_ASSERT_FAIL range flow
 
 
 module Domain =
@@ -179,7 +181,9 @@ struct
     | S_assert(cond) ->
       assume
         cond
-        ~fthen:(fun safe_flow -> Post.return safe_flow)
+        ~fthen:(fun safe_flow ->
+            safe_assert_check cond.erange man safe_flow |>
+            Post.return)
         ~felse:(fun fail_flow ->
             raise_assert_fail cond man fail_flow |>
             Post.return
@@ -190,7 +194,8 @@ struct
     | S_satisfy(cond) ->
       man.exec (mk_assume cond stmt.srange) flow >>%? fun flow' ->
       if not @@ man.lattice.is_bottom @@ Flow.get T_cur man.lattice flow' then
-        Post.return flow |>
+        safe_assert_check cond.erange man flow |>
+        Post.return |>
         OptionExt.return
       else
         raise_assert_fail cond man flow |>
@@ -204,6 +209,8 @@ struct
   let eval exp man flow = None
 
   let ask query man flow = None
+
+  let print_expr man flow printer exp = ()
 
 end
 

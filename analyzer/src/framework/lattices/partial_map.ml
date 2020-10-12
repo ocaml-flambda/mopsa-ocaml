@@ -27,7 +27,7 @@
 *)
 
 open Bot_top
-open Core.Lattice
+open Core.All
 
 
 let debug fmt = Debug.debug ~channel:"framework.lattices.partial_map" fmt
@@ -42,7 +42,7 @@ module type KEY =
 sig
   type t
   val compare: t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : Print.printer -> t -> unit
 end
 
 
@@ -134,19 +134,13 @@ struct
   (** Meet. *)
 
 
-  let print fmt (a:t) : unit =
+  let print printer (a:t) : unit =
     match a with
-    | BOT -> Format.pp_print_string fmt "⊥"
-    | TOP -> Format.pp_print_string fmt "⊤"
-    | Nbt m when PMap.is_empty m -> Format.fprintf fmt "∅"
+    | BOT -> pp_string printer "⊥"
+    | TOP -> pp_string printer "⊤"
+    | Nbt m when PMap.is_empty m -> pp_string printer "∅"
     | Nbt m ->
-      Format.fprintf fmt "@[<v>%a@]"
-        (Format.pp_print_list
-           ~pp_sep:(fun fmt () -> Format.fprintf fmt ",@,")
-           (fun fmt (k, v) ->
-              Format.fprintf fmt "%a ⇀ @[%a@]" Key.print k Value.print v
-           )
-        ) (PMap.bindings m)
+      pp_map Key.print Value.print printer (PMap.bindings m) ~mopen:"" ~mbind:"⇀" ~msep:"," ~mclose:""
   (** Printing. *)
 
   let find (k: Key.t) (a:t) : 'a =

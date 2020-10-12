@@ -171,6 +171,9 @@ val mk_warning_diagnostic : check -> callstack -> range -> diagnostic
 val mk_unreachable_diagnostic : check -> callstack -> range -> diagnostic
 (** Create a diagnostic that says that a check is unreachable *)
 
+val pp_diagnostic_kind : Format.formatter -> diagnostic_kind -> unit
+(** Print a diagnostic kind *)
+
 val pp_diagnostic : Format.formatter -> diagnostic -> unit
 (** Print a diagnostic *)
 
