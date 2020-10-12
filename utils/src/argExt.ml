@@ -52,6 +52,8 @@ type spec =
   | Set_string_list of string list ref
 
   | Symbol of string list * (string -> unit)
+  | Symbol_delayed of string list * (string -> unit)
+  | Symbol_exit of string list * (string -> unit)
 
 type arg = {
   key: string;
@@ -209,6 +211,33 @@ let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (m
               );
               f v;
               eat tl
+
+           | Symbol_delayed (l,f) ->
+              let v, tl = get_arg () in
+              if not (List.mem v l) then (
+                Printf.eprintf
+                  "%s: option %s requires an argument in the list: [%a]\n"
+                  progname a
+                  (ListExt.print ListExt.printer_plain output_string) l;
+                help ();
+                exit 2
+              );
+              delayed := (!delayed)@[(fun () -> f v)];
+              eat tl
+
+           | Symbol_exit (l,f) ->
+             exit_after := true;
+             let v, tl = get_arg () in
+             if not (List.mem v l) then (
+               Printf.eprintf
+                 "%s: option %s requires an argument in the list: [%a]\n"
+                 progname a
+                 (ListExt.print ListExt.printer_plain output_string) l;
+               help ();
+               exit 2
+             );
+             delayed := (!delayed)@[(fun () -> f v)];
+             eat tl
          )
          else (
            Printf.eprintf "%s: unknown option %s\n" progname a;

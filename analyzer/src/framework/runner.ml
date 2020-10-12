@@ -52,7 +52,7 @@ let () =
 let parse_options f () =
   let files = ref [] in
   let args  = ref None in
-  ArgExt.parse (Config.Options.to_arg ())
+  ArgExt.parse (Config.Options.get_options ())
                (fun filename -> files := filename :: !files)
                (fun rest -> args := Some rest)
                "Modular Open Platform for Static Analysis"

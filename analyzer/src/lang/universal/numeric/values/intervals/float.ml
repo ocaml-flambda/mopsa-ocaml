@@ -55,7 +55,7 @@ struct
 
 
   let () =
-    import_standalone_option Rounding.name ~into:name
+    import_shared_option Rounding.name name
 
   let accept_type = function
     | T_float _ -> true

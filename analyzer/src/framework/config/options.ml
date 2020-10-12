@@ -22,8 +22,9 @@
 (** Management of command-line options *)
 
 open ArgExt
+module StringSet = SetExt.StringSet
 
-(** Command-line option *)
+ (** Command-line option *)
 type opt =
   | O_builtin of arg
   (** Built-in option *)
@@ -34,9 +35,8 @@ type opt =
   | O_domain of string * arg
   (** Domain option *)
 
-  | O_standalone of string * arg
-  (** Standalone options. Several domains can share a same standalone option
-      by importing it. *)
+  | O_shared of string * arg
+  (** Shared options that can be imported by several domains. *)
 
 (** {2 Registration} *)
 (** **************** *)
@@ -44,8 +44,8 @@ type opt =
 (** List of registered options *)
 let options : opt list ref = ref []
 
-(** Map giving the standalone options imported by a domain *)
-let imports : (string, string list) Hashtbl.t = Hashtbl.create 16
+(** Map giving the shared options imported by a domain *)
+let imports : (string (* domain *), StringSet.t (* imported options *)) Hashtbl.t = Hashtbl.create 16
 
 (** Register a built-in option *)
 let register_builtin_option (arg:arg) =
@@ -59,30 +59,43 @@ let register_language_option (lang:string) (arg:arg) =
 let register_domain_option (dom:string) (arg:arg) =
   options := (O_domain (dom, arg)) :: !options
 
-(** Register a group option *)
-let register_standalone_option (name:string) (arg:arg) =
-  options := (O_standalone (name, arg)) :: !options
+(** Register a shared option *)
+let register_shared_option (name:string) (arg:arg) =
+  options := (O_shared (name, arg)) :: !options
 
-(** Import a standalone option into a domain *)
-let import_standalone_option ~(into:string) (name:string) =
-  let old = try Hashtbl.find imports into with Not_found -> [] in
-  Hashtbl.replace imports into (name::old)
+(** Import a shared option into a domain *)
+let import_shared_option (name:string) (domain:string) =
+  let old = try Hashtbl.find imports domain with Not_found -> StringSet.empty in
+  Hashtbl.replace imports domain (StringSet.add name old)
 
 (** Get the imported options of a domain. *)
 let find_domain_imports (dom:string) =
-  try Hashtbl.find imports dom with Not_found -> []
+  try Hashtbl.find imports dom with Not_found -> StringSet.empty
 
+
+(** {2 Interface with Arg and Output} *)
+(** ********************************* *)
+
+let opt_to_arg opt =
+  match opt with
+  | O_builtin d | O_language (_, d) | O_domain (_, d) | O_shared (_, d) ->
+    d
 
 (** {2 Filters} *)
 (** *********** *)
 
-(** Return the list of built-in options *)
+(** Return the list of options *)
+let get_options () =
+  List.map opt_to_arg !options
+
+ (** Return the list of built-in options *)
 let get_builtin_options () =
   List.filter (fun opt ->
       match opt with
       | O_builtin _ -> true
       | _ -> false
-    ) !options
+    ) !options |>
+  List.map opt_to_arg
 
 (** Return the list of registered options of a language *)
 let get_language_options (lang:string) =
@@ -90,13 +103,14 @@ let get_language_options (lang:string) =
       match opt with
       | O_language (l, arg) -> l = lang
       | _ -> false
-    ) !options
+    ) !options |>
+  List.map opt_to_arg
 
 (** Find a standalone option *)
-let find_standalone_option (name:string) =
+let find_shared_option (name:string) =
   List.find (fun opt ->
       match opt with
-      | O_standalone (n, _) -> n = name
+      | O_shared (n, _) -> n = name
       | _ -> false
     ) !options
 
@@ -112,20 +126,11 @@ let get_domain_options (dom:string) =
   (* Options registered by the groups of the domain *)
   let opt2 =
     find_domain_imports dom |>
-    List.map find_standalone_option
+    StringSet.elements |>
+    List.map find_shared_option
   in
-  opt1 @ opt2
+  List.map opt_to_arg (opt1 @ opt2)
 
-(** {2 Interface with Arg and Output} *)
-(** ********************************* *)
-
-let opt_to_arg opt =
-  match opt with
-  | O_builtin d | O_language (_, d) | O_domain (_, d) | O_standalone (_, d) ->
-    d
-
-let to_arg () =
-  List.map opt_to_arg !options
 
 
 (** {2 Built-in options} *)
@@ -216,45 +221,33 @@ let () =
   register_builtin_option {
     key = "-list";
     category = "Help";
-    doc = " list available domains; if a configuration is specified, only used domains are listed";
-    spec = ArgExt.Unit_delayed (fun () ->
-        let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
-        Output.Factory.list_domains domains
-      );
-    default = "";
-  }
+    doc = " list available domains/checks/hooks; if a configuration is specified, only used domains are listed";
+    spec = ArgExt.Symbol_exit (
+        ["domains"; "checks"; "hooks"],
+        (fun selection ->
+           match selection with
+           | "domains" ->
+             let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
+             Output.Factory.list_domains domains
 
-(** List of alarms *)
-let () =
-  register_builtin_option {
-    key = "-checks";
-    category = "Help";
-    doc = " list the checks performed by selected configuration";
-    spec = ArgExt.Unit_delayed (fun () ->
-        let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
-        let domain = Abstraction.Builder.from_json abstraction.domain in
-        let module Domain = (val domain) in
-        Output.Factory.list_checks Domain.checks
-      );
-    default = "";
-  }
+           | "checks" ->
+             let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
+             let domain = Abstraction.Builder.from_json abstraction.domain in
+             let module Domain = (val domain) in
+             Output.Factory.list_checks Domain.checks
 
-(** List of hooks *)
-let () =
-  register_builtin_option {
-    key = "-hooks";
-    category = "Help";
-    doc = " list the available hooks";
-    spec = ArgExt.Unit_exit (fun () ->
-        let d =
-          List.map
-            (fun (h:(module Core.Hook.HOOK)) ->
-               let module H = (val h) in
-               H.name
-            ) (Core.Hook.list_hooks ())
-        in
-        Output.Factory.list_hooks d
-      );
+           | "hooks" ->
+             let d =
+               List.map
+                 (fun (h:(module Core.Hook.HOOK)) ->
+                    let module H = (val h) in
+                    H.name
+                 ) (Core.Hook.list_hooks ())
+             in
+             Output.Factory.list_hooks d
+
+           | _ -> assert false
+        ));
     default = "";
   }
 
@@ -343,7 +336,8 @@ let () =
 (** Help message *)
 let help () =
   let options =
-    if !Abstraction.Parser.opt_config = "" then !options
+    if !Abstraction.Parser.opt_config = "" then
+      List.map opt_to_arg !options
     else
       (* Get the language and domains of selected configuration *)
       let config = Paths.resolve_config_file !Abstraction.Parser.opt_config in
@@ -355,8 +349,7 @@ let help () =
       (get_language_options lang) @
       (List.map get_domain_options domains |> List.flatten)
   in
-  let args = List.map opt_to_arg options in
-  Output.Factory.help args
+  Output.Factory.help options
 
 let () =
   register_builtin_option {
