@@ -23,7 +23,7 @@
 
     Transfer functions use [Cases] to return partitioned results. Cases are
     encoded as DNF formulas. Each individual case comes with a flow, a set
-    of alarms, computation logs and cleaner statements. To represent suspended
+    of alarms, computation effects and cleaner statements. To represent suspended
     computations, the result of a case can be empty.
 *)
 
@@ -31,7 +31,7 @@
 open Token
 open Ast.Stmt
 open Flow
-open Log
+open Effect
 open Context
 open Callstack
 open Lattice
@@ -40,8 +40,8 @@ type cleaners = StmtSet.t
 
 (** A single case of a computation *)
 type 'r case =
-  | Result of 'r * log * cleaners
-  (** Actual result of the computation, with logs and cleaners *)
+  | Result of 'r * teffect * cleaners
+  (** Actual result of the computation, with effects and cleaners *)
 
   | Empty
   (** Empty results due to non-terminating computations (e.g. alarms) *)
@@ -56,8 +56,8 @@ type ('a,'r) cases
 val case : 'r case -> 'a flow -> ('a,'r) cases
 (** Create a case. *)
 
-val return : ?log:log -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
-val singleton : ?log:log -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
+val return : ?effects:teffect -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
+val singleton : ?effects:teffect -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
 (** Create a case with a single non-empty result. *)
 
 val empty : 'a flow -> ('a,'r) cases
@@ -111,20 +111,20 @@ val set_callstack: callstack-> ('a,'r) cases -> ('a,'r) cases
 (** [set_callstack cs c] returns a copy of [c] with callstack [cs]. *)
 
 
-(** {1 Logs} *)
-(** ******** *)
+(** {1 Effects} *)
+(** *********** *)
 
-val get_case_log : 'r case -> log
-(** Get the logs attached to a case *)
+val get_case_effects : 'r case -> teffect
+(** Get the effects attached to a case *)
 
-val set_case_log : log -> 'r case -> 'r case
-(** Set the logs attached to a case *)
+val set_case_effects : teffect -> 'r case -> 'r case
+(** Set the effects attached to a case *)
 
-val map_log : (log -> log) -> ('a,'r) cases -> ('a,'r) cases
-(** [map_log f c] replaces each log [l] in [c] with [f l]. *)
+val map_effects : (teffect -> teffect) -> ('a,'r) cases -> ('a,'r) cases
+(** [map_effects f c] replaces each effects [l] in [c] with [f l]. *)
 
-val set_log : log -> ('a,'r) cases -> ('a,'r) cases
-(** Set the same logs for all cases *)
+val set_effects : teffect -> ('a,'r) cases -> ('a,'r) cases
+(** Set the same effects for all cases *)
 
 
 (** {1 Lattice operators} *)
@@ -236,7 +236,7 @@ val bind_opt :
   ('a,'s) cases option
 (** [bind_opt f cases] substitutes each case [(c,flow)] in [cases]
     with [f c flow]. If the function returns [None], the case becomes
-    [NotHandled]. Logs and cleaners returned by [f] are concatenated
+    [NotHandled]. Effects and cleaners returned by [f] are concatenated
     with the previous ones in [cases]. *)
 
 val (>>=?) :
@@ -250,7 +250,7 @@ val bind :
   ('a,'r) cases ->
   ('a,'s) cases
 (** [bind f cases] substitutes each case [(c,flow)] in [cases] with [f c flow].
-    Logs and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
+    Effects and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
 
 val (>>=) :
   ('a,'r) cases ->
@@ -286,7 +286,7 @@ val bind_conjunction :
   (('r case * 'a flow) list -> ('a,'s) cases) ->
   ('a,'r) cases -> ('a,'s) cases
 (** [bind_conjunction f cases] substitutes each conjunction of cases [conj] in [cases] with [f conj].
-    Logs and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
+    Effects and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
 
 val bind_conjunction_result :
   ('r list -> 'a flow -> ('a,'s) cases) ->
@@ -298,7 +298,7 @@ val bind_disjunction :
   (('r case * 'a flow) list -> ('a,'s) cases) ->
   ('a,'r) cases -> ('a,'s) cases
 (** [bind_disjunction f cases] substitutes each disjunction of cases [disj] in [cases] with [f disj].
-    Logs and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
+    Effects and cleaners returned by [f] are concatenated with the previous ones in [cases]. *)
 
 val bind_disjunction_result :
   ('r list -> 'a flow -> ('a,'s) cases) ->

@@ -44,9 +44,9 @@ sig
   (** Name of the reduction rule *)
 
   val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man ->
-    'a flow -> 'a flow  -> 'a post option
-  (** [reduce s man erman input output] reduces post-state [output] that
-      resulted from executing statement [s] on pre-state [input] *)
+    'a flow -> 'a flow -> teffect -> 'a post option
+  (** [reduce s man erman input output effects] reduces post-state [output]
+      that resulted from executing statement [s] on pre-state [input] *)
 end
 
 

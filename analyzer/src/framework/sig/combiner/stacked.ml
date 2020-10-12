@@ -30,6 +30,7 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
+  val merge : t -> t * teffect -> t * teffect -> t
   val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
   val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
@@ -69,6 +70,13 @@ struct
   let domains = DomainSet.singleton D.name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
+  let merge pre (a1,te1) (a2,te2) =
+    let e1 = get_root_effect te1 in
+    let e2 = get_root_effect te2 in
+    if e1 == e2 then a1 else
+    if is_empty_effect e1 then a2 else
+    if is_empty_effect e2 then a1
+    else D.merge pre (a1,e1) (a2,e2)
   let exec targets = D.exec
   let eval targets = D.eval
   let ask targets  = D.ask
@@ -79,59 +87,13 @@ end
 module CombinerToStacked(T:STACKED_COMBINER) : STACKED with type t = T.t =
 struct
   include T
+  let merge pre (a1,e1) (a2,e2) =
+    let te1 = mk_teffect e1 empty_teffect empty_teffect in
+    let te2 = mk_teffect e2 empty_teffect empty_teffect in
+    T.merge pre (a1,te1) (a2,te2)
   let exec stmt man flow = T.exec [] stmt man flow
   let eval exp man flow  = T.eval [] exp man flow
   let ask query man flow = T.ask [] query man flow
   let print_state printer a = T.print_state [] printer a
   let print_expr man flow printer e = T.print_expr [] man flow printer e
 end
-
-
-module AutoLogger(T:STACKED_COMBINER) : STACKED_COMBINER with type t = T.t =
-struct
-  include T
-  let merge pre (a1,log1) (a2,log2) =
-    if a1 == a2 then a1 else
-    if Log.is_empty_log log1 then a2 else
-    if Log.is_empty_log log2 then a1 else
-    if (Log.compare_log log1 log2 = 0) then a1
-    else T.merge pre (a1,log1) (a2,log2)
-
-
-  let exec domains =
-    let f = T.exec domains in
-    (fun stmt man flow ->
-       f stmt man flow |>
-       OptionExt.lift @@ fun res ->
-       Cases.map_log (fun log ->
-           man.set_log (
-             man.get_log log |> Log.add_stmt_to_log stmt
-           ) log
-         ) res
-    )
-end
-
-
-let domains : (module STACKED_COMBINER) list ref = ref []
-
-let register_stacked_combiner dom =
-  let module D = (val dom : STACKED_COMBINER) in
-  domains := (module AutoLogger(D)) :: !domains
-
-let find_stacked_combiner name =
-  List.find (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
-
-let mem_stacked_combiner name =
-  List.exists (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      compare D.name name = 0
-    ) !domains
-
-let stacked_combiner_names () =
-  List.map (fun dom ->
-      let module D = (val dom : STACKED_COMBINER) in
-      D.name
-    ) !domains

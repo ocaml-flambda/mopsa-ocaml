@@ -63,7 +63,7 @@ struct
 
   let widen ctx = join
 
-  let merge pre (a1,log1) (a2,log2) =
+  let merge pre (a1,e1) (a2,e2) =
     join a1 a2
 
 

@@ -26,7 +26,7 @@
 open Ast.Stmt
 open Flow
 open Token
-open Log
+open Effect
 open Context
 open Alarm
 open Lattice
@@ -35,7 +35,7 @@ type cleaners = StmtSet.t
 
 (** Single case of a computation *)
 type 'r case =
-  | Result of 'r * log * cleaners
+  | Result of 'r * teffect * cleaners
   | Empty
   | NotHandled
 
@@ -44,8 +44,8 @@ type ('a,'r) cases = ('r case * 'a flow) Dnf.t
 
 let case (case:'r case) flow : ('a,'r) cases = Dnf.singleton (case,flow)
 
-let return ?(log=empty_log) ?(cleaners=[]) (res:'r) (flow:'a flow) =
-  case (Result (res,log,StmtSet.of_list cleaners)) flow
+let return ?(effects=empty_teffect) ?(cleaners=[]) (res:'r) (flow:'a flow) =
+  case (Result (res,effects,StmtSet.of_list cleaners)) flow
 
 let singleton = return
 
@@ -102,17 +102,17 @@ let get_case_cleaners (case:'r case) : StmtSet.t =
 
 let set_case_cleaners (cleaners:StmtSet.t) (case:'r case) : 'r case =
   match case with
-  | Result(r,log,_) -> Result(r,log,cleaners)
+  | Result(r,effects,_) -> Result(r,effects,cleaners)
   | _ -> case
 
-let get_case_log (case:'r case) : log =
+let get_case_effects (case:'r case) : teffect =
   match case with
-  | Result(_,log,_)    -> log
-  | Empty | NotHandled -> empty_log
+  | Result(_,effects,_)    -> effects
+  | Empty | NotHandled -> empty_teffect
 
-let set_case_log (log:log) (case:'r case) : 'r case =
+let set_case_effects (effects:teffect) (case:'r case) : 'r case =
   match case with
-  | Result(r,old,cleaners) -> if old == log then case else Result(r,log,cleaners)
+  | Result(r,old,cleaners) -> if old == effects then case else Result(r,effects,cleaners)
   | _ -> case
 
 
@@ -131,7 +131,7 @@ let map_result
   map (fun case flow ->
       let case' =
         match case with
-        | Result (r,log,cleaners) -> Result (f r,log,cleaners)
+        | Result (r,effects,cleaners) -> Result (f r,effects,cleaners)
         | Empty                   -> Empty
         | NotHandled              -> NotHandled
       in
@@ -171,7 +171,7 @@ let reduce_result
   reduce
     (fun case flow ->
        match case with
-       | Result (r,log,cleaners) -> f r flow
+       | Result (r,effects,cleaners) -> f r flow
        | Empty | NotHandled      -> bottom)
     ~join ~meet cases
 
@@ -190,25 +190,25 @@ let print_result pp fmt cases =
     fmt cases
 
 
-let map_log
-    (f:log -> log)
+let map_effects
+    (f:teffect -> teffect)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
-       | Result(r,log,cleaners) -> Result(r,f log,cleaners), flow
+       | Result(r,effects,cleaners) -> Result(r,f effects,cleaners), flow
        | _                      -> case, flow
     ) cases
 
-let set_log
-    (log:log)
+let set_effects
+    (effects:teffect)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
-       | Result(r,old,cleaners) -> if old == log then case,flow else Result(r,log,cleaners), flow
+       | Result(r,old,cleaners) -> if old == effects then case,flow else Result(r,effects,cleaners), flow
        | _                      -> case, flow
     ) cases
 
@@ -220,27 +220,27 @@ let set_cleaners
   map
     (fun case flow ->
        match case with
-       | Result(r,log,_) -> Result(r,log,cleaners), flow
+       | Result(r,effects,_) -> Result(r,effects,cleaners), flow
        | _               -> case, flow
     ) cases
 
 
-let concat_log
-    (old:log)
+let concat_effects
+    (old:teffect)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
        | Result(r,recent,cleaners) ->
-         (* Add logs of non-empty environments only *)
+         (* Add effectss of non-empty environments only *)
          (* FIXME: Since are always called from the binders, we can't
               require having the lattice manager. So we can't test if
               T_cur is ⊥ or not! For the moment, we rely on empty flow
               maps, but this is not always sufficient.
          *)
          if Flow.mem T_cur flow then
-           Result(r, Log.concat_log ~old ~recent, cleaners), flow
+           Result(r, concat_teffect ~old ~recent, cleaners), flow
          else
            case, flow
        | _ -> case, flow
@@ -254,7 +254,7 @@ let add_cleaners
   map
     (fun case flow ->
        match case with
-       | Result(r,log,cleaners') -> Result(r,log,StmtSet.union cleaners' cleaners), flow
+       | Result(r,effects,cleaners') -> Result(r,effects,StmtSet.union cleaners' cleaners), flow
        | _ -> case, flow
     ) cases
 
@@ -375,12 +375,12 @@ let meet_list ~empty (l: ('a,'r) cases list) : ('a,'r) cases =
 
 
 let remove_duplicates compare_case lattice cases =
-  (* Logs of empty environments should be ignored.
-     This function returns an empty log when T_cur environment is empty. *)
-  let real_log flow log =
+  (* Effectss of empty environments should be ignored.
+     This function returns an empty effects when T_cur environment is empty. *)
+  let real_effects flow effects =
     if lattice.Lattice.is_bottom (Flow.get T_cur lattice flow)
-    then empty_log
-    else log
+    then empty_teffect
+    else effects
   in
   (* Remove duplicates of a case in a conjunction *)
   let rec remove_case_duplicates_in_conj case flow conj =
@@ -392,7 +392,7 @@ let remove_duplicates compare_case lattice cases =
         | 0 ->
           let flow = Flow.meet lattice flow' flow'' in
           let case = set_case_cleaners (StmtSet.union (get_case_cleaners case') (get_case_cleaners case'')) case'' |>
-                     set_case_log (meet_log (get_case_log case') (get_case_log case'') |> real_log flow) in
+                     set_case_effects (meet_teffect (get_case_effects case') (get_case_effects case'') |> real_effects flow) in
           case,flow,tl''
         | _ -> case'', flow'', (case',flow')::tl''
   in
@@ -420,7 +420,7 @@ let remove_duplicates compare_case lattice cases =
             (fun ((case,flow), (case',flow')) ->
                let flow = Flow.join lattice flow flow' in
                let case = set_case_cleaners (StmtSet.union (get_case_cleaners case) (get_case_cleaners case')) case |>
-                          set_case_log (join_log (get_case_log case) (get_case_log case') |> real_log flow) in
+                          set_case_effects (join_teffect (get_case_effects case) (get_case_effects case') |> real_effects flow) in
                case,flow
             )
         in
@@ -470,7 +470,7 @@ let bind_opt
          in
          let ctx' = get_ctx cases' in
          let cases'' = add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-                       concat_log (get_case_log case) in
+                       concat_effects (get_case_effects case) in
          ctx',cases''
       )
       (get_ctx cases) cases in
@@ -546,16 +546,16 @@ let bind_conjunction_result
        else
          let cl,fl = List.split handled in
          let flow = List.fold_left (Flow.meet lattice) (List.hd fl) (List.tl fl) in
-         let rl,log,cleaners =
+         let rl,effects,cleaners =
            List.fold_left
              (fun (acc1,acc2,acc3) case ->
                 match case with
-                | Result(r,log,cleaners) -> r::acc1,meet_log acc2 log,StmtSet.union acc3 cleaners
+                | Result(r,effects,cleaners) -> r::acc1,meet_teffect acc2 effects,StmtSet.union acc3 cleaners
                 | _ -> assert false
-             ) ([],empty_log,StmtSet.empty) cl in
+             ) ([],empty_teffect,StmtSet.empty) cl in
          let handled_res = f rl flow |>
                            add_cleaners (StmtSet.elements cleaners) |>
-                           concat_log log in
+                           concat_effects effects in
          if others = [] then
            handled_res
          else
@@ -593,16 +593,16 @@ let bind_disjunction_result
        else
          let cl,fl = List.split handled in
          let flow = List.fold_left (Flow.join lattice) (List.hd fl) (List.tl fl) in
-         let rl,log,cleaners =
+         let rl,effects,cleaners =
            List.fold_left
              (fun (acc1,acc2,acc3) case ->
                 match case with
-                | Result(r,log,cleaners) -> r::acc1,join_log acc2 log,StmtSet.union acc3 cleaners
+                | Result(r,effects,cleaners) -> r::acc1,join_teffect acc2 effects,StmtSet.union acc3 cleaners
                 | _ -> assert false
-             ) ([],empty_log,StmtSet.empty) cl in
+             ) ([],empty_teffect,StmtSet.empty) cl in
          let handled_res = f rl flow |>
                            add_cleaners (StmtSet.elements cleaners) |>
-                           concat_log log in
+                           concat_effects effects in
          if others = [] then
            handled_res
          else

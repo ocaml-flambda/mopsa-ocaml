@@ -171,13 +171,13 @@ struct
         (fun _ aa1 aa2 -> Domain.widen ctx aa1 aa2)
         a1 a2
 
-    let merge pre (a,log1) (b,log2) =
+    let merge pre (a,e1) (b,e2) =
       Map.map2zo
         (fun _ a1 -> a1)
         (fun _ a2 -> a2)
         (fun pack a1 a2 ->
            let prea = try Map.find pack pre with Not_found -> Domain.top in
-           Domain.merge prea (a1,log1) (a2,log2)
+           Domain.merge prea (a1,e1) (a2,e2)
         ) a b
 
 

@@ -169,18 +169,18 @@ struct
     Apron.Abstract1.forget_array ApronManager.man a [|v|] false, bnd
 
 
-  let merge (pre,bnd) ((a1,bnd1),log1) ((a2,bnd2),log2) =
+  let merge (pre,bnd) ((a1,bnd1),e1) ((a2,bnd2),e2) =
     let bnd = Binding.concat bnd1 bnd2 in
-    (* FIXME: the use here the generic merge provided by [Framework.Core.Log]
+    (* FIXME: the use here the generic merge provided by [Framework.Core.Effect]
        and we do not provide a [find] function. Instead, we forget all modified
        and removed variables, which is sound, but inefficient. This should be
        improved by return intervals in [find] and use them in [add]. *)
     let x1,x2 =
-      Log.generic_domain_merge
+      generic_merge
         ~add:(fun v () x -> add_missing_vars x [v] |> forget_var v)
         ~find:(fun v x -> ())
         ~remove:(fun v x -> remove_var v x)
-        ((a1,bnd),log1) ((a2,bnd),log2)
+        ((a1,bnd),e1) ((a2,bnd),e2)
     in
     meet x1 x2
 

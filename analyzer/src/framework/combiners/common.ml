@@ -90,10 +90,10 @@ let fst_pair_man (man:('a, 'b * 'c) man) : ('a, 'b) man = {
   man with
   get = get_pair_fst man;
   set = set_pair_fst man;
-  get_log = (fun glog -> man.get_log glog |> Log.get_left_log);
-  set_log = (fun log glog -> man.set_log (
-      Log.mk_log [] log (man.get_log glog |> Log.get_right_log)
-    ) glog);
+  get_effects = (fun geffects -> man.get_effects geffects |> get_left_teffect);
+  set_effects = (fun effects geffects -> man.set_effects (
+      mk_teffect empty_effect effects (man.get_effects geffects |> get_right_teffect)
+    ) geffects);
 }
 
 (** Manager of the right argument in a pair of domains *)
@@ -101,10 +101,10 @@ let snd_pair_man (man:('a, 'b * 'c) man) : ('a, 'c) man = {
   man with
   get = get_pair_snd man;
   set = set_pair_snd man;
-  get_log = (fun glog -> man.get_log glog |> Log.get_right_log);
-  set_log = (fun log glog -> man.set_log (
-      Log.mk_log [] (man.get_log glog |> Log.get_left_log) log
-    ) glog);
+  get_effects = (fun geffects -> man.get_effects geffects |> get_right_teffect);
+  set_effects = (fun effects geffects -> man.set_effects (
+      mk_teffect empty_effect (man.get_effects geffects |> get_left_teffect) effects
+    ) geffects);
 }
 
 

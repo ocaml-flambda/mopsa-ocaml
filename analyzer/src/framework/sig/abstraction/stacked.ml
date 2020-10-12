@@ -68,14 +68,14 @@ sig
 
   val widen : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's * bool
 
-  val merge : t -> t * log -> t * log -> t
-  (** [merge pre (post1, log1) (post2, log2)] synchronizes two divergent
+  val merge : t -> t * effect -> t * effect -> t
+  (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
       abstraction DAG (e.g., a reduced product).
 
-      The logs [log1] and [log2] represent a journal of internal statements
+      The effects [effect1] and [effect2] represent a journal of internal statements
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
@@ -120,22 +120,15 @@ module Instrument(D:STACKED) : STACKED with type t = D.t =
 struct
   include D
 
-  let merge pre (a1,log1) (a2,log2) =
-    if a1 == a2 then a1 else
-    if Log.is_empty_log log1 then a2 else
-    if Log.is_empty_log log2 then a1 else
-    if (Log.compare_log log1 log2 = 0) then a1
-    else D.merge pre (a1,log1) (a2,log2)
-
-
-  (* Add stmt to the logs of the domain *)
+  (* Add stmt to the effects of the domain *)
   let exec stmt man flow =
     D.exec stmt man flow |>
     OptionExt.lift @@ fun res ->
-    Cases.map_log (fun log ->
-        man.set_log (
-          man.get_log log |> Log.add_stmt_to_log stmt
-        ) log
+    Cases.map_effects (fun effects ->
+        man.set_effects (
+          man.get_effects effects |>
+          add_stmt_to_teffect stmt
+        ) effects
       ) res
 
   (* Remove duplicate evaluations *)

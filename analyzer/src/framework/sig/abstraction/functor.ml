@@ -50,21 +50,22 @@ struct
 
     include D
 
-  (* Add stmt to the logs of the domain *)
-  let exec stmt man flow =
-    D.exec stmt man flow |>
-    OptionExt.lift @@ fun res ->
-    Cases.map_log (fun log ->
-        man.set_log (
-          man.get_log log |> Log.add_stmt_to_log stmt
-        ) log
-      ) res
+    (* Add stmt to the effects of the domain *)
+    let exec stmt man flow =
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_effects (fun effects ->
+          man.set_effects (
+            man.get_effects effects |>
+            add_stmt_to_teffect stmt
+          ) effects
+        ) res
 
-  (* Remove duplicate evaluations *)
-  let eval exp man flow =
-    D.eval exp man flow |>
-    OptionExt.lift @@ Eval.remove_duplicates man.lattice
-  
+    (* Remove duplicate evaluations *)
+    let eval exp man flow =
+      D.eval exp man flow |>
+      OptionExt.lift @@ Eval.remove_duplicates man.lattice
+
   end
 end
 

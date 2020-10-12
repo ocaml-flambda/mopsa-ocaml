@@ -84,33 +84,3 @@ struct
   let print_state _ _ () = ()
 
 end
-
-
-
-(*==========================================================================*)
-(**                          {2 Registration}                               *)
-(*==========================================================================*)
-
-
-let combiners : (module STATELESS_COMBINER) list ref = ref []
-
-let register_stateless_combiner dom =
-  combiners := dom :: !combiners
-
-let find_stateless_combiner name =
-  List.find (fun dom ->
-      let module S = (val dom : STATELESS_COMBINER) in
-      compare S.name name = 0
-    ) !combiners
-
-let mem_stateless_combiner name =
-  List.exists (fun dom ->
-      let module S = (val dom : STATELESS_COMBINER) in
-      compare S.name name = 0
-    ) !combiners
-
-let stateless_combiner_names () =
-  List.map (fun dom ->
-      let module S = (val dom : STATELESS_COMBINER) in
-      S.name
-    ) !combiners

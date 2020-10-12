@@ -27,13 +27,13 @@ open Ast.Stmt
 open Ast.Expr
 open Cases
 open Semantic
-open Log
+open Effect
 
 
 type 'a eval = ('a,expr) cases
 
-val return : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
-val singleton : ?log:log -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val return : ?effects:teffect -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val singleton : ?effects:teffect -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
 
 val empty : 'a flow -> 'a eval
 

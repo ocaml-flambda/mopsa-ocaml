@@ -57,7 +57,7 @@ sig
 
   val widen: (t, t) man -> t ctx -> t -> t -> t
 
-  val merge : t -> t * log -> t * log -> t
+  val merge : t -> t * teffect -> t * teffect -> t
 
 
   (** {2 Transfer functions} *)

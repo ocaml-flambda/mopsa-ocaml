@@ -101,9 +101,9 @@ struct
     let aa2, s, s', stable2 = D2.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), log) ((a1',a2'), log') =
-    D1.merge pre1 (a1, Log.get_left_log log) (a1', Log.get_left_log log'),
-    D2.merge pre2 (a2, Log.get_right_log log) (a2', Log.get_right_log log')
+  let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
+    D1.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
+    D2.merge pre2 (a2, get_right_teffect te) (a2', get_right_teffect te')
 
 
 

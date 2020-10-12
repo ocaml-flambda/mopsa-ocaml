@@ -95,8 +95,8 @@ struct
       in
       Some (
         let post' = post >>% inline f params locals body ret range man in
-        (* FIXME: we keep logs intra-procedural for the moment *)
-        Cases.set_log empty_log post'
+        (* FIXME: we only keep intra-procedural effects for the moment *)
+        Cases.set_effects empty_teffect post'
       )
 
     | _ -> None

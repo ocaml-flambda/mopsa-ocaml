@@ -241,18 +241,18 @@ let map2zo
     report = falarm flow1.report flow2.report;
   }
 
-let merge lattice ~merge_report pre (flow1,log1) (flow2,log2) =
+let merge lattice ~merge_report pre (flow1,effect1) (flow2,effect2) =
   let ctx = most_recent_ctx (get_ctx flow1) (get_ctx flow2) in
   map2zo
     (fun _ a1 -> lattice.bottom)
     (fun _ a2 -> lattice.bottom)
     (fun tk a1 a2 ->
        match tk with
-       (* Logs concern only cur environments *)
+       (* Effects concern only cur environments *)
        | T_cur ->
          (* Merge the cur environments *)
          let p = get T_cur lattice pre in
-         lattice.merge p (a1,log1) (a2,log2)
+         lattice.merge p (a1,effect1) (a2,effect2)
 
        (* For the other tokens, compute the meet of the environments *)
        | _ -> lattice.meet ctx a1 a2
