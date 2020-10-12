@@ -104,7 +104,8 @@ struct
     | C_int_interval (i1,i2) ->
       Nb (I.of_z i1 i2)
 
-    | C_avalue(V_int_interval _, itv) -> itv
+    | C_avalue(V_int_interval, itv) -> itv
+    | C_avalue(V_int_interval_fast, itv) -> itv
 
     | _ -> top_of_typ t
 
@@ -208,7 +209,8 @@ struct
   let avalue : type r. r avalue_kind -> t -> r option =
     fun aval a ->
     match aval with
-    | Common.V_int_interval _ -> Some a
+    | Common.V_int_interval -> Some a
+    | Common.V_int_interval_fast -> Some a
     | Common.V_int_congr_interval -> Some (a, Bot.Nb Common.C.minf_inf)
     | _ -> None
 

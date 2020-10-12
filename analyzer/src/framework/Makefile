@@ -22,7 +22,7 @@
 
 # Framework packs
 framework = core lattices sig combiners toplevel engines output config runner
-framework.core = semantic route ast print query avalue context alarm token effect \
+framework.core = semantic route ast print context query avalue alarm token effect \
 		         lattice flow cases eval post id manager hook cache all
 framework.core.ast = program frontend typ operator constant var expr stmt visitor
 framework.lattices = partial_map partial_inversible_map_sig \

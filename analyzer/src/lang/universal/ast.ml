@@ -300,8 +300,8 @@ type ('a,_) query += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interact
 
 let () =
   register_query {
-      join = (let doit : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-          fun next query join a b ->
+      join = (let doit : type a r. query_pool -> (a,r) query -> r -> r -> r =
+          fun next query a b ->
           match query with
           | Q_debug_addr_value addr ->
              let open Framework.Engines.Interactive in
@@ -315,10 +315,10 @@ let () =
                                  end in
              {var_value=None; var_value_type = T_any; var_sub_value}
 
-          | _ -> next.apply query join a b
+          | _ -> next.pool_join query a b
         in doit
       );
-      meet = (fun next q meet a b -> next.apply q meet a b);
+      meet = (fun next q a b -> next.pool_meet q a b);
     }
 
 

@@ -419,8 +419,7 @@ struct
           | [] -> None
           | r :: tl ->
             OptionExt.neutral2
-              (meet_query q
-                 ~meet:(fun _ _ -> panic "abstract query called from simplified domain"))
+              (meet_query q)
               r
               (loop tl)
         in

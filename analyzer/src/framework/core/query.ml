@@ -24,43 +24,81 @@
 *)
 
 
+open Lattice
+open Context
+
+
 type ('a,_) query = ..
 
-
-type query_operator = {
-  apply : 'a 'r.  ('a,'r) query -> ('a -> 'a -> 'a) -> 'r -> 'r -> 'r;
+type query_pool = {
+  pool_join : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
+  pool_meet : 'a 'r. ('a,'r) query -> 'r -> 'r -> 'r;
 }
 
-let join_chain = ref {
-    apply = (fun _ _ _ _ -> Exceptions.panic "query_join: unknown query");
+let simple_pool = ref {
+    pool_join = (fun _ _ _ -> raise Not_found);
+    pool_meet = (fun _ _ _ -> raise Not_found);
   }
 
-let meet_chain = ref {
-    apply = (fun _ _ _ _ -> Exceptions.panic "query_meet: unknown query");
+type lattice_query_pool = {
+  pool_join : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  pool_meet : 'a 'r. 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
+
+let lattice_pool = ref {
+    pool_join = (fun _ _ _ _ _ -> raise Not_found);
+    pool_meet = (fun _ _ _ _ _ -> raise Not_found);
   }
 
-let join_query
-    ?(join=(fun x y ->
-        Exceptions.panic "join_query: state join not provided"))
-    q a b =
-  !join_chain.apply q join a b
+let join_query ?(ctx=None) ?(lattice=None) q a b =
+  try
+    !simple_pool.pool_join q a b
+  with Not_found ->
+  match ctx,lattice with
+  | Some ctx, Some lattice ->
+    begin
+      try !lattice_pool.pool_join ctx lattice q a b
+      with Not_found -> Exceptions.panic "join_query: query not found"
+    end
+  | _ -> Exceptions.panic "join_query: query not found"
 
-let meet_query
-    ?(meet=(fun x y ->
-        Exceptions.panic "meet_query: state join not provided"))
-    q a b =
-  !meet_chain.apply q meet a b
+
+let meet_query ?(ctx=None) ?(lattice=None) q a b =
+  try
+    !simple_pool.pool_meet q a b
+  with Not_found ->
+  match ctx,lattice with
+  | Some ctx, Some lattice ->
+    begin
+      try !lattice_pool.pool_meet ctx lattice q a b
+      with Not_found -> Exceptions.panic "meet_query: query not found"
+    end
+  | _ -> Exceptions.panic "meet_query: query not found"
+
 
 type query_info = {
-  join : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
-  meet : 'a 'r. query_operator -> ('a,'r) query -> ('a->'a->'a) -> 'r -> 'r -> 'r;
+  join : 'a 'r. query_pool -> ('a,'r) query -> 'r -> 'r -> 'r;
+  meet : 'a 'r. query_pool -> ('a,'r) query -> 'r -> 'r -> 'r;
 }
 
 let register_query info =
-  let old_join = !join_chain in
-  let old_meet = !meet_chain in
-  join_chain := { apply = (fun q join a b -> info.join old_join q join a b) };
-  meet_chain := { apply = (fun q meet a b -> info.meet old_meet q meet a b) }
+  let old_pool = !simple_pool in
+  simple_pool := {
+    pool_join = (fun q a b -> info.join old_pool q a b);
+    pool_meet = (fun q a b -> info.meet old_pool q a b);
+  }
+
+type lattice_query_info = {
+  join : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+  meet : 'a 'r. lattice_query_pool -> 'a ctx -> 'a lattice -> ('a,'r) query -> 'r -> 'r -> 'r;
+}
+
+let register_lattice_query info =
+  let old_pool = !lattice_pool in
+  lattice_pool := {
+    pool_join = (fun ctx lattice q a b -> info.join old_pool ctx lattice q a b);
+    pool_meet = (fun ctx lattice q a b -> info.meet old_pool ctx lattice q a b);
+  }
 
 
 type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
@@ -68,17 +106,17 @@ type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarS
 let () =
   register_query {
       join = (
-        let f : type a r. query_operator -> (a, r) query -> (a -> a -> a) -> r -> r -> r =
-          fun next query join a b ->
+        let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+          fun next query a b ->
           match query with
           | Q_variables_linked_to _ -> Ast.Var.VarSet.union a b
-          | _ -> next.apply query join a b in f
+          | _ -> next.pool_join query a b in f
       );
       meet = (
-        let f : type a r. query_operator -> (a, r) query -> (a -> a -> a) -> r -> r -> r =
-          fun next query meet a b ->
+        let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+          fun next query a b ->
           match query with
           | Q_variables_linked_to _ -> Ast.Var.VarSet.inter a b
-          | _ -> next.apply query meet a b in f
+          | _ -> next.pool_meet query a b in f
       );
     }

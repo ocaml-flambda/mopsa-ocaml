@@ -45,24 +45,24 @@ type ('a,_) query +=
 let () =
   register_query {
     join = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query join a b ->
+      let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+        fun next query a b ->
           match query with
           | Q_allocated_addresses -> a @ b
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
-          | _ -> next.apply query join a b
+          | _ -> next.pool_join query a b
       in f
     );
     meet = (
-      let f : type a r. query_operator -> (a,r) query -> (a->a->a) -> r -> r -> r =
-        fun next query meet a b ->
+      let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+        fun next query a b ->
           match query with
           | Q_allocated_addresses ->
             assert false
           | Q_alive_addresses -> assert false
           | Q_alive_addresses_aspset -> Pool.meet a b
-          | _ -> next.apply query meet a b
+          | _ -> next.pool_meet query a b
       in f
     );
   }

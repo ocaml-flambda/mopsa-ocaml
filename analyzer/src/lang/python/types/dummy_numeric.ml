@@ -82,7 +82,8 @@ module Value =
     fun avk a ->
     match avk with
     | Universal.Numeric.Common.V_float_interval _
-    | Universal.Numeric.Common.V_int_interval _
+    | Universal.Numeric.Common.V_int_interval
+    | Universal.Numeric.Common.V_int_interval_fast
     | Universal.Numeric.Common.V_int_congr_interval ->
       Some (top_avalue avk)
 

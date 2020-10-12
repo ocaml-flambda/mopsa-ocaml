@@ -148,7 +148,7 @@ struct
       let f2 = D2.ask targets in
       (fun q man flow ->
          OptionExt.neutral2
-           (join_query q ~join:(fun a b -> man.lattice.join (Flow.get_ctx flow) a b))
+           (join_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) q)
            (f1 q (fst_pair_man man) flow)
            (f2 q (snd_pair_man man) flow)
       )
