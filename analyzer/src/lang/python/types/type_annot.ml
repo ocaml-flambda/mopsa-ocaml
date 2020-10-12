@@ -76,6 +76,7 @@ struct
                    | Some {ekind = E_py_object (addr, _)} ->
                      Keys.Class (mk_addr_attr addr s (T_py None))
                    | _ -> assert false in
+                 debug "var = %a@.acc = %a" (format Keys.print) var (format TVMap.print) acc;
                  begin match TVMap.find_opt var acc with
                    | None ->
                      (begin match var with
@@ -83,8 +84,8 @@ struct
                         | Keys.Global _ -> Keep (TVMap.add var set acc)
                       end)
                    | Some set2 ->
-                     if ESet.equal set set2 then Keep acc
-                     else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s (format ESet.print) set (format ESet.print) set2
+                      if ESet.equal set set2 then Keep acc
+                      else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s (format ESet.print) set (format ESet.print) set2
                  end
                | _ ->
                  VisitParts acc)
@@ -180,21 +181,23 @@ struct
                 match annot with
                 | None -> (flow_in, flow_notin)
                 | Some ant ->
-                  let e =
-                    match ekind ant with
-                    | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) ->
-                      let nant = if is_method then
-                          {ant with ekind = E_py_call (tv,
-                                                       (mk_var
-                                                          (mk_addr_attr (match ekind @@ List.hd args with
-                                                               | E_py_object (a, _) -> a
-                                                               | _ -> assert false) s (T_py None))
-                                                          range)::types
-                                                      , [])}
-                        else ant in
-                      mk_expr ~etyp:(T_py None) (E_py_check_annot (arg, nant)) range
-                    | _ ->
-                      mk_expr ~etyp:(T_py None) (E_py_check_annot (arg, ant)) range in
+                   let nant = Visitor.map_expr
+                                (fun expr -> match ekind expr with
+                                             | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)} as tv, {ekind = E_constant (C_string s)}::types, []) ->
+                                                let nant = if is_method then
+                                                             {ant with ekind = E_py_call (tv,
+                                                                                          (mk_var
+                                                                                             (mk_addr_attr (match ekind @@ List.hd args with
+                                                                                                            | E_py_object (a, _) -> a
+                                                                                                            | _ -> assert false) s (T_py None))
+                                                                                             range)::types
+                                                                                          , [])}
+                                                           else ant in
+                                                Keep nant
+                                             | _ -> VisitParts expr
+                                )
+                                (fun stmt -> VisitParts stmt) ant in
+                  let e = mk_expr ~etyp:(T_py None) (E_py_check_annot (arg, nant)) range in
                   post_to_flow man (man.exec (mk_assume e range) flow_in),
                   Flow.join man.lattice (post_to_flow man (man.exec (mk_assume (mk_py_not e range) range) flow_in)) flow_notin
               )  (flow, Flow.bottom_from flow) in_args in_types in

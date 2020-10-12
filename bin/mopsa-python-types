@@ -2,4 +2,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/types.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG}  -loop-unrolling=2 -unprecise-exn=IndexError -unprecise-exn=ValueError -unprecise-exn=KeyError -unprecise-exn=OverflowError -default-alloc-pol=all -py-list-alloc-pol=range -py-tuple-alloc-pol=range -py-dict-alloc-pol=range $@ #-debug=warning $@
+${MOPSADIR}/bin/mopsa -config=${CONFIG}  -loop-unrolling=2 -unprecise-exn=IndexError -unprecise-exn=ValueError -unprecise-exn=KeyError -unprecise-exn=OverflowError -unprecise-exn=ZeroDivisionError -default-alloc-pol=all -py-list-alloc-pol=range -py-tuple-alloc-pol=range -py-dict-alloc-pol=range -py-disable-desugar-for-range $@ #-debug=warning $@

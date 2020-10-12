@@ -6,14 +6,13 @@ import sys
 from typing import (Any, BinaryIO, Generic, Iterable, Iterator, List, MutableSequence,
                     overload, Text, Tuple, TypeVar, Union)
 
-# cheating: there is currently an issue with check_annot([0], Union[bytes, List[_T])) in array.__init__. It doesn't refine _T
-# _T = TypeVar('_T', int, float, Text)
+_T = TypeVar('_T', int, float, Text)
 
 # if sys.version_info >= (3,):
 typecodes: str
 
-_T = int
-class array(MutableSequence[_T]):
+# _T = int
+class array(Generic[_T], MutableSequence[_T]):
     typecode: str
     itemsize: int
     @overload
