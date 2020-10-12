@@ -165,3 +165,19 @@ let mk_avalue_expr avk av range = mk_constant (mk_avalue_constant avk av) ~etyp:
 type ('a,_) query += Q_avalue : expr * 'v avalue_kind -> ('a,'v) query
 
 let mk_avalue_query e avk = Q_avalue(e,avk)
+
+let () =
+  register_query {
+    join = (let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+              fun pool query x y ->
+                match query with
+                | Q_avalue(e,avk) -> join_avalue avk x y
+                | _ -> pool.pool_join query x y
+            in f);
+    meet = (let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
+              fun pool query x y ->
+                match query with
+                | Q_avalue(e,avk) -> meet_avalue avk x y
+                | _ -> pool.pool_meet query x y
+            in f);
+  }
