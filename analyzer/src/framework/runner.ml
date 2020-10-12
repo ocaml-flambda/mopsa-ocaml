@@ -24,20 +24,28 @@
 open Core.All
 open Config.Options
 
-(** {2 Command-line options} *)
+
+ (** {2 Command-line options} *)
 (** ************************ *)
 
-let opt_interactive = ref false
+let opt_interactive = ref "automatic"
 
 let () =
   register_builtin_option {
-    key = "-interactive";
+    key = "-engine";
     category = "Debugging";
-    doc = " start the analysis in interactive mode";
-    spec = ArgExt.Set opt_interactive;
-    default = "false";
+    doc = "selects analysis mode";
+    spec =  ArgExt.Symbol (
+        ["automatic"; "interactive"],
+        (fun s ->
+           match s with
+           | "automatic" -> opt_interactive := "automatic"
+           | "interactive" -> opt_interactive := "interactive"
+           | _ -> ()
+        )
+      );
+    default = "automatic";
   }
-
 
 (** Parse command line arguments and apply [f] on the list of target
    source files *)
@@ -82,13 +90,14 @@ let analyze_files (files:string list) (args:string list option) : int =
     let module Toplevel = Toplevel.Make(Domain) in
     let module Engine =
       (val
-        if !opt_interactive
-        then
+        match !opt_interactive with
+        | "interactive"   ->
           let module E = Engines.Interactive.Make(Toplevel) in
           (module E)
-        else
+        | "automatic" ->
           let module E = Engines.Automatic.Make(Toplevel) in
           (module E)
+        | x -> Exceptions.panic "unknown engine '%s'" x
         : Engines.Engine.ENGINE with type t = Domain.t
       )
     in

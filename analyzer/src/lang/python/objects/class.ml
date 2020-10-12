@@ -47,6 +47,9 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
+    | E_py_call({ekind = E_py_object (({addr_kind=A_py_class (C_builtin "bool", _)}, _))}, args, kwargs) ->
+       None
+
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* FIXME: this is actually type.__call__(cls) *)

@@ -72,13 +72,13 @@ struct
     match eval_num_cond cond man flow with
     | Some true  -> safe_c_memory_access_check range man flow |>
                     Cases.singleton (Some (mk_lval base offset typ mode range))
-    | Some false -> raise_c_out_bound_alarm base offset size typ range man flow flow |>
+    | Some false -> raise_c_out_bound_alarm base size offset typ range man flow flow |>
                     Cases.empty
     | None ->
       assume cond
         ~fthen:(fun tflow -> safe_c_memory_access_check range man flow |>
                              Cases.singleton (Some (mk_lval base offset typ mode range)))
-        ~felse:(fun eflow -> raise_c_out_bound_alarm base offset size typ range man flow eflow |>
+        ~felse:(fun eflow -> raise_c_out_bound_alarm base size offset typ range man flow eflow |>
                              Cases.empty)
         man flow
 

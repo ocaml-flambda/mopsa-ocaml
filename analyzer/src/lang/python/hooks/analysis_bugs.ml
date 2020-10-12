@@ -19,13 +19,12 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Hook to track some bug patterns in C analysis
+(** Hook to track some bug patterns in Python analysis, inspired by
+   the one written in C.
 
-    The hook captures assignments and calls to stubbed functions. It
-    checks that if such statement is reachable its post-state should
-    not be empty. Otherwise, this seems to be a soundness bug in some
-    transfer function.
-*)
+    The hook captures assignments. It checks that if such statement is
+   reachable its post-state should not be empty. Otherwise, this seems
+   to be a soundness bug in some transfer function.  *)
 
 open Location
 open Mopsa
@@ -40,7 +39,7 @@ struct
   (** {2 Hook header} *)
   (** *************** *)
 
-  let name = "c-analysis-bugs"
+  let name = "py.analysis-bugs"
 
 
   (** {2 Analyzer bugs} *)
@@ -54,15 +53,15 @@ struct
 
   and bug_kind =
     | Exec of stmt
-    | Call of string
+    (* | Call of string *)
 
 
   (** Compare two bug kinds *)
   let compare_bug_kind bk1 bk2 =
     match bk1, bk2 with
     | Exec s1, Exec s2 -> compare_stmt s1 s2
-    | Call f1, Call f2 -> compare f1 f2
-    | _ -> compare bk1 bk2
+    (* | Call f1, Call f2 -> compare f1 f2 *)
+    (* | _ -> compare bk1 bk2 *)
 
 
   (** Compare two bugs *)
@@ -75,7 +74,7 @@ struct
   (** Print bug kinds *)
   let pp_bug_kind fmt = function
     | Exec stmt -> pp_stmt fmt stmt
-    | Call f -> pp_print_string fmt f
+    (* | Call f -> pp_print_string fmt f *)
 
 
   (** Print a bug *)
@@ -98,23 +97,24 @@ struct
   let bugs = ref BugSet.empty
 
   (** Whitelist of stub functions that do not return *)
-  let whitelist = [ "exit";
-                    "_exit";
-                    "quick_exit";
-                    "_Exit";
-                    "abort";
-                    "_exit";
-                    "__builtin_abort";
-                    "__builtin_unreachable";
-                    "__assert_fail";
-                    "__assert_perror_fail";
-                    "__assert";
-                    "_mopsa_error";
-                    "_mopsa_error_at_line";
-                    "sigreturn";
-                    "error";
-                    "error_at_line";
-                  ]
+  let whitelist = [
+      (* "exit";
+       * "_exit";
+       * "quick_exit";
+       * "_Exit";
+       * "abort";
+       * "_exit";
+       * "__builtin_abort";
+       * "__builtin_unreachable";
+       * "__assert_fail";
+       * "__assert_perror_fail";
+       * "__assert";
+       * "_mopsa_error";
+       * "_mopsa_error_at_line";
+       * "sigreturn";
+       * "error";
+       * "error_at_line"; *)
+    ]
 
 
   (** Add a bug at a statement *)
@@ -124,9 +124,9 @@ struct
 
 
   (** Add a bug at a function call *)
-  let add_call_bug f range cs =
-    if not (List.mem f whitelist) then warn_at range "potential bug detected in %s" f;
-    bugs := BugSet.add {bug_range = range; bug_kind = Call f; bug_callstack = cs} !bugs
+  (* let add_call_bug f range cs =
+   *   if not (List.mem f whitelist) then warn_at range "potential bug detected in %s" f;
+   *   bugs := BugSet.add {bug_range = range; bug_kind = Call f; bug_callstack = cs} !bugs *)
 
 
   (** Remove redundant bug locations *)
@@ -142,13 +142,13 @@ struct
 
 
   (** Remove calls to whitelist functions *)
-  let remove_whitelist_bugs () =
-    bugs := BugSet.filter
-        (fun b ->
-           match b.bug_kind with
-           | Call f when List.mem f whitelist -> false
-           | _ -> true
-        ) !bugs
+  (* let remove_whitelist_bugs () =
+   *   bugs := BugSet.filter
+   *       (fun b ->
+   *          match b.bug_kind with
+   *          | Call f when List.mem f whitelist -> false
+   *          | _ -> true
+   *       ) !bugs *)
 
 
   (** {2 Initialization} *)
@@ -172,12 +172,12 @@ struct
   (** {2 Events handlers} *)
   (** ******************* *)
 
-  let on_before_exec path stmt man flow = ()
+  let on_before_exec zone stmt man flow = ()
 
-  let on_after_exec path stmt man flow post =
+  let on_after_exec zone stmt man flow post =
     match skind stmt with
     | S_assign _
-    | S_stub_directive _
+    (* | S_stub_directive _ *)
       when not (is_cur_bottom_in_flow man flow)
         && is_cur_bottom_in_cases man post
       ->
@@ -186,28 +186,28 @@ struct
     | _ -> ()
 
 
-  let on_before_eval path exp man flow = ()
+  let on_before_eval zone exp man flow = ()
 
-  let on_after_eval path exp man flow evl =
+  let on_after_eval zone exp man flow evl =
     match ekind exp with
-    | E_stub_call (f,_)
-      when not (is_cur_bottom_in_flow man flow)
-        && is_cur_bottom_in_cases man evl
-      ->
-      add_call_bug f.stub_func_name exp.erange (Flow.get_callstack flow)
+    (* | E_stub_call (f,_)
+     *   when not (is_cur_bottom_in_flow man flow)
+     *     && is_cur_bottom_in_cases man evl
+     *   ->
+     *   add_call_bug f.stub_func_name exp.erange (Flow.get_callstack flow) *)
 
-    | E_c_builtin_call (f,_)
-      when not (is_cur_bottom_in_flow man flow)
-        && is_cur_bottom_in_cases man evl
-      ->
-      add_call_bug f exp.erange (Flow.get_callstack flow)
+    (* | E_py_call (f,_,_)
+     *   when not (is_cur_bottom_in_flow man flow)
+     *     && is_cur_bottom_in_cases man evl
+     *   ->
+     *   add_call_bug f exp.erange (Flow.get_callstack flow) *)
 
     | _ -> ()
-    
+
 
   let on_finish man flow =
     let () = remove_redundant_bugs () in
-    let () = remove_whitelist_bugs () in
+    (* let () = remove_whitelist_bugs () in *)
     if BugSet.is_empty !bugs then
       printf "No potential analyzer bug detected@\n@."
     else

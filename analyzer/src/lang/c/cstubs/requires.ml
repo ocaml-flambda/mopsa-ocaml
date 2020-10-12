@@ -132,7 +132,7 @@ struct
       assume cond
         ~fthen:(fun flow -> Post.return flow)
         ~felse:(fun eflow ->
-            raise_c_out_bound_alarm base offset size (under_type ptr.etyp) range man flow eflow |>
+            raise_c_out_bound_alarm base size offset (under_type ptr.etyp) range man flow eflow |>
             Post.return
           )
         man flow

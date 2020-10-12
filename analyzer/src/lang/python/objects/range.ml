@@ -341,21 +341,21 @@ struct
            (It seems that in the case of the else statement, the usual desugar is sometimes better, so we keep it).
         *)
        let start = Timing.start () in
-       let ra s = mk_py_attr rangeobj s (tag_range range "%s" s) in
-       let res = Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow range
+       let ra s = mk_py_attr rangeobj s (tag_range rangeobj.erange "%s" s) in
+       let res = Utils.bind_list_args man [ra "start"; ra "stop"; ra "step"] flow rangeobj.erange
          (fun vars flow ->
              let start, stop, step = match List.map (fun x -> mk_var x range) vars with
                | [a;b;c] -> a, b, c
                | _ -> assert false in
 
              let gen_stmt comp_op =
-               let assign_target = mk_assign target start range in
+               let assign_target = mk_assign target start rangeobj.erange in
                let old_body = match skind body with
                  | S_block (stmts, _) -> stmts
                  | _ -> [body] in
-               let targetostep o = mk_binop ~etyp:(T_py None) target o step range in
-               let incr_target = mk_assign target (targetostep O_plus) range in
-               let decr_target = mk_assign target (targetostep O_minus) range in
+               let targetostep o = mk_binop ~etyp:(T_py None) target o step rangeobj.erange in
+               let incr_target = mk_assign target (targetostep O_plus) rangeobj.erange in
+               let decr_target = mk_assign target (targetostep O_minus) rangeobj.erange in
                (* let new_else = match skind orelse with
                 *   | S_block ([], _) -> orelse
                 *   | S_block (t, _) -> mk_block (decr_target :: t) range
@@ -368,7 +368,9 @@ struct
                  (mk_nop range) range
              in
              assume (mk_binop ~etyp:(T_py None) step O_gt (mk_zero ~typ:(T_py None) range) range) man flow
-               ~fthen:(fun flow -> man.exec (gen_stmt O_lt) flow >>% Post.return)
+               ~fthen:(fun flow ->
+                 man.exec (gen_stmt O_lt) flow >>% Post.return
+               )
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
          )
                  |> OptionExt.return in

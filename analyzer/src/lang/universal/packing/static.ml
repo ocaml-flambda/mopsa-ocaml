@@ -195,8 +195,9 @@ struct
       try Cache.find cache v
       with Not_found ->
         let packs = Strategy.packs_of_var ctx v in
-        let () = Cache.add cache v packs in
-        packs
+        let packs' = List.sort_uniq Strategy.compare packs in
+        let () = Cache.add cache v packs' in
+        packs'
 
     (** Get the packs of the variables present in an expression *)
     let rec packs_of_expr ctx e =
