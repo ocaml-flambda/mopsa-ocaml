@@ -372,11 +372,6 @@ struct
                  man.exec (gen_stmt O_lt) flow >>% Post.return
                )
                ~felse:(fun flow -> man.exec (gen_stmt O_gt) flow >>% Post.return)
-               ~fboth:(fun f1 f2 ->
-                 (* FIXME: arbitrary hack to avoid executing both loops *)
-                 man.exec (gen_stmt O_lt) flow >>% Post.return
-               )
-
          )
                  |> OptionExt.return in
        Debug.debug ~channel:"profiling" "for loop at range %a: %.4f" pp_range range (Timing.stop start);
