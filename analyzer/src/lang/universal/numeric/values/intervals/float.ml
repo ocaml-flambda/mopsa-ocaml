@@ -198,7 +198,7 @@ struct
       (* Get the value of the intger *)
       let v = man.eval e in
       (* Convert it to an interval *)
-      let int_itv = man.avalue (V_int_interval true) v in
+      let int_itv = man.avalue V_int_interval v in
       (* Cast it to a float *)
       I.of_int_itv_bot (prec p) (round ()) int_itv
 
@@ -232,7 +232,7 @@ struct
   (* Backward evaluations of float expressions *)
   let backward man e ve r =
     match ekind e with
-    | E_unop(O_float_class cls, ee) -> backward_float_class man cls ee ve (man.avalue (V_int_interval true) r)
+    | E_unop(O_float_class cls, ee) -> backward_float_class man cls ee ve (man.avalue V_int_interval r)
     | _ -> backward man e ve r
 
   (* Extended backward evaluation of casts of integers *)
@@ -242,14 +242,14 @@ struct
       (* Get the intger value *)
       let v,_ = find_vexpr e ve in
       (* Convert to an interval *)
-      let iitv = man.avalue (V_int_interval true) v in
+      let iitv = man.avalue V_int_interval v in
       begin match iitv with
         | BOT    -> None
         | Nb itv ->
           (* Refine it knowing that the result of the cast is [r] *)
           let iitv' = ItvUtils.FloatItvNan.bwd_of_int_itv (prec p) (round ()) itv r in
           (* Evaluate the new float value *)
-          let v' = man.eval (mk_avalue_expr (V_int_interval true) iitv' e.erange) in
+          let v' = man.eval (mk_avalue_expr V_int_interval iitv' e.erange) in
           (* Put it in the evaluation tree *)
           refine_vexpr e (man.meet v v') ve |>
           OptionExt.return

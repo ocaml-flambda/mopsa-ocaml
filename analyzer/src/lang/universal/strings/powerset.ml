@@ -179,7 +179,7 @@ struct
     | E_binop(O_mult, ({etyp = T_string} as e1), ({etyp = T_int} as e2)) ->
       let strings_e1 = man.eval e1 |> man.get in
       let itv_e2 = man.eval e2 |>
-                   man.avalue (Numeric.Common.V_int_interval true) in
+                   man.avalue Numeric.Common.V_int_interval in
       (* FIXME: arbitrary constants... *)
       if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && not @@ is_top strings_e1 && cardinal strings_e1 <= 3 then
         fold (fun str acc ->
@@ -206,7 +206,7 @@ struct
                   List.map
                     (fun s -> Numeric.Common.I.cst_int (String.length s)) |>
                     Numeric.Common.I.join_list in
-        man.eval (mk_avalue_expr (Numeric.Common.V_int_interval true) itv e.erange) |>
+        man.eval (mk_avalue_expr Numeric.Common.V_int_interval itv e.erange) |>
         OptionExt.return
 
     | _ -> None
