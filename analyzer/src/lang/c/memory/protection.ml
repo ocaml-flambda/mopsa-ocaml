@@ -55,12 +55,12 @@ struct
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
     match eval_num_cond cond man flow with
     | Some true  -> safe_c_memory_access_check range man flow |> Post.return
-    | Some false -> raise_c_out_bound_alarm base offset size typ range man flow flow |>
+    | Some false -> raise_c_out_bound_alarm base size offset typ range man flow flow |>
                     Post.return
     | None ->
       assume cond
         ~fthen:(fun tflow -> safe_c_memory_access_check range man flow |> Post.return)
-        ~felse:(fun eflow -> raise_c_out_bound_alarm base offset size typ range man flow eflow |> Post.return)
+        ~felse:(fun eflow -> raise_c_out_bound_alarm base size offset typ range man flow eflow |> Post.return)
         ~fnone:(fun nflow -> unreachable_c_memory_access_check range man flow |> Post.return)
         man flow
 

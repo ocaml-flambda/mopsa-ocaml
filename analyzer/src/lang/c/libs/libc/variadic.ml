@@ -186,7 +186,7 @@ struct
             Cases.singleton ap
           )
         ~felse:(fun eflow ->
-            raise_c_out_bound_alarm (mk_var_base ap) offset (mk_z base_size range) (under_type ap.vtyp) range man flow eflow |>
+            raise_c_out_bound_alarm (mk_var_base ap) (mk_z base_size range) offset (under_type ap.vtyp) range man flow eflow |>
             Cases.empty
           )
         ~route:numeric
