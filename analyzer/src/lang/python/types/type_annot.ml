@@ -76,7 +76,7 @@ struct
                    | Some {ekind = E_py_object (addr, _)} ->
                      Keys.Class (mk_addr_attr addr s (T_py None))
                    | _ -> assert false in
-                 debug "var = %a@.acc = %a" Keys.print var TVMap.print acc;
+                 debug "var = %a@.acc = %a" (format Keys.print) var (format TVMap.print) acc;
                  begin match TVMap.find_opt var acc with
                    | None ->
                      (begin match var with
@@ -85,7 +85,7 @@ struct
                       end)
                    | Some set2 ->
                       if ESet.equal set set2 then Keep acc
-                      else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s ESet.print set ESet.print set2
+                      else Exceptions.panic_at (erange expr) "conflict for typevar %s, sets %a and %a differ" s (format ESet.print) set (format ESet.print) set2
                  end
                | _ ->
                  VisitParts acc)
