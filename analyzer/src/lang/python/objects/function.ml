@@ -321,7 +321,7 @@ module Domain =
                 in
 
                 let fundec = {
-                  fun_orig_name = pyfundec.py_func_var.vname;
+                  fun_orig_name = get_orig_vname pyfundec.py_func_var;
                   fun_uniq_name = pyfundec.py_func_var.vname;
                   fun_parameters = pyfundec.py_func_parameters;
                   fun_locvars = pyfundec.py_func_locals;
