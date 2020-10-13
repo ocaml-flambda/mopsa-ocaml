@@ -28,6 +28,10 @@ open Callstack
 open Location
 open Common
 
+module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
+module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
+
+
 let print out json =
   let channel =
     match out with
@@ -81,12 +85,54 @@ let render_check check =
   let title = Format.asprintf "%a" pp_check check in
   `String title
 
-let render_alarm (range,check,csl) =
-  `Assoc [
-    "title", render_check check;
-    "range", render_range range;
-    "callstacks", `List (List.map render_callstack csl);
-  ]
+let render_alarm_messages kinds =
+  `String (Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_alarm_kind) kinds)
+
+let render_alarms report =
+  RangeMap.fold
+    (fun range checks acc ->
+      CheckMap.fold
+        (fun check diag acc ->
+          match diag.diag_kind with
+          | Error | Warning ->
+              (* Get the set of alarms kinds and callstacks *)
+              let kinds,callstacks =
+                AlarmSet.fold
+                  (fun a (kinds,callstacks) ->
+                     AlarmKindSet.add a.alarm_kind kinds,
+                     CallstackSet.add a.alarm_callstack callstacks)
+                  diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
+              (* Join alarm kinds *)
+              let rec iter = function
+                | [] -> []
+                | hd::tl ->
+                  let hd',tl' = iter_with hd tl in
+                  hd'::iter tl'
+              and iter_with a = function
+                | [] -> a,[]
+                | hd::tl ->
+                  match join_alarm_kind a hd with
+                  | None    ->
+                    let a',tl' = iter_with a tl in
+                    a',hd::tl'
+                  | Some aa ->
+                    let aa',tl' = iter_with aa tl in
+                    aa',tl'
+              in
+              let kinds' = iter (AlarmKindSet.elements kinds) in
+              let json_diag =
+                `Assoc [
+                    "title", render_check check;
+                    "messages", render_alarm_messages kinds';
+                    "range", render_range range;
+                    "callstacks", `List (List.map render_callstack (CallstackSet.elements callstacks))
+                  ]
+              in
+              json_diag :: acc
+          | _ -> acc
+        ) checks acc
+    ) report.report_diagnostics []
+
 
 let render_soudness_assumtion h =
   let msg = Format.asprintf "%a" pp_assumption_kind h.assumption_kind in
@@ -124,7 +170,7 @@ let report man flow ~time ~files ~out : unit =
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (aggregate_alarms rep |> List.map render_alarm);
+      "alarms", `List (render_alarms rep);
       "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in

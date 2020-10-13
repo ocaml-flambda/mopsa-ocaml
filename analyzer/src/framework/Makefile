@@ -39,13 +39,15 @@ framework.sig.combiner = stacked stacked_functor \
 			 simplified simplified_functor \
 			 stateless
 framework.sig.reduction = eval exec simplified value
+
 framework.combiners = common value domain
 framework.combiners.value = nonrel union product
 framework.combiners.domain = switch compose product simplified_product stateless_switch
 framework.abstraction.json = syntax visitor parser
-framework.engines = engine automatic interactive
+framework.engines = engine automatic interactive dap
 framework.output = common text json factory
 framework.config = abstraction paths options
+
 framework.config.abstraction = syntax visitor parser builder
 
 
