@@ -765,8 +765,8 @@ struct
     lattice;
     get = (fun a -> a);
     set = (fun a _ -> a);
-    get_log = (fun log -> log);
-    set_log = (fun log _ -> log);
+    get_effects = (fun log -> log);
+    set_effects = (fun log _ -> log);
     exec = exec;
     eval = eval;
     ask = ask;
