@@ -26,8 +26,8 @@ TARGET_LIBS = mlPythonParser
 
 
 # Packs
-mlPythonParser = py_parser
-py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
+mlPythonParser = mopsa_py_parser
+mopsa_py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
 
 
 # Packages

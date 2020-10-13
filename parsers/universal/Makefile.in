@@ -25,7 +25,8 @@
 TARGET_LIBS = mlUniversalParser
 
 # Packs
-mlUniversalParser = U_ast U_ast_printer U_parser U_lexer U_file_parser
+mlUniversalParser = mopsa_universal_parser
+mopsa_universal_parser = U_ast U_ast_printer U_parser U_lexer U_file_parser
 
 
 # MOPSA libraries
