@@ -36,11 +36,12 @@ let () =
     category = "Debugging";
     doc = "selects analysis mode";
     spec =  ArgExt.Symbol (
-        ["automatic"; "interactive"],
+         ["automatic"; "interactive"; "dap"],
         (fun s ->
            match s with
            | "automatic" -> opt_interactive := "automatic"
            | "interactive" -> opt_interactive := "interactive"
+           | "dap" -> opt_interactive := "dap"
            | _ -> ()
         )
       );
@@ -92,8 +93,11 @@ let analyze_files (files:string list) (args:string list option) : int =
       (val
         match !opt_interactive with
         | "interactive"   ->
-          let module E = Engines.Interactive.Make(Toplevel) in
-          (module E)
+           let module E = Engines.Interactive.Make(Toplevel) in
+           (module E)
+        | "dap"   ->
+           let module E = Engines.Dap.Make(Toplevel) in
+           (module E)
         | "automatic" ->
           let module E = Engines.Automatic.Make(Toplevel) in
           (module E)

@@ -120,19 +120,19 @@ let panic_at range fmt =
 let warn fmt =
   if !print_warnings then
     Format.kasprintf (fun str ->
-        Format.printf "%a: %s@." (color_str "orange") "warning" str
+        Format.eprintf "%a: %s@." (color_str "orange") "warning" str
       ) fmt
   else
-    Format.ifprintf Format.std_formatter fmt
+    Format.ifprintf Format.err_formatter fmt
 
 
 let warn_at range fmt =
     if !print_warnings then
       Format.kasprintf (fun str ->
-          Format.printf "%a: warning: %s@." (color "orange" Location.pp_range) range str
+          Format.eprintf "%a: warning: %s@." (color "orange" Location.pp_range) range str
         ) fmt
     else
-      Format.ifprintf Format.std_formatter fmt
+      Format.ifprintf Format.err_formatter fmt
 
 
 
