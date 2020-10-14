@@ -43,8 +43,8 @@ mopsa_analyzer.lang.c.packing = static_scope reductions
 
 
 # MOPSA
-MOPSALIBS += parsers/c:mlClangParser \
-             parsers/c_stubs:mlCStubsParser
+MOPSALIBS += parsers/c:MopsaClangParser \
+             parsers/c_stubs:MopsaCStubsParser
 
 
 # Flags

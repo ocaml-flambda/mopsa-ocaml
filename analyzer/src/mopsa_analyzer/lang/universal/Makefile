@@ -41,4 +41,4 @@ mopsa_analyzer.lang.universal.hooks = logs progress function_profiler loop_profi
 
 
 # MOPSA
-MOPSALIBS += parsers/universal:mlUniversalParser
+MOPSALIBS += parsers/universal:MopsaUniversalParser

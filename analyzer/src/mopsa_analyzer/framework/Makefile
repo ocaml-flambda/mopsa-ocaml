@@ -56,7 +56,7 @@ PKGS += str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith thr
 
 
 # MOPSA libraries
-MOPSALIBS += utils:utils
+MOPSALIBS += utils:MopsaUtils
 
 # this is needed for ocamlrun to find our dll*.so when running the bytecode bynary
 # TODO: find a better way

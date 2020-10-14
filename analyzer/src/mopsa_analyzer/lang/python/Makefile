@@ -34,4 +34,4 @@ mopsa_analyzer.lang.python.types = nominal_types addr_env structural_types polym
 
 
 # MOPSA libraries
-MOPSALIBS += parsers/python:mlPythonParser
+MOPSALIBS += parsers/python:MopsaPythonParser

@@ -24,13 +24,13 @@
 
 # Targets
 TARGET_BINS = mopsa
-TARGET_LIBS = mopsaLib
+TARGET_LIBS = MopsaAnalyzer
 
 
 
 # Packs
 mopsa = mopsa_analyzer main
-mopsaLib = mopsa_analyzer
+MopsaAnalyzer = mopsa_analyzer
 mopsa_analyzer = framework mopsa lang
 
 # Universal domains

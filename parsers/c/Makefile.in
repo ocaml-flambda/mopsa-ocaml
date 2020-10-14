@@ -23,13 +23,13 @@
 
 
 # Targets
-TARGET_CLIBS = mlClangParser
+TARGET_CLIBS = MopsaClangParser
 TARGET_BINS = wrapper
 
 
 
 # Packs
-mlClangParser = mopsa_c_parser mopsa_c_build
+MopsaClangParser = mopsa_c_parser mopsa_c_build
 mopsa_c_build = Build_DB
 wrapper = mopsa_c_build Build_wrapper
 mopsa_c_parser = Clang_AST Clang_utils Clang_dump Clang_parser \
@@ -89,7 +89,7 @@ endif
 
 
 # MOPSA libraries
-MOPSALIBS := utils:utils
+MOPSALIBS := utils:MopsaUtils
 
 
 # MOPSA make rules
