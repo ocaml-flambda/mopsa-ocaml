@@ -29,9 +29,8 @@ TARGET_BINS = wrapper
 
 
 # Packs
-MopsaClangParser = mopsa_c_parser mopsa_c_build
-mopsa_c_build = Build_DB
-wrapper = mopsa_c_build Build_wrapper
+MopsaClangParser = mopsa_c_parser mopsa_c_build_db
+wrapper = mopsa_c_build_db Build_wrapper
 mopsa_c_parser = Clang_AST Clang_utils Clang_dump Clang_parser \
 		Clang_parser_cache C_AST C_print C_utils C_simplify \
 		Clang_to_C C_parser 
