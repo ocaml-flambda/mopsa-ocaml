@@ -166,7 +166,7 @@ struct
     | _ -> None
 
   let find_function orig_name prog =
-    List.hd @@ Visitor.fold_stmt
+    match Visitor.fold_stmt
         (fun acc exp -> VisitParts acc)
         (fun acc stmt ->
            match skind stmt with
@@ -175,6 +175,9 @@ struct
              Keep (fundec :: acc)
            | _ -> VisitParts (acc)
         ) [] prog
+    with
+    | hd :: tl -> hd
+    | [] -> panic "find_function %s failed" orig_name
 
   let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
     fun query man flow ->
