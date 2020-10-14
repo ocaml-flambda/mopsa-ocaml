@@ -148,7 +148,9 @@ let find_var_bounds_ctx_opt v ctx =
 (** {2 Non-relational domain} *)
 (** ************************* *)
 
-module Make(Value: VALUE) : Sig.Abstraction.Simplified.SIMPLIFIED =
+module Make(Value: VALUE) :
+  Sig.Abstraction.Simplified.SIMPLIFIED
+  with type t = (var,Value.t) Lattices.Partial_map.map =
 struct
 
 
