@@ -24,31 +24,32 @@
 
 # Targets
 TARGET_BINS = mopsa
-TARGET_LIBS = mopsaLib
+TARGET_LIBS = MopsaAnalyzer
 
 
 
 # Packs
-mopsa = framework mopsa lang main
-mopsaLib = framework mopsa lang
+mopsa = mopsa_analyzer main
+MopsaAnalyzer = mopsa_analyzer
+mopsa_analyzer = framework mopsa lang
 
 # Universal domains
-include src/framework/Makefile
-include src/lang/universal/Makefile
-include src/lang/repl/Makefile
+include src/mopsa_analyzer/framework/Makefile
+include src/mopsa_analyzer/lang/universal/Makefile
+include src/mopsa_analyzer/lang/repl/Makefile
 
 # CFG domains
-include src/lang/cfg/Makefile
+include src/mopsa_analyzer/lang/cfg/Makefile
 
 # C domains
 ifneq (@disable_c@,yes)
-include src/lang/stubs/Makefile
-include src/lang/c/Makefile
+include src/mopsa_analyzer/lang/stubs/Makefile
+include src/mopsa_analyzer/lang/c/Makefile
 endif
 
 # Python domains
 ifneq (@disable_python@,yes)
-include src/lang/python/Makefile
+include src/mopsa_analyzer/lang/python/Makefile
 endif
 
 

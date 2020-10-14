@@ -23,20 +23,21 @@
 
 
 # Targets
-TARGET_CLIBS = utils
+TARGET_CLIBS = MopsaUtils
 
 
 # Packs
-utils = bot compare location callstack debug exceptions optionExt dnf setExt \
+MopsaUtils = mopsa_utils
+mopsa_utils = bot compare location callstack debug exceptions optionExt dnf setExt \
 	setExtSig setP listExt mapExtSig mapExt mapExtPoly invRelation \
 	invRelationSig equiv mapP relation relationSig valueSig \
 	timing top bot_top itvUtils congUtils bitfields graphSig graph argExt \
 	lineEdit typeExt eq version
-itvUtils = float intBound intItv floatItv floatItvNan
+mopsa_utils.itvUtils = float intBound intItv floatItv floatItvNan
 
 
 # C files
-C_SRC = itvUtils/floats_round.c
+C_SRC = mopsa_utils/itvUtils/floats_round.c
 
 
 # External packages, as given to ocamlfind

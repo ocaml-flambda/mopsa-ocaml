@@ -33,7 +33,7 @@ AC_CONFIG_FILES([
  parsers/c_stubs/Makefile
  parsers/python/Makefile
  analyzer/Makefile
- utils/src/version.ml
+ utils/src/mopsa_utils/version.ml
  META
 ])
 

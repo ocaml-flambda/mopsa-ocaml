@@ -22,14 +22,15 @@
 ##############################################################################
 
 # Targets
-TARGET_LIBS = mlUniversalParser
+TARGET_LIBS = MopsaUniversalParser
 
 # Packs
-mlUniversalParser = U_ast U_ast_printer U_parser U_lexer U_file_parser
+MopsaUniversalParser = mopsa_universal_parser
+mopsa_universal_parser = U_ast U_ast_printer U_parser U_lexer U_file_parser
 
 
 # MOPSA libraries
-MOPSALIBS := utils:utils
+MOPSALIBS := utils:MopsaUtils
 
 
 # MOPSA make rules

@@ -37,7 +37,7 @@
 /config.status
 /Makefile
 /META
-/utils/src/version.ml
+/utils/src/mopsa_utils/version.ml
 
 *.native
 *.byte

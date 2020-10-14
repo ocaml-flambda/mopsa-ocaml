@@ -22,19 +22,19 @@
 
 
 # Targets
-TARGET_LIBS = mlPythonParser
+TARGET_LIBS = MopsaPythonParser
 
 
 # Packs
-mlPythonParser = py_parser
-py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
+MopsaPythonParser = mopsa_py_parser
+mopsa_py_parser = cst parser lexer builtins ast pp cst_to_ast scoping main
 
 
 # Packages
 PKGS = zarith
 
 # MOPSA libraries
-MOPSALIBS := utils:utils
+MOPSALIBS := utils:MopsaUtils
 
 
 # MOPSA make rules

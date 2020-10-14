@@ -23,20 +23,21 @@
 
 
 # Targets
-TARGET_CLIBS = mlClangParser
+TARGET_CLIBS = MopsaClangParser
 TARGET_BINS = wrapper
 
 
 
 # Packs
-mlClangParser = Clang_AST Clang_utils Clang_dump Clang_parser \
+MopsaClangParser = mopsa_c_parser mopsa_build_db
+wrapper = mopsa_build_db Build_wrapper
+mopsa_c_parser = Clang_AST Clang_utils Clang_dump Clang_parser \
 		Clang_parser_cache C_AST C_print C_utils C_simplify \
-		Clang_to_C C_parser Build_DB
+		Clang_to_C C_parser 
 
-wrapper = Build_DB Build_wrapper
 
 # C++ files
-CC_SRC = Clang_to_ml.cc
+CC_SRC = mopsa_c_parser/Clang_to_ml.cc
 
 
 # External packages, as given to ocamlfind
@@ -87,7 +88,7 @@ endif
 
 
 # MOPSA libraries
-MOPSALIBS := utils:utils
+MOPSALIBS := utils:MopsaUtils
 
 
 # MOPSA make rules
