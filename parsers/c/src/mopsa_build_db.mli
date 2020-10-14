@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (**
-  Build_DB - Build a database to manage the analysis of multi-file projects
+  Mopsa_build_db - Build a database to manage the analysis of multi-file projects
 
   To help with the analysis of large projects that may have multiple
   source files, specific libraries, headers, preprocessing and compilation

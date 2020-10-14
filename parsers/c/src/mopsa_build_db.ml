@@ -20,7 +20,7 @@
 (****************************************************************************)
 
 (**
-  Build_DB - Build a database to manage the analysis of multi-file projects
+  Mopsa_build_db - Build a database to manage the analysis of multi-file projects
  *)
 
 let log = ref false

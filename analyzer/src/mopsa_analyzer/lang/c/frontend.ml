@@ -223,7 +223,7 @@ and parse_db (dbfile: string) ctx : unit =
 
   let open Clang_parser in
   let open Clang_to_C in
-  let open Mopsa_c_build_db in
+  let open Mopsa_build_db in
 
   let db = load_db dbfile in
   let execs = get_executables db in
