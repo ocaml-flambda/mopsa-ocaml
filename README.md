@@ -18,56 +18,47 @@ The documentation and example files of the MOPSA software are distributed under 
 
 ## Dependencies
 
+Before compiling MOPSA, ensure that you have the following dependencies:
+
+* apron
 * autoconf
+* camlidl
+* gmp
+* llvm + clang (version >= 5.x)
 * make
+* menhir
+* mpfr
 * ocaml (version >= 4.08.0)
 * opam (version >= 2)
-* apron
-* llvm + clang (version >= 5.x)
-* zarith
-* menhir
 * yojson
-* gmp
-* mpfr
-* camlidl
+* zarith
 * zlib
 
-
-## Compilation and installation
-
-
-### DEB-based distributions (Debian, Ubuntu)
-
-Tested on Ubuntu 16.04:
+For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
 
 ```shell
-sudo apt install build-essential m4 opam clang-5.0 llvm-5.0-dev libclang-5.0-dev libgmp-dev libmpfr-dev zlib1g-dev
+sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev
 opam init
-opam switch 4.08.0
-eval $(opam config env)
+eval $(opam env)
 opam install apron zarith menhir yojson
-./configure
-make
-make tests
 ```
 
+## Compilation
 
-### RPM-based distributions
-
-Tested on Fedora 27:
+To compile MOPSA, just run:
 
 ```shell
-sudo dnf install git m4 redhat-rpm-config patch opam clang-devel-5.0.? llvm-devel-5.0.? gmp-devel mpfr-devel zlib-devel make which
-opam init
-opam switch 4.08.0
-eval $(opam config env)
-opam install apron zarith menhir yojson
 ./configure
 make
-make tests
 ```
 
-### Installation
+Note that the script `configure` accepts the usual configuration options (e.g. `--prefix`, `--bindir`, etc.), in addition to:
+
+* `--disable-c` to disable the compilation of the C analysis.
+* `--disable-python` to disable the compilation of the Python analysis.
+* `--enable-byte` to compile MOPSA as a bytecode executable.
+
+## Installation
 
 After compilation, the binaries are available in the `bin` sub-directory.
 
@@ -80,7 +71,7 @@ will install the binaries in the default prefix (`/usr/local`), which you can ch
 The OCaml libraries are installed by `ocamlfind` in its default directory (see `ocamlfind printconf destdir`).
 
 
-### Opam-based installation
+## Opam-based compilation & installation
 
 Assuming that dependencies are installed, you can replace `./configure`, `make`, `sudo make install` with simply:
 
@@ -88,17 +79,6 @@ Assuming that dependencies are installed, you can replace `./configure`, `make`,
 opam pin add mopsa .
 ```
 which compiles MOPSA and install the binaries and libraries in your opam switch.
-
-
-
-## Example usage
-
-```shell
-./bin/mopsa-c benchmarks/c/examples/swap.c
-./bin/mopsa-c benchmarks/c/examples/euclid.c -debug=print
-./bin/mopsa-python benchmarks/python/basic/operators.py
-./bin/mopsa-c -unittest analyzer/tests/c/int_tests.c
-```
 
 
 ## Linking against the MOPSA library
@@ -119,5 +99,5 @@ ocamlfind ocamlopt -thread -package mopsa.analyzer -linkpkg test.ml
 
 ## Additional resources
 
-* [Full documentation](https://mopsa.lip6.fr/mopsa/doc/)
+* [User manual](https://mopsa.lip6.fr/mopsa/doc/)
 * [Mopsa project page](https://mopsa.lip6.fr/)
