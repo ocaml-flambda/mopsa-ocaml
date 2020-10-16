@@ -3,17 +3,17 @@
 #
 ###############################################
 
-FROM ubuntu:latest
+FROM ubuntu:20.04
 
 
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential lsb-release m4 llvm-6.0-dev libclang-6.0-dev \
-    	     clang-6.0 libgmp-dev libmpfr-dev zlib1g-dev pkg-config wget  \
-	     unzip bubblewrap git
-ENV OPAM_SWITCH 4.08.0
-ENV OPAM_DEPS apron zarith menhir yojson javalib
+ENV APT_DEPS build-essential opam llvm-10-dev libclang-cpp10-dev \
+             clang-10 libgmp-dev libmpfr-dev wget  \
+             unzip bubblewrap git
+
+ENV OPAM_DEPS apron zarith menhir yojson
 
 
 # install system packages as root
@@ -27,13 +27,6 @@ RUN \
     apt-get install -y $APT_DEPS && \
     adduser --disabled-password --gecos 'Mopsa' mopsa
 
-
-# install opam
-##
-
-COPY install-opam.sh /tmp
-RUN sh /tmp/install-opam.sh
-    
 
 # log in as mopsa
 #
@@ -51,13 +44,4 @@ RUN \
     opam init --disable-sandboxing -y && \
     eval $(opam env) && \
     opam update -y && \
-    opam switch create -y -j 8 $OPAM_SWITCH && \
-    eval $(opam env) && \
-    opam install -y -j 8 $OPAM_DEPS && \
-    echo && \
-    echo "All done!" && \
-    uname -a && \
-    cat /etc/debian_version && \    
-    lsb_release -d && \
-    echo opam `opam --version` && \
-    ocamlc -v
+    opam install -y -j 8 $OPAM_DEPS
