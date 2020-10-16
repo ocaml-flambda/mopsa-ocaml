@@ -9,9 +9,9 @@ FROM ubuntu:20.04
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential opam llvm-10-dev libclang-cpp10-dev \
-             clang-10 libgmp-dev libmpfr-dev wget  \
-             unzip bubblewrap git
+ENV APT_DEPS build-essential opam llvm-10-dev libclang-10-dev \
+             libclang-cpp10-dev clang-10 libgmp-dev libmpfr-dev  \
+             git
 
 ENV OPAM_DEPS apron zarith menhir yojson
 
