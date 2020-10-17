@@ -99,5 +99,4 @@ ocamlfind ocamlopt -thread -package mopsa.analyzer -linkpkg test.ml
 
 ## Additional resources
 
-* [User manual](https://mopsa.lip6.fr/mopsa/doc/)
 * [Mopsa project page](https://mopsa.lip6.fr/)
