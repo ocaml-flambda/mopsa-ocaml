@@ -90,7 +90,7 @@ It contains several sub-packages, including various utilities (`mopsa.utils`) an
 
 Consider the simple program `test.ml` that simulates the effect of the `mopsa` binary:
 ```ocaml
-let _ = Framework.Runner.run()
+let _ = Mopsa_analyzer.Framework.Runner.run()
 ```
 It can be compiled with:
 ```shell
