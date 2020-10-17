@@ -40,7 +40,7 @@ import re
 
 gitlabURL = 'https://www.gitlab.com'
 group = 'mopsa'
-project = 'mopsa'
+project = 'mopsa-analyzer'
 
 
 # Command-line arguments
@@ -79,7 +79,7 @@ headers = {'PRIVATE-TOKEN': token }
 # local tree info
 #################
 
-last_tag = subprocess.check_output(['git','describe','--abbrev=0']).decode('utf-8').strip()
+# last_tag = subprocess.check_output(['git','describe','--abbrev=0']).decode('utf-8').strip()
 branch = subprocess.check_output(['git','-P','branch','--show-current']).decode('utf-8').strip()
 commit_sha = subprocess.check_output(['git','-P','log','-1','--format=%H']).decode('utf-8').strip()
 commit_sha_short = subprocess.check_output(['git','-P','log','-1','--format=%h']).decode('utf-8').strip()
@@ -255,7 +255,7 @@ def print_opam_instructions():
 
 print('You are in branch: ' + branch)
 print('at commit: ' + commit_sha_short + ' (' + commit_sha + ')')
-print('last tag is: ' + last_tag)
+# print('last tag is: ' + last_tag)
 print('You are releasing version: ' + version)
 print('to: ' + project_url)
 print('The git tag for the release will be: ' + git_tag)

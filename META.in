@@ -5,46 +5,46 @@ package "utils" (
         description = "MOPSA utilities"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads"
         version = "@version@"
-        archive(byte) = "utils.cma"
-        archive(native) = "utils.cmxa"
+        archive(byte) = "MopsaUtils.cma"
+        archive(native) = "MopsaUtils.cmxa"
 )
 
 package "universal_parser" (
         description = "Parser for MOPSA's Universal toy-language"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
-        archive(byte) = "mlUniversalParser.cma"
-        archive(native) = "mlUniversalParser.cmxa"
+        archive(byte) = "MopsaUniversalParser.cma"
+        archive(native) = "MopsaUniversalParser.cmxa"
 )
 
 package "clang_parser" (
         description = "Clang-based C parser"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
-        archive(byte) = "mlClangParser.cma"
-        archive(native) = "mlClangParser.cmxa"
+        archive(byte) = "MopsaClangParser.cma"
+        archive(native) = "MopsaClangParser.cmxa"
 )
 
 package "cstub_parser" (
         description = "Parser for MOPSA's language for C stubs"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
-        archive(byte) = "mlCStubsParser.cma"
-        archive(native) = "mlCStubsParser.cmxa"
+        archive(byte) = "MopsaCStubsParser.cma"
+        archive(native) = "MopsaCStubsParser.cmxa"
 )
 
 package "python_parser" (
         description = "Parser for Python 3.x"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
-        archive(byte) = "mlPythonParser.cma"
-        archive(native) = "mlPythonParser.cmxa"
+        archive(byte) = "MopsaPythonParser.cma"
+        archive(native) = "MopsaPythonParser.cmxa"
 )
 
 package "analyzer" (
         description = "MOPSA analyzer engine"
         requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads @meta_analyzer_requires@"
         version = "@version@"
-        archive(byte) = "mopsaLib.cma"
-        archive(native) = "mopsaLib.cmxa"
+        archive(byte) = "MopsaAnalyzer.cma"
+        archive(native) = "MopsaAnalyzer.cmxa"
 )
