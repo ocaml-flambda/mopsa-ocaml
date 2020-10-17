@@ -62,7 +62,7 @@ ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c install
 endif
 	@echo -e "$(INSTALLMSG)     mopsa library"
-	$(QUIET)@$(OCAMLFIND) install mopsa META $(MLFILES_TO_INSTALL)
+	$(QUIET) $(OCAMLFIND) install mopsa META $(MLFILES_TO_INSTALL)
 
 uninstall:
 	$(MAKE) -C analyzer uninstall
@@ -70,7 +70,7 @@ ifneq (@disable_c@,yes)
 	$(MAKE) -C parsers/c uninstall
 endif
 	@echo -e "$(UINSTALLMSG)     mopsa library"
-	$(QUIET)@$(OCAMLFIND) remove mopsa
+	$(QUIET) $(OCAMLFIND) remove mopsa
 
 
 distclean: clean

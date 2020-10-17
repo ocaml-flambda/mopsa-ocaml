@@ -50,8 +50,7 @@ if test -d .git; then
    GIT_COMMIT=`git -P log -1 --format=%h`
    GIT_DATE=`git -P log -1 --format=%ai`
    GIT_BRANCH=`git -P branch --show-current`
-   GIT_TAG=`git describe --abbrev=0`
-   DEV_VERSION="git branch:$GIT_BRANCH tag:$GIT_TAG commit:$GIT_COMMIT commit-date:$GIT_DATE"
+   DEV_VERSION="git branch:$GIT_BRANCH commit:$GIT_COMMIT commit-date:$GIT_DATE"
 else
    # no .git, assuming a release version from a tarball
    DEV_VERSION="release"
