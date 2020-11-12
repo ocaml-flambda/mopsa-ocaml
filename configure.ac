@@ -47,9 +47,9 @@ AC_SUBST(version,$VERSION)
 AC_MSG_CHECKING([for Mopsa's development version])
 if test -d .git; then
    # has .git, assuming a development version
-   GIT_COMMIT=`git -P log -1 --format=%h`
-   GIT_DATE=`git -P log -1 --format=%ai`
-   GIT_BRANCH=`git -P branch --show-current`
+   GIT_COMMIT=`git --no-pager log -1 --format=%h`
+   GIT_DATE=`git --no-pager log -1 --format=%ai`
+   GIT_BRANCH=`git --no-pager branch --show-current`
    DEV_VERSION="git branch:$GIT_BRANCH commit:$GIT_COMMIT commit-date:$GIT_DATE"
 else
    # no .git, assuming a release version from a tarball
