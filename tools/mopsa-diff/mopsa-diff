@@ -1,0 +1,361 @@
+#!/usr/bin/python3
+
+##############################################################################
+#                                                                            #
+#  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
+#                                                                            #
+#  Copyright (C) 2017-2019 The MOPSA Project.                                #
+#                                                                            #
+#  This program is free software: you can redistribute it and/or modify      #
+#  it under the terms of the GNU Lesser General Public License as published  #
+#  by the Free Software Foundation, either version 3 of the License, or      #
+#  (at your option) any later version.                                       #
+#                                                                            #
+#  This program is distributed in the hope that it will be useful,           #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+#  GNU Lesser General Public License for more details.                       #
+#                                                                            #
+#  You should have received a copy of the GNU Lesser General Public License  #
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                            #
+##############################################################################
+
+# Diff tool for comparing two mopsa reports
+
+import os
+import glob
+import argparse
+import json
+import sys
+
+
+
+# Command line options
+#######################
+
+
+parser = argparse.ArgumentParser(description='Compare two mopsa reports.')
+parser.add_argument('old', help='path to old reports')
+parser.add_argument('new', help='path to new reports')
+parser.add_argument('--ignore-time', help='ignore analysis time', action="store_true", dest="ignore_time")
+parser.add_argument('--summary', help='print a summary of the comparison', action="store_true", dest="summary")
+parser.add_argument('--regression', help='fail if regression detected', action="store_true", dest="regression")
+parser.add_argument('--time-tolerance', help='tolerated time difference in milliseconds', dest="time_tolerance", type=int, default=1000)
+parser.add_argument('--verbose', help='print debug messages', action="store_true", dest="verbose")
+
+args = parser.parse_args()
+
+
+# Printing
+##########
+
+def info(msg):
+    print(msg, file=sys.stderr)
+
+def debug(msg):
+    if args.verbose: print(msg, file=sys.stderr)
+
+
+# Locations
+###########
+
+def remove_stub_prefix(path):
+    l = path.split("share/mopsa/stubs")
+    if len(l) == 2:
+        return ("share/mopsa/stubs" + l[1])
+    else:
+        return path
+
+class Position:
+    def __init__(self, data):
+        self.file = remove_stub_prefix(data["file"])
+        self.line = int(data["line"])
+        self.column = int(data["column"])
+
+    def __hash__(self):
+        return hash((self.file,self.line,self.column))
+
+    def __eq__(self,other):
+        return (self.file == other.file and self.line == other.line and self.column == other.column)
+
+    def __str__(self):
+        return "%s:%d:%d"%(self.file,self.line,self.column)
+
+
+class Location:
+    def __init__(self, data):
+        self.start = Position(data["start"])
+        self.end = Position(data["end"])
+
+    def __hash__(self):
+        return hash((self.start,self.end))
+
+    def __eq__(self,other):
+        return (self.start == other.start and self.end == other.end)
+
+    def __str__(self):
+        if (self.start.file == self.end.file and self.start.line == self.end.line and self.start.column == self.end.column):
+            return "%s"%(self.start)
+
+        if (self.start.file == self.end.file and self.start.line == self.end.line):
+            return "%s:%d.%d-%d"%(self.start.file,self.start.line,self.start.column,self.end.column)
+
+        if (self.start.file == self.end.file):
+            return "%s:%d.%d-%d.%d"%(self.start.file,self.start.line,self.start.column,self.end.line,self.end.column)
+
+        return "%s-%s"%(self.star,self.end)
+
+# Alarms
+########
+
+class Alarm:
+    def __init__(self, data):
+        self.title = data["title"]
+        self.loc = Location(data["range"])
+
+    def __hash__(self):
+        return hash((self.title,self.loc))
+
+    def __eq__(self,other):
+        return (self.title == other.title and self.loc == other.loc)
+
+
+    def __str__(self):
+        return "%s: alarm: %s"%(self.loc,self.title)
+
+
+# Soundness assumptions
+#######################
+
+class Assumption:
+    def __init__(self, data):
+        self.message = data["message"]
+        self.loc = Location(data["range"]) if "range" in data else None
+
+    def __hash__(self):
+        return hash((self.message,self.loc))
+
+    def __eq__(self,other):
+        return (self.message == other.message and self.loc == other.loc)
+
+    def __str__(self):
+        if self.loc is None:
+            return self.message
+        else:
+            return "%s: assumption: %s"%(self.loc,self.message)
+
+
+# Analysis report
+#################
+
+class Report:
+    def __init__(self, path):
+        debug("parsing %s"%path)
+        self.path = path
+        with open(path,'rt') as f:
+            data = json.load(f)
+            self.time = float(data["time"])
+            if data["success"]:
+                self.success = True
+                self.alarms = { Alarm(a) for a in data["alarms"] }
+                self.assumptions = { Assumption(w) for w in data["assumptions"] }
+                self.exception = None
+            else:
+                self.success = False
+                self.alarms = set()
+                self.assumptions = set()
+                self.exception = data["exception"]
+
+
+
+# Reports database
+##################
+
+class Db:
+    def __init__(self, path):
+        self.db = {}
+        if os.path.isfile(path):
+            self.db["singleton"] = Report(path)
+        else:
+            files = glob.glob(path+'/**/*.json', recursive = True)
+            for f in files:
+                base = os.path.relpath(f, path)
+                self.db[base] = Report(f)
+
+
+# Diff element
+##############
+
+class Diff:
+    def __init__(self,old,new):
+        self.old = old
+        self.new = new
+
+    @staticmethod
+    def substitue(old,new):
+        return Diff(old,new)
+
+    @staticmethod
+    def remove(old):
+        return Diff(old,"")
+
+    @staticmethod
+    def add(new):
+        return Diff("",new)
+
+    def __str__(self):
+        s1 = str(self.old)
+        s2 = str(self.new)
+        if s1 != "" and s2 != "": return "- %s\n+ %s"%(self.old,self.new)
+        elif s2 == "":            return "- %s"%(self.old)
+        elif s1 == "":            return "+ %s"%(self.new)
+        else: None
+
+
+# Diff of analysis reports
+##########################
+
+class ReportDiff:
+    def __init__(self,old,new):
+        debug("comparing %s and %s"%(old.path, new.path))
+        self.old = old
+        self.new = new
+        self.time = new.time - old.time
+        self.speedup = 100.0 * (old.time - new.time) / old.time
+        self.new_alarms = new.alarms.difference(old.alarms)
+        self.removed_alarms = old.alarms.difference(new.alarms)
+        self.new_assumptions = new.assumptions.difference(old.assumptions)
+        self.removed_assumptions = old.assumptions.difference(new.assumptions)
+        self.new_success = not old.success and new.success
+        self.new_failure = old.success and not new.success
+
+    def is_empty(self):
+        return (
+            (args.ignore_time or 1000.0*abs(self.time) <= args.time_tolerance)
+            and not self.new_alarms
+            and not self.removed_alarms
+            and not self.new_assumptions
+            and not self.removed_assumptions
+            and not self.new_success
+            and not self.new_failure
+        )
+
+    def is_regressed(self):
+        return (
+            (not args.ignore_time and 1000.0*self.time > args.time_tolerance)
+            or self.new_alarms
+            or self.new_assumptions
+            or self.new_failure
+        )
+
+
+    def __str__(self):
+        if self.is_empty():
+            return ""
+        else:
+            diffs = []
+            if not args.ignore_time and 1000.0*abs(self.time) > args.time_tolerance:
+                diffs.append(Diff.substitue("time: %.4f"%self.old.time, "time: %.4f"%self.new.time))
+            diffs += [Diff.add(a) for a in self.new_alarms]
+            diffs += [Diff.remove(a) for a in self.removed_alarms]
+            diffs += [Diff.add(w) for w in self.new_assumptions]
+            diffs += [Diff.remove(w) for w in self.removed_assumptions]
+            return "--- %s\n+++ %s\n\n%s"%(self.old.path,self.new.path,"\n\n".join([str(d) for d in diffs]))
+
+
+# Diff of reports database
+##########################
+
+class DbDiff:
+
+    def __init__(self,old,new):
+        self.old = old
+        self.new = new
+        f1 = set(old.db.keys())
+        f2 = set(new.db.keys())
+        common = f1.intersection(f2)
+        self.reports = common
+        self.diffs = []
+        if len(common) == 0:
+            debug("no common reports found")
+            return
+        for f in common:
+            debug("computing diff for %s"%f)
+            d = ReportDiff(old.db[f], new.db[f])
+            self.diffs.append(d)
+
+
+    def is_diff(self):
+        return any(not d.is_empty() for d in self.diffs)
+
+    def is_regressed(self):
+        return any(d.is_regressed() for d in self.diffs)
+
+    def __str__(self):
+        return "\n\n".join([str(d) for d in self.diffs if not d.is_empty()])
+
+    def summary(self):
+        new_alarms = 0
+        removed_alarms = 0
+        new_assumptions = 0
+        removed_assumptions = 0
+        new_successes = 0
+        new_failures = 0
+        time_deltas = []
+        speedups = []
+        for d in self.diffs:
+            new_successes += int(d.new_success)
+            new_failures += int(d.new_failure)
+            if not d.new_success and not d.new_failure:
+                time_deltas.append(d.time)
+                speedups.append(d.speedup)
+                new_alarms += len(d.new_alarms)
+                removed_alarms += len(d.removed_alarms)
+                new_assumptions += len(d.new_assumptions)
+                removed_assumptions += len(d.removed_assumptions)
+        if not args.ignore_time:
+            avg_time = sum(time_deltas)/float(len(time_deltas)) if len(time_deltas) > 0 else 0
+            avg_time = "+%.3fs"%avg_time if avg_time > 0 else "%.3fs"%avg_time
+            print("{:<20s} {:>10s}".format("avg. time change",avg_time))
+            avg_speedup = sum(speedups)/float(len(speedups)) if len(speedups) > 0 else 0
+            avg_speedup = "+%.2f%%"%avg_speedup if avg_speedup > 0 else "%.f%%"%avg_speedup
+            print("{:<20s} {:>10s}".format("avg. speedup",avg_speedup))
+        print("{:<20s} {:>10d}\n{:<20s} {:>10d}\n{:<20s} {:>10d}\n{:<20s} {:>10d}\n{:<20s} {:>10d}\n{:<20s} {:>10d}".format(
+            "new alarms", new_alarms,
+            "removed alarms", removed_alarms,
+            "new assumptions", new_assumptions,
+            "removed assumptions", removed_assumptions,
+            "new successes", new_successes,
+            "new failures", new_failures))
+
+
+
+# Entry point
+#############
+
+def main():
+    old = Db(args.old)
+    new = Db(args.new)
+
+    diffs = DbDiff(old,new)
+    nb = len(diffs.reports)
+    info("%d report%s compared"%(nb,"s" if nb >= 2 else ""))
+    if args.regression:
+        if diffs.is_regressed():
+            info("regression found")
+            if args.summary: diffs.summary()
+            else: print(diffs)
+            exit(1)
+        else:
+            info("no regression found")
+            exit(0)
+    if diffs.is_diff():
+        if args.summary: diffs.summary()
+        else: print(diffs)
+        exit(1)
+    else:
+        info("no difference found")
+        exit(0)
+
+main()
