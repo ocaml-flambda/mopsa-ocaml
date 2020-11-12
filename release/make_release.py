@@ -80,7 +80,7 @@ headers = {'PRIVATE-TOKEN': token }
 #################
 
 # last_tag = subprocess.check_output(['git','describe','--abbrev=0']).decode('utf-8').strip()
-branch = subprocess.check_output(['git','--no-pager','branch','--show-current']).decode('utf-8').strip()
+branch = subprocess.check_output(['git','rev-parse','--abbrev-ref','HEAD']).decode('utf-8').strip()
 commit_sha = subprocess.check_output(['git','--no-pager','log','-1','--format=%H']).decode('utf-8').strip()
 commit_sha_short = subprocess.check_output(['git','--no-pager','log','-1','--format=%h']).decode('utf-8').strip()
 
