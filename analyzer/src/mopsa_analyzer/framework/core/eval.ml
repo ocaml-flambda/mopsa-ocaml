@@ -34,6 +34,9 @@ type 'a eval  = ('a,expr) cases
 
 include Cases
 
+let translate semantic e ee flow =
+  singleton (add_expr_translation semantic e ee) flow
+
 let print fmt (evl: 'a eval) : unit =
   Cases.print_result (fun fmt e flow -> pp_expr fmt e) fmt evl
 

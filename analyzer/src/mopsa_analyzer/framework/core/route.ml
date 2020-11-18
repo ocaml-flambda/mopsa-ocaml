@@ -40,7 +40,7 @@ let pp_route fmt = function
   | Semantic sem -> pp_semantic fmt sem
 
 
-let toplevel = Semantic toplevel_semantic
+let toplevel = Semantic any_semantic
 
 module Map =
   MapExt.Make

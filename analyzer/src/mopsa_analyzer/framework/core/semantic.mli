@@ -31,6 +31,10 @@ val compare_semantic : semantic -> semantic -> int
 
 val pp_semantic : Format.formatter -> semantic -> unit
 
-val toplevel_semantic : semantic
+val any_semantic : semantic
+
+val is_any_semantic : semantic -> bool
 
 module SemanticSet : Mopsa_utils.SetExtSig.S with type elt = semantic
+
+module SemanticMap : Mopsa_utils.MapExtSig.S with type key = semantic

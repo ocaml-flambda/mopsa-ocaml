@@ -504,7 +504,7 @@ struct
         match List.find_opt
                 (fun (p,a) -> compare_var p v = 0) bindings with
         | None -> Visitor.Keep exp
-        | Some (p,a) -> Keep { exp with eprev = Some a }
+        | Some (p,a) -> Keep { exp with ehistory = a :: exp.ehistory }
       end
     | _ -> VisitParts exp
 

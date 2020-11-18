@@ -36,6 +36,8 @@ open Cases
 open Route
 open Query
 open Print
+open Semantic
+
 
 (*==========================================================================*)
 (**                             {2 Managers}                                *)
@@ -53,7 +55,7 @@ type ('a, 't) man = {
 
   (* Toplevel transfer functions *)
   exec : ?route:route -> stmt -> 'a flow -> 'a post;
-  eval : ?route:route -> expr -> 'a flow -> 'a eval;
+  eval : ?route:route -> ?translate:semantic -> expr -> 'a flow -> 'a eval;
   ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
   print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
 

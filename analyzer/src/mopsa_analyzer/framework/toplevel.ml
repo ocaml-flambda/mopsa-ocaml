@@ -68,7 +68,7 @@ sig
 
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
+  val eval : ?route:route -> ?translate:semantic -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
@@ -306,8 +306,58 @@ struct
     else
       route
 
+  (** Evaluate sub-nodes of an expression and rebuild it *)
+  let eval_sub_expressions ?(route=toplevel) exp man flow =
+    let parts, builder = structure_of_expr exp in
+    match parts with
+    | {exprs; stmts = []} ->
+      (* Evaluate each sub-expression *)
+      let n = List.length parts.exprs in
+      Cases.bind_list exprs (fun e flow -> man.eval ~route e flow) flow >>$ fun exprs' flow ->
+      (* Rebuild the expression from its evaluated parts *)
+      let e' = builder {exprs = exprs'; stmts = []} in
+      (* Rebuild also the translations of the expression from the translations of its parts *)
+      let etrans =
+        (* Construct a map from semantics to list of sub-translations *)
+        List.fold_left
+          (fun acc e ->
+              SemanticMap.map2o
+                (fun s ee   -> [ee])
+                (fun s l   -> l)
+                (fun s ee l -> ee::l)
+                e.etrans acc
+          ) SemanticMap.empty exprs' |>
+        (* Filter sub-translations that don't have the correct number of expressions *)
+        SemanticMap.filter
+          (fun _ l -> List.length l <> n) |>
+        (* Rebuild the tranlsation from its parts *)
+        SemanticMap.map
+          (fun exprs -> builder {exprs; stmts=[]})
+      in
+      Eval.singleton { e' with etrans } flow
+
+    (* XXX sub-statements are not handled for the moment *)
+    | _ -> Eval.singleton exp flow
+
+  (** Evaluate non-handled cases *)
+  let eval_not_handled ?(route=toplevel) exp man evl =
+    let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
+    let not_handled_ret =
+      match not_handled with
+      | None -> None
+      | Some evl ->
+        (* Evaluate sub-expressions of the not-handled cases *)
+        let evl =
+          Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
+          eval_sub_expressions ~route exp man flow
+        in
+        Some evl
+    in
+    OptionExt.neutral2 Cases.join handled not_handled_ret |>
+    OptionExt.none_to_exn
+
   (** Evaluation of expressions. *)
-  let eval ?(route=toplevel) exp man flow =
+  let eval ?(route=toplevel) ?(translate=any_semantic) exp man flow =
     let flow =
       if inside_hook () then
         flow
@@ -321,58 +371,47 @@ struct
     let route = refine_route_with_var_semantic route exp in
 
     let feval =
-      try RouteMap.find route eval_map
+      try Cache.eval (RouteMap.find route eval_map) route
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
     let evl =
-      (* Ask domains to perform the evaluation *)
-      let ret = Cache.eval feval route exp man flow in
-      let eval_sub_expressions flow =
-        let parts, builder = structure_of_expr exp in
-        match parts with
-        | {exprs; stmts = []} ->
-          (* Iterate over sub-expressions *)
-          Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
-          (* Rebuild the expression from its evaluated parts *)
-          let e' = builder {exprs = exprs'; stmts = []} in
-          Cases.singleton e' f'
-
-        (* XXX sub-statements are not handled for the moment *)
-        | _ -> Cases.singleton exp flow
-      in
-      (* Check whether there are not-handled cases *)
-      match ret with
-      | None   -> eval_sub_expressions flow
-      | Some evl ->
-        let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
-        let not_handled_ret =
-          match not_handled with
-          | None -> None
-          | Some evl ->
-            (* Evaluate sub-expressions of the not-handled cases *)
-            let evl =
-              Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
-              eval_sub_expressions flow
-            in
-            Some evl
-      in
-      OptionExt.neutral2 Cases.join handled not_handled_ret |>
-      OptionExt.none_to_exn
+      match feval exp man flow with
+      | None   -> eval_sub_expressions exp man flow
+      | Some evl -> eval_not_handled ~route exp man evl
     in
 
-    (* Updates the expression transformation lineage *)
+    (* Updates the expression history *)
     let ret =
-      evl >>$ fun exp' flow' ->
-      if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
+      Cases.map_result
+        (fun exp' ->
+           if exp == exp'
+           then exp'
+           else { exp' with ehistory = exp :: exp'.ehistory }
+        ) evl
+    in
+
+    (** Return a translation if it was requested *)
+    let ret' =
+      if is_any_semantic translate
+      then ret
+      else Cases.map_result
+          (fun e ->
+             try get_expr_translation translate e
+             with Not_found ->
+               e (* XXX If the requested semantics is not found, we return the
+                    evaluated expression and let the caller domain react *)
+          ) ret
     in
 
     if inside_hook () then
-        ret
+        ret'
     else
       let () = enter_hook() in
-      let x = Hook.on_after_eval route exp man flow ret in
+      let x = Hook.on_after_eval route exp man flow ret' in
       let () = exit_hook () in
-      match x with None -> ret | Some ctx -> Cases.set_ctx ctx ret
+      match x with
+      | None    -> ret'
+      | Some ctx -> Cases.set_ctx ctx ret'
 
 
   (** {2 Handler of queries} *)

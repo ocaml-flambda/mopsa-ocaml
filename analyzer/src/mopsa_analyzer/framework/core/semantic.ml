@@ -28,6 +28,16 @@ let compare_semantic = String.compare
 
 let pp_semantic = Format.pp_print_string
 
-let toplevel_semantic = "*"
+let any_semantic = "*"
 
-module SemanticSet = Mopsa_utils.SetExt.StringSet
+let is_any_semantic = function
+  | "*" -> true
+  | _   -> false
+
+module SemanticSet =
+  Mopsa_utils.SetExt.Make
+    (struct type t = semantic let compare = compare_semantic end)
+
+module SemanticMap =
+  Mopsa_utils.MapExt.Make
+    (struct type t = semantic let compare = compare_semantic end)

@@ -504,7 +504,7 @@ struct
              each conjunction.
              THE CHOICE IS ARBITRARY!
           *)
-          Eval.return (List.hd el') flow
+          Eval.singleton (List.hd el') flow
 
         | rule::tl ->
           let module R = (val rule : EVAL_REDUCTION) in

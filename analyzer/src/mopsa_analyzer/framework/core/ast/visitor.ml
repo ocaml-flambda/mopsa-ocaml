@@ -422,23 +422,6 @@ let stmt_vars (s: stmt) : var list =
     [] s
 
 
-(** Get the original version of an evaluated expression *)
-let rec get_orig_expr e =
-  match e.eprev with
-  | Some ee ->
-    get_orig_expr ee
-
-  | None ->
-    let rec iter ee =
-      match ee.eprev with
-      | None -> ee
-      | Some eee -> iter eee
-    in
-    map_expr
-      (fun ee -> VisitParts (iter ee))
-      (fun s -> VisitParts s)
-      e
-
 let is_var_in_expr v e =
   fold_expr
     (fun acc ee ->
