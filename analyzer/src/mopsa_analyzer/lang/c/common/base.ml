@@ -159,7 +159,8 @@ let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =
 
   | Addr addr ->
     let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
-    man.eval ~route bytes_expr flow
+    (* XXX for backward compatibility, the size is converted to Universal, but maybe it should be a C expression? *)
+    man.eval ~route bytes_expr flow ~translate:"Universal"
 
 
 module Base =

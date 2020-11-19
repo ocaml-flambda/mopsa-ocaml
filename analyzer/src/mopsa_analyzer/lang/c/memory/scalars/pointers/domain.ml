@@ -227,6 +227,8 @@ struct
     Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
     match ptr with
     | AddrOf (base, offset, mode) ->
+      (* XXX for backward compatibility, the offset is converted to Universal, but maybe it should be a C expression? *)
+      man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       Cases.singleton (mk_c_points_to_bloc base offset mode) flow
 
     | Eval (p, mode, offset) ->
