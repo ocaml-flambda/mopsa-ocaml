@@ -327,9 +327,9 @@ struct
                 (fun s ee l -> ee::l)
                 e.etrans acc
           ) SemanticMap.empty exprs' |>
-        (* Filter sub-translations that don't have the correct number of expressions *)
+        (* Filter sub-translations that have the correct number of expressions *)
         SemanticMap.filter
-          (fun _ l -> List.length l <> n) |>
+          (fun _ l -> List.length l = n) |>
         (* Rebuild the tranlsation from its parts *)
         SemanticMap.map
           (fun exprs -> builder {exprs; stmts=[]})
