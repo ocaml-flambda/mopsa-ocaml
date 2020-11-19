@@ -19,83 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-include Ast.Constant
-include Ast.Expr
-include Ast.Stmt
-include Ast.Typ
-include Ast.Program
-include Ast.Frontend
-include Ast.Operator
-include Ast.Var
-include Ast.Visitor
+(** Stack of domains  *)
 
-module Var =
-struct
-  type t = var
-  let compare = compare_var
-  let print = Print.unformat pp_var
-end
+type dstack = string Stack.t
 
-include Alarm
-module Alarm = Alarm
+let dstack : dstack = Stack.create ()
 
-include Context
-module Context = Context
+let push_domain domain = Stack.push domain dstack
 
-module Cases = Cases
+let pop_domain () = Stack.pop dstack
 
-type 'r case = 'r Cases.case
-type ('a,'r) cases = ('a,'r) Cases.cases
-
-let bind = Cases.bind
-let (>>=) = Cases.(>>=)
-
-let bind_opt = Cases.bind_opt
-let (>>=?) = Cases.(>>=?)
-
-let bind_result = Cases.bind_result
-let (>>$) = Cases.(>>$)
-
-let bind_result_opt = Cases.bind_result_opt
-let (>>$?) = Cases.(>>$?)
-
-let bind_list = Cases.bind_list
-let bind_list_opt = Cases.bind_list_opt
-
-module Eval = Eval
-type 'a eval = 'a Eval.eval
-
-module Flow = Flow
-type 'a flow = 'a Flow.flow
-
-module Post = Post
-type 'a post = 'a Post.post
-
-let (>>%) = Post.(>>%)
-let (>>%?) = Post.(>>%?)
-
-module Effect = Effect
-include Effect
-
-include Query
-
-include Token
-
-include Semantic
-
-include Route
-
-include Lattice
-
-include Id
-
-include Manager
-
-module Hook = Hook
-
-include Print
-module Print = Print
-
-include Avalue
-
-include Dstack
+let top_domain () = Stack.top dstack

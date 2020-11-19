@@ -153,14 +153,16 @@ struct
   let on_before_exec route stmt man flow =
     reach stmt.srange;
     if Options.short then
-      indent "%a%a"
+      indent "%a%a from %s"
         pp_S stmt
         pp_route_if_any route
+        (top_domain ())
         ~symbol:BEGIN
     else
-      indent "%a%a@,input @[%a@]"
+      indent "%a%a from %s@,input @[%a@]"
         pp_S stmt
         pp_route_if_any route
+        (top_domain ())
         (format (Flow.print man.lattice.print)) flow
         ~symbol:BEGIN
     ;
@@ -171,16 +173,18 @@ struct
     let time = get_timing () in
     let nb = Cases.cardinal post in
     if Options.short then
-      indent "%a done%a [%.4fs, %d case%a]"
+      indent "%a%a from %s done [%.4fs, %d case%a]"
         pp_S stmt
         pp_route_if_any route
+        (top_domain ())
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done%a [%.4fs, %d case%a]@ output: @[%a@]"
+      indent "%a%a from %s done [%.4fs, %d case%a]@ output: @[%a@]"
         pp_S stmt
         pp_route_if_any route
+        (top_domain ())
         time
         nb Debug.plurial_int nb
         (Cases.print
@@ -193,14 +197,16 @@ struct
 
   let on_before_eval route semantic exp man flow =
     if Options.short then
-      indent "%a%a"
+      indent "%a%a from %s"
         (pp_E semantic) exp
         pp_route_if_any route
+        (top_domain ())
         ~symbol:BEGIN
     else
-      indent "%a%a@,input: @[%a@]"
+      indent "%a%a from %s@,input: @[%a@]"
         (pp_E semantic) exp
         pp_route_if_any route
+        (top_domain ())
         (format (Flow.print man.lattice.print)) flow
         ~symbol:BEGIN
     ;
@@ -216,17 +222,19 @@ struct
     in
     let nb = Cases.cardinal evl in
     if Options.short then
-      indent "%a = %a done%a [%.4fs, %d case%a]"
+      indent "%a = %a%a from %s done [%.4fs, %d case%a]"
         (pp_E semantic) exp
         pp_evl_with_type evl
         pp_route_if_any route
+        (top_domain ())
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done%a [%.4fs, %d case%a]@ output: @[%a]"
+      indent "%a%a from %s done [%.4fs, %d case%a]@ output: @[%a]"
         (pp_E semantic) exp
         pp_route_if_any route
+        (top_domain ())
         time
         nb Debug.plurial_int nb
         pp_evl_with_type evl

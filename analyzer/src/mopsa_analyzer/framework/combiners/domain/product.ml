@@ -471,7 +471,12 @@ struct
     (fun stmt man flow ->
        apply_pointwise f stmt man flow |>
        OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
+       add_missing_pointwise_results (fun stmt flow ->
+           push_domain "<product>";
+           let r = man.exec ~route:successor stmt flow in
+           let _ = pop_domain () in
+           r
+         ) stmt pointwise man flow |>
        merge_inter_conflicts man flow |>
        simplify_pointwise_post |>
        merge_intra_conflicts man flow |>
@@ -521,7 +526,12 @@ struct
     (fun exp man flow ->
        apply_pointwise f exp man flow |>
        OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
+       add_missing_pointwise_results (fun exp flow ->
+           push_domain "<product>";
+           let r = man.eval ~route:successor exp flow in
+           let _ = pop_domain () in
+           r
+         ) exp pointwise man flow |>
        merge_inter_conflicts man flow |>
        reduce_pointwise_eval exp man flow |>
        Eval.remove_duplicates man.lattice |>
