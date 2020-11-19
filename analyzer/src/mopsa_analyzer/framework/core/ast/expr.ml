@@ -93,7 +93,7 @@ let add_expr_translation semantic t e =
 let get_expr_translations e = e.etrans
 
 let get_expr_translation semantic e =
-  SemanticMap.find semantic e.etrans
+  if is_any_semantic semantic then e else SemanticMap.find semantic e.etrans
 
 let get_expr_history e = e.ehistory
 

@@ -68,7 +68,7 @@ sig
 
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?route:route -> ?translate:semantic -> expr -> (t, t) man -> t flow -> t eval
+  val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
@@ -357,13 +357,23 @@ struct
     OptionExt.none_to_exn
 
   (** Evaluation of expressions. *)
-  let eval ?(route=toplevel) ?(translate=any_semantic) exp man flow =
+  let eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp man flow =
+    (* Get the translation semantic *)
+    let semantic =
+      if not (is_any_semantic translate) then
+        translate
+      else
+        match List.find_opt (fun (s,f) -> f exp) translate_when with
+        | Some (s,_) -> s
+        | None       -> any_semantic
+    in
+
     let flow =
       if inside_hook () then
         flow
       else
         let () = enter_hook() in
-        let x = Hook.on_before_eval route exp man flow in
+        let x = Hook.on_before_eval route semantic exp man flow in
         let () = exit_hook() in
         match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
     in
@@ -392,11 +402,12 @@ struct
 
     (** Return a translation if it was requested *)
     let ret' =
-      if is_any_semantic translate
+      if is_any_semantic semantic
       then ret
-      else Cases.map_result
+      else
+        Cases.map_result
           (fun e ->
-             try get_expr_translation translate e
+             try get_expr_translation semantic e
              with Not_found ->
                e (* XXX If the requested semantics is not found, we return the
                     evaluated expression and let the caller domain react *)
@@ -407,7 +418,7 @@ struct
         ret'
     else
       let () = enter_hook() in
-      let x = Hook.on_after_eval route exp man flow ret' in
+      let x = Hook.on_after_eval route semantic exp man flow ret' in
       let () = exit_hook () in
       match x with
       | None    -> ret'

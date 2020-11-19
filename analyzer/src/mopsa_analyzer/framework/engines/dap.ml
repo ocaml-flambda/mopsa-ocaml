@@ -380,14 +380,14 @@ struct
   (* FIXME: Merge with interactive *)
   (** Actions on abstract domain *)
   type _ action =
-    | Exec : stmt * route            -> Toplevel.t post action
-    | Eval : expr * route * semantic -> Toplevel.t eval action
+    | Exec : stmt * route -> Toplevel.t post action
+    | Eval : expr * route * semantic * (semantic*(expr->bool)) list -> Toplevel.t eval action
 
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
     | Exec(stmt,_) -> stmt.srange
-    | Eval(exp,_,_)  -> exp.erange
+    | Eval(exp,_,_,_)  -> exp.erange
 
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
@@ -398,7 +398,7 @@ struct
          pp_stmt stmt
          pp_route route
 
-    | Eval(exp,route,translate) ->
+    | Eval(exp,route,translate,translate_when) ->
        fprintf fmt "@[<v 4>E[ %a@] : %a ]<%a> in %a@."
          pp_expr exp
          pp_typ (etyp exp)
@@ -598,7 +598,7 @@ struct
     fun action flow ->
     match action with
     | Exec(stmt, route) -> Toplevel.exec ~route stmt man flow
-    | Eval(exp, route, translate)  -> Toplevel.eval ~route ~translate exp man flow
+    | Eval(exp, route, translate, translate_when)  -> Toplevel.eval ~route ~translate ~translate_when exp man flow
 
   (** Wait for request and process it *)
   and interact: type a. a action -> Toplevel.t flow -> a = fun action flow ->
@@ -741,8 +741,8 @@ struct
   and exec ?(route=toplevel) stmt flow =
     interact_or_apply_action (Exec (stmt, route)) stmt.srange flow
 
-  and eval ?(route=toplevel) ?(translate=any_semantic) exp flow =
-    interact_or_apply_action (Eval (exp, route, translate)) exp.erange flow
+  and eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp flow =
+    interact_or_apply_action (Eval (exp, route, translate, translate_when)) exp.erange flow
 
   and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
     fun ?(route=toplevel)query flow ->
