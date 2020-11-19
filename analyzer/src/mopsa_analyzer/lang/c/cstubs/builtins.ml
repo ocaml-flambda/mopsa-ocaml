@@ -154,7 +154,7 @@ struct
           let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
           (* Check validity of the offset *)
           let cond = mk_in o (mk_zero range) (sub size elm range) range in
-          Eval.singleton cond flow
+          man.eval cond flow
 
         | P_fun _ -> Eval.singleton (mk_one range) flow
 

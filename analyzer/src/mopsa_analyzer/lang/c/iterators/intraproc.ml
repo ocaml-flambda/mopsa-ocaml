@@ -135,11 +135,6 @@ struct
       man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
       OptionExt.return
 
-    | S_assume e when is_c_type e.etyp ->
-      man.eval e flow >>$? fun e flow ->
-      man.exec (mk_assume e stmt.srange) ~route:(Below name) flow |>
-      OptionExt.return
-
     | _ -> None
 
 
@@ -186,9 +181,14 @@ struct
       OptionExt.return
 
     | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
-      assume e man flow
-        ~fthen:(Eval.singleton (mk_zero exp.erange))
-        ~felse:(Eval.singleton (mk_one exp.erange))
+      man.eval e flow >>$? fun e flow ->
+      switch [
+        [eq e zero exp.erange],
+        (fun flow -> Eval.singleton one flow);
+
+        [ne e zero exp.erange],
+        (fun flow -> Eval.singleton zero flow)
+      ] man flow
       |> OptionExt.return
 
     | E_c_assign(lval, rval) ->

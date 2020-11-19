@@ -234,6 +234,8 @@ struct
     | Eval (p, mode, offset) ->
       let o = mk_offset p mode exp.erange in
       let offset' = mk_binop o O_plus offset ~etyp:T_int exp.erange in
+      man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
+      man.eval offset' flow ~translate:"Universal" >>$ fun offset' flow ->
       let a = get_env T_cur man flow in
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
@@ -244,7 +246,6 @@ struct
               | true, true -> Post.return flow
               | false, true ->
                 man.exec ~route:numeric (mk_add o exp.erange) flow >>% fun flow ->
-                man.eval offset flow >>$ fun offset flow ->
                 man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset exp.erange) flow
               | true, false -> man.exec ~route:numeric (mk_remove o exp.erange) flow
             ) >>% fun flow ->
@@ -307,14 +308,14 @@ struct
     | false, false, _ -> Post.return flow
 
     | true, true, Some offset ->
-      man.eval offset flow >>$ fun offset flow ->
+      man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:numeric (mk_assign o offset range) flow
 
     | true, true, None -> Post.return flow
 
     | false, true, Some offset ->
       man.exec ~route:numeric (mk_add o range) flow >>% fun flow ->
-      man.eval offset flow >>$ fun offset flow ->
+      man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:numeric (mk_assign (strongify_var_expr o) offset range) flow
 
     | true, false, _ -> man.exec ~route:numeric (mk_remove o range) flow
@@ -472,7 +473,7 @@ struct
       match mk_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range with
       | None -> Post.return flow
       | Some cond ->
-        man.eval cond flow >>$ fun cond flow ->
+        man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
         man.exec ~route:numeric (mk_assume cond range) flow
 
 
@@ -504,7 +505,7 @@ struct
         in
         let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
         [
-          man.eval cond flow >>$ fun cond flow ->
+          man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
           man.exec ~route:numeric (mk_assume cond range) flow
         ]
     in
@@ -560,7 +561,7 @@ struct
           match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
           | None -> Post.return flow
           | Some cond ->
-            man.eval cond flow >>$ fun cond flow ->
+            man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
             man.exec ~route:numeric (mk_assume cond range) flow
         ]
     in
@@ -758,10 +759,6 @@ struct
       exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume({ekind = E_unop(O_log_not, p)}) when is_c_pointer_type p.etyp ->
-      assume_eq p (mk_c_null stmt.srange) stmt.srange man flow |>
-      OptionExt.return
-
     | S_assume(p) when is_c_pointer_type p.etyp ->
       assume_ne p (mk_c_null stmt.srange) stmt.srange man flow |>
       OptionExt.return
@@ -818,7 +815,7 @@ struct
         in
         match ee with
         | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
-        | Some e -> [man.eval e flow]
+        | Some e -> [man.eval e flow ~translate:"Universal"]
     in
 
     (* Case 2: different base => undefined behavior *)

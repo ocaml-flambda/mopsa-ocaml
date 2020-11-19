@@ -513,6 +513,11 @@ struct
       man.exec ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
+    | S_assume(e) when is_c_num_type e.etyp ->
+      man.eval ~translate:"Universal" e flow >>$? fun e' flow ->
+      man.exec ~route:numeric (mk_assume e' stmt.srange) flow |>
+      OptionExt.return
+
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
