@@ -33,6 +33,7 @@ open Post
 open Eval
 open Route
 open Manager
+open Semantic
 open Mopsa_utils
 
 
@@ -42,8 +43,8 @@ sig
   val init : 'a ctx -> 'a ctx
   val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx option
   val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
+  val on_before_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
+  val on_after_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
   val on_finish : ('a,'a) man -> 'a flow -> unit
 end
 
@@ -54,8 +55,8 @@ sig
   val init : 'a ctx -> unit
   val on_before_exec : route -> stmt -> ('a,'a) man  -> 'a flow -> unit
   val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> unit
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
+  val on_before_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> unit
+  val on_after_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
   val on_finish : ('a,'a) man -> 'a flow -> unit
 end
 
@@ -75,12 +76,12 @@ struct
     Hook.on_after_exec route stmt man flow post;
     None
 
-  let on_before_eval route stmt man flow =
-    Hook.on_before_eval route stmt man flow;
+  let on_before_eval route semantic exp man flow =
+    Hook.on_before_eval route semantic exp man flow;
     None
 
-  let on_after_eval route stmt man flow eval =
-    Hook.on_after_eval route stmt man flow eval;
+  let on_after_eval route semantic exp man flow eval =
+    Hook.on_after_eval route semantic exp man flow eval;
     None
 
   let on_finish = Hook.on_finish
@@ -190,28 +191,28 @@ let on_after_exec route stmt man flow post =
 
 
 (** Fire [on_before_eval] event *)
-let on_before_eval route exp man flow =
+let on_before_eval route semantic exp man flow =
   Hashtbl.fold (fun name hook acc ->
       let flow =
         match acc with
         | None -> flow
         | Some ctx -> Flow.set_ctx ctx flow in
       let module H = (val hook : HOOK) in
-      match H.on_before_eval route exp man flow with
+      match H.on_before_eval route semantic exp man flow with
       | None -> acc
       | x -> x
     ) active_hooks None
 
 
 (** Fire [on_after_eval] event *)
-let on_after_eval route exp man flow evl =
+let on_after_eval route semantic exp man flow evl =
   Hashtbl.fold (fun name hook acc ->
       let evl =
         match acc with
         | None -> evl
         | Some ctx -> Cases.set_ctx ctx evl in
       let module H = (val hook : HOOK) in
-      match H.on_after_eval route exp man flow evl with
+      match H.on_after_eval route semantic exp man flow evl with
       | None -> acc
       | x -> x
     ) active_hooks None
