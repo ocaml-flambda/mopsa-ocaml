@@ -188,7 +188,7 @@ struct
         | _ -> assert false
       in
       Some (
-        man.eval flt flow >>$ fun flt flow ->
+        man.eval flt flow ~translate:"Universal" >>$ fun flt flow ->
         Eval.singleton (mk_float_class cls flt exp.erange) flow
       )
 
