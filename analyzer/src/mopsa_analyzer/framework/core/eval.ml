@@ -29,6 +29,8 @@ open Flow
 open Context
 open Cases
 open Semantic
+open Mopsa_utils
+
 
 type 'a eval  = ('a,expr) cases
 
@@ -40,4 +42,11 @@ let translate semantic e ee flow =
 let print fmt (evl: 'a eval) : unit =
   Cases.print_result (fun fmt e flow -> pp_expr fmt e) fmt evl
 
-let remove_duplicates lattice evl = Cases.remove_duplicate_results compare_expr lattice evl
+let remove_duplicates lattice evl =
+  Cases.remove_duplicate_results
+    (fun e1 e2 ->
+       (* Compare the expressions and their translations *)
+       Compare.pair compare_expr (SemanticMap.compare compare_expr)
+         (e1,e1.etrans)
+         (e2,e2.etrans)
+    ) lattice evl
