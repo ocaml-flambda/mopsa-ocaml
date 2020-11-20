@@ -355,7 +355,11 @@ let rank_float =
   | FLOAT -> 0
   | DOUBLE -> 1
   | LONG_DOUBLE -> 2
-  
+
+let is_int_binop = function
+  | EQ | NEQ | LT | LE | GT | GE | LAND | LOR -> true
+  | _ -> false
+
 let binop_type range prj t1 t2 =
   let open C_AST in
   let open C_utils in
@@ -447,16 +451,16 @@ let rec visit_expr e prj func =
       let e1 = promote_expression_type prj e1 in
       let e2 = promote_expression_type prj e2 in
 
-      let t = binop_type e.range prj e1.content.typ e2.content.typ in
-
-      let e1 = convert_expression_type e1 t in
-      let e2 = convert_expression_type e2 t in
+      let t =
+        if is_int_binop op then int_type
+        else binop_type e.range prj e1.content.typ e2.content.typ
+      in
 
       let ee' = with_range
           Ast.{ kind = E_binop(op, e1, e2); typ = t }
           e.range
       in
-      
+
       begin match op with
         | EQ | NEQ | LT | LE | GT | GE -> ee'.content.kind, ee'.content.typ
         | _ -> Ast.E_cast(t, false, ee'), t
