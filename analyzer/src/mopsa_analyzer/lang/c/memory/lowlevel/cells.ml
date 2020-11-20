@@ -660,6 +660,11 @@ struct
           then Cases.empty flow
           else Cases.singleton region flow
         else
+        if Z.(nb = one) then
+          (* Only one case -> return it *)
+          let c = mk_cell base lo typ in
+          Cases.singleton (Cell (c,mode)) flow
+        else
           (* few cases -> iterate fully over [l, u] *)
           let rec aux o =
             if Z.gt o uo
