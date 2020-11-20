@@ -461,16 +461,13 @@ struct
       fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
       match action with
       | Exec(stmt,route) ->
-        fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
+        fprintf fmt "@[<v 4>S[ %a@] ]@."
           pp_stmt stmt
-          pp_route route
 
       | Eval(exp,route,translate,translate_when) ->
-        fprintf fmt "@[<v 4>E[ %a@] : %a ]<%a> in %a@."
+        fprintf fmt "@[<v 4>E[ %a@] : %a ]@."
           pp_expr exp
           pp_typ (etyp exp)
-          pp_semantic translate
-          pp_route route
     )
 
   (** Check that an action is atomic *)

@@ -83,6 +83,7 @@ struct
   (** Tabulation *)
   let tab level = color level "|"
 
+  let cur_level () = max (Stack.length stack) 0
 
   (** Indent a message by adding tabs at the beginning of each line *)
   let indent ~symbol fmt =
@@ -90,25 +91,24 @@ struct
     Format.kasprintf (fun str ->
         (* Split the message into lines *)
         let lines = String.split_on_char '\n' str in
-        let cur_level = max (Stack.length stack) 0 in
-
+        let level = cur_level () in
         match lines with
         | [] -> ()
         | first :: others ->
 
           (* The first line is prefixed with the entry symbol *)
-          let first' = (symbol_to_string symbol cur_level) ^ " " ^ first in
+          let first' = (symbol_to_string symbol level) ^ " " ^ first in
 
           (* The other lines are prefixed with the indent symbol *)
           let others' =
             if not (is_end_symbol symbol) then
-              List.map (fun line -> (tab cur_level) ^ " " ^ line) others
+              List.map (fun line -> (tab level) ^ " " ^ line) others
             else
               List.map (fun line -> "  " ^ line) others
           in
 
           (* Add the margin *)
-          let margin = List.init cur_level (fun i -> (tab i) ^ " ") |>
+          let margin = List.init level (fun i -> (tab i) ^ " ") |>
                        String.concat ""
           in
           let lines' = List.map (fun line ->
@@ -153,16 +153,16 @@ struct
   let on_before_exec route stmt man flow =
     reach stmt.srange;
     if Options.short then
-      indent "%a%a from %s"
+      indent "%a%a from %a"
         pp_S stmt
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         ~symbol:BEGIN
     else
-      indent "%a%a from %s@,input @[%a@]"
+      indent "%a%a from %a@,input @[%a@]"
         pp_S stmt
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         (format (Flow.print man.lattice.print)) flow
         ~symbol:BEGIN
     ;
@@ -173,18 +173,18 @@ struct
     let time = get_timing () in
     let nb = Cases.cardinal post in
     if Options.short then
-      indent "%a%a from %s done [%.4fs, %d case%a]"
+      indent "%a%a from %a done [%.4fs, %d case%a]"
         pp_S stmt
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a%a from %s done [%.4fs, %d case%a]@ output: @[%a@]"
+      indent "%a%a from %a done [%.4fs, %d case%a]@ output: @[%a@]"
         pp_S stmt
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         time
         nb Debug.plurial_int nb
         (Cases.print
@@ -197,16 +197,16 @@ struct
 
   let on_before_eval route semantic exp man flow =
     if Options.short then
-      indent "%a%a from %s"
+      indent "%a%a from %a"
         (pp_E semantic) exp
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         ~symbol:BEGIN
     else
-      indent "%a%a from %s@,input: @[%a@]"
+      indent "%a%a from %a@,input: @[%a@]"
         (pp_E semantic) exp
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         (format (Flow.print man.lattice.print)) flow
         ~symbol:BEGIN
     ;
@@ -222,19 +222,19 @@ struct
     in
     let nb = Cases.cardinal evl in
     if Options.short then
-      indent "%a = %a%a from %s done [%.4fs, %d case%a]"
+      indent "%a = %a%a from %a done [%.4fs, %d case%a]"
         (pp_E semantic) exp
         pp_evl_with_type evl
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a%a from %s done [%.4fs, %d case%a]@ output: @[%a]"
+      indent "%a%a from %a done [%.4fs, %d case%a]@ output: @[%a]"
         (pp_E semantic) exp
         pp_route_if_any route
-        (top_domain ())
+        Debug.pp_channel (top_domain ())
         time
         nb Debug.plurial_int nb
         pp_evl_with_type evl
