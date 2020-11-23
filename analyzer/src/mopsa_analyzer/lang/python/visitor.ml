@@ -366,6 +366,12 @@ let () =
           | {exprs = [x; typ]} -> {stmt with skind = S_py_annot(x, typ)}
           | _ -> assert false
         )
+      | S_py_check_annot(x, typ) ->
+        {exprs = [x; typ]; stmts = []},
+        (function
+          | {exprs = [x; typ]} -> {stmt with skind = S_py_check_annot(x, typ)}
+          | _ -> assert false
+        )
 
       | S_py_import _ -> leaf stmt
       | S_py_import_from _ -> leaf stmt

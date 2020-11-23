@@ -370,6 +370,9 @@ type stmt_kind +=
   (** type annotations for variables *)
   | S_py_annot of expr * expr
 
+  (** type annotation check for variables *)
+  | S_py_check_annot of expr * expr
+
   (** for loops *)
   | S_py_for of expr (** target *) *
              expr (** iterator *) *
