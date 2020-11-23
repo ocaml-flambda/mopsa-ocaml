@@ -46,6 +46,8 @@ let () =
       default = "";
     }
 
+let opt_check_type_annot = ref true
+
 let debug fmt = Debug.debug ~channel:"python.frontend" fmt
 
 (** Entry point of the frontend *)
@@ -53,6 +55,7 @@ let rec parse_program (files: string list) : program =
   match files with
   | [filename] ->
     debug "parsing %s" filename;
+    let () = opt_check_type_annot := (Filename.extension filename <> ".pyi") in
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
     Hooks.Coverage.Hook.add_file filename body;
@@ -97,9 +100,12 @@ and from_stmt (stmt: Mopsa_py_parser.Ast.stmt) : stmt =
       S_assign (from_exp x, from_exp e)
 
     | S_type_annot (x, e) ->
-      let expr = from_exp e in
-      let expr = {expr with ekind = E_py_annot expr} in
-      S_py_annot (from_exp x, expr)
+       if !opt_check_type_annot then
+         S_py_check_annot (from_exp x, from_exp e)
+       else
+         let expr = from_exp e in
+         let expr = {expr with ekind = E_py_annot expr} in
+         S_py_annot (from_exp x, expr)
 
     | S_expression e ->
       Universal.Ast.S_expression (from_exp e)

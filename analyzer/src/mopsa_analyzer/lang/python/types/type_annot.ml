@@ -695,6 +695,22 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
+    | S_py_check_annot(x, e) ->
+       let range = srange stmt in
+       assume
+         (mk_expr (E_py_check_annot(x, e)) range)
+         man flow
+         ~fthen:(fun flow ->
+           Flow.add_safe_check Alarms.CHK_PY_INVALID_TYPE_ANNOTATION range flow |>
+           Post.return
+         )
+         ~felse:(fun flow ->
+           let cs = Flow.get_callstack flow in
+           let alarm = mk_alarm (Alarms.A_py_invalid_type_annotation(x, e)) cs range in
+           Flow.raise_alarm alarm ~bottom:false man.lattice flow |> Post.return
+         )
+       |> OptionExt.return
+
     | S_fold ({ekind = E_py_annot {ekind = E_addr a'}}, [{ekind = (E_addr a)}])
     | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
       let cur = get_env T_cur man flow in

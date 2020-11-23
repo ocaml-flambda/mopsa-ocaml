@@ -100,3 +100,33 @@ let () =
         | T_py_exception (_,str,k) -> Format.fprintf fmt "@[<hv 2>PyExc(%s)@,%a@]" str pp_py_exc_kind k
         | _ -> next fmt tk);
   }
+
+
+type check += CHK_PY_INVALID_TYPE_ANNOTATION
+type alarm_kind += A_py_invalid_type_annotation of expr * expr
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_PY_INVALID_TYPE_ANNOTATION -> Format.fprintf fmt " Type annotations"
+      | a -> next fmt a)
+
+let () =
+  register_alarm {
+      check = (fun next -> function
+                | A_py_invalid_type_annotation _ -> CHK_PY_INVALID_TYPE_ANNOTATION
+                | a -> next a);
+      compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_py_invalid_type_annotation (v1, a1), A_py_invalid_type_annotation (v2, a2) ->
+           Compare.compose
+             [
+               (fun () -> compare_expr v1 v2);
+               (fun () -> compare_expr a1 a2);
+             ]
+        | _ -> next a1 a2);
+      print = (fun next fmt -> function
+                | A_py_invalid_type_annotation (v, annot) ->
+                   Format.fprintf fmt "Variable '%a' does not satisfy annotation '%a'" pp_expr v pp_expr annot
+                | a -> next fmt a);
+      join = (fun next -> next);
+    }
