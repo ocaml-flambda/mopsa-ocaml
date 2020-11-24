@@ -32,21 +32,29 @@ struct
   let name = "universal.numeric.reductions.numeric_eval"
 
   let reduce exp man rman pre results flow =
-    if not @@ List.exists (fun e -> is_numeric_type e.etyp) results then None
+    (* No reduction if no numeric expression found *)
+    if not @@ List.exists
+        (fun e ->
+           let n = get_expr_translation "Universal" e in
+           is_numeric_type n.etyp
+        ) results
+    then None
     else
     (* Simplify constant expressions *)
     let results' =
       results
       |> List.map (fun e ->
-          match expr_to_const e with
-          | Some c -> { e with ekind = E_constant c }
+          let n = get_expr_translation "Universal" e in
+          match expr_to_const n with
+          | Some c -> add_expr_translation "Universal" { n with ekind = E_constant c } e
           | None -> e
         )
       (* Convert boolean values to numeric values to simplify reduction *)
       |> List.map (fun e ->
-          match ekind e with
-          | E_constant (C_bool true) -> { e with ekind = E_constant (C_int Z.one); etyp = T_int }
-          | E_constant (C_bool false) -> { e with ekind = E_constant (C_int Z.zero); etyp = T_int }
+          let n = get_expr_translation "Universal" e in
+          match ekind n with
+          | E_constant (C_bool true) -> add_expr_translation "Universal" { n with ekind = E_constant (C_int Z.one); etyp = T_int } e
+          | E_constant (C_bool false) -> add_expr_translation "Universal" { n with ekind = E_constant (C_int Z.zero); etyp = T_int } e
           | _ -> e
         )
     in
@@ -58,7 +66,9 @@ struct
         let rec iter acc flow = function
           | [] -> Eval.singleton acc flow
           | hd::tl ->
-            match ekind acc, ekind hd with
+            let nacc = get_expr_translation "Universal" acc in
+            let nhd = get_expr_translation "Universal" hd in
+            match ekind nacc, ekind nhd with
             (* Top rules *)
             | _, E_constant (C_top _) ->
               iter acc flow tl
@@ -78,7 +88,11 @@ struct
 
             | E_constant(C_int_interval (a,b)), E_constant (C_int_interval(c,d)) ->
               let lo = Z.max a c and hi = Z.min b d in
-              if Z.(lo <= hi) then iter (mk_z_interval lo hi exp.erange) flow tl else Eval.empty flow
+              if Z.(lo <= hi) then
+                let acc = add_expr_translation "Universal" (mk_z_interval lo hi exp.erange) acc in
+                iter acc flow tl
+              else
+                Eval.empty flow
 
             (* Variables *)
             | E_var (v1,mode1), E_var (v2,mode2) ->
@@ -94,7 +108,7 @@ struct
               man.exec (mk_assume (eq acc hd exp.erange) exp.erange) flow >>% fun flow' ->
               (* Keep the variable as the most precise expression *)
               let precise =
-                match ekind hd with
+                match ekind nhd with
                 | E_var (v,_) -> hd
                 | _ -> acc
               in
@@ -104,13 +118,14 @@ struct
             | E_binop(op1,_,_), E_binop(op2,_,_) when (is_comparison_op op1 || is_logic_op op1)
                                                    && (is_comparison_op op2 || is_logic_op op2) ->
               (* Transform as a conjunction *)
-              iter (mk_log_and acc hd exp.erange) flow tl
+              let acc' = add_expr_translation "Universal" (mk_log_and acc hd exp.erange) acc in
+              iter acc' flow tl
 
             (* constant AND compare : keep compare *)
             | E_constant (C_int n), E_binop(op,_,_)
             | E_binop(op,_,_), E_constant (C_int n) when (is_comparison_op op || is_logic_op op) ->
               let precise =
-                match ekind hd with E_binop _ -> hd | _ -> acc
+                match ekind nhd with E_binop _ -> hd | _ -> acc
               in
               iter precise flow tl
 
