@@ -214,17 +214,28 @@ struct
 
   let on_after_eval route semantic exp man flow evl =
     let time = get_timing () in
-    let pp_evl_with_type fmt evl =
+    let pp_evl fmt evl =
       Cases.print_result (
         fun fmt e flow ->
-          Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
+          Format.fprintf fmt "%a : %a%a"
+            pp_expr e
+            pp_typ e.etyp
+            (fun fmt trans ->
+               if SemanticMap.is_empty trans then ()
+               else
+                 fprintf fmt " ‖ %a"
+                   (pp_print_list
+                      ~pp_sep:(fun fmt () -> fprintf fmt " ‖ ")
+                      (fun fmt (s,e) -> fprintf fmt "%a: %a" pp_semantic s pp_expr e)
+                   ) (SemanticMap.bindings trans)
+            ) e.etrans
       ) fmt evl
     in
     let nb = Cases.cardinal evl in
     if Options.short then
       indent "%a = %a%a from %a done [%.4fs, %d case%a]"
         (pp_E semantic) exp
-        pp_evl_with_type evl
+        pp_evl evl
         pp_route_if_any route
         Debug.pp_channel (top_domain ())
         time
@@ -237,7 +248,7 @@ struct
         Debug.pp_channel (top_domain ())
         time
         nb Debug.plurial_int nb
-        pp_evl_with_type evl
+        pp_evl evl
         ~symbol:END
 
   let on_finish man flow =
