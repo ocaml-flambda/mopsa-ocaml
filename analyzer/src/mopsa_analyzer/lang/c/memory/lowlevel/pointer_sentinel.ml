@@ -80,13 +80,13 @@ struct
       print = (fun next fmt v ->
           match v.vkind with
           | V_c_sentinel_pos (base) ->
-            Format.fprintf fmt "sentinel-pos(%a)" pp_base base
+            Format.fprintf fmt "sentinel-pos⦃%a⦄" pp_base base
 
           | V_c_before_sentinel (base) ->
-            Format.fprintf fmt "before-sentinel(%a)" pp_base base
+            Format.fprintf fmt "before-sentinel⦃%a⦄" pp_base base
 
           | V_c_sentinel (base) ->
-            Format.fprintf fmt "sentinel(%a)" pp_base base
+            Format.fprintf fmt "sentinel⦃%a⦄" pp_base base
 
           | _ -> next fmt v
         );
@@ -113,7 +113,7 @@ struct
 
   (** Create the auxiliary variable sentinel(base) *)
   let mk_sentinel_pos_var base : var =
-    let name = "sentinel-pos(" ^ (base_uniq_name base) ^ ")" in
+    let name = "sentinel-pos⦃" ^ (base_uniq_name base) ^ "⦄" in
     mkv name (V_c_sentinel_pos (base)) T_int ~mode:(base_mode base) ~semantic:"U/Numeric"
 
 
@@ -123,7 +123,7 @@ struct
 
   (** Create the auxiliary variable before-sentinel(base) *)
   let mk_before_var base : var =
-    let name = "before-sentinel(" ^ (base_uniq_name base) ^ ")" in
+    let name = "before-sentinel⦃" ^ (base_uniq_name base) ^ "⦄" in
     mkv name (V_c_before_sentinel (base)) (T_c_pointer T_c_void) ~mode:WEAK ~semantic:"C/Scalar"
 
 
@@ -133,7 +133,7 @@ struct
 
   (** Create the auxiliary variable at-sentinel(base) *)
   let mk_sentinel_var base : var =
-    let name = "sentinel(" ^ (base_uniq_name base) ^ ")" in
+    let name = "sentinel⦃" ^ (base_uniq_name base) ^ "⦄" in
     mkv name (V_c_sentinel (base)) (T_c_pointer T_c_void) ~mode:(base_mode base) ~semantic:"C/Scalar"
 
 
@@ -404,7 +404,6 @@ struct
   (** Cases of the abstract transformer for 𝕊⟦ *p = rval; ⟧ *)
   let assign_cases base offset mode rval range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~route:scalar size flow  >>$ fun size flow ->
 
     (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
        optional as the domain does not raise out-of-bound alarms *)
@@ -539,7 +538,6 @@ struct
       if not (is_interesting_base base) || not (is_c_pointer_type lval.etyp) then
         Post.return flow
       else
-        man.eval ~route:scalar offset flow >>$ fun offset flow ->
         man.eval rval flow >>$ fun rval flow ->
         assign_cases base offset mode rval range man flow
 
@@ -594,7 +592,6 @@ struct
   (** Cases of the abstraction evaluations *)
   let eval_deref_cases base offset mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~route:scalar size flow  >>$ fun size flow ->
 
     (* Safety condition: offset ∈ [0, size - pointer_size] *)
     assume ~route:numeric
@@ -664,7 +661,6 @@ struct
       if is_scalar_base base then Cases.not_handled flow else
       if is_interesting_base base && is_c_pointer_type ctype
       then
-        man.eval ~route:scalar offset flow >>$ fun offset flow ->
         eval_deref_cases base offset mode ctype range man flow
       else
         Eval.singleton (mk_top ctype range) flow
@@ -677,9 +673,8 @@ struct
     let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
 
     eval_base_size base range man flow >>$ fun size flow ->
-    man.eval ~route:scalar size flow >>$ fun size flow ->
-    man.eval ~route:scalar min flow >>$ fun min flow ->
-    man.eval ~route:scalar max flow >>$ fun max flow ->
+    man.eval min flow ~translate:"Universal" >>$ fun min flow ->
+    man.eval max flow ~translate:"Universal" >>$ fun max flow ->
 
     let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
     let sentinel = mk_sentinel_var_expr base ~mode range in
