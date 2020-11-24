@@ -65,7 +65,7 @@ struct
     man.exec stmt flow >>% fun flow1 ->
 
     (** Initialize special variable __name__ *)
-    let v = Frontend.from_var {name="__name__"; uid=140} in
+    let v = List.find (fun x -> get_orig_vname x = "__name__") globals in
     let stmt =
       let range = tag_range range "__name__ assignment" in
       mk_assign
@@ -76,7 +76,7 @@ struct
     man.exec stmt flow1 >>% fun flow2 ->
 
     (** Initialize special variable __file__ *)
-    let v = Frontend.from_var {name="__file__"; uid=141} in
+    let v = List.find (fun x -> get_orig_vname x = "__file__") globals in
     let stmt =
       let range = tag_range range "__file__ assignment" in
         mk_assign
