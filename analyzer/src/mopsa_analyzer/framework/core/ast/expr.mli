@@ -122,6 +122,10 @@ val get_expr_history : expr -> expr list
 val get_orig_expr : expr -> expr
 (** Get the original form of an expression *)
 
+val find_expr_ancestor : (expr -> bool) -> expr -> expr
+(** Get the ancestor expression verifying a predicate *)
+
+
 (****************************************************************************)
 (**                         {1 Registration}                                *)
 (****************************************************************************)

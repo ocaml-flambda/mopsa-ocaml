@@ -88,12 +88,22 @@ let compare_expr e1 e2 = TypeExt.compare expr_compare_chain e1 e2
 let pp_expr fmt e = TypeExt.print expr_pp_chain fmt e
 
 let add_expr_translation semantic t e =
-  { e with etrans = SemanticMap.add semantic t e.etrans }
+  (* Add [e] to the history of [t] *)
+  let t' = { t with ehistory = e :: t.ehistory } in
+  (* Add [t'] to the translations of [e] *)
+  { e with etrans = SemanticMap.add semantic t' e.etrans }
 
 let get_expr_translations e = e.etrans
 
 let get_expr_translation semantic e =
-  if is_any_semantic semantic then e else SemanticMap.find semantic e.etrans
+  if is_any_semantic semantic then e
+  else
+    try SemanticMap.find semantic e.etrans
+    with Not_found ->
+      (* XXX We assume that an expression is translated to itself if no
+         translation exists. This is a temporary fix for situations where
+         domains don't add appropriate entires in the translation table. *)
+      e
 
 let get_expr_history e = e.ehistory
 
@@ -101,6 +111,13 @@ let get_orig_expr e =
   match e.ehistory with
   | [] -> e
   | _  -> ListExt.last e.ehistory
+
+let find_expr_ancestor f e =
+  let rec iter = function
+    | [] -> raise Not_found
+    | hd::tl -> if f hd then hd else iter tl
+  in
+  iter e.ehistory
 
 let () =
   register_expr {

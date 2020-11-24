@@ -509,3 +509,79 @@ struct
       Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end
+
+
+
+(** {1 Utility functions} *)
+(** ********************* *)
+
+let assume
+    cond ?(route=toplevel)
+    ~fthen ~felse
+    ?(fboth=(fun then_flow else_flow ->
+        Cases.join
+          (fthen then_flow)
+          (felse else_flow)
+      ))
+    ?(fnone=(fun flow ->
+        Cases.empty flow
+      ))
+    man flow
+  =
+  (* First, evaluate the condition *)
+  let evl = man.eval cond flow ~route in
+  (* Filter flows that satisfy the condition *)
+  let then_post = ( evl >>$ fun cond flow -> man.exec (mk_assume cond cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Post.remove_duplicates man.lattice
+  in
+  (* Propagate the flow-insensitive context to the other branch *)
+  let then_ctx = Cases.get_ctx then_post in
+  let evl' = Cases.set_ctx then_ctx evl in
+  let else_post = ( evl' >>$ fun cond flow -> man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow ~route ) |>
+                  (* Execute the cleaners of the evaluation here *)
+                  exec_cleaners man |>
+                  Post.remove_duplicates man.lattice
+  in
+  then_post >>% fun then_flow ->
+  else_post >>% fun else_flow ->
+  match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
+        man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
+  with
+  | false,true  -> fthen then_flow
+  | true,false  -> felse else_flow
+  | true,true   -> fnone (Flow.join man.lattice then_flow else_flow)
+  | false,false -> fboth then_flow else_flow
+
+
+let switch
+    (cases : (expr list * ('a Flow.flow -> ('a,'r) cases)) list)
+    ?(route = toplevel)
+    man flow
+  : ('a,'r) cases
+  =
+  let rec one (cond : expr list) acc f =
+    match cond with
+    | [] -> f acc
+    | x :: tl ->
+      let s = mk_assume x x.erange in
+      man.exec ~route s acc >>% fun acc' ->
+      if Flow.get T_cur man.lattice acc' |> man.lattice.is_bottom then
+        Cases.empty acc'
+      else
+        one tl acc' f
+  in
+  let rec aux cases =
+    match cases with
+    | [] -> assert false
+
+    | [(cond, t)] -> one cond flow t
+
+    | (cond, t) :: q ->
+      let r = one cond flow t in
+      let rr = aux q in
+      Cases.join r rr
+  in
+  aux cases
+

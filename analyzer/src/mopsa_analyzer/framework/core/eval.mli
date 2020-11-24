@@ -32,9 +32,9 @@ open Effect
 
 type 'a eval = ('a,expr) cases
 
-val singleton : ?effects:teffect -> ?cleaners:stmt list -> expr -> 'a flow -> 'a eval
+val singleton : ?effects:teffect -> ?cleaners:stmt list -> ?translations:(semantic*expr) list -> expr -> 'a flow -> 'a eval
 
-val translate : semantic -> expr -> expr -> 'a flow -> 'a eval
+val add_translation : semantic -> expr -> 'a eval -> 'a eval
 
 val empty : 'a flow -> 'a eval
 
