@@ -121,7 +121,7 @@ struct
 
 
   let pp_offset fmt p =
-    Format.fprintf fmt "offset(%a)" pp_var p
+    Format.fprintf fmt "offset⦃%a⦄" pp_var p
 
 
   let () =
@@ -143,7 +143,7 @@ struct
   (** Create the offset variable of a pointer *)
   let mk_offset_var (p:var) : var =
     let name =
-      let () = Format.fprintf Format.str_formatter "offset(%s)" p.vname in
+      let () = Format.fprintf Format.str_formatter "offset⦃%s⦄" p.vname in
       Format.flush_str_formatter ()
     in
     mkv name (V_c_ptr_offset p) T_int ~mode:p.vmode ~semantic:"U/Numeric"
