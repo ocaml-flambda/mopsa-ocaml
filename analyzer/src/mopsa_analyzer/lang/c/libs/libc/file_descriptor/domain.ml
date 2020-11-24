@@ -238,7 +238,7 @@ struct
     switch
       (
         List.map (fun i ->
-            [mk_binop slot O_eq (mk_int i range) range],
+            [eq slot (mk_int i range) range],
             (fun flow ->
                let flow = map_env T_cur (fun a ->
                    { a with
@@ -255,7 +255,7 @@ struct
           (let rec aux k = if k = window then [] else k :: aux (k + 1) in aux 0)
         @
         [
-          [mk_binop slot O_ge (mk_int window range) range],
+          [ge slot (mk_int window range) range],
           (fun flow ->
              let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
              let flow = map_env T_cur (fun a ->
@@ -266,7 +266,6 @@ struct
           )
         ]
       )
-      ~route:numeric
       man flow
 
 
@@ -283,7 +282,7 @@ struct
         let addrs = Slot.get hd in
         if addrs = [] then find_addr_first (j + 1) tl flow
         else
-          assume (mk_binop i O_eq (mk_int j range) range) ~route:numeric
+          assume (eq i (mk_int j range) range)
             ~fthen:(fun flow ->
                 List.map (fun addr -> Eval.singleton (mk_addr addr range) flow) addrs |>
                 Eval.join_list ~empty:(fun () -> Eval.empty flow)
@@ -409,7 +408,7 @@ struct
     | E_c_builtin_call("_mopsa_register_file_resource_at", [f; fd]) ->
       begin
         resolve_pointer f man flow >>$ fun p flow ->
-        man.eval fd flow >>$ fun fd flow ->
+        man.eval fd flow ~translate:"Universal" >>$ fun fd flow ->
         match p with
         | P_block({ base_kind = Addr addr; base_valid = true; },_,_) ->
           insert_addr_at addr fd exp.erange man flow
@@ -422,14 +421,14 @@ struct
 
     (* 𝔼⟦ _mopsa_find_file_resource(fd) ⟧ *)
     | E_c_builtin_call("_mopsa_find_file_resource", [fd]) ->
-      man.eval fd flow >>$? fun fd flow ->
+      man.eval fd flow ~translate:"Universal" >>$? fun fd flow ->
       find_addr fd exp.erange man flow
       |> OptionExt.return
 
 
     (* 𝔼⟦ n in FileDescriptor ⟧ *)
     | E_stub_resource_mem(n, "FileDescriptor") ->
-      man.eval n flow >>$? fun n flow ->
+      man.eval n flow ~translate:"Universal" >>$? fun n flow ->
       find_addr n exp.erange man flow >>$? fun addr flow ->
       let exp' =
         match ekind addr with
