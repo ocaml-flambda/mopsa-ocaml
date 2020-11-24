@@ -115,7 +115,7 @@ struct
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_num vv -> pp_var fmt vv
+          | V_c_num vv -> Format.fprintf fmt "num⦃%a⦄" pp_var vv
           | _ -> next fmt v
         );
       compare = (fun next v1 v2 ->
@@ -139,7 +139,8 @@ struct
       | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
   let mk_num_var v =
-    mkv v.vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode ~semantic:"U/Numeric"
+    let vname = Format.asprintf "num⦅%s⦆" v.vname in
+    mkv vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode ~semantic:"U/Numeric"
 
   let mk_num_var_expr e =
     match ekind e with
@@ -242,14 +243,14 @@ struct
 
   (** Check that a division is not performed on a null denominator *)
   let check_division cexp man flow =
-    let denominator = match ekind cexp with
+    let nexp = c2num cexp in
+    let denominator = match ekind nexp with
       | E_binop(_,_,e) -> e
       | _ -> assert false in
     let cond = ne denominator zero cexp.erange in
     assume cond
       ~fthen:(fun tflow ->
           let tflow = safe_c_divide_by_zero_check cexp.erange man tflow in
-          let nexp = c2num cexp in
           Eval.singleton cexp tflow |>
           Eval.add_translation "Universal" nexp
         )
@@ -449,7 +450,7 @@ struct
     (* 𝔼⟦ (float)float ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
                           e   |> etyp |> is_c_float_type ->
-      man.eval ~translate:"Universal" e flow |>
+      man.eval e flow |>
       OptionExt.return
 
     (* 𝔼⟦ (int)num ⟧ *)
@@ -471,7 +472,6 @@ struct
       Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
     else
       flow
-
 
 
   (* Declaration of a scalar numeric variable *)
