@@ -58,6 +58,9 @@ let rec parse_program (files: string list) : program =
     let () = opt_check_type_annot := (Filename.extension filename <> ".pyi") in
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
+    let body = if Filename.extension filename <> ".pyi" && !opt_gc_after_functioncall then
+                 Universal.Ast.mk_block ([body;mk_stmt Universal.Heap.Recency.S_perform_gc (Location.mk_fresh_range ())]) body.srange
+               else body in
     Hooks.Coverage.Hook.add_file filename body;
     let globals = List.map from_var ast.prog_globals in
     Core.Ast.Var.start_vcounter_at counter;

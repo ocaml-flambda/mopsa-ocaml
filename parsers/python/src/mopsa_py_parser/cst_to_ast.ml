@@ -48,7 +48,7 @@ let rec translate_program (sl: Cst.stmt list) : Ast.program =
 
 (** Collect the set of global variables *)
 and find_program_globals (sl: Cst.stmt list) =
-  (find_lvals_in_block sl @ find_globals_in_block sl) |>
+  ("__name__" :: "__file__" :: find_lvals_in_block sl @ find_globals_in_block sl) |>
   List.sort_uniq compare |>
   List.map translate_var
 

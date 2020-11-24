@@ -155,6 +155,19 @@ module Domain =
                     | Py_program(_, globals, body) -> globals, body
                     | _ -> assert false
                   in
+                  let name_assign =
+                    mk_assign
+                      (mk_var (List.find (fun x -> get_orig_vname x = "__name__") globals) range)
+                      {(mk_string name range) with etyp=(T_py (Some Str))}
+                      range
+                  in
+                  let file_assign =
+                    mk_assign
+                      (mk_var (List.find (fun x -> get_orig_vname x = "__file__") globals) range)
+                      {(mk_string filename range) with etyp=(T_py (Some Str))}
+                      range
+                  in
+                  let body = Universal.Ast.mk_block (name_assign::file_assign::body::[]) range in
                   let addr = {
                     addr_kind = A_py_module (M_user(name, globals));
                     addr_partitioning = G_all;
@@ -223,6 +236,8 @@ module Domain =
           List.iter (parse base) block
 
         | S_py_import(name, _, _) when is_builtin_name name -> ()
+
+        | Universal.Heap.Recency.S_perform_gc -> ()
 
         | _ -> panic "stmt %a not supported in %s" pp_stmt stmt file
 

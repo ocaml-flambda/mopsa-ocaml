@@ -77,8 +77,8 @@ let functions = [
 ]
 
 (* Exceptions *)
-let  exceptions = [ 
-  "BaseException";  
+let  exceptions = [
+  "BaseException";
   "Exception";
   "AssertionError";
   "AttributeError";
@@ -172,10 +172,10 @@ let classes = [
   "xrange"
 ]
 
-let vars = [
-  "__name__";
-  "__file__"
-]
+let vars = []
+(*   "__name__";
+ *   "__file__"
+ * ] *)
 
 let decorators = [
   "trackCall";
