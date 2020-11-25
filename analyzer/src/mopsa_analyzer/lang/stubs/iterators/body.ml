@@ -246,20 +246,28 @@ struct
         fold2zo_report
           (fun diag acc ->
              match diag.diag_kind with
-             | Error ->  diag::acc
+             | Error | Warning ->  diag::acc
              | _ -> acc)
-          (fun _ acc -> acc)
-          (fun _ _ acc -> acc)
-          (Flow.get_report flow1) (Flow.get_report flow) [] in
+          (fun d acc -> acc)
+          (fun d1 d2 acc ->
+             match d1.diag_kind, d2.diag_kind with
+             | Error, Unreachable | Warning, Unreachable ->
+               d1 :: acc
+             | _ -> acc
+          ) (Flow.get_report flow1) (Flow.get_report flow) [] in
       let new_errors2 =
         fold2zo_report
           (fun diag acc ->
              match diag.diag_kind with
-             | Error -> diag::acc
+             | Error | Warning -> diag::acc
              | _ -> acc)
-          (fun _ acc -> acc)
-          (fun _ _ acc -> acc)
-          (Flow.get_report flow2) (Flow.get_report flow) [] in
+          (fun d acc -> acc)
+          (fun d1 d2 acc ->
+             match d1.diag_kind, d2.diag_kind with
+             | Error, Unreachable | Warning, Unreachable ->
+               d1 :: acc
+             | _ -> acc
+          ) (Flow.get_report flow2) (Flow.get_report flow) [] in
       let flow1,flow2 =
         match new_errors1,new_errors2 with
         | [],[] -> flow1,flow2
