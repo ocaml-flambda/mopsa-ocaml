@@ -316,7 +316,6 @@ struct
     match parts with
     | {exprs; stmts = []} ->
       (* Evaluate each sub-expression *)
-      let n = List.length parts.exprs in
       Cases.bind_list exprs (fun e flow ->
           push_domain "<toplevel>";
           let r = man.eval ~route e flow in
@@ -358,8 +357,9 @@ struct
     | _ -> Eval.singleton exp flow
 
 
-  (** Evaluate non-handled cases *)
+  (** Evaluate not-handled cases *)
   let eval_not_handled ?(route=toplevel) exp man evl =
+    (* Separate handled and not-handled cases *)
     let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
     let not_handled_ret =
       match not_handled with
@@ -367,17 +367,20 @@ struct
       | Some evl ->
         (* Evaluate sub-expressions of the not-handled cases *)
         let evl =
+          (* Merge all not-handled cases into one *)
           Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
           eval_sub_expressions ~route exp man flow
         in
         Some evl
     in
+    (* Join handled and evaluated not-handled cases *)
     OptionExt.neutral2 Cases.join handled not_handled_ret |>
     OptionExt.none_to_exn
 
+
   (** Evaluation of expressions. *)
   let eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp man flow =
-    (* Get the translation semantic *)
+    (* Get the translation semantic if any *)
     let semantic =
       if not (is_any_semantic translate) then
         translate
@@ -387,14 +390,16 @@ struct
         | None       -> any_semantic
     in
 
+    (* Notify hooks *)
     let flow =
-      if inside_hook () then
-        flow
+      if inside_hook () then flow
       else
         let () = enter_hook() in
         let x = Hook.on_before_eval route semantic exp man flow in
         let () = exit_hook() in
-        match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
+        match x with
+        | None -> flow
+        | Some ctx -> Flow.set_ctx ctx flow
     in
 
     let route = refine_route_with_var_semantic route exp in
@@ -409,7 +414,7 @@ struct
       | Some evl -> eval_not_handled ~route exp man evl
     in
 
-    (* Updates the expression history *)
+    (* Update the expression history *)
     let ret =
       Cases.map_result
         (fun exp' ->
@@ -423,18 +428,11 @@ struct
     let ret' =
       if is_any_semantic semantic
       then ret
-      else
-        Cases.map_result
-          (fun e ->
-             try get_expr_translation semantic e
-             with Not_found ->
-               e (* XXX If the requested semantics is not found, we return the
-                    evaluated expression and let the caller domain react *)
-          ) ret
+      else Cases.map_result (get_expr_translation semantic) ret
     in
 
-    if inside_hook () then
-        ret'
+    (* Notify hooks *)
+    if inside_hook () then ret'
     else
       let () = enter_hook() in
       let x = Hook.on_after_eval route semantic exp man flow ret' in
