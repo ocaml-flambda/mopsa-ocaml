@@ -311,7 +311,7 @@ struct
       route
 
   (** Evaluate sub-nodes of an expression and rebuild it *)
-  let eval_sub_expressions ?(route=toplevel) translate exp man flow =
+  let eval_sub_expressions ?(route=toplevel) exp man flow =
     let parts, builder = structure_of_expr exp in
     match parts with
     | {exprs; stmts = []} ->
@@ -319,40 +319,47 @@ struct
       let n = List.length parts.exprs in
       Cases.bind_list exprs (fun e flow ->
           push_domain "<toplevel>";
-          let r = man.eval ~route ~translate e flow in
+          let r = man.eval ~route e flow in
           let _ = pop_domain () in
           r
-        ) flow >>$ fun exprs' flow ->
-      (* Rebuild the expression from its evaluated parts *)
-      let e' = builder {exprs = exprs'; stmts = []} in
-      if is_any_semantic translate then
-        Eval.singleton e' flow
-      else
-        (* Rebuild also the translations of the expression from the translations of its parts *)
-        let etrans =
-          (* Construct a map from semantics to list of sub-translations *)
-          List.fold_left
-            (fun acc e ->
-               SemanticMap.map2o
-                 (fun s ee   -> [ee])
-                 (fun s l    -> e::l)
-                 (fun s ee l -> ee::l)
-                 e.etrans acc
-            ) SemanticMap.empty exprs' |>
-          (* Filter sub-translations that have the correct number of expressions *)
-          SemanticMap.filter
-            (fun _ l -> List.length l = n) |>
-          (* Rebuild the tranlsation from its parts *)
-          SemanticMap.map
-            (fun exprs -> builder {exprs = List.rev exprs; stmts=[]})
-        in
-        Eval.singleton { e' with etrans } flow
+        ) flow
+      >>$ fun exprs flow ->
+      (* Normalize translation maps by ensuring that sub-expression should be
+         translated to the same semanitcs *)
+      let semantics =
+        List.fold_left
+          (fun acc e ->
+             SemanticSet.union acc
+               (SemanticMap.bindings e.etrans |> List.map fst |> SemanticSet.of_list)
+          ) SemanticSet.empty exprs in
+      let exprs =
+        List.map
+          (SemanticSet.fold
+             (fun s e ->
+                if SemanticMap.mem s e.etrans then e else { e with etrans = SemanticMap.add s e e.etrans }
+             ) semantics
+          ) exprs in
+      (* Rebuild the expression [exp] from its evaluated parts *)
+      let exp = builder {exprs; stmts = []} in
+      (* Rebuild also the translations of [exp] from the translations of its parts *)
+      let etrans =
+        SemanticSet.fold
+          (fun s etrans ->
+             let exprs =
+               List.fold_left
+                 (fun acc e -> SemanticMap.find s e.etrans :: acc)
+                 [] exprs in
+             let exp = builder {exprs = List.rev exprs; stmts=[]} in
+             SemanticMap.add s exp etrans
+          ) semantics SemanticMap.empty in
+      Eval.singleton { exp with etrans } flow
 
     (* XXX sub-statements are not handled for the moment *)
     | _ -> Eval.singleton exp flow
 
+
   (** Evaluate non-handled cases *)
-  let eval_not_handled ?(route=toplevel) translate exp man evl =
+  let eval_not_handled ?(route=toplevel) exp man evl =
     let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
     let not_handled_ret =
       match not_handled with
@@ -361,7 +368,7 @@ struct
         (* Evaluate sub-expressions of the not-handled cases *)
         let evl =
           Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
-          eval_sub_expressions ~route translate exp man flow
+          eval_sub_expressions ~route exp man flow
         in
         Some evl
     in
@@ -398,8 +405,8 @@ struct
     in
     let evl =
       match feval exp man flow with
-      | None   -> eval_sub_expressions semantic exp man flow
-      | Some evl -> eval_not_handled ~route semantic exp man evl
+      | None   -> eval_sub_expressions exp man flow
+      | Some evl -> eval_not_handled ~route exp man evl
     in
 
     (* Updates the expression history *)
