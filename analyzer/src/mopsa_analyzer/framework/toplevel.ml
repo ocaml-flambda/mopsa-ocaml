@@ -420,7 +420,16 @@ struct
         (fun exp' ->
            if exp == exp'
            then exp'
-           else { exp' with ehistory = exp :: exp'.ehistory }
+           else
+             let exp'' = { exp' with
+                           ehistory = exp :: exp'.ehistory } in
+             (* Update history of the translations *)
+             { exp'' with
+               etrans =
+                 SemanticMap.map
+                   (fun e ->
+                      { e with ehistory = e.ehistory @ exp''.ehistory }
+                   ) exp''.etrans }
         ) evl
     in
 
@@ -444,7 +453,6 @@ struct
 
   (** {2 Handler of queries} *)
   (** ********************** *)
-
 
   let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
     fun ?(route=toplevel) query man flow ->
