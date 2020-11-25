@@ -226,7 +226,7 @@ struct
                  fprintf fmt " ‖ %a"
                    (pp_print_list
                       ~pp_sep:(fun fmt () -> fprintf fmt " ‖ ")
-                      (fun fmt (s,e) -> fprintf fmt "%a: %a" pp_semantic s pp_expr e)
+                      (fun fmt (s,e) -> fprintf fmt "%a ⇝ %a : %a" pp_semantic s pp_expr e pp_typ e.etyp)
                    ) (SemanticMap.bindings trans)
             ) e.etrans
       ) fmt evl
