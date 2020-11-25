@@ -110,7 +110,7 @@ struct
         match pt with
         | P_block (base,_,mode) ->
           eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
-          Eval.singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
+          man.eval (byte_to_element (under_type e.etyp) bytes exp.erange) flow
 
         | _ ->
           man.eval (mk_top ul exp.erange) flow
