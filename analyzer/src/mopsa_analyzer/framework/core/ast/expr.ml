@@ -88,10 +88,7 @@ let compare_expr e1 e2 = TypeExt.compare expr_compare_chain e1 e2
 let pp_expr fmt e = TypeExt.print expr_pp_chain fmt e
 
 let add_expr_translation semantic t e =
-  (* Add [e] to the history of [t] *)
-  let t' = { t with ehistory = e :: t.ehistory } in
-  (* Add [t'] to the translations of [e] *)
-  { e with etrans = SemanticMap.add semantic t' e.etrans }
+  { e with etrans = SemanticMap.add semantic t e.etrans }
 
 let get_expr_translations e = e.etrans
 
