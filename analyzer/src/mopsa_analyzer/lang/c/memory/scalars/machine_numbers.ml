@@ -41,8 +41,6 @@ struct
       let name = "c.memory.scalars.machine_numbers"
     end)
 
-  let numeric = Semantic "U/Numeric"
-
   let checks = [ CHK_C_INTEGER_OVERFLOW;
                  CHK_C_DIVIDE_BY_ZERO;
                  CHK_C_INVALID_SHIFT ]
@@ -258,7 +256,7 @@ struct
           let flow = raise_c_divide_by_zero_alarm denominator cexp.erange man fflow in
           Eval.empty flow
         )
-      ~route:numeric man flow
+      man flow
 
 
   (** Check that bit-shifts are safe. Two conditions are verified:
@@ -282,11 +280,7 @@ struct
           let flow' = raise_c_invalid_shift_alarm cexp n man flow fflow in
           Eval.empty flow'
         )
-      ~fnone:(fun nflow ->
-          let nflow = unreachable_c_shift_check range man nflow in
-          Eval.empty nflow
-        )
-      ~route:numeric man flow
+      man flow
 
 
 
@@ -501,9 +495,9 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.exec ~route:numeric (mk_add vv range) flow >>% fun flow ->
+    man.exec (mk_add vv range) flow >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.exec ~route:numeric (mk_assign vv init' range)
+    man.exec (mk_assign vv init' range)
 
 
   let exec stmt man flow =
@@ -515,23 +509,23 @@ struct
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
-      man.exec ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
+      man.exec (mk_assign lval' rval' stmt.srange) flow |>
       OptionExt.return
 
     | S_assume(e) when is_c_num_type e.etyp ->
       man.eval ~translate:"Universal" e flow >>$? fun e' flow ->
-      man.exec ~route:numeric (mk_assume e' stmt.srange) flow |>
+      man.exec (mk_assume e' stmt.srange) flow |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.exec ~route:numeric (mk_add vv stmt.srange) |>
+      man.exec (mk_add vv stmt.srange) |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
+      man.exec (mk_remove vv stmt.srange) flow |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
@@ -540,7 +534,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.exec ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.exec (mk_rename vv1 vv2 stmt.srange) flow |>
       OptionExt.return
 
     | S_expand({ekind = E_var _} as e, el)
@@ -549,7 +543,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_expand v vl stmt.srange) ~route:numeric flow |>
+      man.exec (mk_expand v vl stmt.srange) flow |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -558,7 +552,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_fold v vl stmt.srange) ~route:numeric flow |>
+      man.exec (mk_fold v vl stmt.srange) flow |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
@@ -570,7 +564,7 @@ struct
         else
           mk_top vv.etyp stmt.srange
       in
-      man.exec (mk_assign vv top stmt.srange) ~route:numeric flow |>
+      man.exec (mk_assign vv top stmt.srange) flow |>
       OptionExt.return
 
     | _ -> None
@@ -589,7 +583,7 @@ struct
     match ekind (remove_casts exp) with
     | E_var (v,_) when is_c_num_type v.vtyp ->
       let vv = mk_num_var v in
-      man.print_expr ~route:numeric flow printer (mk_var vv exp.erange)
+      man.print_expr flow printer (mk_var vv exp.erange)
     | _ -> ()
 
 end
