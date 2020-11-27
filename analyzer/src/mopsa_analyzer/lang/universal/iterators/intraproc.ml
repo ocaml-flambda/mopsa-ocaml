@@ -91,14 +91,20 @@ struct
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
-    | S_assume{ekind = E_constant (C_bool true)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool false)})} ->
-      Post.return flow |>
+    | S_assume{ekind = E_constant (C_bool b)} ->
+      Post.return (if b then flow else Flow.remove T_cur flow) |>
       OptionExt.return
 
-    | S_assume{ekind = E_constant (C_bool false)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
-      Post.return (Flow.remove T_cur flow) |>
+    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool b)})} ->
+      Post.return (if not b then flow else Flow.remove T_cur flow) |>
+      OptionExt.return
+
+    | S_assume{ekind = E_constant (C_int n)} ->
+      Post.return (if Z.(n <> zero) then flow else Flow.remove T_cur flow) |>
+      OptionExt.return
+
+    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_int n)})} ->
+      Post.return (if Z.(n = zero) then flow else Flow.remove T_cur flow) |>
       OptionExt.return
 
     | S_assume e when is_universal_type (etyp e) ->

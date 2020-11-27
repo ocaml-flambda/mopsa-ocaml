@@ -202,6 +202,8 @@ type expr_kind += E_binop of operator (** operator *) *
 val mk_binop : ?etyp:typ -> expr -> operator -> expr -> range -> expr
 (** Create a binary operator expression *)
 
+val negate_expr : expr -> expr
+(** Return the negation of an expression *)
 
 (****************************************************************************)
 (**                      {1 Expressions containers}                         *)

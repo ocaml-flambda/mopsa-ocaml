@@ -181,15 +181,34 @@ struct
       OptionExt.return
 
     | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
-      man.eval e flow >>$? fun e flow ->
-      switch [
-        [eq e zero exp.erange],
-        (fun flow -> Eval.singleton one flow);
+      begin
+        man.eval e flow >>$ fun e flow ->
+        match c_expr_to_z e with
+        | Some n when Z.(n = zero) -> Eval.singleton one flow
+        | Some n                   -> Eval.singleton zero flow
+        | None ->
+          let cond,neg_cond =
+            let rec aux e =
+              match ekind e with
+              | E_unop(O_log_not,ee) ->
+                let c1,c2 = aux ee in
+                c2,c1
+              | E_binop(op,_,_) when is_comparison_op op || is_logic_op op ->
+                e, negate_expr e
+              | _ ->
+                eq e zero exp.erange, ne e zero exp.erange
+            in
+            aux e
+          in
+          switch [
+            [cond],
+            (fun flow -> Eval.singleton one flow);
 
-        [ne e zero exp.erange],
-        (fun flow -> Eval.singleton zero flow)
-      ] man flow
-      |> OptionExt.return
+            [neg_cond],
+            (fun flow -> Eval.singleton zero flow)
+          ] man flow
+      end |>
+      OptionExt.return
 
     | E_c_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->

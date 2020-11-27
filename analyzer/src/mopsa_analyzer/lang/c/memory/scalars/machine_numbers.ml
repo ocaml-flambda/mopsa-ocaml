@@ -395,7 +395,12 @@ struct
          transform it (e.g. comparison expressions can be transformed into
          booleans *)
       man.eval nexp flow >>$? fun nexp flow ->
-      Eval.singleton cexp flow |>
+      (* Return a C constant if Universal computed a constant *)
+      let cexp' =
+        match expr_to_z nexp with
+        | None   -> cexp
+        | Some z -> mk_z z cexp.erange in
+      Eval.singleton cexp' flow |>
       Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
@@ -514,7 +519,11 @@ struct
 
     | S_assume(e) when is_c_num_type e.etyp ->
       man.eval ~translate:"Universal" e flow >>$? fun e' flow ->
-      man.exec (mk_assume e' stmt.srange) flow |>
+      begin match expr_to_z e' with
+        | Some n when Z.(n = zero) -> Post.return (Flow.remove T_cur flow)
+        | Some n                   -> Post.return flow
+        | None                     -> man.exec (mk_assume e' stmt.srange) flow
+      end |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->

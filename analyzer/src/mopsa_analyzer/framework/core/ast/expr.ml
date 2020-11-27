@@ -191,6 +191,16 @@ let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_not e range = mk_unop O_log_not e ~etyp:e.etyp range
 
+let rec negate_expr exp =
+  match ekind exp with
+  | E_unop(O_log_not,ee) -> ee
+  | E_binop(op,e1,e2) when is_logic_op op ->
+    mk_binop (negate_expr e1) (negate_logic_op op) (negate_expr e2) ~etyp:exp.etyp exp.erange
+  | E_binop(op,e1,e2) when is_comparison_op op ->
+    mk_binop e1 (negate_comparison_op op) e2 ~etyp:exp.etyp exp.erange
+  | _ -> mk_not exp exp.erange
+
+
 module ExprSet = SetExt.Make(struct
     type t = expr
     let compare = compare_expr
