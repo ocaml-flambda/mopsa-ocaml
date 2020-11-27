@@ -137,8 +137,6 @@ struct
       let name = "c.libs.clib.file_descriptor"
     end)
 
-  let numeric = Semantic "U/Numeric"
-
   let checks = []
 
   (** Initialization of environments *)

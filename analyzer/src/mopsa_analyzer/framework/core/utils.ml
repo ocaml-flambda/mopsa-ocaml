@@ -83,7 +83,7 @@ and post_to_flow man post =
 
 
 let assume
-    cond ?(route=toplevel)
+    cond ?(route=toplevel) ?(translate=any_semantic)
     ~fthen ~felse
     ?(fboth=(fun then_flow else_flow ->
         Cases.join
@@ -96,7 +96,7 @@ let assume
     man flow
   =
   (* First, evaluate the condition *)
-  let evl = man.eval cond flow ~route in
+  let evl = man.eval cond flow ~route ~translate in
   (* Filter flows that satisfy the condition *)
   let then_post = ( evl >>$ fun cond flow -> man.exec (mk_assume cond cond.erange) flow ~route ) |>
                   (* Execute the cleaners of the evaluation here *)
@@ -161,7 +161,6 @@ let get_env (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
 let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   set_env tk (f (get_env tk man flow)) man flow
 
-
 let get_pair_fst man = (fun a -> man.get a |> fst)
 let set_pair_fst man = (fun a1 a -> let old = man.get a in if a1 == fst old then a else man.set (a1, snd old) a)
 
@@ -174,7 +173,6 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   (* Execute the statement *)
   let flow' = f flow |> post_to_flow man in
   Flow.get T_cur man.lattice flow'
-
 
 let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
   let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in

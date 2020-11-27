@@ -75,7 +75,7 @@ struct
     | E_constant (C_top T_int) -> fboth flow
     | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
-      assume (to_bool_expr ee) man flow ~route:(Below name)
+      assume (to_bool_expr ee) man flow ~route:(Below name) ~translate:"Universal"
         ~fthen:ftrue
         ~felse:ffalse
 
@@ -108,7 +108,6 @@ struct
       OptionExt.return
 
     | S_assume e when is_universal_type (etyp e) ->
-      man.eval e flow >>$? fun e flow ->
       eval_bool_expr e stmt.srange man flow
         ~ftrue:(fun flow -> Post.return flow)
         ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
@@ -202,7 +201,6 @@ struct
     | E_binop(op,e1,e2)
       when is_comparison_op op  &&
            is_universal_type exp.etyp ->
-      man.eval exp ~route:(Below name) flow ~translate:"Universal" >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
@@ -211,7 +209,6 @@ struct
 
     | E_unop(op,ee) when is_predicate_op op  &&
                          is_universal_type exp.etyp ->
-      man.eval exp ~route:(Below name) flow ~translate:"Universal" >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
