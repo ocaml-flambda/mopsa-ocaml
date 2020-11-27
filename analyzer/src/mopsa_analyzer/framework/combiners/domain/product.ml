@@ -36,9 +36,9 @@ module type POOL =
 sig
   include STACKED_COMBINER
   val checks : check list list
-  val members : domain list list
-  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option list
-  val eval : string list -> expr -> ('a,t) man -> 'a flow -> 'a eval option list
+  val members : DomainSet.t list
+  val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option list
+  val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option list
 end
 
 
@@ -77,7 +77,7 @@ struct
   type t = S.t * P.t
   let id = C_pair(Product,S.id,P.id)
   let domains = DomainSet.union S.domains P.domains
-  let members = DomainSet.elements S.domains :: P.members
+  let members = S.domains :: P.members
   let semantics = SemanticSet.union S.semantics P.semantics
   let routing_table = join_routing_table S.routing_table P.routing_table
   let checks = S.checks :: P.checks
@@ -352,8 +352,9 @@ struct
     (* XXX This is a hack to be sure to take a member that is a user
        domain, not a composed domain, because `BelowOf` routes are
        defined for user domains only *)
-    let member = List.find (function [domain] -> true | _ -> false) Pool.members |>
-                 List.hd in
+    let member =
+      List.find (fun domains -> DomainSet.cardinal domains = 1) Pool.members |>
+      DomainSet.choose in
     Below member
 
 

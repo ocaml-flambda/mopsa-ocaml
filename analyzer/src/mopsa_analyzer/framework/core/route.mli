@@ -31,6 +31,9 @@ type route =
   | Below    of domain   (** Sub-tree below a domain *)
   | Semantic of semantic (** Sub-tree identified by a semantic *)
 
+module DomainSet : Mopsa_utils.SetExtSig.S with type elt = domain
+
+ (** Set of domains *)
 val compare_route : route -> route -> int
 (** Compare two routes *)
 
@@ -46,13 +49,13 @@ type routing_table
 val empty_routing_table : routing_table
 (** Empty routing table *)
 
-val resolve_route : route -> routing_table -> domain list
+val resolve_route : route -> routing_table -> DomainSet.t
 (** Resolve a route into domains *)
 
 val add_route : route -> domain -> routing_table -> routing_table
 (** Add a route between a route and a domain *)
 
-val add_routes : route -> domain list -> routing_table -> routing_table
+val add_routes : route -> DomainSet.t -> routing_table -> routing_table
 (** Add a set of routing_table linking a route and a set of domains *)
 
 val get_routes : routing_table -> route list
@@ -64,5 +67,3 @@ val join_routing_table : routing_table -> routing_table -> routing_table
 val pp_routing_table : Format.formatter -> routing_table -> unit
 (** Print a routing table *)
 
-module DomainSet : Mopsa_utils.SetExtSig.S with type elt = domain
-(** Set of domains *)

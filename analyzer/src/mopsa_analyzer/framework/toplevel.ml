@@ -185,7 +185,7 @@ struct
   (** Build the map of exec functions *)
   let exec_map : (stmt -> (t,t) man -> t flow -> t post option) RouteMap.t =
     (* Add the initial implicit binding for toplevel route *)
-    let map = RouteMap.singleton toplevel (Domain.exec []) in
+    let map = RouteMap.singleton toplevel (Domain.exec None) in
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
     List.fold_left (fun map route ->
@@ -193,7 +193,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.exec domains) map
+          RouteMap.add route (Domain.exec (Some domains)) map
       ) map
 
   (** Hooks should not be activated within hooks exec/eval.
@@ -288,7 +288,7 @@ struct
   (** Build the map of [eval] functions *)
   let eval_map : (expr -> (t,t) man -> t flow -> t eval option) RouteMap.t =
     (* Add the implicit eval for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.eval []) in
+    let map = RouteMap.singleton toplevel (Domain.eval None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -297,7 +297,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.eval domains) map
+          RouteMap.add route (Domain.eval (Some domains)) map
       ) map
 
   (** Get the actual route of the expression in case of a
@@ -460,7 +460,7 @@ struct
   let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
     fun ?(route=toplevel) query man flow ->
     (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
-    let domains = if compare_route route toplevel = 0 then [] else resolve_route route Domain.routing_table in
+    let domains = if compare_route route toplevel = 0 then None else Some (resolve_route route Domain.routing_table) in
     match Domain.ask domains query man flow with
     | None -> raise Not_found
     | Some r -> r
@@ -472,7 +472,7 @@ struct
   (** Build the map of [print_state] functions *)
   let print_state_map : (printer -> t -> unit) RouteMap.t =
     (* Add the implicit printer for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.print_state []) in
+    let map = RouteMap.singleton toplevel (Domain.print_state None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -481,7 +481,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.print_state domains) map
+          RouteMap.add route (Domain.print_state (Some domains)) map
       ) map
 
   (** Pretty print of states *)
@@ -500,7 +500,7 @@ struct
   (** Build the map of [print_expr] functions *)
   let print_expr_map : ((t,t) man -> t flow -> printer -> expr -> unit) RouteMap.t =
     (* Add the implicit printer for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.print_expr []) in
+    let map = RouteMap.singleton toplevel (Domain.print_expr None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -509,7 +509,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.print_expr domains) map
+          RouteMap.add route (Domain.print_expr (Some domains)) map
       ) map
 
   (** Pretty print of expression values *)

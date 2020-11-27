@@ -42,6 +42,8 @@ let pp_route fmt = function
 
 let toplevel = Semantic any_semantic
 
+module DomainSet = SetExt.StringSet
+
 module Map =
   MapExt.Make
     (struct
@@ -49,19 +51,19 @@ module Map =
       let compare = compare_route
     end)
 
-type routing_table = domain list Map.t
+type routing_table = DomainSet.t Map.t
 
 let empty_routing_table = Map.empty
 
 let resolve_route route map = Map.find route map
 
 let add_route selector domain map =
-  let old = try Map.find selector map with Not_found -> [] in
-  Map.add selector (domain :: old) map
+  let old = try Map.find selector map with Not_found -> DomainSet.empty in
+  Map.add selector (DomainSet.add domain old) map
 
 let add_routes selector domains map =
-  let old = try Map.find selector map with Not_found -> [] in
-  Map.add selector (domains @ old) map
+  let old = try Map.find selector map with Not_found -> DomainSet.empty in
+  Map.add selector (DomainSet.union domains old) map
 
 let get_routes map = Map.bindings map |> List.map fst
 
@@ -69,7 +71,7 @@ let join_routing_table m1 m2 =
   Map.map2zo
     (fun sem1 domains1 -> domains1)
     (fun sem2 domains2 -> domains2)
-    (fun sem domains1 domains2 -> domains1 @ domains2)
+    (fun sem domains1 domains2 -> DomainSet.union domains1 domains2)
     m1 m2
 
 let pp_routing_table fmt m =
@@ -78,9 +80,8 @@ let pp_routing_table fmt m =
                (fun fmt (route,domains) ->
                   fprintf fmt "%a -> {%a}"
                     pp_route route
-                    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_print_string) domains
+                    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_print_string) (DomainSet.elements domains)
                )
             ) (Map.bindings m)
          )
                        
-module DomainSet = SetExt.StringSet

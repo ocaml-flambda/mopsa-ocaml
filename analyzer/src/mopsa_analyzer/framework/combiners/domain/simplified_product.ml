@@ -333,7 +333,7 @@ struct
         aux id a
       );
 
-    ask = (fun q ctx a -> match D.ask [] q man ctx a with None -> raise Not_found | Some r -> r);
+    ask = (fun q ctx a -> match D.ask None q man ctx a with None -> raise Not_found | Some r -> r);
   }
 
   let reduce stmt man ctx pre post =
