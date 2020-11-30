@@ -77,20 +77,10 @@ module Instrument(D:STATELESS) : STATELESS =
 struct
   include D
 
-  let exec stmt man flow =
-    push_domain D.name;
-    let r = D.exec stmt man flow in
-    let _ = pop_domain () in
-    r
-
   (* Remove duplicate evaluations *)
   let eval exp man flow =
-    push_domain D.name;
-    let r = D.eval exp man flow |>
-            OptionExt.lift @@ Eval.remove_duplicates man.lattice in
-    let _ = pop_domain () in
-    r
-
+    D.eval exp man flow |>
+    OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
 end
 

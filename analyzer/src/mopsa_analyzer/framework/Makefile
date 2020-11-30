@@ -22,7 +22,7 @@
 
 # Framework packs
 mopsa_analyzer.framework = core lattices sig combiners toplevel engines output config runner
-mopsa_analyzer.framework.core = semantic dstack route ast print context query \
+mopsa_analyzer.framework.core = semantic route ast print context query \
 								avalue alarm token effect lattice flow cases \
 								eval post id manager hook cache utils all
 mopsa_analyzer.framework.core.ast = program frontend typ operator constant var expr stmt visitor

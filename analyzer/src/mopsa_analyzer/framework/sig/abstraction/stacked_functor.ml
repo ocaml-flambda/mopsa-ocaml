@@ -53,29 +53,21 @@ struct
 
     (* Add stmt to the effects of the domain *)
     let exec stmt man flow =
-      push_domain F.name;
-      let r =
-        I.exec stmt man flow |>
-        OptionExt.lift @@ fun res ->
-        Cases.map_effects (fun effects ->
-            man.set_effects (
-              man.get_effects effects |>
-              add_stmt_to_teffect stmt
-            ) effects
-          ) res in
-      let _ = pop_domain () in
-      r
+      I.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_effects (fun effects ->
+          man.set_effects (
+            man.get_effects effects |>
+            add_stmt_to_teffect stmt
+          ) effects
+        ) res
 
     (* Remove duplicate evaluations *)
     let eval exp man flow =
-      push_domain F.name;
-      let r =
-        I.eval exp man flow |>
-        OptionExt.lift @@ Eval.remove_duplicates man.lattice in
-      let _ = pop_domain () in
-      r
-  end
+      I.eval exp man flow |>
+      OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
+  end
 end
 
 

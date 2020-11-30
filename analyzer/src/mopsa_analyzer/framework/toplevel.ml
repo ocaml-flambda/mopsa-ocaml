@@ -172,10 +172,6 @@ struct
     let () = Hook.init () in
     let ctx = Hook.init_active_hooks (Flow.get_ctx res) in
 
-    (** Initialize the domains stack *)
-    Stack.clear dstack;
-    push_domain "<toplevel>";
-
     Flow.set_ctx ctx res
 
 
@@ -319,12 +315,7 @@ struct
 
     | {exprs; stmts = []} ->
       (* Evaluate each sub-expression *)
-      Cases.bind_list exprs (fun e flow ->
-          push_domain "<toplevel>";
-          let r = man.eval ~route e flow in
-          let _ = pop_domain () in
-          r
-        ) flow
+      Cases.bind_list exprs (man.eval ~route) flow
       >>$ fun exprs flow ->
       (* Normalize translation maps by ensuring that sub-expression should be
          translated to the same semanitcs *)
