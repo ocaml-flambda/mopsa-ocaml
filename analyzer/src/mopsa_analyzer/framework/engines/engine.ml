@@ -33,7 +33,7 @@ sig
 
   val exec : ?route:route -> stmt -> t flow -> t post
 
-  val eval : ?route:route -> expr -> t flow -> t eval
+  val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr -> bool)) list -> expr -> t flow -> t eval
 
   val ask : ?route:route -> (t,'r) query -> t flow -> 'r
 

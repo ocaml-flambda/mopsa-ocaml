@@ -75,7 +75,7 @@ struct
     | E_constant (C_top T_int) -> fboth flow
     | E_unop(O_log_not,ee) -> eval_bool_expr ee ~ftrue:ffalse ~ffalse:ftrue ~fboth range man flow
     | _ ->
-      assume (to_bool_expr ee) man flow ~route:(Below name)
+      assume (to_bool_expr ee) man flow ~route:(Below name) ~translate:"Universal"
         ~fthen:ftrue
         ~felse:ffalse
 
@@ -91,18 +91,23 @@ struct
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
-    | S_assume{ekind = E_constant (C_bool true)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool false)})} ->
-      Post.return flow |>
+    | S_assume{ekind = E_constant (C_bool b)} ->
+      Post.return (if b then flow else Flow.remove T_cur flow) |>
       OptionExt.return
 
-    | S_assume{ekind = E_constant (C_bool false)}
-    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool true)})} ->
-      Post.return (Flow.remove T_cur flow) |>
+    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_bool b)})} ->
+      Post.return (if not b then flow else Flow.remove T_cur flow) |>
+      OptionExt.return
+
+    | S_assume{ekind = E_constant (C_int n)} ->
+      Post.return (if Z.(n <> zero) then flow else Flow.remove T_cur flow) |>
+      OptionExt.return
+
+    | S_assume{ekind = E_unop(O_log_not, {ekind = E_constant (C_int n)})} ->
+      Post.return (if Z.(n = zero) then flow else Flow.remove T_cur flow) |>
       OptionExt.return
 
     | S_assume e when is_universal_type (etyp e) ->
-      man.eval e flow >>$? fun e flow ->
       eval_bool_expr e stmt.srange man flow
         ~ftrue:(fun flow -> Post.return flow)
         ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
@@ -157,13 +162,22 @@ struct
 
     | _ -> None
 
+  let is_not_universal e = not (is_universal_type e.etyp)
 
   let eval exp man flow =
     match ekind exp with
     | E_binop (O_log_and, e1, e2)
       when is_universal_type exp.etyp ->
       assume e1 man flow
-        ~fthen:(fun flow -> man.eval e2 flow)
+        ~fthen:(fun flow ->
+            (* Since we didn't check the type of the sub-expression [e1], we
+               need to translate to Universal (if this isn't the case already).
+               That way, we can handle expressions from other semantics, as long
+               as they can be translated to Universal.
+               Note that we need to do that because we checked that the type of
+               the whole expression is Universal. *)
+            man.eval e2 flow ~translate:"Universal"
+          )
         ~felse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
       |> OptionExt.return
 
@@ -171,7 +185,7 @@ struct
       when is_universal_type exp.etyp ->
       assume e1 man flow
         ~fthen:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
-        ~felse:(fun flow -> man.eval e2 flow)
+        ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       |> OptionExt.return
 
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) })
@@ -187,7 +201,6 @@ struct
     | E_binop(op,e1,e2)
       when is_comparison_op op  &&
            is_universal_type exp.etyp ->
-      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)
@@ -196,7 +209,6 @@ struct
 
     | E_unop(op,ee) when is_predicate_op op  &&
                          is_universal_type exp.etyp ->
-      man.eval exp ~route:(Below name) flow >>$? fun exp flow ->
       eval_bool_expr exp exp.erange man flow
         ~ftrue:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~ffalse:(fun flow -> Eval.singleton (mk_false exp.erange) flow)

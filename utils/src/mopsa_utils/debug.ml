@@ -82,14 +82,23 @@ let bold pp fmt x =
   else
     Format.fprintf fmt "%a" pp x
 
+let pp_channel fmt channel =
+  if !print_color then
+    Format.fprintf fmt "\027[1;38;5;%dm%s\027[0m" (random_color channel) channel
+  else
+    Format.pp_print_string fmt channel
+
+
+let pp_channel_with_time fmt channel =
+  if !print_color then
+    Format.printf "\027[1;38;5;%dm[%s %.3f]\027[0m" (random_color channel) channel (Sys.time ())
+  else
+    Format.printf "[%s %.3f]" channel (Sys.time ())
 
 let debug ?(channel = "debug") fmt =
   if can_print channel then
     Format.kasprintf (fun str ->
-        if !print_color then
-          Format.printf "\027[1;38;5;%dm[%s %.3f]\027[0m @[%s@]@." (random_color channel) channel (Sys.time ()) str
-        else
-          Format.printf "[%s %.3f] @[%s@]@." channel (Sys.time ()) str
+        Format.printf "%a @[%s@]@." pp_channel_with_time channel str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt

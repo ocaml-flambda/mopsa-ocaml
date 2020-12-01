@@ -44,7 +44,7 @@ struct
       let name = "c.libs.variadic"
     end)
 
-  let numeric = Semantic "U/Numeric"
+  let universal = Semantic "Universal"
 
   let checks = [ CHK_C_INVALID_MEMORY_ACCESS;
                  CHK_C_INSUFFICIENT_VARIADIC_ARGS ]
@@ -161,8 +161,8 @@ struct
 
   (* Initialize a counter *)
   let init_valc_var valc range man flow =
-    man.exec (mk_add valc range) ~route:numeric flow >>%
-    man.exec (mk_assign valc (mk_zero range) range) ~route:numeric
+    man.exec (mk_add valc range) ~route:universal flow >>%
+    man.exec (mk_assign valc (mk_zero range) range) ~route:universal
 
 
   (* Resolve a pointer to a va_list *)
@@ -189,7 +189,7 @@ struct
             raise_c_out_bound_alarm (mk_var_base ap) (mk_z base_size range) offset (under_type ap.vtyp) range man flow eflow |>
             Cases.empty
           )
-        ~route:numeric
+        ~route:universal
         man flow
 
     | _ -> panic_at range "resolve_va_list: pointed object %a not supported" pp_points_to pt
@@ -238,7 +238,7 @@ struct
               (* Increment the counter *)
               man.exec
                 (mk_assign valc (mk_z (Z.succ n) range) range)
-                ~route:numeric
+                ~route:universal
                 flow
               >>%
               man.eval (mk_var arg range)
@@ -252,7 +252,7 @@ struct
           let flow' = raise_c_insufficient_variadic_args ap valc unnamed range man flow eflow in
           Eval.empty flow'
         )
-      ~route:numeric
+      ~route:universal
       man flow
 
 
@@ -263,7 +263,7 @@ struct
     let valc = mk_valc_var ap range in
 
     (* Remove the counter *)
-    man.exec (mk_remove valc range) ~route:numeric flow >>%
+    man.exec (mk_remove valc range) ~route:universal flow >>%
     Eval.singleton (mk_unit range)
 
 

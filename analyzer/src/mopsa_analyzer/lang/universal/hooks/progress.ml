@@ -173,13 +173,13 @@ struct
     after_stmt stmt.srange
 
 
-  let on_before_eval route exp man flow =
+  let on_before_eval route semantic exp man flow =
     match ekind exp with
     | E_call ({ ekind = E_function (User_defined f) }, args) -> before_call f
     | _ -> ()
 
 
-  let on_after_eval route exp man flow evl =
+  let on_after_eval route semantic exp man flow evl =
     match ekind exp with
     | E_call ({ ekind = E_function (User_defined f) }, args) -> after_call ()
     | _ -> ()

@@ -163,6 +163,11 @@ let is_int_typ t =
   | C_AST.T_integer _ -> true
   | _ -> false
 
+let is_float_typ t =
+  match unroll_type t |> fst with
+  | C_AST.T_float _ -> true
+  | _ -> false
+
 let is_pointer_typ t =
   match unroll_type t |> fst with
   | C_AST.T_pointer _ -> true
@@ -271,55 +276,7 @@ let visit_var v range prj func =
     try List.find (fun v' -> compare v'.var_org_name v.vname = 0) vars
     with Not_found -> Exceptions.panic_at range "undeclared variable %a" pp_var v
 
-let rec promote_expression_type prj (e: Ast.expr with_range) =
-  (* Integer promotions (C99 6.3.1.1) *)
-  let open C_AST in
-  let open C_utils in
-  bind_range e @@ fun ee ->
-  let t = unroll_type ee.typ in
-  match fst t with
-  | T_integer (SIGNED_INT | UNSIGNED_INT |
-               SIGNED_LONG | UNSIGNED_LONG |
-               SIGNED_LONG_LONG | UNSIGNED_LONG_LONG |
-               SIGNED_INT128 | UNSIGNED_INT128
-              ) ->
-    ee
-
-  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) | T_bool ->
-    let tt = (T_integer SIGNED_INT), snd t in
-    { kind = E_cast(tt, false, e); typ = tt }
-
-  | T_integer ((Char UNSIGNED | UNSIGNED_CHAR | UNSIGNED_SHORT) as i) ->
-    (* signed int wins if it can represent all unsigned values *)
-    let ii =
-      if sizeof_int prj.proj_target i < sizeof_int prj.proj_target SIGNED_INT
-      then SIGNED_INT
-      else UNSIGNED_INT
-    in
-    let tt = (T_integer ii), snd t in
-    { kind = E_cast(tt, false, e); typ = tt }
-
-  | T_float _ -> ee
-
-  | T_pointer _ -> ee
-
-  | T_array _ -> ee
-
-  | _ -> Exceptions.panic_at e.range "promote_expression_type: unsupported type %s"
-           (C_print.string_of_type_qual t)
-
-let convert_expression_type (e:Ast.expr with_range) t =
-  bind_range e @@ fun ee ->
-  if compare ee.typ t = 0 then
-    ee
-  else
-  if is_int_typ ee.typ && (is_pointer_typ t || is_array_typ t) then
-    (* No cast is added when a pointer is added to an integer *)
-    ee
-  else
-    { kind = E_cast(t, false, e); typ = t }
-
-let int_rank = 
+let int_rank =
   let open C_AST in
   function
   | Char _ | UNSIGNED_CHAR | SIGNED_CHAR -> 0
@@ -355,7 +312,11 @@ let rank_float =
   | FLOAT -> 0
   | DOUBLE -> 1
   | LONG_DOUBLE -> 2
-  
+
+let is_int_binop = function
+  | EQ | NEQ | LT | LE | GT | GE | LAND | LOR -> true
+  | _ -> false
+
 let binop_type range prj t1 t2 =
   let open C_AST in
   let open C_utils in
@@ -367,7 +328,7 @@ let binop_type range prj t1 t2 =
 
   | T_float _, T_integer _ -> t1
   | T_integer _, T_float _ -> t2
-    
+
   | T_integer a, T_integer b ->
      (* Usual arithmetic conversions (C99 6.3.1.8) *)
      (* same sign: the highest ranked wins *)
@@ -399,8 +360,56 @@ let binop_type range prj t1 t2 =
   | _ -> Exceptions.panic_at range "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
            (C_print.string_of_type_qual t2)
+(* Integer promotions (C99 6.3.1.1) *)
+let integer_promotion prj (e: Ast.expr with_range) =
+  let open C_AST in
+  let open C_utils in
+  bind_range e @@ fun ee ->
+  let t = unroll_type ee.typ in
+  match fst t with
+  | T_integer (SIGNED_INT | UNSIGNED_INT |
+               SIGNED_LONG | UNSIGNED_LONG |
+               SIGNED_LONG_LONG | UNSIGNED_LONG_LONG |
+               SIGNED_INT128 | UNSIGNED_INT128
+              ) ->
+    ee
 
-let rec visit_expr e prj func =
+  | T_integer (Char SIGNED | SIGNED_CHAR | SIGNED_SHORT) | T_bool ->
+    let tt = (T_integer SIGNED_INT), snd t in
+    { kind = E_cast(tt, false, e); typ = tt }
+
+  | T_integer ((Char UNSIGNED | UNSIGNED_CHAR | UNSIGNED_SHORT) as i) ->
+    (* signed int wins if it can represent all unsigned values *)
+    let ii =
+      if sizeof_int prj.proj_target i < sizeof_int prj.proj_target SIGNED_INT
+      then SIGNED_INT
+      else UNSIGNED_INT
+    in
+    let tt = (T_integer ii), snd t in
+    { kind = E_cast(tt, false, e); typ = tt }
+
+  | T_float _ -> ee
+
+  | T_pointer _ -> ee
+
+  | T_array _ -> ee
+
+  | _ -> Exceptions.panic_at e.range "promote_expression_type: unsupported type %s"
+           (C_print.string_of_type_qual t)
+
+let promote_expression_type prj target_type (e: Ast.expr with_range) =
+  if is_float_typ target_type then
+    let t = e.content.typ in
+    if target_type == t then e
+    else
+      with_range
+        Ast.{ kind = E_cast(target_type, false, e); typ = target_type }
+        e.range
+  else
+   integer_promotion prj e
+
+
+let rec visit_expr e prj func : Ast.expr with_range =
   bind_range e @@ fun ee ->
   let kind, typ = match ee with
     | E_top t ->
@@ -429,38 +438,30 @@ let rec visit_expr e prj func =
       let v = visit_var v e.range prj func in
       Ast.E_var v, v.var_type
 
-    | E_unop(op, e')      ->
+    | E_unop(op, e') ->
       let e' = visit_expr e' prj func in
-      let e' = promote_expression_type prj e' in
+      let e' = promote_expression_type prj e'.content.typ e' in
       let ee' =
         with_range
           Ast.{ kind = E_unop(op, e'); typ = e'.content.typ }
           e.range
       in
-
       E_cast(e'.content.typ, false, ee'), e'.content.typ
 
     | E_binop(op, e1, e2) ->
       let e1 = visit_expr e1 prj func in
       let e2 = visit_expr e2 prj func in
 
-      let e1 = promote_expression_type prj e1 in
-      let e2 = promote_expression_type prj e2 in
-
       let t = binop_type e.range prj e1.content.typ e2.content.typ in
 
-      let e1 = convert_expression_type e1 t in
-      let e2 = convert_expression_type e2 t in
+      let e1 = promote_expression_type prj t e1 in
+      let e2 = promote_expression_type prj t e2 in
 
-      let ee' = with_range
-          Ast.{ kind = E_binop(op, e1, e2); typ = t }
-          e.range
-      in
-      
-      begin match op with
-        | EQ | NEQ | LT | LE | GT | GE -> ee'.content.kind, ee'.content.typ
-        | _ -> Ast.E_cast(t, false, ee'), t
-      end
+      if is_int_binop op then
+        E_binop(op, e1, e2), int_type
+      else
+        let ee = with_range Ast.{ kind = E_binop(op, e1, e2); typ = t } e.range in
+        E_cast(t, false, ee), t
 
     | E_addr_of(e')       ->
       let e' = visit_expr e' prj func in

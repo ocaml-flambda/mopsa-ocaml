@@ -189,7 +189,7 @@ struct
       let nb = mk_var (find_variable ("_next_"^name^"_fun_slot") prog.c_globals) range in
       let buf = mk_var (find_variable ("_"^name^"_fun_buf") prog.c_globals) range in
       let nb_itv =
-        let evl = man.eval nb flow in
+        let evl = man.eval nb flow ~translate:"Universal" in
         Cases.fold_result
           (fun acc nb flow ->
              man.ask (mk_int_interval_query nb) flow |>
@@ -554,7 +554,7 @@ struct
 
       (* Get the direct value of an integer expression *)
       and int_value e =
-        let evl = man.eval e flow in
+        let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
               let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
@@ -568,7 +568,7 @@ struct
 
       (* Get the direct value of a float expression *)
       and float_value e =
-        let evl = man.eval e flow in
+        let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
                let itv = man.ask (mk_float_interval_query ee) flow in

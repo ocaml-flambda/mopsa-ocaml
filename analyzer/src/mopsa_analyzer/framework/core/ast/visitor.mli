@@ -195,9 +195,6 @@ val expr_vars : expr -> var list
 val stmt_vars : stmt -> var list
 (** Get all variables present in a statement *)
 
-val get_orig_expr : expr -> expr
-(** Get the original version along the transformation lineage of an expression *)
-
 val is_var_in_expr : var -> expr -> bool
 (** Check whether a variable appears in an expression *)
 

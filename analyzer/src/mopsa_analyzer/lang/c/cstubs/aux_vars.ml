@@ -37,7 +37,7 @@ type var_kind +=
   | V_c_bytes of addr
 
 let pp_bytes fmt addr =
-  Format.fprintf fmt "bytes(%a)" pp_addr addr
+  Format.fprintf fmt "bytes⦃%a⦄" pp_addr addr
 
 let () =
   register_var {
@@ -81,7 +81,7 @@ type var_kind +=
 let () = register_var {
     print = (fun next fmt v ->
         match v.vkind with
-        | V_c_primed_base base -> Format.fprintf fmt "%a'" pp_base base
+        | V_c_primed_base base -> Format.fprintf fmt "primed⦃%a⦄" pp_base base
         | _ -> next fmt v
       );
     compare = (fun next v1 v2 ->
@@ -93,7 +93,7 @@ let () = register_var {
 
 let mk_primed_base_var base =
   let vkind = V_c_primed_base base in
-  let vname = base_uniq_name base ^ "'" in
+  let vname = Format.asprintf "primed⦃%s⦄" (base_uniq_name base) in
   let vtyp = match base.base_kind with
     | Var v  -> v.vtyp
     | Addr a -> T_c_array(s8,C_array_no_length)

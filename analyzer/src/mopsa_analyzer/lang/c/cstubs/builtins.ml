@@ -110,7 +110,7 @@ struct
         match pt with
         | P_block (base,_,mode) ->
           eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
-          Eval.singleton (byte_to_element (under_type e.etyp) bytes exp.erange) flow
+          man.eval (byte_to_element (under_type e.etyp) bytes exp.erange) flow
 
         | _ ->
           man.eval (mk_top ul exp.erange) flow
@@ -154,7 +154,7 @@ struct
           let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
           (* Check validity of the offset *)
           let cond = mk_in o (mk_zero range) (sub size elm range) range in
-          Eval.singleton cond flow
+          man.eval cond flow
 
         | P_fun _ -> Eval.singleton (mk_one range) flow
 
@@ -188,7 +188,7 @@ struct
         | _ -> assert false
       in
       Some (
-        man.eval flt flow >>$ fun flt flow ->
+        man.eval flt flow ~translate:"Universal" >>$ fun flt flow ->
         Eval.singleton (mk_float_class cls flt exp.erange) flow
       )
 

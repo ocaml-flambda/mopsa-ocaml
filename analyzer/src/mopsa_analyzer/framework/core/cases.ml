@@ -376,7 +376,7 @@ let meet_list ~empty (l: ('a,'r) cases list) : ('a,'r) cases =
 
 
 let remove_duplicates compare_case lattice cases =
-  (* Effectss of empty environments should be ignored.
+  (* Effects of empty environments should be ignored.
      This function returns an empty effects when T_cur environment is empty. *)
   let real_effects flow effects =
     if lattice.Lattice.is_bottom (Flow.get T_cur lattice flow)
