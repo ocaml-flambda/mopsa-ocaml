@@ -476,3 +476,28 @@ let register_addr_kind_nominal_type f  = nominal_type_of_addr_kind := f !nominal
 let register_addr_kind_structural_type f  = structural_type_of_addr_kind := f !structural_type_of_addr_kind
 let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak
 let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
+
+
+(* multilanguage *)
+type addr_kind +=
+   | A_py_c_module of string (** name *) * Mopsa.program (* C program *)
+
+let () =
+  Format.(
+    register_addr_kind {
+        print =
+          (fun default fmt a ->
+            match a with
+            | A_py_c_module(c, p) -> fprintf fmt "c module %s" c
+            | _ -> default fmt a);
+        compare =
+          (fun default a1 a2 ->
+            match a1, a2 with
+            | A_py_c_module(c1, p1), A_py_c_module(c2, p2) ->
+               Compare.pair
+                 Stdlib.compare
+                 compare_program
+                 (c1, p1) (c2, p2)
+            | _ -> default a1 a2);
+      }
+  )

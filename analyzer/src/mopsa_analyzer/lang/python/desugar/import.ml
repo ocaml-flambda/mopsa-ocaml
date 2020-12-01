@@ -134,20 +134,37 @@ module Domain =
             begin
               let dir = Paths.get_lang_stubs_dir "python" () in
               let filename =
-                let tentative1 = dir ^ "/" ^ name ^ ".py" in
-                let tentative2 = name ^ ".py" in
-                let tentative3 = dir ^ "/typeshed/" ^ name ^ ".pyi" in
-                if Sys.file_exists tentative1 then tentative1
-                else if Sys.file_exists tentative2 then tentative2
-                else if Sys.file_exists tentative3 then tentative3
-                else
-                  let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory)" name dir (dir ^ "/typeshed/") in
-                  raise (Module_not_found name) in
+                let file_candidates = [dir ^ "/" ^ name ^ ".py";
+                                       name ^ ".py";
+                                       dir ^ "/typeshed/" ^ name ^ ".pyi";
+                                       name ^ "module.c";
+                                       ]
+                in
+                match List.find_opt Sys.file_exists file_candidates with
+                | Some s -> s
+                | None ->
+                   let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory (%s))" name dir (dir ^ "/typeshed/") (Sys.getcwd ()) in
+                   raise (Module_not_found name)
+              in
               let () = debug "importing file %s" filename in
               let (a, e), body, is_stub, flow =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
                   o, b, true, flow
+                else if filename = name ^ "module.c" then
+                  let prog = C.Frontend.parse_program [filename] in
+                  let () = debug "Parsed C program %a" pp_program prog in
+                  let () = C.Iterators.Program.Domain.opt_entry_function := "PyInit_" ^ name in
+                  let flow = C.Iterators.Program.Domain.init prog man flow in
+                  let body = mk_stmt (S_program(prog, None)) range in
+                  let addr =
+                    {
+                      addr_kind = A_py_c_module (name, prog);
+                      addr_partitioning = G_all;
+                      addr_mode = STRONG;
+                    }
+                  in
+                  (addr, None), body, false, flow
                 else
                   let prog = Frontend.parse_program [filename] in
                   let globals, body =
@@ -175,7 +192,9 @@ module Domain =
                   }
                   in
                   (addr, None), body, false, flow in
+              let () = debug "pre body" in
               let flow' = man.exec body flow in
+              let () = debug "post body" in
               Hashtbl.add imported_modules name ((a, e), is_stub);
               (a, e), post_to_flow man flow', is_stub
             end
