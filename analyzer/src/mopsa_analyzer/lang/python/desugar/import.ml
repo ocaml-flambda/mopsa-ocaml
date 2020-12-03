@@ -159,7 +159,7 @@ module Domain =
                   let body = mk_stmt (S_program(prog, None)) range in
                   let addr =
                     {
-                      addr_kind = A_py_c_module (name, prog);
+                      addr_kind = A_py_c_module name; (*, prog);*)
                       addr_partitioning = G_all;
                       addr_mode = STRONG;
                     }

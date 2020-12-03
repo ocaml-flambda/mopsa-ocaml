@@ -70,6 +70,8 @@
                             "c.iterators.intraproc",
                             // Stubs
                             "stubs.iterators.body",
+                            // CPython
+                            "cpython.cmodule",
                             // C Libraries
                             "c.libs.compiler",
                             "c.libs.mopsalib",

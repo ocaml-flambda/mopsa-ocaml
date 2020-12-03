@@ -100,6 +100,8 @@ let _ =
 
       "exit";
       "quick_exit";
+
+      "PyModule_Create2"
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

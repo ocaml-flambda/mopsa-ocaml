@@ -56,9 +56,16 @@ c_typ(PyObject *self, PyObject *args)
     return (PyObject*) Py_TYPE(&CboxType);
 }
 
+static PyObject*
+c_broken(PyObject *self, PyObject *args)
+{
+    return 42;
+}
+
 
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) c_typ, METH_VARARGS, ""},
+    {"broken", (PyCFunction) c_broken, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
