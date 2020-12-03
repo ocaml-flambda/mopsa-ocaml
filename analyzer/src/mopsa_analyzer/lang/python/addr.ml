@@ -481,6 +481,8 @@ let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
 (* multilanguage *)
 type addr_kind +=
    | A_py_c_module of string (** name *) (** Mopsa.program (* C program *)*)
+   | A_py_c_function of string (** name *) * int (** function uid *) (* for later: METH_VARARGS etc flags? *)
+   | A_py_c_class of var (** static variable used in the C stack to define the class *)
 
 let () =
   Format.(
@@ -489,17 +491,30 @@ let () =
           (fun default fmt a ->
             match a with
             | A_py_c_module(c(*, p*)) -> fprintf fmt "c module %s" c
+            | A_py_c_function (f, _) -> fprintf fmt "c function %s" f
+            | A_py_c_class v -> fprintf fmt "c class %a" pp_var v
             | _ -> default fmt a);
         compare =
           (fun default a1 a2 ->
             match a1, a2 with
-            | A_py_c_module(c1(*, p1*)), A_py_c_module(c2(*, p2*)) ->
-               (* Compare.pair
-                *   Stdlib.compare
-                *   compare_program
-                *   (c1, p1) (c2, p2)
-                *)
-               Stdlib.compare c1 c2
+            (* | A_py_c_module(c1(\*, p1*\)), A_py_c_module(c2(\*, p2*\)) ->
+             *    (\* Compare.pair
+             *     *   Stdlib.compare
+             *     *   compare_program
+             *     *   (c1, p1) (c2, p2)
+             *     *\)
+             *    Stdlib.compare c1 c2 *)
             | _ -> default a1 a2);
       }
-  )
+  );
+  register_addr_kind_nominal_type (fun default ak ->
+      match ak with
+      | A_py_c_module _ -> "module"
+      | A_py_c_function _ -> "builtin_function_or_method"
+      | A_py_c_class _ -> "type"
+      | _ -> default ak);
+  register_addr_kind_structural_type (fun default ak s ->
+      match ak with
+      | A_py_c_class _
+      | A_py_c_function _ -> false
+      | _ -> default ak s);

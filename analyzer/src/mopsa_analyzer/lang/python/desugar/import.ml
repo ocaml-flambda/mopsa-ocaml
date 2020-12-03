@@ -108,6 +108,8 @@ module Domain =
            | A_py_module(M_builtin m) ->
               let obj = find_builtin_attribute obj name in
               mk_py_object obj range
+           | A_py_c_module m ->
+              mk_py_object_attr obj name ~etyp:(T_py None) range
            | _ -> assert false
          in
          let stmt = mk_assign (mk_var vmodul range) e range in

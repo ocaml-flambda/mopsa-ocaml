@@ -64,7 +64,9 @@ module Domain =
                | E_py_object ({addr_kind = A_py_class _}, _)
                | E_py_object ({addr_kind = A_py_function _}, _)
                | E_py_object ({addr_kind = A_py_method _}, _)
-               | E_py_object ({addr_kind = A_py_module _}, _) ->
+               | E_py_object ({addr_kind = A_py_module _}, _)
+               | E_py_object ({addr_kind = A_py_c_function _}, _)
+               | E_py_object ({addr_kind = A_py_c_module _}, _) ->
                  let exp = {exp with ekind = E_py_call(f, args, kwargs)} in
                  man.eval    exp flow
 
