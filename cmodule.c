@@ -3,6 +3,14 @@
 /* #include <math.h> */
 /* #include <stddef.h> */
 
+
+int PyType_Ready(PyTypeObject *type)
+{
+    Py_TYPE(type) = &PyType_Type;
+    return 0;
+}
+
+
 typedef struct {
     PyObject_HEAD
     PyObject* contents;
@@ -53,6 +61,7 @@ static PyTypeObject CboxType = {
 static PyObject*
 c_typ(PyObject *self, PyObject *args)
 {
+    printf("%s", PyModule_GetName(self));
     return (PyObject*) Py_TYPE(&CboxType);
 }
 

@@ -1,11 +1,15 @@
-from c import Cbox
+from c import typ, Cbox, broken
 
-class A: pass
+# r = broken()
 
-a = A()
+class A:
+    def __init__(self, x):
+        self.x = x
+
+a = A(1)
 
 c = Cbox(a)
 
-a.a = 42
+# a.a = 42
 
-assert(c.contents.a == 42)
+# assert(c.contents.a == 42)

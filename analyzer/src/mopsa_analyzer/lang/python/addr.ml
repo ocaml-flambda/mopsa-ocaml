@@ -245,10 +245,6 @@ let is_builtin_class_function cls f =
 (**                      {2 Utility functions}                              *)
 (*==========================================================================*)
 
-let mro (obj: py_object) : py_object list =
-  match kind_of_object obj with
-  | A_py_class (c, b) -> b
-  | _ -> assert false
 
 let mk_py_z_interval l u range =
   mk_z_interval l u range
@@ -481,8 +477,18 @@ let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
 (* multilanguage *)
 type addr_kind +=
    | A_py_c_module of string (** name *) (** Mopsa.program (* C program *)*)
-   | A_py_c_function of string (** name *) * int (** function uid *) (* for later: METH_VARARGS etc flags? *)
+   | A_py_c_function of
+       string (** name *) *
+       int (** function uid *) *
+       py_object (** self *)
    | A_py_c_class of var (** static variable used in the C stack to define the class *)
+
+
+let mro (obj: py_object) : py_object list =
+  match kind_of_object obj with
+  | A_py_class (c, b) -> b
+  | A_py_c_class _ ->  (* FIXME *) obj :: (find_builtin "object") :: []
+  | _ -> assert false
 
 let () =
   Format.(
@@ -491,19 +497,19 @@ let () =
           (fun default fmt a ->
             match a with
             | A_py_c_module(c(*, p*)) -> fprintf fmt "c module %s" c
-            | A_py_c_function (f, _) -> fprintf fmt "c function %s" f
+            | A_py_c_function (f, _, _) -> fprintf fmt "c function %s" f
             | A_py_c_class v -> fprintf fmt "c class %a" pp_var v
             | _ -> default fmt a);
         compare =
           (fun default a1 a2 ->
             match a1, a2 with
-            (* | A_py_c_module(c1(\*, p1*\)), A_py_c_module(c2(\*, p2*\)) ->
-             *    (\* Compare.pair
-             *     *   Stdlib.compare
-             *     *   compare_program
-             *     *   (c1, p1) (c2, p2)
-             *     *\)
-             *    Stdlib.compare c1 c2 *)
+            | A_py_c_function (f1, i1, o1), A_py_c_function(f2, i2, o2) ->
+               Compare.compose
+                 [
+                   (fun () -> Stdlib.compare f1 f2);
+                   (fun () -> Stdlib.compare i1 i2);
+                   (fun () -> compare_py_object o1 o2);
+                 ]
             | _ -> default a1 a2);
       }
   );
@@ -512,9 +518,10 @@ let () =
       | A_py_c_module _ -> "module"
       | A_py_c_function _ -> "builtin_function_or_method"
       | A_py_c_class _ -> "type"
+      (* FIXME: we should/could call C's Py_TYPE? which currently assigns PyType_Type,  ~ ok up to reduction... *)
       | _ -> default ak);
   register_addr_kind_structural_type (fun default ak s ->
       match ak with
       | A_py_c_class _
       | A_py_c_function _ -> false
-      | _ -> default ak s);
+      | _ -> default ak s)

@@ -98,6 +98,7 @@ struct
 
   let rec eval exp man flow =
     let range = erange exp in
+    if is_py_exp exp then
     match ekind exp with
     | E_py_tuple els ->
       let addr_tuple = mk_alloc_addr (A_py_tuple (List.length els)) range in
@@ -233,7 +234,7 @@ struct
       |> OptionExt.return
 
     | _ -> None
-
+    else None
 
   let exec stmt man flow =
     let range = srange stmt in

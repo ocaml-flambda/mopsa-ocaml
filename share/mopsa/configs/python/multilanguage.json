@@ -42,6 +42,8 @@
                             "python.data_model.aug_assign",
                             "python.data_model.callable",
 
+                            "cpython.pycalls",
+
                             "python.types.t_string",
                             "python.types.t_int",
                             "python.types.t_float",

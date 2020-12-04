@@ -24,7 +24,8 @@ module Domain =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ())
         [
           "PyModule_Create2";
-          "PyModule_AddObject"
+          "PyModule_AddObject";
+          (* "PyType_Ready"; *)
         ];
       flow
 
@@ -77,7 +78,7 @@ module Domain =
                          let methd_fundec = match methd_function with
                            | P_fun f -> f
                            | _ -> assert false  in
-                         man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid)) range) flow >>$
+                         man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, (m_addr, None))) range) flow >>$
                          fun methd_addr flow ->
                          let methd_addr = match ekind methd_addr with
                            | E_addr a -> a
@@ -103,6 +104,7 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyModule_AddObject", [module_object; obj_name; obj]) ->
+         debug "type of m: %a@.%a" pp_typ (etyp module_object) (format @@ Flow.print man.lattice.print) flow;
          resolve_pointer module_object man flow >>$
            (
              fun module_object flow ->
@@ -116,7 +118,6 @@ module Domain =
                  let obj_var = match obj with
                    | P_block ({base_kind = Var v}, _, _) -> v
                    | _ -> assert false in
-
                  man.eval (mk_alloc_addr (Python.Addr.A_py_c_class obj_var) range) flow >>$
                    fun obj_addr flow ->
                    let obj_addr = match ekind obj_addr with
@@ -135,6 +136,11 @@ module Domain =
                    Eval.singleton (mk_zero range)
            )
          |> OptionExt.return
+
+
+      (* | E_c_builtin_call ("PyType_Ready", [cls]) ->
+       * (\* we're cheating here *\)
+       * (\* Py_TYPE(cls) = &PyType_Type *\) *)
 
       | _ -> None
 
