@@ -1,6 +1,6 @@
 from c import typ, Cbox, broken
 
-# r = broken()
+r = typ()
 
 class A:
     def __init__(self, x):

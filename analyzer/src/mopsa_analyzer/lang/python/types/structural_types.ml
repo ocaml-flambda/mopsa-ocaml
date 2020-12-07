@@ -260,7 +260,7 @@ struct
             end
 
         (* FIXME: addr_kind_find_structural_type should have a flag for default behavior *)
-        | A_py_c_module _
+        | A_py_c_module _ | A_py_c_class _
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
           let oaset = AMap.find_opt addr cur in
@@ -349,7 +349,7 @@ struct
               man.eval   (mk_var attr_var range) flow
           end
 
-        | A_py_c_module _
+        | A_py_c_module _ | A_py_c_class _
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
           let attr_var = mk_addr_attr addr attr (T_py None) in

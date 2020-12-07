@@ -4,9 +4,11 @@
 /* #include <stddef.h> */
 
 
-int PyType_Ready(PyTypeObject *type)
+int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
+    type->tp_alloc = PyType_GenericAlloc;
+    _mopsa_print();
     return 0;
 }
 
@@ -20,6 +22,7 @@ static PyObject*
 Cbox_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     Cbox *self;
+    _mopsa_print();
     self = (Cbox *) type->tp_alloc(type, 0);
     if (self != NULL) {
         self->contents = NULL;

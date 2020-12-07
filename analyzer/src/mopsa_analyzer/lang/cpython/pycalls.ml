@@ -22,17 +22,31 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, self)}, _)}, args, kwargs) ->
          (* Find the c function with uid in the context *)
          let cfunc = find_c_fundec_by_uid uid flow in
-         let self_typ, args_typ = match cfunc.c_func_parameters with
-           | a::b::[] -> vtyp a, vtyp b
+         let self_typ, args_typ, got_kwds = match cfunc.c_func_parameters with
+           | a::b::[] -> vtyp a, vtyp b, false
+           | a::b::_::[] ->
+              warn "ignoring keywords";
+              vtyp a, vtyp b, true
            | _ -> assert false in
          (* Call it with self, E_py_tuple(args) *)
-         let self = Universal.Ast.mk_addr (fst self) ~etyp:self_typ range in
-         let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) range in
+         let self =
+           (* woops, don't forget to convert back to C like values
+              FIXME
+              and that also applies to py_args? :/ *)
+           match (fst self).addr_kind with
+           | A_py_c_class v -> C.Ast.mk_c_address_of (mk_var v range) range
+           | _ -> Universal.Ast.mk_addr (fst self) ~etyp:self_typ range in
+         let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
+         let py_kwds = (* okay, lets cheat here *)
+           (* mk_expr ~etyp:(T_py None) (E_py_tuple []) (tag_range range "kwds") *)
+           mk_top (T_c_pointer T_c_void) range
+         in
          man.eval py_args flow >>$
            (fun py_args flow ->
              let addr_py_args = addr_of_object @@ object_of_expr py_args in
              let args = Universal.Ast.mk_addr addr_py_args ~etyp:args_typ range in
-             let call = mk_c_call cfunc [self; args] range in
+             let cfunc_args = if got_kwds then [self; args; py_kwds] else [self; args] in
+             let call = mk_c_call cfunc cfunc_args range in
              let open C.Common.Points_to in
              resolve_pointer call man flow >>$
                fun result flow ->
