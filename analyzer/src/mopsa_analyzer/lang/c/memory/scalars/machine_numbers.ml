@@ -41,7 +41,7 @@ struct
       let name = "c.memory.scalars.machine_numbers"
     end)
 
-  let numeric = Semantic "U/Numeric"
+  let universal = Semantic "Universal"
 
   let checks = [ CHK_C_INTEGER_OVERFLOW;
                  CHK_C_DIVIDE_BY_ZERO;
@@ -115,7 +115,7 @@ struct
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_num vv -> pp_var fmt vv
+          | V_c_num vv -> Format.fprintf fmt "num⦃%a⦄" pp_var vv
           | _ -> next fmt v
         );
       compare = (fun next v1 v2 ->
@@ -139,7 +139,8 @@ struct
       | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
   let mk_num_var v =
-    mkv v.vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode ~semantic:"U/Numeric"
+    let vname = Format.asprintf "num⦅%s⦆" v.vname in
+    mkv vname (V_c_num v) (to_num_type v.vtyp) ~mode:v.vmode ~semantic:"Universal"
 
   let mk_num_var_expr e =
     match ekind e with
@@ -172,23 +173,36 @@ struct
     | O_plus | O_minus | O_mult | O_div -> true
     | _ -> false
 
+
+  (** Rebuild a C expression from its parts *)
+  let rebuild_c_expr exp parts =
+    let _,builder = structure_of_expr exp in
+    builder {exprs = parts; stmts = []}
+
+
+  (** Build a numeric expression from a C expression *)
+  let c2num exp =
+    let parts,builder = structure_of_expr exp in
+    let nparts = { exprs = List.map (get_expr_translation "Universal") parts.exprs; stmts = [] } in
+    let e = builder nparts in
+    { e with etyp = to_num_type e.etyp }
+
+
   (** [check_overflow cexp nexp ...] checks whether the C expression
       [cexp] produces an integer overflow and returns and transforms
       its numeric evaluation [nexp] accordingly *)
-  let check_overflow cexp nexp range man flow =
+  let check_overflow cexp ?(nexp=c2num cexp) man flow =
+    let range = cexp.erange in
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check raise_alarm =
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
-      if Itv.is_bottom itv then
-        unreachable_c_integer_overflow_check range man flow |>
-        Eval.singleton nexp
-      else
       if Itv.subset itv ritv then
         safe_c_integer_overflow_check range man flow |>
-        Eval.singleton nexp
+        Eval.singleton cexp |>
+        Eval.add_translation "Universal" nexp
       else
         let nexp' = wrap_expr nexp (rmin, rmax) range in
         let flow' =
@@ -200,7 +214,8 @@ struct
               raise_c_integer_overflow_alarm ~warning:true cexp nexp man flow flow
           else flow
         in
-        Eval.singleton nexp' flow'
+        Eval.singleton cexp flow' |>
+        Eval.add_translation "Universal" nexp'
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
@@ -227,88 +242,89 @@ struct
 
 
   (** Check that a division is not performed on a null denominator *)
-  let check_division op nominator denominator range man flow =
-    let cond = ne denominator zero range in
+  let check_division cexp man flow =
+    let nexp = c2num cexp in
+    let denominator = match ekind nexp with
+      | E_binop(_,_,e) -> e
+      | _ -> assert false in
+    let cond = ne denominator zero cexp.erange in
     assume cond
       ~fthen:(fun tflow ->
-          let tflow = safe_c_divide_by_zero_check range man tflow in
-          let exp' = mk_binop nominator op denominator ~etyp:T_int range in
-          Eval.singleton exp' tflow
+          let tflow = safe_c_divide_by_zero_check cexp.erange man tflow in
+          Eval.singleton cexp tflow |>
+          Eval.add_translation "Universal" nexp
         )
       ~felse:(fun fflow ->
-          let flow = raise_c_divide_by_zero_alarm denominator range man fflow in
+          let flow = raise_c_divide_by_zero_alarm denominator cexp.erange man fflow in
           Eval.empty flow
         )
-      ~fnone:(fun nflow ->
-          let nflow = unreachable_c_divide_by_zero_check range man nflow in
-          Eval.empty nflow
-        )
-      ~route:numeric man flow
+      man flow
 
 
   (** Check that bit-shifts are safe. Two conditions are verified:
       (i) the shift position is positive, and
       (ii) this position does not exceed the size of the shifted value
   *)
-  let check_shift exp e n range man flow =
-    let t = exp.etyp in
-    let op = match ekind exp with E_binop(op,_,_) -> op | _ -> assert false in
+  let check_shift cexp man flow =
+    let t = cexp.etyp in
+    let nexp = c2num cexp in
+    let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
+    let range = cexp.erange in
     (* Condition: n ∈ [0, bits(t) - 1] *)
     let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
           let tflow = safe_c_shift_check range man tflow in
-          let exp' = { exp with
-                       ekind = E_binop(op,e,n);
-                       etyp  = to_num_type t; }
-          in
-          check_overflow exp exp' range man tflow
+          check_overflow cexp ~nexp man tflow
         )
       ~felse:(fun fflow ->
-          let flow' = raise_c_invalid_shift_alarm exp n man flow fflow in
+          let flow' = raise_c_invalid_shift_alarm cexp n man flow fflow in
           Eval.empty flow'
         )
-      ~fnone:(fun nflow ->
-          let nflow = unreachable_c_shift_check range man nflow in
-          Eval.empty nflow
-        )
-      ~route:numeric man flow
+      man flow
+
 
 
   (** Transfer functions *)
   (** ================== *)
 
-
   let eval exp man flow =
-    let range = erange exp in
     match ekind exp with
     (* 𝔼⟦ n ⟧ *)
     | E_constant(C_int _ | C_int_interval _ | C_float _ | C_float_interval _) when is_c_num_type exp.etyp ->
-      Eval.singleton {exp with etyp = to_num_type exp.etyp} flow
-      |> OptionExt.return
+      let nexp = { exp with etyp = to_num_type exp.etyp } in
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" nexp |>
+      OptionExt.return
 
     (* 𝔼⟦ 'c' ⟧ *)
     | E_constant(C_c_character (c, _)) ->
-      Eval.singleton {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} flow
-      |> OptionExt.return
+      let nexp = {exp with ekind = E_constant (C_int c); etyp = to_num_type exp.etyp} in
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" nexp |>
+      OptionExt.return
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
       let l, u = rangeof t in
-      let exp' = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
-      Eval.singleton exp' flow |>
+      let nexp = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
     (* 𝔼⟦ ⊤float ⟧ *)
     | E_constant(C_top t) when is_c_float_type t ->
-      let exp' = mk_top (to_num_type t) exp.erange in
-      Eval.singleton exp' flow |>
+      let nexp = mk_top (to_num_type t) exp.erange in
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
     (* 𝔼⟦ var ⟧ *)
     | E_var (v,_) when is_c_num_type v.vtyp ->
-      Eval.singleton (mk_num_var_expr exp) flow |>
+      let nexp = mk_num_var_expr exp in
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
@@ -316,38 +332,30 @@ struct
                          exp |> etyp |> is_c_int_type
       ->
       man.eval e flow >>$? fun e flow ->
-      let exp' = { exp with
-                   ekind = E_unop(op, e);
-                   etyp = to_num_type exp.etyp } in
-      check_overflow exp exp' range man flow |>
-      OptionExt.return
-
-    (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
-    | E_unop(O_wrap(min,max) as op, e) when exp |> etyp |> is_c_int_type ->
-      man.eval e flow >>$? fun e flow ->
-      let exp' = { exp with
-                   ekind = E_unop(op, e);
-                   etyp = to_num_type exp.etyp } in
-      Eval.singleton exp' flow |>
+      let cexp = rebuild_c_expr exp [e] in
+      check_overflow cexp man flow |>
       OptionExt.return
 
     (* 𝔼⟦ ~ e ⟧, type(e) = unsigned *)
     | E_unop(O_bit_invert, e) when exp |> etyp |> is_c_int_type
                                 && not (exp |> etyp |> is_c_signed_int_type) ->
       man.eval e flow >>$? fun e flow ->
+      let cexp = rebuild_c_expr exp [e] in
+      let ne = get_expr_translation "Universal" e in
       let _,hi = rangeof exp.etyp in
-      Eval.singleton (sub (mk_z hi exp.erange) e exp.erange) flow |>
+      let nexp = sub (mk_z hi exp.erange) ne exp.erange in
+      Eval.singleton cexp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e ⟧ *)
     | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
       man.eval e flow >>$? fun e flow ->
-      let exp' = { exp with
-                   ekind = E_unop(op, e);
-                   etyp = to_num_type exp.etyp } in
-      Eval.singleton exp' flow |>
+      let cexp = rebuild_c_expr exp [e] in
+      let nexp = c2num cexp in
+      Eval.singleton cexp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
-
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {/, %} and type(exp) = int *)
     | E_binop(op, e, e') when op |> is_c_div_op &&
@@ -355,7 +363,8 @@ struct
       ->
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
-      check_division op e e' range man flow |>
+      let cexp = rebuild_c_expr exp [e;e'] in
+      check_division cexp man flow |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {>>, <<} *)
@@ -364,7 +373,8 @@ struct
       ->
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
-      check_shift exp e e' range man flow |>
+      let cexp = rebuild_c_expr exp [e;e'] in
+      check_shift cexp man flow |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
@@ -373,58 +383,59 @@ struct
       ->
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
-      let exp' = { exp with
-                   ekind = E_binop(op, e, e');
-                   etyp = to_num_type exp.etyp }
-      in
-      check_overflow exp exp' range man flow |>
+      let cexp = rebuild_c_expr exp [e;e'] in
+      check_overflow cexp man flow |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧ *)
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
-      let exp' = { exp with
-                   ekind = E_binop(op, e, e');
-                   etyp = to_num_type exp.etyp }
-      in
+      let cexp = rebuild_c_expr exp [e;e'] in
+      let nexp = c2num cexp in
       (* Re-evaluate the numeric expression, in case Universal wants to
          transform it (e.g. comparison expressions can be transformed into
          booleans *)
-      man.eval exp' flow |>
+      man.eval nexp flow >>$? fun nexp flow ->
+      (* Return a C constant if Universal computed a constant *)
+      let cexp' =
+        match expr_to_z nexp with
+        | None   -> cexp
+        | Some z -> mk_z z cexp.erange in
+      Eval.singleton cexp' flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
+    (* 𝔼⟦ (bool)e ⟧ *)
     | E_c_cast(e,_) when is_c_bool_type exp.etyp &&
                          is_c_int_type e.etyp ->
       assume e man flow
-        ~fthen:(Eval.singleton (mk_true exp.erange))
-        ~felse:(Eval.singleton (mk_false exp.erange))
+        ~fthen:(Eval.singleton
+                  (mk_one ~typ:exp.etyp exp.erange)
+                  ~translations:["Universal",mk_true exp.erange])
+        ~felse:(Eval.singleton
+                  (mk_zero ~typ:exp.etyp exp.erange)
+                  ~translations:["Universal",mk_false exp.erange])
       |>
       OptionExt.return
 
 
     (* 𝔼⟦ (float)int ⟧ *)
-    | E_c_cast(e, _) when exp |> etyp |> is_c_float_type &&
-                          e   |> etyp |> is_c_int_type ->
-      man.eval e flow >>$? fun e flow ->
-      let exp' =
-        mk_unop
-          O_cast
-          e ~etyp:(to_num_type exp.etyp) exp.erange
-      in
-      Eval.singleton exp' flow |>
-      OptionExt.return
-
     (* 𝔼⟦ (int)float ⟧ *)
-    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
-                          e   |> etyp |> is_c_float_type ->
+    | E_c_cast(e, _) when ( exp |> etyp |> is_c_float_type &&
+                            e   |> etyp |> is_c_int_type )
+                       || ( exp |> etyp |> is_c_int_type &&
+                            e   |> etyp |> is_c_float_type  )
+      ->
       man.eval e flow >>$? fun e flow ->
-      let exp' =
-        mk_unop
-          O_cast
-          e ~etyp:(to_num_type exp.etyp) exp.erange
+      let cexp = rebuild_c_expr exp [e] in
+      let nexp =
+        mk_unop O_cast
+          (get_expr_translation "Universal" e)
+          ~etyp:(to_num_type exp.etyp) exp.erange
       in
-      Eval.singleton exp' flow |>
+      Eval.singleton cexp flow |>
+      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
 
@@ -432,14 +443,9 @@ struct
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
                           e   |> etyp |> is_c_int_type
       ->
-      man.eval e flow >>$? fun e' flow ->
-      check_overflow exp e' range man flow |>
-      OptionExt.return
-
-    (* 𝔼⟦ (int)num ⟧ *)
-    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
-                          is_numeric_type e.etyp ->
-      Eval.singleton e flow |>
+      man.eval e flow >>$? fun e flow ->
+      let cexp = rebuild_c_expr exp [e] in
+      check_overflow cexp ~nexp:(get_expr_translation "Universal" e) man flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)float ⟧ *)
@@ -448,10 +454,12 @@ struct
       man.eval e flow |>
       OptionExt.return
 
-    (* 𝔼⟦ valid_float(e) ⟧ *)
-    | Stubs.Ast.E_stub_builtin_call(VALID_FLOAT as f, e) ->
+    (* 𝔼⟦ (int)num ⟧ *)
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
+                          is_numeric_type e.etyp ->
       man.eval e flow >>$? fun e flow ->
-      Eval.singleton (mk_expr (E_stub_builtin_call(f, e)) ~etyp:exp.etyp exp.erange) flow |>
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" e |>
       OptionExt.return
 
     | _ ->
@@ -465,7 +473,6 @@ struct
       Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
     else
       flow
-
 
 
   (* Declaration of a scalar numeric variable *)
@@ -489,15 +496,15 @@ struct
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
 
       | _, Some (C_init_expr e) ->
-        man.eval e flow
+        man.eval ~translate:"Universal" e flow
 
       | _ -> assert false
     in
 
     init' >>$ fun init' flow ->
-    man.exec ~route:numeric (mk_add vv range) flow >>% fun flow ->
+    man.exec (mk_add vv range) flow ~route:universal >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.exec ~route:numeric (mk_assign vv init' range)
+    man.exec (mk_assign vv init' range) ~route:universal
 
 
   let exec stmt man flow =
@@ -507,20 +514,29 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
-      man.eval lval flow >>$? fun lval' flow ->
-      man.eval rval flow >>$? fun rval' flow ->
-      man.exec ~route:numeric (mk_assign lval' rval' stmt.srange) flow |>
+      man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
+      man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
+      man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
+      OptionExt.return
+
+    | S_assume(e) when is_c_num_type e.etyp ->
+      man.eval ~translate:"Universal" e flow >>$? fun e' flow ->
+      begin match expr_to_z e' with
+        | Some n when Z.(n = zero) -> Post.return (Flow.remove T_cur flow)
+        | Some n                   -> Post.return flow
+        | None                     -> man.exec (mk_assume e' stmt.srange) flow ~route:universal
+      end |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.exec ~route:numeric (mk_add vv stmt.srange) |>
+      man.exec (mk_add vv stmt.srange) ~route:universal |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.exec ~route:numeric (mk_remove vv stmt.srange) flow |>
+      man.exec (mk_remove vv stmt.srange) flow ~route:universal |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
@@ -529,7 +545,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.exec ~route:numeric (mk_rename vv1 vv2 stmt.srange) flow |>
+      man.exec (mk_rename vv1 vv2 stmt.srange) flow ~route:universal |>
       OptionExt.return
 
     | S_expand({ekind = E_var _} as e, el)
@@ -538,7 +554,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_expand v vl stmt.srange) ~route:numeric flow |>
+      man.exec (mk_expand v vl stmt.srange) flow ~route:universal |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -547,7 +563,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_fold v vl stmt.srange) ~route:numeric flow |>
+      man.exec (mk_fold v vl stmt.srange) flow ~route:universal |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
@@ -559,7 +575,7 @@ struct
         else
           mk_top vv.etyp stmt.srange
       in
-      man.exec (mk_assign vv top stmt.srange) ~route:numeric flow |>
+      man.exec (mk_assign vv top stmt.srange) flow ~route:universal |>
       OptionExt.return
 
     | _ -> None
@@ -578,7 +594,7 @@ struct
     match ekind (remove_casts exp) with
     | E_var (v,_) when is_c_num_type v.vtyp ->
       let vv = mk_num_var v in
-      man.print_expr ~route:numeric flow printer (mk_var vv exp.erange)
+      man.print_expr flow printer (mk_var vv exp.erange)
     | _ -> ()
 
 end

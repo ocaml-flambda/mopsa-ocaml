@@ -80,7 +80,7 @@ let rec bound offset quants : expr * expr =
       expression [o] is aligned w.r.t. size sz *)
 let is_aligned e sz man flow =
   (sz = Z.one) || (is_c_expr_equals_z e Z.zero) ||
-  (man.eval e flow |>
+  (man.eval e flow ~translate:"Universal" |>
    Cases.for_all_result (fun ee flow ->
        let open Universal.Numeric.Common in
        let i , c = man.ask (mk_int_congr_interval_query ee) flow in

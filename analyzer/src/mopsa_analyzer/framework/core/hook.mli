@@ -33,6 +33,7 @@ open Post
 open Eval
 open Route
 open Manager
+open Semantic
 
 
 (** Signature of a hook *)
@@ -51,10 +52,10 @@ sig
   val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
+  val on_before_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
+  val on_after_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
   (** Event fired after an eval is performed *)
 
   val on_finish : ('a,'a) man -> 'a flow -> unit
@@ -76,10 +77,10 @@ sig
   val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> unit
   (** Event fired after an exec is performed *)
 
-  val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> unit
+  val on_before_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> unit
   (** Event fired before an eval is performed *)
 
-  val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
+  val on_after_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> unit
   (** Event fired after an eval is performed *)
 
   val on_finish : ('a,'a) man -> 'a flow -> unit
@@ -123,10 +124,10 @@ val on_before_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a ctx option
 val on_after_exec : route -> stmt -> ('a,'a) man -> 'a flow -> 'a post -> 'a ctx option
 (** Call [on_after_exec] on all active hooks *)
 
-val on_before_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
+val on_before_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a ctx option
 (** Call [on_before_eval] on all active hooks *)
 
-val on_after_eval : route -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
+val on_after_eval : route -> semantic -> expr -> ('a,'a) man -> 'a flow -> 'a eval -> 'a ctx option
 (** Call [on_after_eval] on all active hooks *)
 
 val on_finish : ('a,'a) man -> 'a flow -> unit

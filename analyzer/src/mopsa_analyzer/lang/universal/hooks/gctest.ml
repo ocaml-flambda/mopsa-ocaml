@@ -41,8 +41,8 @@ struct
 
   let on_before_exec route stmt man flow = ()
   let on_after_exec route stmt man flow post = ()
-  let on_before_eval route exp man flow = ()
-  let on_after_eval route exp man flow evl = ()
+  let on_before_eval route semantic exp man flow = ()
+  let on_after_eval route semantic exp man flow evl = ()
 
   let on_finish man flow =
     let alladdr = man.ask Heap.Recency.Q_allocated_addresses flow in

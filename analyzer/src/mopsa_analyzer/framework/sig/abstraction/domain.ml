@@ -138,7 +138,6 @@ struct
     D.eval exp man flow |>
     OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
-  
 end
 
 let domains : (module DOMAIN) list ref = ref []

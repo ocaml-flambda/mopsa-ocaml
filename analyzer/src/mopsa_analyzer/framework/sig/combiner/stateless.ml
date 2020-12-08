@@ -31,10 +31,10 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
-  val exec : domain list -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
-  val eval : domain list -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
-  val ask  : domain list -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
-  val print_expr : domain list -> ('a,unit) man -> 'a flow -> printer -> expr -> unit
+  val exec : DomainSet.t option -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
+  val eval : DomainSet.t option -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
+  val print_expr : DomainSet.t option -> ('a,unit) man -> 'a flow -> printer -> expr -> unit
 end
 
 
@@ -54,14 +54,11 @@ end
 module CombinerToStateless(T:STATELESS_COMBINER) : STATELESS =
 struct
   include T
-  let exec stmt man flow = T.exec [] stmt man flow
-  let eval exp man flow  = T.eval [] exp man flow
-  let ask query man flow = T.ask [] query man flow
-  let print_expr man flow printer e = T.print_expr [] man flow printer e
+  let exec stmt man flow = T.exec None stmt man flow
+  let eval exp man flow  = T.eval None exp man flow
+  let ask query man flow = T.ask None query man flow
+  let print_expr man flow printer e = T.print_expr None man flow printer e
 end
-
-
-
 
 
 module StatelessToDomain(S:STATELESS_COMBINER) : Domain.DOMAIN_COMBINER with type t = unit =

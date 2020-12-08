@@ -69,6 +69,7 @@ struct
   let check_offset_access base offset mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
+    man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
     match eval_num_cond cond man flow with
     | Some true  -> safe_c_memory_access_check range man flow |>
                     Cases.singleton (Some (mk_lval base offset typ mode range))

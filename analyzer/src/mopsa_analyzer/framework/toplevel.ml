@@ -68,7 +68,7 @@ sig
 
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
-  val eval : ?route:route -> expr -> (t, t) man -> t flow -> t eval
+  val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
 
   val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
 
@@ -181,7 +181,7 @@ struct
   (** Build the map of exec functions *)
   let exec_map : (stmt -> (t,t) man -> t flow -> t post option) RouteMap.t =
     (* Add the initial implicit binding for toplevel route *)
-    let map = RouteMap.singleton toplevel (Domain.exec []) in
+    let map = RouteMap.singleton toplevel (Domain.exec None) in
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
     List.fold_left (fun map route ->
@@ -189,7 +189,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.exec domains) map
+          RouteMap.add route (Domain.exec (Some domains)) map
       ) map
 
   (** Hooks should not be activated within hooks exec/eval.
@@ -284,7 +284,7 @@ struct
   (** Build the map of [eval] functions *)
   let eval_map : (expr -> (t,t) man -> t flow -> t eval option) RouteMap.t =
     (* Add the implicit eval for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.eval []) in
+    let map = RouteMap.singleton toplevel (Domain.eval None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -293,7 +293,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.eval domains) map
+          RouteMap.add route (Domain.eval (Some domains)) map
       ) map
 
   (** Get the actual route of the expression in case of a
@@ -306,83 +306,152 @@ struct
     else
       route
 
+  (** Evaluate sub-nodes of an expression and rebuild it *)
+  let eval_sub_expressions ?(route=toplevel) exp man flow =
+    let parts, builder = structure_of_expr exp in
+    match parts with
+    | {exprs = []; stmts = []} ->
+      Eval.singleton exp flow
+
+    | {exprs; stmts = []} ->
+      (* Evaluate each sub-expression *)
+      Cases.bind_list exprs (man.eval ~route) flow
+      >>$ fun exprs flow ->
+      (* Normalize translation maps by ensuring that sub-expression should be
+         translated to the same semanitcs *)
+      let semantics =
+        List.fold_left
+          (fun acc e ->
+             SemanticSet.union acc
+               (SemanticMap.bindings e.etrans |> List.map fst |> SemanticSet.of_list)
+          ) SemanticSet.empty exprs in
+      let exprs =
+        List.map
+          (SemanticSet.fold
+             (fun s e ->
+                if SemanticMap.mem s e.etrans then e else { e with etrans = SemanticMap.add s e e.etrans }
+             ) semantics
+          ) exprs in
+      (* Rebuild the expression [exp] from its evaluated parts *)
+      let exp = builder {exprs; stmts = []} in
+      (* Rebuild also the translations of [exp] from the translations of its parts *)
+      let etrans =
+        SemanticSet.fold
+          (fun s etrans ->
+             let exprs =
+               List.fold_left
+                 (fun acc e -> SemanticMap.find s e.etrans :: acc)
+                 [] exprs in
+             let exp = builder {exprs = List.rev exprs; stmts=[]} in
+             SemanticMap.add s exp etrans
+          ) semantics SemanticMap.empty in
+      Eval.singleton { exp with etrans } flow
+
+    (* XXX sub-statements are not handled for the moment *)
+    | _ -> Eval.singleton exp flow
+
+
+  (** Evaluate not-handled cases *)
+  let eval_not_handled ?(route=toplevel) exp man evl =
+    (* Separate handled and not-handled cases *)
+    let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
+    let not_handled_ret =
+      match not_handled with
+      | None -> None
+      | Some evl ->
+        (* Evaluate sub-expressions of the not-handled cases *)
+        let evl =
+          (* Merge all not-handled cases into one *)
+          Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
+          eval_sub_expressions ~route exp man flow
+        in
+        Some evl
+    in
+    (* Join handled and evaluated not-handled cases *)
+    OptionExt.neutral2 Cases.join handled not_handled_ret |>
+    OptionExt.none_to_exn
+
+
   (** Evaluation of expressions. *)
-  let eval ?(route=toplevel) exp man flow =
+  let eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp man flow =
+    (* Get the translation semantic if any *)
+    let semantic =
+      if not (is_any_semantic translate) then
+        translate
+      else
+        match List.find_opt (fun (s,f) -> f exp) translate_when with
+        | Some (s,_) -> s
+        | None       -> any_semantic
+    in
+
+    (* Notify hooks *)
     let flow =
-      if inside_hook () then
-        flow
+      if inside_hook () then flow
       else
         let () = enter_hook() in
-        let x = Hook.on_before_eval route exp man flow in
+        let x = Hook.on_before_eval route semantic exp man flow in
         let () = exit_hook() in
-        match x with None -> flow | Some ctx -> Flow.set_ctx ctx flow
+        match x with
+        | None -> flow
+        | Some ctx -> Flow.set_ctx ctx flow
     in
 
     let route = refine_route_with_var_semantic route exp in
 
     let feval =
-      try RouteMap.find route eval_map
+      try Cache.eval (RouteMap.find route eval_map) route
       with Not_found -> Exceptions.panic_at exp.erange "eval for %a not found" pp_route route
     in
     let evl =
-      (* Ask domains to perform the evaluation *)
-      let ret = Cache.eval feval route exp man flow in
-      let eval_sub_expressions flow =
-        let parts, builder = structure_of_expr exp in
-        match parts with
-        | {exprs; stmts = []} ->
-          (* Iterate over sub-expressions *)
-          Cases.bind_list exprs (fun e flow -> man.eval e flow) flow >>$ fun exprs' f' ->
-          (* Rebuild the expression from its evaluated parts *)
-          let e' = builder {exprs = exprs'; stmts = []} in
-          Cases.singleton e' f'
-
-        (* XXX sub-statements are not handled for the moment *)
-        | _ -> Cases.singleton exp flow
-      in
-      (* Check whether there are not-handled cases *)
-      match ret with
-      | None   -> eval_sub_expressions flow
-      | Some evl ->
-        let handled,not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) evl in
-        let not_handled_ret =
-          match not_handled with
-          | None -> None
-          | Some evl ->
-            (* Evaluate sub-expressions of the not-handled cases *)
-            let evl =
-              Eval.remove_duplicates man.lattice evl >>= fun _ flow ->
-              eval_sub_expressions flow
-            in
-            Some evl
-      in
-      OptionExt.neutral2 Cases.join handled not_handled_ret |>
-      OptionExt.none_to_exn
+      match feval exp man flow with
+      | None   -> eval_sub_expressions exp man flow
+      | Some evl -> eval_not_handled ~route exp man evl
     in
 
-    (* Updates the expression transformation lineage *)
+    (* Update the expression history *)
     let ret =
-      evl >>$ fun exp' flow' ->
-      if exp == exp' then Cases.singleton exp' flow' else Cases.singleton { exp' with eprev = Some exp } flow'
+      Cases.map_result
+        (fun exp' ->
+           if exp == exp'
+           then exp'
+           else
+             let exp'' = { exp' with
+                           ehistory = exp :: exp'.ehistory } in
+             (* Update history of the translations *)
+             { exp'' with
+               etrans =
+                 SemanticMap.map
+                   (fun e ->
+                      { e with ehistory = e.ehistory @ exp''.ehistory }
+                   ) exp''.etrans }
+        ) evl
     in
 
-    if inside_hook () then
-        ret
+    (** Return a translation if it was requested *)
+    let ret' =
+      if is_any_semantic semantic
+      then ret
+      else Cases.map_result (get_expr_translation semantic) ret
+    in
+
+    (* Notify hooks *)
+    if inside_hook () then ret'
     else
       let () = enter_hook() in
-      let x = Hook.on_after_eval route exp man flow ret in
+      let x = Hook.on_after_eval route semantic exp man flow ret' in
       let () = exit_hook () in
-      match x with None -> ret | Some ctx -> Cases.set_ctx ctx ret
+      match x with
+      | None    -> ret'
+      | Some ctx -> Cases.set_ctx ctx ret'
 
 
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-
   let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
     fun ?(route=toplevel) query man flow ->
     (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
-    let domains = if compare_route route toplevel = 0 then [] else resolve_route route Domain.routing_table in
+    let domains = if compare_route route toplevel = 0 then None else Some (resolve_route route Domain.routing_table) in
     match Domain.ask domains query man flow with
     | None -> raise Not_found
     | Some r -> r
@@ -394,7 +463,7 @@ struct
   (** Build the map of [print_state] functions *)
   let print_state_map : (printer -> t -> unit) RouteMap.t =
     (* Add the implicit printer for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.print_state []) in
+    let map = RouteMap.singleton toplevel (Domain.print_state None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -403,7 +472,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.print_state domains) map
+          RouteMap.add route (Domain.print_state (Some domains)) map
       ) map
 
   (** Pretty print of states *)
@@ -422,7 +491,7 @@ struct
   (** Build the map of [print_expr] functions *)
   let print_expr_map : ((t,t) man -> t flow -> printer -> expr -> unit) RouteMap.t =
     (* Add the implicit printer for toplevel *)
-    let map = RouteMap.singleton toplevel (Domain.print_expr []) in
+    let map = RouteMap.singleton toplevel (Domain.print_expr None) in
 
     (* Iterate over all routes *)
     get_routes Domain.routing_table |>
@@ -431,7 +500,7 @@ struct
           map
         else
           let domains = resolve_route route Domain.routing_table in
-          RouteMap.add route (Domain.print_expr domains) map
+          RouteMap.add route (Domain.print_expr (Some domains)) map
       ) map
 
   (** Pretty print of expression values *)
@@ -447,3 +516,6 @@ struct
       Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end
+
+
+

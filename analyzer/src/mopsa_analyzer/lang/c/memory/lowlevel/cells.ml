@@ -660,6 +660,11 @@ struct
           then Cases.empty flow
           else Cases.singleton region flow
         else
+        if Z.(nb = one) then
+          (* Only one case -> return it *)
+          let c = mk_cell base lo typ in
+          Cases.singleton (Cell (c,mode)) flow
+        else
           (* few cases -> iterate fully over [l, u] *)
           let rec aux o =
             if Z.gt o uo
@@ -1048,7 +1053,7 @@ struct
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
-    let evl = man.eval offset flow in
+    let evl = man.eval offset flow ~translate:"Universal" in
     Cases.reduce_result
       (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
       ~join:Itv.join

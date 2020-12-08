@@ -30,6 +30,8 @@ open Operator
 open Constant
 open Var
 open Format
+open Semantic
+
 
 type expr_kind = ..
 
@@ -37,18 +39,22 @@ type expr = {
   ekind: expr_kind;
   etyp: typ;
   erange: Location.range;
-  eprev: expr option;
+  etrans: expr SemanticMap.t;
+  ehistory: expr list;
 }
+
+
+let ekind (e: expr) = e.ekind
+let etyp (e: expr) = e.etyp
+let erange (e: expr) = e.erange
+let etrans (e:expr) = e.etrans
+let ehistory (e:expr) = e.ehistory
 
 type expr_kind +=
   | E_var of var * mode option
   | E_constant of constant
   | E_unop of operator * expr
   | E_binop of operator * expr * expr
-
-let ekind (e: expr) = e.ekind
-let etyp (e: expr) = e.etyp
-let erange (e: expr) = e.erange
 
 let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
       match ekind e1, ekind e2 with
@@ -80,6 +86,35 @@ let register_expr_pp pp = TypeExt.register_print pp expr_pp_chain
 let compare_expr e1 e2 = TypeExt.compare expr_compare_chain e1 e2
 
 let pp_expr fmt e = TypeExt.print expr_pp_chain fmt e
+
+let add_expr_translation semantic t e =
+  { e with etrans = SemanticMap.add semantic t e.etrans }
+
+let get_expr_translations e = e.etrans
+
+let get_expr_translation semantic e =
+  if is_any_semantic semantic then e
+  else
+    try SemanticMap.find semantic e.etrans
+    with Not_found ->
+      (* XXX We assume that an expression is translated to itself if no
+         translation exists. This is a temporary fix for situations where
+         domains don't add appropriate entires in the translation table. *)
+      e
+
+let get_expr_history e = e.ehistory
+
+let get_orig_expr e =
+  match e.ehistory with
+  | [] -> e
+  | _  -> ListExt.last e.ehistory
+
+let find_expr_ancestor f e =
+  let rec iter = function
+    | [] -> raise Not_found
+    | hd::tl -> if f hd then hd else iter tl
+  in
+  iter e.ehistory
 
 let () =
   register_expr {
@@ -115,11 +150,11 @@ let () =
 
 let mk_expr
     ?(etyp = T_any)
-    ?(eprev = None)
-    ekind
-    erange
+    ?(etrans = SemanticMap.empty)
+    ?(ehistory = [])
+    ekind erange
   =
-  {ekind; etyp; erange; eprev}
+  {ekind; etyp; erange; etrans; ehistory}
 
 let mk_var v ?(mode = None) erange =
   mk_expr ~etyp:v.vtyp (E_var(v, mode)) erange
@@ -155,6 +190,16 @@ let mk_constant ?(etyp=T_any) c = mk_expr ~etyp (E_constant c)
 let mk_top typ range = mk_constant (C_top typ) ~etyp:typ range
 
 let mk_not e range = mk_unop O_log_not e ~etyp:e.etyp range
+
+let rec negate_expr exp =
+  match ekind exp with
+  | E_unop(O_log_not,ee) -> ee
+  | E_binop(op,e1,e2) when is_logic_op op ->
+    mk_binop (negate_expr e1) (negate_logic_op op) (negate_expr e2) ~etyp:exp.etyp exp.erange
+  | E_binop(op,e1,e2) when is_comparison_op op ->
+    mk_binop e1 (negate_comparison_op op) e2 ~etyp:exp.etyp exp.erange
+  | _ -> mk_not exp exp.erange
+
 
 module ExprSet = SetExt.Make(struct
     type t = expr

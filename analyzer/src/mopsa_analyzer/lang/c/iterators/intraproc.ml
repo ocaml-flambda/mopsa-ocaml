@@ -135,11 +135,6 @@ struct
       man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
       OptionExt.return
 
-    | S_assume e when is_c_type e.etyp ->
-      man.eval e flow >>$? fun e flow ->
-      man.exec (mk_assume e stmt.srange) ~route:(Below name) flow |>
-      OptionExt.return
-
     | _ -> None
 
 
@@ -186,10 +181,34 @@ struct
       OptionExt.return
 
     | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
-      assume e man flow
-        ~fthen:(Eval.singleton (mk_zero exp.erange))
-        ~felse:(Eval.singleton (mk_one exp.erange))
-      |> OptionExt.return
+      begin
+        man.eval e flow >>$ fun e flow ->
+        match c_expr_to_z e with
+        | Some n when Z.(n = zero) -> Eval.singleton one flow
+        | Some n                   -> Eval.singleton zero flow
+        | None ->
+          let cond,neg_cond =
+            let rec aux e =
+              match ekind e with
+              | E_unop(O_log_not,ee) ->
+                let c1,c2 = aux ee in
+                c2,c1
+              | E_binop(op,_,_) when is_comparison_op op || is_logic_op op ->
+                e, negate_expr e
+              | _ ->
+                eq e zero ~etyp:s32 exp.erange, ne e zero ~etyp:s32 exp.erange
+            in
+            aux e
+          in
+          switch [
+            [cond],
+            (fun flow -> Eval.singleton one flow);
+
+            [neg_cond],
+            (fun flow -> Eval.singleton zero flow)
+          ] man flow
+      end |>
+      OptionExt.return
 
     | E_c_assign(lval, rval) ->
       man.eval rval flow >>$? fun rval flow ->

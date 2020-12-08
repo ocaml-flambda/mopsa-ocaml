@@ -63,17 +63,22 @@ open Operator
 open Constant
 open Var
 open Format
-
+open Semantic
 
 type expr_kind = ..
 (** Extensible type of expression kinds *)
 
 type expr = {
-  ekind: expr_kind;   (** kind of the expression *)
-  etyp: typ;          (** type of the expression *)
-  erange: range;      (** location range of the expression *)
-  eprev: expr option; (** previous version of the expression in the
-                          transformation lineage *)
+  ekind: expr_kind;
+  (** kind of the expression *)
+  etyp: typ;
+  (** type of the expression *)
+  erange: range;
+  (** location range of the expression *)
+  etrans: expr SemanticMap.t;
+  (** translations of the expression into other semantics *)
+  ehistory: expr list;
+  (** History of preceding evaluations of the expression *)
 }
 (** Expressions *)
 
@@ -93,10 +98,32 @@ val etyp : expr -> typ
 val erange : expr -> range
 (** Get the location of an expression *)
 
-val mk_expr : ?etyp:typ -> ?eprev:expr option -> expr_kind -> range -> expr
-(** [mk_expr ~etyp:t ~eprev:e ekind range] constructs an expression with kind
-    [ekind], location [range], type [t] ([T_any] if not given) and previous
-    version [e] ([None] if not given) *) 
+val etrans : expr -> expr SemanticMap.t
+(** Get the translation map of an expression *)
+
+val ehistory : expr -> expr list
+(** Get the evaluation history of an expression *)
+
+val mk_expr : ?etyp:typ -> ?etrans:expr SemanticMap.t -> ?ehistory:expr list -> expr_kind -> range -> expr
+(** Construct an expression *)
+
+val add_expr_translation : semantic -> expr -> expr -> expr
+(** Add a translation of an expression *)
+
+val get_expr_translations : expr -> expr SemanticMap.t
+(** Get all translations of an expression *)
+
+val get_expr_translation : semantic -> expr -> expr
+(** Get the translation of an expression into a given semantic *)
+
+val get_expr_history : expr -> expr list
+(** Get the evaluation history of an expression *)
+
+val get_orig_expr : expr -> expr
+(** Get the original form of an expression *)
+
+val find_expr_ancestor : (expr -> bool) -> expr -> expr
+(** Get the ancestor expression verifying a predicate *)
 
 
 (****************************************************************************)
@@ -175,6 +202,8 @@ type expr_kind += E_binop of operator (** operator *) *
 val mk_binop : ?etyp:typ -> expr -> operator -> expr -> range -> expr
 (** Create a binary operator expression *)
 
+val negate_expr : expr -> expr
+(** Return the negation of an expression *)
 
 (****************************************************************************)
 (**                      {1 Expressions containers}                         *)
