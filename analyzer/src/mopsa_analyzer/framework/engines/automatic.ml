@@ -37,8 +37,8 @@ struct
   and exec ?(route=toplevel)stmt flow =
     Toplevel.exec ~route stmt man flow
 
-  and eval ?(route=toplevel) exp flow =
-    Toplevel.eval ~route exp man flow
+  and eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp flow =
+    Toplevel.eval ~route ~translate ~translate_when exp man flow
 
   and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
     fun ?(route=toplevel) query flow ->

@@ -31,11 +31,11 @@ sig
   val semantics : SemanticSet.t
   val routing_table : routing_table
   val merge : t -> t * teffect -> t * teffect -> t
-  val exec : domain list -> stmt -> ('a,t) man -> 'a flow -> 'a post option
-  val eval : domain list -> expr -> ('a,t) man -> 'a flow -> 'a eval option
-  val ask  : domain list -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
-  val print_state : domain list -> printer -> t -> unit
-  val print_expr  : domain list -> ('a,t) man -> 'a flow -> printer -> expr -> unit
+  val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
+  val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val print_state : DomainSet.t option -> printer -> t -> unit
+  val print_expr  : DomainSet.t option -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
 
 module EmptyDomain : STACKED_COMBINER =
@@ -91,9 +91,9 @@ struct
     let te1 = mk_teffect e1 empty_teffect empty_teffect in
     let te2 = mk_teffect e2 empty_teffect empty_teffect in
     T.merge pre (a1,te1) (a2,te2)
-  let exec stmt man flow = T.exec [] stmt man flow
-  let eval exp man flow  = T.eval [] exp man flow
-  let ask query man flow = T.ask [] query man flow
-  let print_state printer a = T.print_state [] printer a
-  let print_expr man flow printer e = T.print_expr [] man flow printer e
+  let exec stmt man flow = T.exec None stmt man flow
+  let eval exp man flow  = T.eval None exp man flow
+  let ask query man flow = T.ask None query man flow
+  let print_state printer a = T.print_state None printer a
+  let print_expr man flow printer e = T.print_expr None man flow printer e
 end

@@ -205,13 +205,13 @@ struct
         (fun acc ee ->
            match ekind ee with
            | E_var (v,_) ->
-             let packs = packs_of_var ctx v |> Set.of_list
-             in
+             let packs = packs_of_var ctx v |> Set.of_list in
              let packs' =
                if Set.is_empty packs then
-                 match ee.eprev with
-                 | None -> Set.empty
-                 | Some eee -> packs_of_expr ctx eee
+                 List.fold_left
+                   (fun acc eee ->
+                      Set.union acc (packs_of_expr ctx eee)
+                   ) Set.empty ee.ehistory
                else
                  packs
              in

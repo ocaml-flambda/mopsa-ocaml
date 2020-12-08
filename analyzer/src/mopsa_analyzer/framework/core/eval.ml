@@ -28,13 +28,30 @@ open Token
 open Flow
 open Context
 open Cases
+open Effect
 open Semantic
+open Mopsa_utils
+
 
 type 'a eval  = ('a,expr) cases
 
 include Cases
 
+let singleton ?(effects=empty_teffect) ?(cleaners=[]) ?(translations=[]) e flow =
+  let e' = List.fold_left (fun acc (s,ee) -> add_expr_translation s ee acc) e translations in
+  Cases.singleton ~effects ~cleaners e' flow
+
+let add_translation semantic e evl =
+  Cases.map_result (add_expr_translation semantic e) evl
+
 let print fmt (evl: 'a eval) : unit =
   Cases.print_result (fun fmt e flow -> pp_expr fmt e) fmt evl
 
-let remove_duplicates lattice evl = Cases.remove_duplicate_results compare_expr lattice evl
+let remove_duplicates lattice evl =
+  Cases.remove_duplicate_results
+    (fun e1 e2 ->
+       (* Compare the expressions and their translations *)
+       Compare.pair compare_expr (SemanticMap.compare compare_expr)
+         (e1,e1.etrans)
+         (e2,e2.etrans)
+    ) lattice evl

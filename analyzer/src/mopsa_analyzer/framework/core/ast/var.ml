@@ -50,7 +50,7 @@ let vtyp  v = v.vtyp
 let vmode v = v.vmode
 let vsemantic v = v.vsemantic
 
-let mkv name kind ?(mode=STRONG) ?(semantic=toplevel_semantic) typ =
+let mkv name kind ?(mode=STRONG) ?(semantic=any_semantic) typ =
   {vname = name; vkind = kind; vtyp = typ; vmode = mode; vsemantic = semantic }
 
 
@@ -161,13 +161,13 @@ let mktmp ?(typ=T_any) ?(mode=STRONG) () =
 
 
 (** Create a variable attribute *)
-let mk_attr_var v attr ?(mode=STRONG) ?(semantic=toplevel_semantic) typ =
+let mk_attr_var v attr ?(mode=STRONG) ?(semantic=any_semantic) typ =
   let name = v.vname ^ "." ^ attr in
   mkv name (V_var_attr (v, attr)) ~mode ~semantic typ
 
 
 (** Create a program range attribute *)
-let mk_range_attr_var range attr ?(mode=STRONG) ?(semantic=toplevel_semantic) typ =
+let mk_range_attr_var range attr ?(mode=STRONG) ?(semantic=any_semantic) typ =
   let name = Format.asprintf "%a.%s" Location.pp_range range attr in
   mkv name (V_range_attr (range, attr)) ~mode ~semantic typ
 

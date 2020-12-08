@@ -217,15 +217,15 @@ struct
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then ()
     else update_cov cs range
 
-  let on_before_exec path stmt man flow =
+  let on_before_exec route stmt man flow =
     process_range stmt.srange man flow
 
-  let on_after_exec path stmt man flow post = ()
+  let on_after_exec route stmt man flow post = ()
 
-  let on_before_eval path exp man flow =
+  let on_before_eval route semantic exp man flow =
     process_range exp.erange man flow
 
-  let on_after_eval path exp man flow evl = ()
+  let on_after_eval route semantic exp man flow evl = ()
 
   let on_finish man flow =
     print_cov_stats ()

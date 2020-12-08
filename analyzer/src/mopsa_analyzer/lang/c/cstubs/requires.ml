@@ -139,7 +139,7 @@ struct
 
 
   let exec_stub_requires_float_class flt cls msg range man flow =
-    man.eval flt flow >>$ fun flt flow ->
+    man.eval flt flow ~translate:"Universal" >>$ fun flt flow ->
     let cond = mk_float_class cls flt range in
     assume cond
       ~fthen:(fun flow -> Post.return flow)

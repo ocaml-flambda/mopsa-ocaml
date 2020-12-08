@@ -45,8 +45,6 @@ struct
       let name = "c.cstubs.assigns"
     end)
 
-  let lowlevel = Semantic "C/Lowlevel"
-
   let checks = []
 
 
@@ -87,9 +85,9 @@ struct
        pointers pointing to base will point also to base', which is not what
        we want.
        Consequently, this domain should be placed *after* the toplevel C
-       abstraction (i.e. c.memory.blocks) in the configuration file.
+       abstraction (i.e. c.iterators.intraproc) in the configuration file.
     *)
-    man.exec (mk_expand (mk_base_expr base range) [primed] range) ~route:lowlevel flow
+    man.exec (mk_expand (mk_base_expr base range) [primed] range) ~route:(Below name) flow
 
 
   (** Prepare primed copies of assigned bases *)
@@ -194,7 +192,7 @@ struct
     if base_mode base = STRONG then
       post1
     else
-      let post2 = man.exec (mk_remove primed range) ~route:lowlevel flow in
+      let post2 = man.exec (mk_remove primed range) ~route:(Below name) flow in
       Post.join post1 post2
 
 

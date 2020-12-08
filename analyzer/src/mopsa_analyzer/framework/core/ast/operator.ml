@@ -82,6 +82,11 @@ let is_logic_op = function
   | O_log_and | O_log_or | O_log_not -> true
   | _ -> false
 
+let negate_logic_op = function
+  | O_log_and -> O_log_or
+  | O_log_or  -> O_log_and
+  | op -> Exceptions.panic "don't know how to negate operator %a" pp_operator op
+
 let negate_comparison_op = function
   | O_eq -> O_ne
   | O_ne -> O_eq

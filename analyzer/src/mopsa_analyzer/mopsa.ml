@@ -44,3 +44,5 @@ include Framework.Config.Options
 include Exceptions
 
 type 'a info = 'a TypeExt.info
+
+include Framework.Toplevel

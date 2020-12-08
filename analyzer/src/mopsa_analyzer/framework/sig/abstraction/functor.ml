@@ -44,16 +44,17 @@ end
 module Instrument(F:DOMAIN_FUNCTOR) : DOMAIN_FUNCTOR =
 struct
 
-  include F
+  let name = F.name
 
   module Functor(D:DOMAIN) =
   struct
 
-    include D
+    module I = F.Functor(D)
+    include I
 
     (* Add stmt to the effects of the domain *)
     let exec stmt man flow =
-      D.exec stmt man flow |>
+      I.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
       Cases.map_effects (fun effects ->
           man.set_effects (
@@ -64,7 +65,7 @@ struct
 
     (* Remove duplicate evaluations *)
     let eval exp man flow =
-      D.eval exp man flow |>
+      I.eval exp man flow |>
       OptionExt.lift @@ Eval.remove_duplicates man.lattice
 
   end

@@ -83,7 +83,9 @@ let () = register_id {
 
 (** [sat_targets ~domains ~targets] checks whether a combiner containing [domains] satisifies some route [targets] *)
 let sat_targets ~targets ~domains =
-  targets = [] || List.exists (fun t -> DomainSet.mem t domains) targets
+  match targets with
+  | None   -> true
+  | Some s -> not (DomainSet.is_empty (DomainSet.inter s domains))
 
 
 (** Manager of the left argument in a pair of domains *)
@@ -145,14 +147,17 @@ let cascade_call targets f1 domains1 f2 domains2 =
   with
   | false, false ->
     (* Both domains do not provide an [exec] for such targets *)
-    let pp_domains = Format.(pp_print_list
-                               ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-                               pp_print_string)
+    let pp_domains fmt s =
+      Format.(pp_print_list
+                ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+                pp_print_string)
+        fmt
+        (DomainSet.elements s)
     in
     Exceptions.panic "switch: targets '%a' not found in %a nor %a"
-      pp_domains targets
-      pp_domains (DomainSet.elements domains1)
-      pp_domains (DomainSet.elements domains2)
+      (OptionExt.print pp_domains) targets
+      pp_domains domains1
+      pp_domains domains2
 
   | true, false ->
     (* Only [D1] provides a transfer function for such targets *)

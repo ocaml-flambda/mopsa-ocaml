@@ -91,7 +91,7 @@ struct
   let is_cur_bottom man flow =
     man.lattice.is_bottom (Flow.get T_cur man.lattice flow)
 
-  let on_before_exec path stmt man flow =
+  let on_before_exec route stmt man flow =
     match skind stmt with
     | S_py_function _ | S_py_class _ -> ()
     | Universal.Ast.S_block (l, _) when l <> [] -> ()
@@ -111,9 +111,9 @@ struct
           let () = entry.always_bottom_stmts <- StmtSet.remove stmt entry.always_bottom_stmts in
           entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
 
-  let on_after_exec path stmt man flow post = ()
+  let on_after_exec route stmt man flow post = ()
 
-  let on_before_eval path exp man flow =
+  let on_before_eval route semantic exp man flow =
     let range = erange exp in
     let file = get_range_file range in
     let entry = Hashtbl.find table file in
@@ -127,7 +127,7 @@ struct
       let () = entry.always_bottom_exprs <- ExprSet.remove exp entry.always_bottom_exprs in
       entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
 
-  let on_after_eval path exp man flow evl =
+  let on_after_eval route semantic exp man flow evl =
     match ekind exp with
     (* to highlight the def bla(params): if bla is ever called *)
     | E_py_call ({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user f)}, _)} as caller, _, _) ->

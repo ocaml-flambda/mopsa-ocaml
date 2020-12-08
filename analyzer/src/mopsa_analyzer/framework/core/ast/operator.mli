@@ -108,3 +108,6 @@ val is_logic_op : operator -> bool
   
 val negate_comparison_op : operator -> operator
 (** Return the negation of a comparison operator *)
+
+val negate_logic_op : operator -> operator
+(** Return the negation of a logical operator *)

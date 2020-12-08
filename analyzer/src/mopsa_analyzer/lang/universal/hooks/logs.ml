@@ -83,6 +83,7 @@ struct
   (** Tabulation *)
   let tab level = color level "|"
 
+  let cur_level () = max (Stack.length stack) 0
 
   (** Indent a message by adding tabs at the beginning of each line *)
   let indent ~symbol fmt =
@@ -90,25 +91,24 @@ struct
     Format.kasprintf (fun str ->
         (* Split the message into lines *)
         let lines = String.split_on_char '\n' str in
-        let cur_level = max (Stack.length stack) 0 in
-
+        let level = cur_level () in
         match lines with
         | [] -> ()
         | first :: others ->
 
           (* The first line is prefixed with the entry symbol *)
-          let first' = (symbol_to_string symbol cur_level) ^ " " ^ first in
+          let first' = (symbol_to_string symbol level) ^ " " ^ first in
 
           (* The other lines are prefixed with the indent symbol *)
           let others' =
             if not (is_end_symbol symbol) then
-              List.map (fun line -> (tab cur_level) ^ " " ^ line) others
+              List.map (fun line -> (tab level) ^ " " ^ line) others
             else
               List.map (fun line -> "  " ^ line) others
           in
 
           (* Add the margin *)
-          let margin = List.init cur_level (fun i -> (tab i) ^ " ") |>
+          let margin = List.init level (fun i -> (tab i) ^ " ") |>
                        String.concat ""
           in
           let lines' = List.map (fun line ->
@@ -128,8 +128,19 @@ struct
   let pp_S fmt stmt =
     fprintf fmt "@[<v 3>S [| %a@] |]" pp_stmt stmt
 
-  let pp_E fmt exp =
-    fprintf fmt "@[<v 3>E [| %a : %a@] |]" pp_expr exp pp_typ exp.etyp
+  let pp_E semantic fmt exp =
+    fprintf fmt "@[<v 3>E [| %a : %a@] |]%a"
+      pp_expr exp
+      pp_typ exp.etyp
+      (fun fmt s ->
+         if is_any_semantic s then () else fprintf fmt "<%a>" pp_semantic s
+      ) semantic
+
+  let pp_route_if_any fmt route =
+    if compare_route route toplevel = 0 then
+      ()
+    else
+      fprintf fmt " in %a" pp_route route
 
   let get_timing () =
     try Sys.time () -. Stack.pop stack
@@ -142,15 +153,15 @@ struct
   let on_before_exec route stmt man flow =
     reach stmt.srange;
     if Options.short then
-      indent "%a in semantic %a"
+      indent "%a%a"
         pp_S stmt
-        pp_route route
+        pp_route_if_any route
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and semantic %a"
+      indent "%a%a@,input @[%a@]"
         pp_S stmt
+        pp_route_if_any route
         (format (Flow.print man.lattice.print)) flow
-        pp_route route
         ~symbol:BEGIN
     ;
     Stack.push (Sys.time ()) stack
@@ -160,16 +171,16 @@ struct
     let time = get_timing () in
     let nb = Cases.cardinal post in
     if Options.short then
-      indent "%a done in semantic %a [%.4fs, %d case%a]"
+      indent "%a%a done [%.4fs, %d case%a]"
         pp_S stmt
-        pp_route route
+        pp_route_if_any route
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
+      indent "%a%a done [%.4fs, %d case%a]@ output: @[%a@]"
         pp_S stmt
-        pp_route route
+        pp_route_if_any route
         time
         nb Debug.plurial_int nb
         (Cases.print
@@ -180,45 +191,56 @@ struct
         ~symbol:END
 
 
-  let on_before_eval route exp man flow =
+  let on_before_eval route semantic exp man flow =
     if Options.short then
-      indent "%a in semantic %a"
-        pp_E exp
-        pp_route route
+      indent "%a%a"
+        (pp_E semantic) exp
+        pp_route_if_any route
         ~symbol:BEGIN
     else
-      indent "%a @,in %a @,and semantic %a"
-        pp_E exp
+      indent "%a%a@,input: @[%a@]"
+        (pp_E semantic) exp
+        pp_route_if_any route
         (format (Flow.print man.lattice.print)) flow
-        pp_route route
         ~symbol:BEGIN
     ;
       Stack.push (Sys.time ()) stack
 
-  let on_after_eval route exp man flow evl =
+  let on_after_eval route semantic exp man flow evl =
     let time = get_timing () in
-    let pp_evl_with_type fmt evl =
+    let pp_evl fmt evl =
       Cases.print_result (
         fun fmt e flow ->
-          Format.fprintf fmt "%a : %a" pp_expr e pp_typ e.etyp
+          Format.fprintf fmt "%a : %a%a"
+            pp_expr e
+            pp_typ e.etyp
+            (fun fmt trans ->
+               if SemanticMap.is_empty trans then ()
+               else
+                 fprintf fmt " ‖ %a"
+                   (pp_print_list
+                      ~pp_sep:(fun fmt () -> fprintf fmt " ‖ ")
+                      (fun fmt (s,e) -> fprintf fmt "%a ⇝ %a : %a" pp_semantic s pp_expr e pp_typ e.etyp)
+                   ) (SemanticMap.bindings trans)
+            ) e.etrans
       ) fmt evl
     in
     let nb = Cases.cardinal evl in
     if Options.short then
-      indent "%a = %a done in semantic %a [%.4fs, %d case%a]"
-        pp_E exp
-        pp_evl_with_type evl
-        pp_route route
+      indent "%a = %a%a done [%.4fs, %d case%a]"
+        (pp_E semantic) exp
+        pp_evl evl
+        pp_route_if_any route
         time
         nb Debug.plurial_int nb
         ~symbol:END
     else
-      indent "%a done in semantic %a [%.4fs, %d case%a]@ -->  %a"
-        pp_E exp
-        pp_route route
+      indent "%a%a done [%.4fs, %d case%a]@ output: @[%a]"
+        (pp_E semantic) exp
+        pp_route_if_any route
         time
         nb Debug.plurial_int nb
-        pp_evl_with_type evl
+        pp_evl evl
         ~symbol:END
 
   let on_finish man flow =
