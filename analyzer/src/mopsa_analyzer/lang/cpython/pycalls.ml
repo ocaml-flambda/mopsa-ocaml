@@ -39,14 +39,14 @@ module Domain =
          let self, args =
            match kind with
            | "builtin_function_or_method" -> self, args
-           | "wrapper_descriptor" -> List.hd args, List.tl args
+           | "wrapper_descriptor" -> Universal.Ast.mk_addr (fst @@ object_of_expr @@ List.hd args) range, List.tl args
            | _ -> panic_at range "Call of c function of kind %s unsupported" kind
          in
          let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
          debug "%s, self is %a, args: %a@.%a" name pp_expr self pp_expr py_args (format @@ Flow.print man.lattice.print) flow;
          let py_kwds = (* okay, lets cheat here *)
            (* mk_expr ~etyp:(T_py None) (E_py_tuple []) (tag_range range "kwds") *)
-           mk_top (T_c_pointer T_c_void) range
+           mk_c_null range
          in
          man.eval py_args flow >>$
            (fun py_args flow ->
@@ -57,26 +57,32 @@ module Domain =
              let open C.Common.Points_to in
              man.eval call flow >>$
                fun call_res flow ->
-               exec_cleaners man (Post.return flow) >>%
-                 fun flow ->
-               resolve_pointer call_res man flow >>$
-               fun result flow ->
-               (* FIXME: refactor into `py_addr_of_c_pyobj` *)
-               (* FIXME: If the result is null, check that an exception has been raised? *)
-               match result with
-               | P_block ({base_kind = Addr a}, _, _) ->
-                  Eval.singleton (mk_py_object (a, None) range) flow
-               | P_block ({base_kind = Var result_var}, _, _) ->
-               (* let's assume it's a class declaration...
-                * we should ask cmodule's state for the address matching that...
+               match cfunc.c_func_return with
+               | T_c_integer _ ->
+                  debug "got an integer, probably an init";
+                  assert (String.sub name (String.length name - 5) 5 = "_init");
+                  man.eval (mk_py_none range) flow
+               | _ ->
+                  debug "call result %a@.%a" pp_expr call_res (format @@ Flow.print man.lattice.print) flow;
+                  resolve_pointer call_res man flow >>$
+                    fun result flow ->
+                    (* FIXME: if return is integer, it's probably an _init function, let's return None *)
+                    (* FIXME: refactor into `py_addr_of_c_pyobj` *)
+                    (* FIXME: If the result is null, check that an exception has been raised? *)
+                    match result with
+                    | P_block ({base_kind = Addr a}, _, _) ->
+                       Eval.singleton (mk_py_object (a, None) range) flow
+                    | P_block ({base_kind = Var result_var}, _, _) ->
+                       (* let's assume it's a class declaration...
+                        * we should ask cmodule's state for the address matching that...
                   if it's a builtin, maybe we should still create the allocation. Or find the corresponding class *)
-                  man.eval (Universal.Ast.mk_alloc_addr (Python.Addr.A_py_c_class result_var) range) flow >>$
-                    (* FIXME: if we get PyType_Type, we'd like to merge this into the "type" builtin of Python. Reduction? *)
-                    fun result_addr flow ->
-                    let result_addr = match ekind result_addr with
-                      | Universal.Ast.E_addr a -> a
-                      | _ -> assert false in
-                    Eval.singleton (mk_py_object (result_addr, None) range) flow
+                       man.eval (Universal.Ast.mk_alloc_addr (Python.Addr.A_py_c_class result_var) range) flow >>$
+                         (* FIXME: if we get PyType_Type, we'd like to merge this into the "type" builtin of Python. Reduction? *)
+                         fun result_addr flow ->
+                         let result_addr = match ekind result_addr with
+                           | Universal.Ast.E_addr a -> a
+                           | _ -> assert false in
+                         Eval.singleton (mk_py_object (result_addr, None) range) flow
 
 
                | _ -> panic_at range "result = %a@.%a" pp_points_to result (format @@ Flow.print man.lattice.print) flow
