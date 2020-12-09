@@ -140,6 +140,10 @@ struct
                man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
             end
 
+          | A_py_instance cls, A_py_c_class _ ->
+             warn_at range "isinstance: inheritance not handled with C-defined classes";
+             man.eval (mk_py_bool (compare_addr cls addr_attr = 0) range) flow
+
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow
 

@@ -1,9 +1,8 @@
 #include <Python.h>
 #include "structmember.h"
-/* #include <math.h> */
-/* #include <stddef.h> */
 
-
+// two stubs used by the analysis
+// FIXME: put them in a separate file and handle its import
 int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
@@ -13,22 +12,21 @@ int PyType_ReadyCheat(PyTypeObject *type)
 }
 
 PyObject*
-PyType_GenericAlloc_Helper(PyTypeObject *type, Py_ssize_t nitems)
+PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 {
-    PyObject *obj;
+    PyObject *obj, *obj2;
     const size_t size = _PyObject_VAR_SIZE(type, nitems+1);
 
-    // là il me faudrait un stub pour avoir @A_py_instance plutôt que @Memory...
-    obj = (PyObject *) calloc(1, size);
+    obj = PyType_GenericAlloc_Helper(type, size);
+    memset(obj, '\0', size);
     /* FIXME */
-    /* if (obj == NULL) */
-    /*     return PyErr_NoMemory(); */
+    if (obj == NULL)
+        return PyErr_NoMemory();
 
     _mopsa_print();
-    // memset(obj, '\0', size);
     return obj;
 }
-
+// end of stubs
 
 typedef struct {
     PyObject_HEAD
@@ -36,10 +34,12 @@ typedef struct {
 } Cbox;
 
 static PyObject*
-Cbox_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
 {
     Cbox *self;
     self = (Cbox *) type->tp_alloc(type, 0);
+    /* FIXME: next line should be in tp_alloc */
+    Py_TYPE(self) = type;
     _mopsa_print();
     if (self != NULL) {
         self->contents = NULL;
@@ -49,10 +49,10 @@ Cbox_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 static int
-Cbox_init(Cbox *self, PyObject *args, PyObject *kwds)
+Cbox_init(Cbox *self, PyObject *args2, PyObject *kwds)
 {
     PyObject *c;
-    if(!PyArg_ParseTuple(args, "O", &c))
+    if(!PyArg_ParseTuple(args2, "O", &c))
         return -1;// 0 ~> assertion fails + coredump
 
     if(c)

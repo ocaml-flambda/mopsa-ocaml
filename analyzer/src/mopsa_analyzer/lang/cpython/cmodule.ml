@@ -71,7 +71,8 @@ module Domain =
           "PyModule_Create2";
           "PyModule_AddObject";
           "PyType_Ready";
-          (* "PyType_GenericAlloc" *)
+          "PyType_GenericAlloc_Helper";
+          "PyArg_ParseTuple"
         ];
       set_env T_cur EquivBaseAddrs.empty man flow
 
@@ -120,7 +121,7 @@ module Domain =
           let methd_fundec = match methd_function with
             | P_fun f -> f
             | _ -> assert false in
-          man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, (binder_addr, None))) range) flow >>$
+          man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, "builtin_function_or_method", (binder_addr, None))) range) flow >>$
             fun methd_eaddr flow ->
             let methd_addr = addr_of_exp methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
@@ -178,14 +179,14 @@ module Domain =
         )
 
     (* bind function pointed to by expr, as cls.name in python side *)
-    let bind_function_in name expr cls_addr man flow =
+    let bind_function_in name expr cls_addr function_kind man flow =
       let range = erange expr in
       resolve_pointer expr man flow >>$
         fun func flow ->
         Post.return
           (match func with
           | P_fun fundec ->
-             man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, (cls_addr, None))) range) flow >>$
+             man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range) flow >>$
                (fun fun_eaddr flow ->
                  let fun_addr = addr_of_exp fun_eaddr in
                  let flow = set_singleton func fun_addr man flow in
@@ -211,8 +212,9 @@ module Domain =
           let flow = set_singleton cls cls_addr man flow in
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
-          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr man flow >>% fun flow ->
-          bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr man flow >>% fun flow ->
+          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr "builtin_function_or_method" man flow >>% fun flow ->
+          (* FIXME: wrapper around init since it returns an integer *)
+          bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr "wrapper_descriptor" man flow >>% fun flow ->
           (* FIXME: *)
           resolve_pointer (mk_c_arrow_access_by_name ecls "tp_methods" range) man flow >>$
             fun tp_methods flow ->
@@ -264,14 +266,36 @@ module Domain =
            )
          |> OptionExt.return
 
-      (* | E_c_builtin_call ("PyType_GenericAlloc", args) ->
-       *    let helper = C.Ast.find_c_fundec_by_name "PyType_GenericAlloc_Helper" flow in
-       *    man.eval (mk_c_call helper args range) flow >>$
-       *      (fun size flow ->
-       *        man.eval
-       *
-       *      )
-       *    |> OptionExt.return *)
+      | E_c_builtin_call ("PyType_GenericAlloc_Helper", args) ->
+         let cls = List.hd args in
+         resolve_c_pointer_into_addr cls man flow >>$
+           (fun cls_addr flow ->
+           (* FIXME: should we use the range from where the allocation is performed to help the recency? *)
+           man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
+             fun inst_eaddr flow ->
+             let inst_addr = addr_of_exp inst_eaddr in
+             let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
+             man.exec (mk_add_var bytes range) flow >>%
+               man.exec (mk_assign (mk_var bytes range) (List.hd @@ List.tl args) range) >>%
+               man.exec (mk_add inst_eaddr range) >>%
+               Eval.singleton inst_eaddr
+               (* No need to put this into the equiv, since it's the same thing? *)
+           )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
+         get_name_of fmt man flow >>$
+           (fun fmt_str flow ->
+             match fmt_str with
+             | "O" ->
+                debug "%a" (format @@ Flow.print man.lattice.print) flow;
+                man.eval (Python.Ast.mk_py_index_subscript args (mk_zero ~typ:(Python.Ast.T_py None) range) range) flow >>$
+                  fun obj flow ->
+                  panic_at range "got %a" pp_expr obj
+             | _ ->
+                panic_at range "TODO: implement PyArg_ParseTuple %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
+           )
+         |> OptionExt.return
 
       | _ -> None
 

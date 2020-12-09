@@ -71,8 +71,8 @@ struct
                          match vkind v with
                          | V_range_attr (r, _) -> mk_var v r
                          | _ -> assert false) vars in
-          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
-                                                                             :: tmps) kwargs range in
+          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" (tag_range range "__new__")) ((mk_py_object cls range)
+                                                                             :: tmps) kwargs (tag_range range "__new__") in
           flow >>%
             man.eval   new_call |>
             Cases.add_cleaners (List.map (fun x -> match ekind x with
@@ -83,7 +83,7 @@ struct
                   (mk_py_isinstance inst ecls range)
                   ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow >>$
+                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" (tag_range range "__init__")) (inst :: tmps) kwargs (tag_range range "__init__")) flow >>$
                       (fun r flow ->
                           assume
                             (mk_py_isinstance_builtin r "NoneType" range)
