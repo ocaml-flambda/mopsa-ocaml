@@ -12,6 +12,23 @@ int PyType_ReadyCheat(PyTypeObject *type)
     return 0;
 }
 
+PyObject*
+PyType_GenericAlloc_Helper(PyTypeObject *type, Py_ssize_t nitems)
+{
+    PyObject *obj;
+    const size_t size = _PyObject_VAR_SIZE(type, nitems+1);
+
+    // là il me faudrait un stub pour avoir @A_py_instance plutôt que @Memory...
+    obj = (PyObject *) calloc(1, size);
+    /* FIXME */
+    /* if (obj == NULL) */
+    /*     return PyErr_NoMemory(); */
+
+    _mopsa_print();
+    // memset(obj, '\0', size);
+    return obj;
+}
+
 
 typedef struct {
     PyObject_HEAD
@@ -22,8 +39,8 @@ static PyObject*
 Cbox_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     Cbox *self;
-    _mopsa_print();
     self = (Cbox *) type->tp_alloc(type, 0);
+    _mopsa_print();
     if (self != NULL) {
         self->contents = NULL;
     }

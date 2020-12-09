@@ -1,3 +1,7 @@
+(* Truc commun au multilangage: addr du tas/variable/fonction
+   Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
+           Var -> Valeur ~> Addr -> Valeur
+*)
 (* Intercepts call to PyModule_Create and PyModule_AddObject *)
 
 open Mopsa
@@ -67,7 +71,7 @@ module Domain =
           "PyModule_Create2";
           "PyModule_AddObject";
           "PyType_Ready";
-          "PyType_GenericAlloc"
+          (* "PyType_GenericAlloc" *)
         ];
       set_env T_cur EquivBaseAddrs.empty man flow
 
@@ -205,7 +209,6 @@ module Domain =
           fun cls_eaddr flow ->
           let cls_addr = addr_of_exp cls_eaddr in
           let flow = set_singleton cls cls_addr man flow in
-
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
           bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr man flow >>% fun flow ->
@@ -261,8 +264,14 @@ module Domain =
            )
          |> OptionExt.return
 
-      | E_c_builtin_call ("PyType_GenericAlloc", _) ->
-         panic "ok"
+      (* | E_c_builtin_call ("PyType_GenericAlloc", args) ->
+       *    let helper = C.Ast.find_c_fundec_by_name "PyType_GenericAlloc_Helper" flow in
+       *    man.eval (mk_c_call helper args range) flow >>$
+       *      (fun size flow ->
+       *        man.eval
+       *
+       *      )
+       *    |> OptionExt.return *)
 
       | _ -> None
 
