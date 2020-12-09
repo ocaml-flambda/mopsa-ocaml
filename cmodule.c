@@ -7,23 +7,24 @@ int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
     type->tp_alloc = PyType_GenericAlloc;
-    _mopsa_print();
+//    _mopsa_print();
     return 0;
 }
 
 PyObject*
 PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 {
-    PyObject *obj, *obj2;
+    PyObject *obj;
     const size_t size = _PyObject_VAR_SIZE(type, nitems+1);
 
     obj = PyType_GenericAlloc_Helper(type, size);
     memset(obj, '\0', size);
+
     /* FIXME */
     if (obj == NULL)
         return PyErr_NoMemory();
 
-    _mopsa_print();
+//    _mopsa_print();
     return obj;
 }
 // end of stubs
@@ -40,7 +41,7 @@ Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
     self = (Cbox *) type->tp_alloc(type, 0);
     /* FIXME: next line should be in tp_alloc */
     Py_TYPE(self) = type;
-    _mopsa_print();
+//    _mopsa_print("bla");
     if (self != NULL) {
         self->contents = NULL;
     }
@@ -58,8 +59,20 @@ Cbox_init(Cbox *self, PyObject *args2, PyObject *kwds)
     if(c)
         self->contents = c;
 
+//    _mopsa_print();
     return 0; // -1 ~> coredump o/
 }
+
+static PyObject *
+Cbox_getcontents(Cbox *self, PyObject *args)
+{
+    return self->contents;
+}
+
+static PyMethodDef Cbox_methods[] = {
+    {"getcontents", (PyCFunction) Cbox_getcontents, METH_VARARGS, ""},
+    {NULL}  /* Sentinel */
+};
 
 static PyMemberDef Cbox_members[] = {
     {"contents", T_OBJECT, offsetof(Cbox, contents), 0, "contents"},
@@ -76,6 +89,7 @@ static PyTypeObject CboxType = {
     .tp_new = Cbox_new,
     .tp_init = Cbox_init,
     .tp_members = Cbox_members,
+    .tp_methods = Cbox_methods
 };
 
 static PyObject*

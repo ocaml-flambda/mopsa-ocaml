@@ -289,9 +289,21 @@ module Domain =
              match fmt_str with
              | "O" ->
                 debug "%a" (format @@ Flow.print man.lattice.print) flow;
-                man.eval (Python.Ast.mk_py_index_subscript args (mk_zero ~typ:(Python.Ast.T_py None) range) range) flow >>$
-                  fun obj flow ->
-                  panic_at range "got %a" pp_expr obj
+                (* FIXME: I guess this should be in the equivalence map *)
+                resolve_pointer args man flow >>$
+                  (fun args_points_to flow ->
+                  match args_points_to with
+                  | P_block ({base_kind = Addr addr}, _, _) ->
+                     man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_zero ~typ:(Python.Ast.T_py None) range) range) flow >>$
+                       (fun obj flow ->
+                       match ekind obj, ekind (List.hd refs)  with
+                       | Python.Ast.E_py_object(addr, _), E_c_address_of c ->
+                          man.exec (mk_assign c (mk_addr addr range) range) flow >>%
+                            Eval.singleton (mk_one range)
+                       | _ -> assert false
+                       )
+                  | _ -> assert false
+                  )
              | _ ->
                 panic_at range "TODO: implement PyArg_ParseTuple %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
            )

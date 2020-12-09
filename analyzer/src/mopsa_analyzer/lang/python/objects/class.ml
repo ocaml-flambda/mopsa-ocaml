@@ -54,7 +54,10 @@ struct
       debug "class call  %a@\n@\n" pp_expr exp;
       (* FIXME: this is actually type.__call__(cls) *)
       (* Call __new__ and __init__ *)
+
       let rec bind count args vars (flow: 'a post) f =
+      (* we don't want to evaluate args twice, (in __new__ and __init__)
+         we don't want a cascading disjunction either, so we assign them into tmps... *)
         match args with
         | [] ->
            f (List.rev vars) flow

@@ -10,6 +10,6 @@ a = A(1)
 
 c = Cbox(a)
 
-# a.a = 42
+a.a = 42
 
-# assert(c.contents.a == 42)
+assert(c.getcontent().a == 42)
