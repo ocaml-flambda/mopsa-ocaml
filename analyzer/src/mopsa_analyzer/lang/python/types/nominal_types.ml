@@ -134,10 +134,14 @@ struct
                 man.eval (mk_and conds) flow
             | Some _ -> assert false
             | None ->
-               let ic, imro = match akind cls with
-                 | A_py_class (c, m) -> c, m
-                 | _ -> assert false in
-               man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+               begin match akind cls with
+               | A_py_class (ic, imro) ->
+                  man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+               | A_py_c_class _ ->
+                  warn_at range "%a returned false, is that right? (type class not handled correctly)" pp_expr exp;
+                  man.eval (mk_py_false range) flow
+               | _ -> assert false
+               end
             end
 
           | A_py_instance cls, A_py_c_class _ ->

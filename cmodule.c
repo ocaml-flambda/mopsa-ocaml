@@ -66,7 +66,9 @@ Cbox_init(Cbox *self, PyObject *args2, PyObject *kwds)
 static PyObject *
 Cbox_getcontents(Cbox *self, PyObject *args)
 {
-    return self->contents;
+    PyObject* res = self->contents;
+    _mopsa_print();
+    return res;
 }
 
 static PyMethodDef Cbox_methods[] = {

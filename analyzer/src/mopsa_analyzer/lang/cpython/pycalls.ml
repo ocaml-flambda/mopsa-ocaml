@@ -39,7 +39,8 @@ module Domain =
          let self, args =
            match kind with
            | "builtin_function_or_method" -> self, args
-           | "wrapper_descriptor" -> Universal.Ast.mk_addr (fst @@ object_of_expr @@ List.hd args) range, List.tl args
+           | "wrapper_descriptor"
+             | "method_descriptor" -> Universal.Ast.mk_addr (fst @@ object_of_expr @@ List.hd args) range, List.tl args
            | _ -> panic_at range "Call of c function of kind %s unsupported" kind
          in
          let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
