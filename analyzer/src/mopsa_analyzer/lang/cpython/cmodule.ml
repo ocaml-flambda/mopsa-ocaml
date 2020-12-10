@@ -112,7 +112,7 @@ module Domain =
 
 
 
-    let new_method_from_def binder_addr methd man flow =
+    let new_method_from_def binder_addr methd_kind methd man flow =
       let range = erange methd in
       get_name_of (mk_c_member_access_by_name methd "ml_name" range) man flow >>$
         fun methd_name flow ->
@@ -121,7 +121,7 @@ module Domain =
           let methd_fundec = match methd_function with
             | P_fun f -> f
             | _ -> assert false in
-          man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, "builtin_function_or_method", (binder_addr, None))) range) flow >>$
+          man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range) flow >>$
             fun methd_eaddr flow ->
             let methd_addr = addr_of_exp methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
@@ -129,6 +129,23 @@ module Domain =
             man.exec (mk_bind_in_python binder_addr methd_name methd_addr range) flow
 
 
+    let add_pymethoddef field_name binder_addr methd_descr expr man flow =
+      let range = erange expr in
+      let add_method pos flow =
+        man.eval (mk_c_subscript_access
+                    (mk_c_arrow_access_by_name expr field_name range)
+                    (mk_int pos range)
+                    range) flow >>$
+          (fun methd flow ->
+            new_method_from_def binder_addr methd_descr methd man flow)
+        |> post_to_flow man
+      in
+      let rec process_methods c flow  =
+        try
+          process_methods (c+1) (add_method c flow)
+        with Null_found ->
+          flow in
+      process_methods 0 flow
 
     let new_module_from_def expr man flow =
       (*
@@ -151,22 +168,7 @@ module Domain =
           let m_addr = addr_of_exp module_addr in
           let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
           let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
-          let add_method pos flow =
-            man.eval (mk_c_subscript_access
-                        (mk_c_arrow_access_by_name expr "m_methods" range)
-                        (mk_int pos range)
-                        range) flow >>$
-              (fun methd flow ->
-                new_method_from_def m_addr methd man flow)
-            |> post_to_flow man
-          in
-          let rec process_methods c flow  =
-            try
-              process_methods (c+1) (add_method c flow)
-            with Null_found ->
-              flow in
-          let flow = process_methods 0 flow in
-          Eval.singleton module_addr flow
+          Eval.singleton module_addr (add_pymethoddef "m_methods" m_addr "builtin_function_or_method" expr man flow)
 
     let resolve_c_pointer_into_addr expr man flow =
       resolve_pointer expr man flow >>$
@@ -212,14 +214,15 @@ module Domain =
           let flow = set_singleton cls cls_addr man flow in
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
-          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr "builtin_function_or_method" man flow >>% fun flow ->
-          (* FIXME: wrapper around init since it returns an integer *)
-          bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr "wrapper_descriptor" man flow >>% fun flow ->
-          (* FIXME: *)
-          resolve_pointer (mk_c_arrow_access_by_name ecls "tp_methods" range) man flow >>$
-            fun tp_methods flow ->
-            let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_members, tp_methods, ...") range flow in
-            Cases.singleton cls_addr flow
+          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr "builtin_function_or_method" man flow >>%
+            fun flow ->
+            (* FIXME: wrapper around init since it returns an integer *)
+            bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr "wrapper_descriptor" man flow >>%
+              fun flow ->
+              (* FIXME: *)
+              let flow = add_pymethoddef "tp_methods" cls_addr "method_descriptor" ecls man flow in
+              let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_members, tp_numbers, ...") range flow in
+              Cases.singleton cls_addr flow
 
 
 
