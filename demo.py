@@ -14,5 +14,6 @@ a.a = 42
 
 ccontent = c.getcontents().a
 
+b = broken()
 # c2 = Cbox.__new__(Cbox)
 # c2.getcontents()

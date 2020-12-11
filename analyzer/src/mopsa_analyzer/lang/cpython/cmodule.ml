@@ -4,8 +4,7 @@
  *)
 (*
   TODO:
-   - la gestion des exceptions côté C, et si Null est renvoyé vérifier qu'une exception est levée
-   - prendre les range d'allocation du python plutôt...
+   - prendre les range d'allocation du python plutôt... (ou avoir range+cs pour les kinds d'addr concernés)
 *)
 (* Intercepts call to PyModule_Create and PyModule_AddObject *)
 
@@ -82,6 +81,7 @@ module Domain =
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple"
         ];
+
       set_env T_cur EquivBaseAddrs.empty man flow
 
     exception Null_found
@@ -94,6 +94,19 @@ module Domain =
                      Cases.singleton s flow (* FIXME: assert offset = [0, 0] *)
                   | P_null ->
                      raise Null_found
+                  | _ -> assert false
+                ) in
+      assert(Cases.cardinal r <= 1);
+      r
+
+    let safe_get_name_of expr man flow =
+      let r = resolve_pointer expr man flow >>$
+                (fun points_to flow ->
+                  match points_to with
+                  | P_block({base_kind = String (s, _, _)}, offset, _) ->
+                     Cases.singleton (Some s) flow (* FIXME: assert offset = [0, 0] *)
+                  | P_null ->
+                     Cases.singleton None flow
                   | _ -> assert false
                 ) in
       assert(Cases.cardinal r <= 1);
@@ -254,11 +267,29 @@ module Domain =
          let flow =
            if EquivBaseAddrs.KeySet.is_empty @@ Top.detop @@ EquivBaseAddrs.find_inverse addr_type cur then
              (* since we can't do this in init yet (the C program context is initially empty, we don't know what we'll parse and when*)
-             let pytype_type_var = fst @@ List.find
+             let c_prog_globals = (get_c_program flow).c_globals in
+             let search_for s = fst @@ List.find
                                             (fun (x, _) ->
-                                              (List.hd @@ (String.split_on_char ':') @@ get_orig_vname x) = "PyType_Type")
-                                         (get_c_program flow).c_globals in
-             set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_var_base pytype_type_var) (mk_zero (Location.mk_program_range [])) None) addr_type man flow
+                                              (List.hd @@ (String.split_on_char ':') @@ get_orig_vname x) = s) c_prog_globals in
+             let add_class_equiv c_var_name py_bltin_name flow =
+               let py_addr = fst @@ Python.Addr.find_builtin py_bltin_name in
+               let c_var = search_for c_var_name in
+               set_singleton
+                 (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
+                 py_addr
+                 man flow
+             in
+             let add_class_equivs descr flow  =
+               List.fold_left (fun flow (c, py) ->
+                   add_class_equiv c py flow) flow descr in
+             add_class_equivs
+               [
+                 ("PyType_Type", "type");
+                 ("PyBaseObject_Type", "object");
+                 ("PyExc_MemoryError", "MemoryError")
+                 (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
+               ]
+               flow
            else
              flow
          in
@@ -391,7 +422,28 @@ module Domain =
                       fun addr flow ->
                       Eval.singleton (mk_py_object (addr, None) range) flow
                   with Null_found ->
-                    panic_at range "found null, TODO"
+                    let c_prog_globals = (get_c_program flow).c_globals in
+                    let search_for s = fst @@ List.find
+                                                (fun (x, _) ->
+                                                  (List.hd @@ (String.split_on_char ':') @@ get_orig_vname x) = s) c_prog_globals in
+                    let exc_state = search_for "exc_state" in
+                    let exc_msg = search_for "exc_msg" in
+                    try
+                      resolve_c_pointer_into_addr (mk_var exc_state range) man flow >>$
+                        fun exc_addr flow ->
+                        safe_get_name_of (mk_var exc_msg range) man flow >>$
+                          fun exc_msg flow ->
+                          let args = match exc_msg with
+                            | None -> []
+                            | Some s -> [Universal.Ast.mk_string s range] in
+                          man.exec (Python.Ast.mk_raise
+                                      (Python.Ast.mk_py_call
+                                         (Python.Ast.mk_py_object (exc_addr, None) range)
+                                         args range)
+                                      range) flow >>%
+                            Eval.empty
+                    with Null_found ->
+                      panic_at range "NULL returned w/o exc set, need to raise a given exception too"
            )
          |> OptionExt.return
 

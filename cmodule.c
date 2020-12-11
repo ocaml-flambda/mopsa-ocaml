@@ -1,8 +1,24 @@
 #include <Python.h>
 #include "structmember.h"
 
-// two stubs used by the analysis
+// stubs used by the analysis
 // FIXME: put them in a separate file and handle its import
+PyObject* exc_state = NULL;
+char* exc_msg = NULL;
+
+PyObject*
+PyErr_NoMemory()
+{
+    exc_state = &PyExc_MemoryError;
+    return NULL;
+}
+
+PyObject*
+PyErr_Occured()
+{
+    return exc_state;
+};
+
 int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
@@ -100,7 +116,7 @@ c_typ(PyObject *self, PyObject *args)
 static PyObject*
 c_broken(PyObject *self, PyObject *args)
 {
-    return 42;
+    return PyErr_NoMemory();
 }
 
 
