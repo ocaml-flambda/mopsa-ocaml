@@ -7,7 +7,6 @@ int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
     type->tp_alloc = PyType_GenericAlloc;
-//    _mopsa_print();
     return 0;
 }
 
@@ -19,12 +18,12 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 
     obj = PyType_GenericAlloc_Helper(type, size);
     memset(obj, '\0', size);
+    Py_TYPE(obj) = type;
 
     /* FIXME */
     if (obj == NULL)
         return PyErr_NoMemory();
 
-//    _mopsa_print();
     return obj;
 }
 // end of stubs
@@ -39,9 +38,6 @@ Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
 {
     Cbox *self;
     self = (Cbox *) type->tp_alloc(type, 0);
-    /* FIXME: next line should be in tp_alloc */
-    Py_TYPE(self) = type;
-//    _mopsa_print("bla");
     if (self != NULL) {
         self->contents = NULL;
     }

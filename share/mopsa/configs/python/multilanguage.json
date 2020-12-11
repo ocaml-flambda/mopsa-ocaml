@@ -6,6 +6,7 @@
                 "switch": [
                     // Partitioning
 	            "universal.partitioning.merge_after_stmt",
+                    "cpython.cmodule",
                     {
                         "semantic": "Python",
                         "switch": [
@@ -42,8 +43,6 @@
                             "python.data_model.aug_assign",
                             "python.data_model.callable",
 
-                            "cpython.pycalls",
-
                             "python.types.t_string",
                             "python.types.t_int",
                             "python.types.t_float",
@@ -72,8 +71,6 @@
                             "c.iterators.intraproc",
                             // Stubs
                             "stubs.iterators.body",
-                            // CPython
-                            "cpython.cmodule",
                             // C Libraries
                             "c.libs.compiler",
                             "c.libs.mopsalib",
