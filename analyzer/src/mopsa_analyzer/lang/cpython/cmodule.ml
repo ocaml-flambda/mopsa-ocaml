@@ -270,7 +270,9 @@ module Domain =
              let c_prog_globals = (get_c_program flow).c_globals in
              let search_for s = fst @@ List.find
                                             (fun (x, _) ->
-                                              (List.hd @@ (String.split_on_char ':') @@ get_orig_vname x) = s) c_prog_globals in
+                                              match vkind x with
+                                               | V_cvar v -> v.cvar_orig_name = s
+                                               | _ -> false) c_prog_globals in
              let add_class_equiv c_var_name py_bltin_name flow =
                let py_addr = fst @@ Python.Addr.find_builtin py_bltin_name in
                let c_var = search_for c_var_name in
@@ -425,7 +427,9 @@ module Domain =
                     let c_prog_globals = (get_c_program flow).c_globals in
                     let search_for s = fst @@ List.find
                                                 (fun (x, _) ->
-                                                  (List.hd @@ (String.split_on_char ':') @@ get_orig_vname x) = s) c_prog_globals in
+                                                  match vkind x with
+                                                  | V_cvar v -> v.cvar_orig_name = s
+                                                  | _ -> false) c_prog_globals in
                     let exc_state = search_for "exc_state" in
                     let exc_msg = search_for "exc_msg" in
                     try
