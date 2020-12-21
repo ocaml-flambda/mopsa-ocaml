@@ -148,18 +148,20 @@ let language file : string =
   let json = Yojson.Basic.from_file file in
   get_language json
 
+let all_domains () =
+  stacked_domain_names () @
+  standard_domain_names () @
+  simplified_domain_names () @
+  stateless_domain_names () @
+  value_abstraction_names () @
+  stacked_functor_names () @
+  domain_functor_names () @
+  simplified_functor_names () @
+  value_functor_names ()
+
 let domains file : string list =
   if file = "" then
-    stacked_domain_names () @
-    standard_domain_names () @
-    simplified_domain_names () @
-    stateless_domain_names () @
-    value_abstraction_names () @
-    stacked_functor_names () @
-    domain_functor_names () @
-    simplified_functor_names () @
-    value_functor_names ()
-
+    all_domains ()
   else
     let json = Yojson.Basic.from_file file in
     let domain = json |> member "domain" in
