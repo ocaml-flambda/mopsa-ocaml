@@ -228,14 +228,44 @@ let () =
         (fun selection ->
            match selection with
            | "domains" ->
-             let domains = Abstraction.Parser.(domains @@ Paths.resolve_config_file !opt_config) in
-             Output.Factory.list_domains domains
+             let domains =
+               if !Abstraction.Parser.opt_config = "" then
+                 Abstraction.Parser.all_domains ()
+               else
+                 Paths.resolve_config_file !Abstraction.Parser.opt_config |>
+                 Abstraction.Parser.domains
+             in
+             List.sort_uniq compare domains |>
+             Output.Factory.list_domains
 
            | "checks" ->
-             let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
-             let domain = Abstraction.Builder.from_json abstraction.domain in
-             let module Domain = (val domain) in
-             Output.Factory.list_checks Domain.checks
+             let checks =
+               if !Abstraction.Parser.opt_config = "" then
+                 (* List checks of all registered domains *)
+                 let domains = Abstraction.Parser.all_domains () in
+                 List.fold_left
+                   (fun acc domain ->
+                      try
+                        let module D = (val Sig.Abstraction.Stacked.find_stacked_domain domain) in
+                        D.checks @ acc
+                      with Not_found ->
+                      try
+                        let module D = (val Sig.Abstraction.Domain.find_standard_domain domain) in
+                        D.checks @ acc
+                      with Not_found ->
+                      try
+                        let module D = (val Sig.Abstraction.Stateless.find_stateless_domain domain) in
+                        D.checks @ acc
+                      with Not_found -> acc
+                   ) [] domains
+               else
+                 let abstraction = Abstraction.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
+                 let domain = Abstraction.Builder.from_json abstraction.domain in
+                 let module Domain = (val domain) in
+                 Domain.checks
+             in
+             List.sort_uniq compare checks |>
+             Output.Factory.list_checks
 
            | "hooks" ->
              let d =
@@ -245,7 +275,8 @@ let () =
                     H.name
                  ) (Core.Hook.list_hooks ())
              in
-             Output.Factory.list_hooks d
+             List.sort_uniq compare d |>
+             Output.Factory.list_hooks
 
            | _ -> assert false
         ));
