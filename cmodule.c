@@ -19,6 +19,12 @@ PyErr_Occured()
     return exc_state;
 };
 
+void PyErr_SetString(PyObject* exc, const char* msg){
+    exc_state = exc;
+    exc_msg = strdup(msg);
+}
+
+
 int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
@@ -42,11 +48,57 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 
     return obj;
 }
+
+static PyObject *
+// remove member_get and directly call PyMember_GetOne?
+// was PyMemberDescrObject, we're cheating again
+member_get(PyMemberDef *descr, PyObject *obj, PyObject *type)
+{
+    /* PyObject *res; */
+
+    /* if (descr_check((PyDescrObject *)descr, obj, &res)) */
+    /*     return res; */
+
+    /* if (descr->d_member->flags & READ_RESTRICTED) { */
+    /*     if (PySys_Audit("object.__getattr__", "Os", */
+    /*         obj ? obj : Py_None, descr->d_member->name) < 0) { */
+    /*         return NULL; */
+    /*     } */
+    /* } */
+    return PyMember_GetOne((char *)obj, descr); // was descr->d_member, we're cheating
+}
+
+// FIXME: we want to check the flag at creation rather than first call
+// FIXME: simplified version, check the real one in Python/structmember.c
+PyObject *
+PyMember_GetOne(const char *addr, PyMemberDef *l)
+{
+    PyObject *v;
+
+    addr += l->offset;
+    switch (l->type) {
+    case T_INT:
+        v = PyLong_FromLong(*(int*)addr);
+        break;
+    case T_OBJECT:
+        v = *(PyObject **)addr;
+        if (v == NULL)
+            v = Py_None;
+       /* Py_INCREF(v); */
+        break;
+    default:
+        PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
+        v = NULL;
+    }
+    _mopsa_print();
+    return v;
+}
 // end of stubs
 
 typedef struct {
     PyObject_HEAD
     PyObject* contents;
+    int counter;
 } Cbox;
 
 static PyObject*
@@ -56,6 +108,7 @@ Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
     self = (Cbox *) type->tp_alloc(type, 0);
     if (self != NULL) {
         self->contents = NULL;
+        self->counter = 0;
     }
 
     return (PyObject *) self;
@@ -79,17 +132,26 @@ static PyObject *
 Cbox_getcontents(Cbox *self, PyObject *args)
 {
     PyObject* res = self->contents;
-    _mopsa_print();
     return res;
 }
 
+static PyObject *
+Cbox_incr(Cbox *self, PyObject *args)
+{
+    self->counter++;
+    Py_RETURN_NONE;
+}
+
+
 static PyMethodDef Cbox_methods[] = {
     {"getcontents", (PyCFunction) Cbox_getcontents, METH_VARARGS, ""},
+    {"incr", (PyCFunction) Cbox_incr, METH_VARARGS, ""},
     {NULL}  /* Sentinel */
 };
 
 static PyMemberDef Cbox_members[] = {
-    {"contents", T_OBJECT, offsetof(Cbox, contents), 0, "contents"},
+    {"counter", T_INT, offsetof(Cbox, counter), 0, "counter doc"},
+    {"contents", T_OBJECT, offsetof(Cbox, contents), 0, "contents doc"},
     {NULL}  /* Sentinel */
 };
 

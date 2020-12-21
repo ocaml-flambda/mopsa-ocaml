@@ -527,3 +527,9 @@ let () =
       | A_py_c_class _
       | A_py_c_function _ -> false
       | _ -> default ak s)
+
+
+let () = Universal.Heap.Policies.register_mk_addr
+           (fun default ak -> match ak with
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
+                              | _ -> default ak)

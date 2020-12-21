@@ -12,8 +12,9 @@ c = Cbox(a)
 
 a.a = 42
 
-ccontent = c.getcontents().a
+ccontent = c.contents #getcontents().a
 
+cz = c.counter
+cr = c.incr()
+co = c.counter
 b = broken()
-# c2 = Cbox.__new__(Cbox)
-# c2.getcontents()

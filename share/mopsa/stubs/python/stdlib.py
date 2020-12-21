@@ -104,6 +104,12 @@ class method(object):
 class method_descriptor(object):
     def __get__(self): pass
 
+class member_descriptor(object):
+    @mopsa.type("wrapper_descriptor")
+    def __get__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __set__(self, val): pass
+
 class module(object):
     def __new__(cls, args): pass
 
