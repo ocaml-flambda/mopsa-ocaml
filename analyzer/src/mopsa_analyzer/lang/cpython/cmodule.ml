@@ -92,7 +92,8 @@ module Domain =
           "PyType_Ready";
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
-          "PyLong_FromLong"
+          "PyLong_FromLong";
+          "PyLong_AsLong";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -120,7 +121,7 @@ module Domain =
                      Cases.singleton (Some s) flow (* FIXME: assert offset = [0, 0] *)
                   | P_null ->
                      Cases.singleton None flow
-                  | _ -> assert false
+                  | _ -> panic "points_to %a" pp_points_to points_to
                 ) in
       assert(Cases.cardinal r <= 1);
       r
@@ -284,6 +285,41 @@ module Domain =
 
           | _ -> flow)
 
+    let search_c_globals_for flow s =
+      let c_prog_globals = (get_c_program flow).c_globals in
+      fst @@ List.find
+               (fun (x, _) ->
+                 match vkind x with
+                 | V_cvar v -> v.cvar_orig_name = s
+                 | _ -> false) c_prog_globals
+
+    let check_consistent_null function_name man flow range =
+      (* this corresponds to _Py_CheckFunctionResult in Objects/call.c *)
+      (* check that exc_state is not NULL and raise the corresponding exception+message *)
+      (* if exc_state is NULL raise the specific error PyExc_SystemError("... returned NULL without setting an error") *)
+      let exc_state = search_c_globals_for flow "exc_state" in
+      let exc_msg = search_c_globals_for flow "exc_msg" in
+      (* FIXME: call PyErr_Occured() != NULL rather? *)
+      try
+        resolve_c_pointer_into_addr (mk_var exc_state range) man flow >>$
+          fun exc_addr flow ->
+          safe_get_name_of (mk_var exc_msg range) man flow >>$
+            fun exc_msg flow ->
+            let args = match exc_msg with
+              | None -> []
+              | Some s -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}] in
+            man.exec (Python.Ast.mk_raise
+                        (Python.Ast.mk_py_call
+                           (Python.Ast.mk_py_object (exc_addr, None) range)
+                           args range)
+                        range) flow >>%
+              Eval.empty
+      with Null_found ->
+        man.exec (Python.Ast.mk_raise
+                    (Python.Ast.mk_py_call
+                       (Python.Ast.mk_py_object (fst @@ find_builtin "SystemError", None) range)
+                       [{(Universal.Ast.mk_string (Format.asprintf "%s returned NULL without setting an error" function_name) range) with etyp=(T_py None)}] range)
+                    range) flow >>% Eval.empty
 
 
     let new_class_from_def ecls man flow =
@@ -310,27 +346,27 @@ module Domain =
               let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
               Cases.singleton cls_addr flow
 
-
-
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
       (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
+      (* FIXME: proper handling *)
+      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_MemoryError" ->
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "MemoryError") range) flow
+         |> OptionExt.return
+      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_AttributeError" ->
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "AttributeError") range) flow
+         |> OptionExt.return
+
       | E_c_builtin_call ("PyModule_Create2", [module_decl; _]) ->
          let addr_type = fst @@ Python.Addr.find_builtin "type" in
          let cur = get_env T_cur man flow in
          let flow =
            if EquivBaseAddrs.KeySet.is_empty @@ Top.detop @@ EquivBaseAddrs.find_inverse addr_type cur then
              (* since we can't do this in init yet (the C program context is initially empty, we don't know what we'll parse and when*)
-             let c_prog_globals = (get_c_program flow).c_globals in
-             let search_for s = fst @@ List.find
-                                            (fun (x, _) ->
-                                              match vkind x with
-                                               | V_cvar v -> v.cvar_orig_name = s
-                                               | _ -> false) c_prog_globals in
              let add_class_equiv c_var_name py_bltin_name flow =
                let py_addr = fst @@ Python.Addr.find_builtin py_bltin_name in
-               let c_var = search_for c_var_name in
+               let c_var = search_c_globals_for flow c_var_name in
                set_singleton
                  (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
                  py_addr
@@ -341,7 +377,7 @@ module Domain =
                    add_class_equiv c py flow) flow descr in
              let flow =
                let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
-               let c_var = search_for "_Py_NoneStruct" in
+               let c_var = search_c_globals_for flow "_Py_NoneStruct" in
                set_singleton
                  (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
                  none_addr
@@ -351,6 +387,7 @@ module Domain =
                  ("PyType_Type", "type");
                  ("PyBaseObject_Type", "object");
                  ("PyExc_MemoryError", "MemoryError");
+                 ("PyExc_AttributeError", "AttributeError");
                  ("PyExc_SystemError", "SystemError");
                  (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
                ]
@@ -426,6 +463,13 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyLong_AsLong", args) ->
+         (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise? *)
+         if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+           let () = warn_at range "unsafe PyLong_AsLong but cur is bottom" in
+           Eval.empty flow |> OptionExt.return
+         else
+           panic_at range "todo: PyLong_AsLong"
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          get_name_of fmt man flow >>$
@@ -500,30 +544,7 @@ module Domain =
                       fun addr flow ->
                       Eval.singleton (mk_py_object (addr, None) range) flow
                   with Null_found ->
-                    let c_prog_globals = (get_c_program flow).c_globals in
-                    let search_for s = fst @@ List.find
-                                                (fun (x, _) ->
-                                                  match vkind x with
-                                                  | V_cvar v -> v.cvar_orig_name = s
-                                                  | _ -> false) c_prog_globals in
-                    let exc_state = search_for "exc_state" in
-                    let exc_msg = search_for "exc_msg" in
-                    try
-                      resolve_c_pointer_into_addr (mk_var exc_state range) man flow >>$
-                        fun exc_addr flow ->
-                        safe_get_name_of (mk_var exc_msg range) man flow >>$
-                          fun exc_msg flow ->
-                          let args = match exc_msg with
-                            | None -> []
-                            | Some s -> [Universal.Ast.mk_string s range] in
-                          man.exec (Python.Ast.mk_raise
-                                      (Python.Ast.mk_py_call
-                                         (Python.Ast.mk_py_object (exc_addr, None) range)
-                                         args range)
-                                      range) flow >>%
-                            Eval.empty
-                    with Null_found ->
-                      panic_at range "NULL returned w/o exc set, need to raise a given exception too"
+                    check_consistent_null cfunc.c_func_org_name man flow range
            )
          |> OptionExt.return
 
@@ -553,7 +574,6 @@ module Domain =
            | _ -> assert false
          in
          let addr_inst = addr_of_object ~etyp:inst_typ inst in
-         (* FIXME: works only if we've got one member... *)
          let c_descriptor =
            match KeySet.choose @@ Top.detop @@
                    EquivBaseAddrs.find_inverse
@@ -581,8 +601,41 @@ module Domain =
                  | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
                (* panic_at range "md.__get__ on C class results in %a" pp_addr addr *)
                )
-           with Null_found -> assert false
+           with Null_found ->
+             check_consistent_null cfunc.c_func_org_name man flow range
          )
+         |> OptionExt.return
+
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("member_descriptor.__set__", "wrapper_descriptor"))}, _)},
+                   member_descr_instance ::
+                   ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_c_class c}}, _)} as inst) ::
+                   value :: [],
+                   kwargs) ->
+         let cfunc = find_c_fundec_by_name "PyMember_SetOne" flow in
+         let descr_typ, inst_typ, value_typ = match cfunc.c_func_parameters with
+           | [a;b;c] -> vtyp a, vtyp b, vtyp c
+           | _ -> assert false in
+         let addr_of_object ?(etyp=T_addr) x = mk_addr ~etyp:etyp (addr_of_object @@ object_of_expr x) range in
+         let addr_inst = addr_of_object ~etyp:inst_typ inst in
+         let addr_value = addr_of_object ~etyp:value_typ value in
+         let c_descriptor =
+           match KeySet.choose @@ Top.detop @@
+                   EquivBaseAddrs.find_inverse
+                     (fst @@ object_of_expr member_descr_instance)
+                     (get_env T_cur man flow) with
+           | P_block ({base_kind = Var v} as base, offset, _) ->
+              mk_base_offset_pointer base offset (under_type descr_typ) range
+           | _ -> assert false
+         in
+         let cfunc_args = [addr_inst; c_descriptor; addr_value] in
+         let call = mk_c_call cfunc cfunc_args range in
+         assume (mk_binop ~etyp:T_c_bool call O_ge (mk_zero range) range) man flow
+           ~fthen:(fun flow ->
+             man.eval (mk_py_none range) flow
+           )
+           ~felse:(fun flow ->
+             check_consistent_null cfunc.c_func_org_name man flow range
+           )
          |> OptionExt.return
 
       | _ -> None

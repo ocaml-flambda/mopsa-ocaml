@@ -16,5 +16,11 @@ ccontent = c.contents #getcontents().a
 
 cz = c.counter
 cr = c.incr()
-co = c.counter
+# c.contents = 42
+c.counter = 4
+cf = c.counter
+c.counter = 10**1000 # should raise an OverflowError
+# Next: check READONLY flag, try with integers...
+
+
 b = broken()
