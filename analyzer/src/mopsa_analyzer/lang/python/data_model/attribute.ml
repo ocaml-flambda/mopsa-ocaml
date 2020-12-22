@@ -214,7 +214,10 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
-        man.eval   (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
+         man.eval lval flow >>$
+           (fun lval flow ->
+             man.eval (mk_py_call (mk_py_attr lval "__setattr__" range) [attr; rval] range) flow
+           )
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("delattr", _))}, _)}, [lval; attr], []) ->
@@ -228,9 +231,14 @@ module Domain =
       let range = stmt.srange in
       match skind stmt with
       | S_assign({ekind = E_py_attribute(lval, attr)}, rval) ->
-        man.eval   (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:(T_py None) (C_string attr) range; rval] range) flow
-        >>$
- (fun e flow -> Post.return flow)
+         man.eval lval flow >>$
+           (fun lval flow ->
+             man.eval rval flow >>$
+               fun rval flow ->
+               man.eval   (mk_py_call (mk_py_attr (mk_py_type lval range) "__setattr__" range) [lval; mk_constant ~etyp:(T_py None) (C_string attr) range; rval] range) flow
+           >>$
+             (fun e flow -> Post.return flow)
+           )
         |> OptionExt.return
 
       | _ -> None

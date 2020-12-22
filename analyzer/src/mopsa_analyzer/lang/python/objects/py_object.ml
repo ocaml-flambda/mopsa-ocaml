@@ -217,10 +217,10 @@ struct
             ~cls_found:(fun cls flow ->
                 man.eval   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
  (fun obj' flow ->
-                    assume (mk_py_hasattr obj' "__set__" range)
+                    assume (mk_py_hasattr (mk_py_type obj' range) "__set__" range)
                       man flow
                       ~fthen:(fun flow ->
-                          man.eval (mk_py_call (mk_py_attr obj' "__set__" range) [lval; rval] range) flow
+                          man.eval (mk_py_call (mk_py_attr (mk_py_type obj' range) "__set__" range) [obj'; lval; rval] range) flow
                         )
                       ~felse:(
                         man.eval
