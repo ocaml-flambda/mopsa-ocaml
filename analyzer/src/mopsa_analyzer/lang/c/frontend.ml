@@ -203,14 +203,18 @@ let rec parse_program (files: string list) =
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
   input_files := [];
-  ListExt.iteri
-    (fun i file ->
-       match file, Filename.extension file with
-       | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
-       | _, (".cpp" | ".cc" | ".c++") -> parse_file "clang++" ~nb:(i,nb) [] file false true ctx
-       | _, ".db" | ".db", _ -> parse_db file ctx
-       | _, x -> Exceptions.panic "unknown C extension %s" x
-    ) files;
+  let () =
+    try
+      ListExt.iteri
+        (fun i file ->
+          match file, Filename.extension file with
+          | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
+          | _, (".cpp" | ".cc" | ".c++") -> parse_file "clang++" ~nb:(i,nb) [] file false true ctx
+          | _, ".db" | ".db", _ -> parse_db file ctx
+          | _, x -> Exceptions.panic "unknown C extension %s" x
+        ) files;
+    with Exceptions.SyntaxErrorList es ->
+      panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es in
   let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
   {
