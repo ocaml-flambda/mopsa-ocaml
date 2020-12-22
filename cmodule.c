@@ -9,7 +9,8 @@ char* exc_msg = NULL;
 PyObject*
 PyErr_NoMemory()
 {
-    exc_state = &PyExc_MemoryError;
+    exc_state = PyExc_MemoryError;
+//    _mopsa_print();
     return NULL;
 }
 
@@ -21,7 +22,8 @@ PyErr_Occured()
 
 void PyErr_SetString(PyObject* exc, const char* msg){
     exc_state = exc;
-    exc_msg = strdup(msg);
+    exc_msg = msg;
+//    _mopsa_print();
 }
 
 
@@ -90,8 +92,59 @@ PyMember_GetOne(const char *addr, PyMemberDef *l)
         PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
         v = NULL;
     }
-    _mopsa_print();
+//    _mopsa_print();
     return v;
+}
+
+// FIXME: returns values with wrap_descr_set
+int
+PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
+{
+    PyObject *oldv;
+    addr += l->offset;
+
+    if ((l->flags & READONLY))
+    {
+        PyErr_SetString(PyExc_AttributeError, "readonly attribute");
+        return -1;
+    }
+    if (v == NULL) {
+        if (l->type == T_OBJECT_EX) {
+            /* Check if the attribute is set. */
+            if (*(PyObject **)addr == NULL) {
+                PyErr_SetString(PyExc_AttributeError, l->name);
+                return -1;
+            }
+        }
+        else if (l->type != T_OBJECT) {
+            PyErr_SetString(PyExc_TypeError,
+                            "can't delete numeric/char attribute");
+            return -1;
+        }
+    }
+    switch (l->type) {
+    case T_INT:{
+        long long_val = PyLong_AsLong(v);
+        if ((long_val == -1) && PyErr_Occurred())
+            return -1;
+        *(int *)addr = (int)long_val;
+        if ((long_val > INT_MAX) || (long_val < INT_MIN))
+            WARN("Truncation of value to int");
+        break;
+        }
+    case T_OBJECT:
+    case T_OBJECT_EX:
+        Py_XINCREF(v);
+        oldv = *(PyObject **)addr;
+        *(PyObject **)addr = v;
+        Py_XDECREF(oldv);
+        break;
+    default:
+        PyErr_Format(PyExc_SystemError,
+                     "bad memberdescr type for %s", l->name);
+        return -1;
+    }
+    return 0;
 }
 // end of stubs
 
@@ -151,7 +204,7 @@ static PyMethodDef Cbox_methods[] = {
 
 static PyMemberDef Cbox_members[] = {
     {"counter", T_INT, offsetof(Cbox, counter), 0, "counter doc"},
-    {"contents", T_OBJECT, offsetof(Cbox, contents), 0, "contents doc"},
+    {"contents", T_OBJECT, offsetof(Cbox, contents), READONLY, "contents doc"},
     {NULL}  /* Sentinel */
 };
 
@@ -178,7 +231,8 @@ c_typ(PyObject *self, PyObject *args)
 static PyObject*
 c_broken(PyObject *self, PyObject *args)
 {
-    return PyErr_NoMemory();
+    PyErr_SetString(PyExc_AttributeError, "blaaa");
+    return NULL;
 }
 
 
