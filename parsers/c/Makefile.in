@@ -62,29 +62,11 @@ CXXFLAGS := \
 
 LDFLAGS := $(shell @LLVMCONFIG@ --ldflags) $(LDFLAGS)
 
-ifeq (@LLVM_MAJOR_VERSION@,10)
 CCLIBS := \
- -lclang-cpp \
+  @LLVM_CCLIBS@ \
  -lclang \
  $(shell @LLVMCONFIG@ --libs --system-libs) \
  -lstdc++
-else
-CCLIBS := \
- -lclangFrontend \
- -lclangSerialization \
- -lclangDriver \
- -lclangTooling \
- -lclangParse \
- -lclangSema \
- -lclangAnalysis \
- -lclangEdit \
- -lclangAST \
- -lclangLex \
- -lclangBasic \
- -lclang \
- $(shell @LLVMCONFIG@ --libs --system-libs) \
- -lstdc++
-endif
 
 
 # MOPSA libraries

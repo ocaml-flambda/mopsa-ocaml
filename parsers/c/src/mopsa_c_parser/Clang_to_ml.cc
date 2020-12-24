@@ -660,14 +660,14 @@ CAMLprim value MLCommentTranslator::getRawCommentList(ASTContext& Context) {
 #else
   std::vector<RawComment*> c;
   FileID id = Context.getSourceManager().getMainFileID();
-  auto coms = Context.getRawCommentList().getCommentsInFile(id);
+  auto coms = Context.Comments.getCommentsInFile(id);
   if (coms != nullptr) {
     for (auto cc : *coms) {
       c.push_back(cc.second);
     }
   }
   GENERATE_LIST(ret, c, TranslateRawComment(child));
-#endif  
+#endif
   CAMLreturn(ret);
 }
 
@@ -2647,7 +2647,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
       GENERATE_NODE_INDIRECT(ExprWithCleanups, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
+#if CLANG_VERSION_MAJOR < 11
           Store_field_array(ret, 1, x->getNumObjects(), TranslateBlockDecl(x->getObject(i)));
+#else
+          // TODO: API for cleanup has changed for recent Clang; we need to support CleanupObject
+          caml_failwith("mlCLangAST: ExprWithCleanups not supported");
+#endif
         });
 
       GENERATE_NODE(FunctionParmPackExpr, ret, node, 2, {

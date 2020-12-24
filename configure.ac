@@ -179,6 +179,13 @@ if test "x$LLVMCONFIG" != "x"; then
     AC_CHECK_TOOL(CLANG,clang$LLVMCONFIG_EXTRA)
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
     AC_SUBST([LLVM_MAJOR_VERSION])
+
+    if test $LLVM_MAJOR_VERSION -ge 10; then
+       LLVM_CCLIBS="-lclang-cpp"
+    else
+       LLVM_CCLIBS=" -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema  -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic"
+    fi
+    AC_SUBST([LLVM_CCLIBS])
   fi
 
 fi
