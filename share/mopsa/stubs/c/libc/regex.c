@@ -41,7 +41,7 @@ int regcomp (regex_t *__restrict __preg,
  * requires: valid_string(__String);
  * requires: __nmatch > 0 implies valid_ptr_range(__pmatch, 0, __nmatch - 1);
  * assigns: __pmatch[0, __nmatch);
- * local: size_t len = strlen();
+ * local: size_t len = strlen(__String);
  * ensures: forall size_t i in [0, __nmatch): (__pmatch[i].rm_so)' in [-1, len];
  * ensures: forall size_t i in [0, __nmatch): (__pmatch[i].rm_eo)' in [-1, len];
  * ensures: return == 0 or return == REG_NOMATCH;
