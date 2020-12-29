@@ -357,6 +357,9 @@ module Domain =
       | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_AttributeError" ->
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "AttributeError") range) flow
          |> OptionExt.return
+      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_OverflowError" ->
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "OverflowError") range) flow
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyModule_Create2", [module_decl; _]) ->
          let addr_type = fst @@ Python.Addr.find_builtin "type" in
@@ -387,6 +390,7 @@ module Domain =
                  ("PyType_Type", "type");
                  ("PyBaseObject_Type", "object");
                  ("PyExc_MemoryError", "MemoryError");
+                 ("PyExc_OverflowError", "OverflowError");
                  ("PyExc_AttributeError", "AttributeError");
                  ("PyExc_SystemError", "SystemError");
                  (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
@@ -464,12 +468,33 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyLong_AsLong", args) ->
-         (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise? *)
+         (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
          if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
            let () = warn_at range "unsafe PyLong_AsLong but cur is bottom" in
            Eval.empty flow |> OptionExt.return
          else
-           panic_at range "todo: PyLong_AsLong"
+           resolve_c_pointer_into_addr (List.hd args) man flow >>$
+             (fun addr flow ->
+               man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+                 fun int_value flow ->
+                 let long_max = mk_z (Z.of_string "9223372036854775807") ~typ:T_int range in
+                 assume
+                   (mk_binop ~etyp:T_bool
+                      (mk_binop ~etyp:T_bool int_value O_le long_max range)
+                      O_log_and
+                      (mk_binop ~etyp:T_bool int_value O_ge (mk_unop ~etyp:T_int O_minus long_max range) range)
+                      range)
+                   man flow
+                   ~fthen:(Eval.singleton int_value)
+                   ~felse:(fun flow ->
+                   (* Overflow: need to set the error and then return -1 *)
+                     let helper = C.Ast.find_c_fundec_by_name "PyLong_AsLong_Helper" flow in
+                     man.eval (mk_c_call helper [] range) flow >>$
+                       fun _ flow ->
+                       Eval.singleton (mk_int ~typ:T_int (-1) range) flow
+                   )
+             )
+           |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          get_name_of fmt man flow >>$
@@ -615,9 +640,9 @@ module Domain =
          let descr_typ, inst_typ, value_typ = match cfunc.c_func_parameters with
            | [a;b;c] -> vtyp a, vtyp b, vtyp c
            | _ -> assert false in
-         let addr_of_object ?(etyp=T_addr) x = mk_addr ~etyp:etyp (addr_of_object @@ object_of_expr x) range in
-         let addr_inst = addr_of_object ~etyp:inst_typ inst in
-         let addr_value = addr_of_object ~etyp:value_typ value in
+         let addr_of_eobject ?(etyp=T_addr) x = mk_addr ~etyp:etyp (addr_of_object @@ object_of_expr x) range in
+         let addr_inst = addr_of_eobject ~etyp:inst_typ inst in
+         let addr_value = addr_of_eobject ~etyp:value_typ value in
          let c_descriptor =
            match KeySet.choose @@ Top.detop @@
                    EquivBaseAddrs.find_inverse
@@ -629,13 +654,25 @@ module Domain =
          in
          let cfunc_args = [addr_inst; c_descriptor; addr_value] in
          let call = mk_c_call cfunc cfunc_args range in
-         assume (mk_binop ~etyp:T_c_bool call O_ge (mk_zero range) range) man flow
+         let call flow =
+           assume (mk_binop ~etyp:T_c_bool call O_ge (mk_zero range) range) man flow
            ~fthen:(fun flow ->
              man.eval (mk_py_none range) flow
            )
            ~felse:(fun flow ->
+             debug "not zero in:@.%a" (format @@ Flow.print man.lattice.print) flow;
              check_consistent_null cfunc.c_func_org_name man flow range
-           )
+           ) in
+
+                                                                                                     (match ekind addr_value with
+         | E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+            (* FIXME: We're moving from Python to C, so we need to attach
+               integer values to the addresses (not precise in the python
+               part but necessary here. *)
+            man.exec (mk_assign (mk_var (mk_addr_attr (addr_of_exp addr_value) "value" T_int) range) (OptionExt.none_to_exn @@ snd @@ object_of_expr value) range) flow >>%
+              call
+         | _ ->
+            call flow)
          |> OptionExt.return
 
       | _ -> None
