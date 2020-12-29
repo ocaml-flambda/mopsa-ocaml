@@ -15,15 +15,31 @@ PyErr_NoMemory()
 }
 
 PyObject*
-PyErr_Occured()
+PyErr_Occurred()
 {
     return exc_state;
 };
+
+void
+PyErr_Clear()
+{
+    exc_state = NULL;
+    exc_msg = NULL;
+}
+
+void PyErr_SetNone(PyObject* exc) {
+    exc_state = exc;
+}
 
 void PyErr_SetString(PyObject* exc, const char* msg){
     exc_state = exc;
     exc_msg = msg;
 //    _mopsa_print();
+}
+
+void PyLong_AsLong_Helper(){
+    PyErr_SetString(PyExc_OverflowError,
+                    "Python int too large to convert to C long");
 }
 
 
@@ -42,7 +58,9 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 
     obj = PyType_GenericAlloc_Helper(type, size);
     memset(obj, '\0', size);
+
     Py_TYPE(obj) = type;
+    obj->ob_refcnt = 1;
 
     /* FIXME */
     if (obj == NULL)
