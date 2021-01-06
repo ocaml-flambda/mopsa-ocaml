@@ -138,13 +138,21 @@ module Domain =
       | _ -> assert false
 
     (* Creates stmt binder_addr · obj_name = obj_addr *)
-    let mk_bind_in_python binder_addr obj_name obj_addr range =
-      mk_assign
-        (Python.Ast.mk_py_attr
-           (Python.Ast.mk_py_object (binder_addr, None) range)
-           obj_name ~etyp:(Python.Ast.T_py None) range)
-        (Python.Ast.mk_py_object (obj_addr, None) range)
-      range
+    let bind_in_python binder_addr obj_name obj_addr range man flow =
+      (if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_integers) = 0 then
+        man.eval (mk_var (mk_addr_attr obj_addr "value" T_int) range) flow >>$
+          fun int_value flow ->
+          Cases.return (Some int_value) flow
+      else
+        Cases.return None flow) >>$
+        fun obj_oe flow ->
+        man.exec
+          (mk_assign
+             (Python.Ast.mk_py_attr
+                (Python.Ast.mk_py_object (binder_addr, None) range)
+                obj_name ~etyp:(Python.Ast.T_py None) range)
+             (Python.Ast.mk_py_object (obj_addr, obj_oe) range)
+             range) flow
 
     let mk_base_expr base range =
       let open C.Common.Base in
@@ -173,7 +181,7 @@ module Domain =
             let methd_addr = addr_of_exp methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
             (* bind method to binder *)
-            man.exec (mk_bind_in_python binder_addr methd_name methd_addr range) flow
+            bind_in_python binder_addr methd_name methd_addr range man flow
 
     let rec fold_until_null func c flow =
       try
@@ -217,7 +225,7 @@ module Domain =
                   let member_descr = addr_of_exp member_descr in
                   let flow = set_singleton member_points_to  member_descr man flow in
                   man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
-                    man.exec (mk_bind_in_python binder_addr member_name member_descr range)
+                    bind_in_python binder_addr member_name member_descr range man
           )
         |> post_to_flow man
       in
@@ -279,9 +287,7 @@ module Domain =
                (fun fun_eaddr flow ->
                  let fun_addr = addr_of_exp fun_eaddr in
                  let flow = set_singleton func fun_addr man flow in
-                 man.exec
-                   (mk_bind_in_python cls_addr name fun_addr range)
-                   flow)
+                 bind_in_python cls_addr name fun_addr range man flow)
              |> post_to_flow man
 
           | _ -> flow)
@@ -419,9 +425,8 @@ module Domain =
                resolve_c_pointer_into_addr obj man flow >>$
                  fun obj_addr flow ->
                  (* bind class to module *)
-                 man.exec
-                   (mk_bind_in_python module_addr obj_name obj_addr range)
-                   flow >>= fun flow ->
+                 bind_in_python module_addr obj_name obj_addr range man flow
+                 >>= fun flow ->
                  Eval.singleton (mk_zero range)
            )
          |> OptionExt.return
