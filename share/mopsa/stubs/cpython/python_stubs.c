@@ -178,4 +178,17 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     }
     return 0;
 }
-// end of stubs
+
+int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
+{
+    PyObject *o = PyLong_FromLong(value);
+    if(!o)
+        return -1;
+    if (PyModule_AddObject(m, name, o) == 0)
+    {
+        _mopsa_print();
+        return 0;
+    }
+    Py_DECREF(o);
+    return -1;
+}
