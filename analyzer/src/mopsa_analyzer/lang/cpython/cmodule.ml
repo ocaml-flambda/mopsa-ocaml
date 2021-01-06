@@ -92,6 +92,7 @@ module Domain =
           "PyType_Ready";
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
+          "PyTuple_Size";
           "PyLong_FromLong";
           "PyLong_AsLong";
         ];
@@ -354,6 +355,9 @@ module Domain =
       | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_MemoryError" ->
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "MemoryError") range) flow
          |> OptionExt.return
+      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_TypeError" ->
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "TypeError") range) flow
+         |> OptionExt.return
       | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_AttributeError" ->
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "AttributeError") range) flow
          |> OptionExt.return
@@ -390,6 +394,7 @@ module Domain =
                  ("PyType_Type", "type");
                  ("PyBaseObject_Type", "object");
                  ("PyExc_MemoryError", "MemoryError");
+                 ("PyExc_TypeError", "TypeError");
                  ("PyExc_OverflowError", "OverflowError");
                  ("PyExc_AttributeError", "AttributeError");
                  ("PyExc_SystemError", "SystemError");
@@ -444,6 +449,7 @@ module Domain =
            (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
            man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
              fun inst_eaddr flow ->
+             debug "%a allocated!" pp_expr inst_eaddr;
              let inst_addr = addr_of_exp inst_eaddr in
              let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
              (* No need to put this into the equiv, since it's the same thing? *)
@@ -469,54 +475,146 @@ module Domain =
 
       | E_c_builtin_call ("PyLong_AsLong", args) ->
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
-         if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-           let () = warn_at range "unsafe PyLong_AsLong but cur is bottom" in
-           Eval.empty flow |> OptionExt.return
-         else
-           resolve_c_pointer_into_addr (List.hd args) man flow >>$
-             (fun addr flow ->
-               man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
-                 fun int_value flow ->
-                 let long_max = mk_z (Z.of_string "9223372036854775807") ~typ:T_int range in
-                 assume
-                   (mk_binop ~etyp:T_bool
-                      (mk_binop ~etyp:T_bool int_value O_le long_max range)
-                      O_log_and
-                      (mk_binop ~etyp:T_bool int_value O_ge (mk_unop ~etyp:T_int O_minus long_max range) range)
-                      range)
-                   man flow
-                   ~fthen:(Eval.singleton int_value)
-                   ~felse:(fun flow ->
+         (* FIXME: if PyLong_AsLong is not called on an integer, this should fail *)
+         resolve_c_pointer_into_addr (List.hd args) man flow >>$
+           (fun addr flow ->
+             man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+               fun int_value flow ->
+               let long_max = mk_z (Z.of_string "9223372036854775807") ~typ:T_int range in
+               assume
+                 (mk_binop ~etyp:T_bool
+                    (mk_binop ~etyp:T_bool int_value O_le long_max range)
+                    O_log_and
+                    (mk_binop ~etyp:T_bool int_value O_ge (mk_unop ~etyp:T_int O_minus long_max range) range)
+                    range)
+                 man flow
+                 ~fthen:(Eval.singleton int_value)
+                 ~felse:(fun flow ->
                    (* Overflow: need to set the error and then return -1 *)
-                     let helper = C.Ast.find_c_fundec_by_name "PyLong_AsLong_Helper" flow in
-                     man.eval (mk_c_call helper [] range) flow >>$
-                       fun _ flow ->
-                       Eval.singleton (mk_int ~typ:T_int (-1) range) flow
-                   )
-             )
-           |> OptionExt.return
+                   let helper = C.Ast.find_c_fundec_by_name "PyLong_AsLong_Helper" flow in
+                   man.eval (mk_c_call helper [] range) flow >>$
+                     fun _ flow ->
+                     Eval.singleton (mk_int ~typ:T_int (-1) range) flow
+                 )
+           )
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          get_name_of fmt man flow >>$
            (fun fmt_str flow ->
-             match fmt_str with
-             | "O" ->
-                resolve_c_pointer_into_addr args man flow >>$
-                  (fun addr flow ->
-                    man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_zero ~typ:(Python.Ast.T_py None) range) range) flow >>$
-                      (fun obj flow ->
-                        match ekind obj, ekind (List.hd refs)  with
-                        | Python.Ast.E_py_object(addr, _), E_c_address_of c ->
-                           man.exec (mk_assign c (mk_addr addr range) range) flow >>%
-                             Eval.singleton (mk_one range)
-                        | _ -> assert false
-                      )
-                  )
-             | _ ->
-                panic_at range "TODO: implement PyArg_ParseTuple %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
+             resolve_c_pointer_into_addr args man flow >>$
+               (fun addr flow ->
+                 man.eval (Python.Ast.mk_py_call
+                             (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
+                             [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
+                   (
+                     (* Currently does not handle variable size arguments etc *)
+                     (* Also, need to check if format is correct *)
+                     (*
+                        check that size = len(fmt_str), otherwise raise TypeError
+                        each conversion may fail: in that case, return 0 FIXME: also, clean
+                        if everything succeeds, return 1
+                      *)
+
+                     fun earg flow ->
+                     let size = match ekind @@ OptionExt.none_to_exn @@ snd @@ object_of_expr earg with
+                       | E_constant (C_int z) -> Z.to_int z
+                       | _ -> assert false in
+
+                     if String.length fmt_str <> size then
+                       let () = debug "wrong number of arguments" in
+                       man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                                   [mk_var (search_c_globals_for flow "PyExc_TypeError") range;
+                                    mk_c_string
+                                      (Format.asprintf "function takes exactly %d arguments (%d given)" (String.length fmt_str) size)
+                                      range] range) flow >>$
+                         fun _ flow ->
+                         Eval.singleton (mk_zero  range) flow
+                     else
+
+                       let convert_single pos output_ref flow =
+                         match fmt_str.[pos] with
+                         | 'O' ->
+                            man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$
+                              (fun obj flow ->
+                                match ekind obj, ekind output_ref  with
+                                | Python.Ast.E_py_object(addr, _), E_c_address_of c ->
+                                   man.exec (mk_assign c (mk_addr addr range) range) flow >>%
+                                     fun flow -> Cases.return 1 flow
+                                | _ -> assert false
+                              )
+                         | 'i' ->
+                            man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$
+                              (* FIXME: this sould be a boundary between python and C.
+                                 As such, it should handle integer translation.
+                                 Python function call PyLong_AsLong *)
+                              (fun obj flow ->
+                                match ekind obj, ekind (List.hd refs) with
+                                | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
+                                   (* FIXME: check it's an integer *)
+                                   if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+                                     man.exec
+                                       (mk_assign
+                                          (mk_var (mk_addr_attr addr "value" T_int) range)
+                                          (OptionExt.none_to_exn oe)
+                                          range)
+                                       flow >>%
+                                       fun flow ->
+                                       debug "value should be stored %a@.%a" pp_var (mk_addr_attr addr "value" T_int) (format @@ Flow.print man.lattice.print) flow;
+                                       man.exec (mk_assign
+                                                   c
+                                                   (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_AsLong" flow) [mk_addr addr range] range)
+                                                   range) flow >>%
+                                         fun flow -> Cases.return 1 flow
+                                   else
+                                     let () = debug "wrong type for convert_single integer" in
+                                     (* set error *)
+                                     man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow) [mk_var (search_c_globals_for flow "PyExc_TypeError") range; mk_c_string "an integer is required (got type ???)" range] range) flow >>$
+                                       fun _ flow ->
+                                       Cases.return 0 flow
+                                | _ -> assert false
+                              )
+
+                         | _ ->
+                            if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+                              let () = warn_at range "PyArg_ParseTuple %s unsupported, but cur is bottom" fmt_str in
+                              Cases.return 1 flow
+                            else
+                              panic_at range "TODO: implement PyArg_ParseTuple %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
+                       in
+
+                     let rec process pos refs flow =
+                       convert_single pos (List.hd refs) flow >>$
+                         fun ret flow ->
+                         if ret = 1 then
+                           if pos < size then
+                             process (pos+1) (List.tl refs) flow
+                           else
+                             Eval.singleton (mk_one range) flow
+                         else
+                           (* error *)
+                           Eval.singleton (mk_zero range) flow
+                     in
+                     process 0 refs flow
+                   )
+               )
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyTuple_Size", [arg]) ->
+         resolve_c_pointer_into_addr arg man flow >>$
+           (fun addr flow ->
+                man.eval (Python.Ast.mk_py_call
+                            (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
+                            [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
+                  (
+                    fun earg flow ->
+                    let size = OptionExt.none_to_exn @@ snd @@ object_of_expr earg in
+                    Eval.singleton size flow
+                    (* panic_at range "tuple size %a %a" pp_expr arg pp_expr earg *)
+                  )
+           )
+         |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
          (* FIXME: use the equiv map | Find the c function with uid in the context *)
@@ -561,9 +659,19 @@ module Domain =
                   (* FIXME: if return is integer, it's probably an _init function, let's return None. Check return value as well *)
                   debug "got an integer, probably an init";
                   assert (String.sub name (String.length name - 5) 5 = "_init");
-                  man.eval (mk_py_none range) flow
+                  assume
+                    (mk_binop ~etyp:T_bool call_res O_eq (mk_zero range) range)
+                    man flow
+                    ~fthen:(fun flow ->
+                      man.eval (mk_py_none range) flow
+                    )
+                    ~felse:(fun flow ->
+                      check_consistent_null name man flow range
+                      (* check that an exception is set and raise it? *)
+                    )
                | _ ->
-                  debug "call result %a@.%a" pp_expr call_res (format @@ Flow.print man.lattice.print) flow;
+                  debug "call result %s %a" name pp_expr call_res;
+                  (* (format @@ Flow.print man.lattice.print) flow; *)
                   try
                     resolve_c_pointer_into_addr call_res man flow >>$
                       fun addr flow ->
