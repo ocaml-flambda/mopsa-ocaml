@@ -473,6 +473,16 @@ let register_addr_kind_structural_type f  = structural_type_of_addr_kind := f !s
 let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak
 let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
 
+type py_c_function_kind =
+  | Builtin_function_or_method
+  | Wrapper_descriptor of string option (* optional wrapper: in that case name *)
+  | Method_descriptor
+
+let str_of_py_c_function_kind =
+  function
+  | Builtin_function_or_method -> "builtin_function_or_method"
+  | Wrapper_descriptor _ -> "wrapper_descriptor"
+  | Method_descriptor -> "method_descriptor"
 
 (* multilanguage *)
 type addr_kind +=
@@ -480,7 +490,7 @@ type addr_kind +=
    | A_py_c_function of
        string (** name *) *
        int (** function uid *) *
-       string (** function kind ⋿ builtin_function_or_method, wrapper_descriptor, method_descriptor *) *
+       py_c_function_kind *
        py_object (** self *)
    | A_py_c_class of var (** static variable used in the C stack to define the class *)
 
@@ -518,7 +528,7 @@ let () =
   register_addr_kind_nominal_type (fun default ak ->
       match ak with
       | A_py_c_module _ -> "module"
-      | A_py_c_function (_, _, k,_) -> k
+      | A_py_c_function (_, _, k,_) -> str_of_py_c_function_kind k
       | A_py_c_class _ -> "type"
       (* FIXME: we should/could call C's Py_TYPE? which currently assigns PyType_Type,  ~ ok up to reduction... *)
       | _ -> default ak);
@@ -532,4 +542,6 @@ let () =
 let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
                               | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
+                              (* FIXME: only if cpython analysis. A bit expensive too... *)
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
                               | _ -> default ak)

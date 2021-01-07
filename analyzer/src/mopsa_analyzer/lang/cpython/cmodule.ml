@@ -2,6 +2,8 @@
    Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
            Var -> Valeur ~> Addr -> Valeur
  *)
+
+(* FIXME: boundaries between C and Python should be applied systematically *)
 (*
   TODO:
    - parameter conversion Python~>C isn't done in all cases
@@ -93,7 +95,9 @@ module Domain =
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
           "PyTuple_Size";
+          "PyTuple_GetItem";
           "PyLong_FromLong";
+          "PyLong_FromSsize_t";
           "PyLong_AsLong";
         ];
 
@@ -253,7 +257,7 @@ module Domain =
           let m_addr = addr_of_exp module_addr in
           let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
           let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
-          Eval.singleton module_addr (add_pymethoddef "m_methods" m_addr "builtin_function_or_method" expr man flow)
+          Eval.singleton module_addr (add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow)
 
     let resolve_c_pointer_into_addr expr man flow =
       resolve_pointer expr man flow >>$
@@ -282,15 +286,15 @@ module Domain =
         fun func flow ->
         Post.return
           (match func with
-          | P_fun fundec ->
-             man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range) flow >>$
-               (fun fun_eaddr flow ->
-                 let fun_addr = addr_of_exp fun_eaddr in
-                 let flow = set_singleton func fun_addr man flow in
-                 bind_in_python cls_addr name fun_addr range man flow)
-             |> post_to_flow man
+           | P_fun fundec ->
+              man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range) flow >>$
+                (fun fun_eaddr flow ->
+                  let fun_addr = addr_of_exp fun_eaddr in
+                  let flow = set_singleton func fun_addr man flow in
+                  bind_in_python cls_addr name fun_addr range man flow)
+              |> post_to_flow man
 
-          | _ -> flow)
+           | _ -> flow)
 
     let search_c_globals_for flow s =
       let c_prog_globals = (get_c_program flow).c_globals in
@@ -342,16 +346,30 @@ module Domain =
           let flow = set_singleton cls cls_addr man flow in
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
-          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr "builtin_function_or_method" man flow >>%
+          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr Builtin_function_or_method man flow >>%
             fun flow ->
-            (* FIXME: wrapper around init since it returns an integer *)
-            bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr "wrapper_descriptor" man flow >>%
+            bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>%
               fun flow ->
-              (* FIXME: *)
-              let flow = add_pymethoddef "tp_methods" cls_addr "method_descriptor" ecls man flow in
-              let flow = add_pymemberdef cls_addr ecls man flow in
-              let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
-              Cases.singleton cls_addr flow
+              assume
+                (mk_binop
+                   (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
+                   O_ne
+                   (mk_c_null range)
+                   ~etyp:T_bool range)
+                man flow
+                ~fthen:(fun flow ->
+                  bind_function_in "__len__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_length" range) cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man flow)
+                ~felse:(fun flow ->
+                  debug "tp_as_sequence is NULL, skipping";
+                  Post.return flow)
+              >>%
+                fun flow ->
+                (* FIXME: *)
+                debug "add_pymethoddef@.%a" (format @@ Flow.print man.lattice.print) flow;
+                let flow = add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow in
+                let flow = add_pymemberdef cls_addr ecls man flow in
+                let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
+                Cases.singleton cls_addr flow
 
     let eval exp man flow =
       let range = erange exp in
@@ -390,11 +408,24 @@ module Domain =
                    add_class_equiv c py flow) flow descr in
              let flow =
                let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
+               let true_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_true in
+               let false_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_false in
                let c_var = search_c_globals_for flow "_Py_NoneStruct" in
-               set_singleton
+               let true_var = search_c_globals_for flow "_Py_TrueStruct" in
+               let false_var = search_c_globals_for flow "_Py_FalseStruct" in
+               let flow = set_singleton
                  (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
                  none_addr
                  man flow in
+               let flow = set_singleton
+                 (mk_c_points_to_bloc (C.Common.Base.mk_var_base true_var) (mk_zero (Location.mk_program_range [])) None)
+                 true_addr
+                 man flow in
+               set_singleton
+                 (mk_c_points_to_bloc (C.Common.Base.mk_var_base false_var) (mk_zero (Location.mk_program_range [])) None)
+                 false_addr
+                 man flow
+             in
              add_class_equivs
                [
                  ("PyType_Type", "type");
@@ -466,17 +497,22 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyLong_FromSsize_t", args)
       | E_c_builtin_call ("PyLong_FromLong", args) ->
          man.eval ~translate:"Universal" (List.hd args) flow >>$
            (fun earg flow ->
              (* FIXME: forced to attach the value as an addr_attr in universal, and convert it afterwards when going back to python... *)
-             man.eval (mk_alloc_addr ~mode:WEAK (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
+             (* FIXME: handle addr renaming and propagate it to the value attribute *)
+             debug "allocating int at range %a callstack %a" pp_range range Callstack.pp_callstack (Flow.get_callstack flow);
+             man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
                fun int_addr flow ->
                debug "got int_addr %a" pp_addr (addr_of_exp int_addr);
                man.exec (mk_assign (mk_var (mk_addr_attr (addr_of_exp int_addr) "value" T_int) range) earg range) flow >>%
+                 (* FIXME: addr vs py_object, we'll need to clean things somehow... *)
                  Eval.singleton (mk_addr (addr_of_exp int_addr) range)
            )
          |> OptionExt.return
+
 
       | E_c_builtin_call ("PyLong_AsLong", args) ->
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
@@ -614,6 +650,8 @@ module Domain =
                             [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
                   (
                     fun earg flow ->
+                    (* FIXME: handle integer boundary properly.
+                       I guess we lose relationality here *)
                     let size = OptionExt.none_to_exn @@ snd @@ object_of_expr earg in
                     Eval.singleton size flow
                     (* panic_at range "tuple size %a %a" pp_expr arg pp_expr earg *)
@@ -621,28 +659,42 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyTuple_GetItem", [tuple; pos]) ->
+         debug "PyTuple_GetItem";
+         resolve_c_pointer_into_addr tuple man flow >>$
+           (fun addr flow ->
+             let py_tuple = Python.Ast.mk_py_object (addr, None) range in
+             man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow) [pos] range) flow >>$
+               fun py_pos flow ->
+               debug "PyTuple_GetItem, py_pos = %a" pp_expr py_pos;
+               man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
+                           [py_tuple; mk_py_object (addr_of_exp py_pos, Some (mk_var (mk_addr_attr (addr_of_exp py_pos) "value" T_int) range)) range] range) flow >>$
+                 fun py_elem flow ->
+                 debug "PyTuple_GetItem: %a" pp_expr py_elem;
+                 Eval.singleton (mk_addr (fst @@ object_of_expr py_elem) range) flow
+           )
+         |> OptionExt.return
+
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
-         (* FIXME: use the equiv map | Find the c function with uid in the context *)
+         (* FIXME: use the equiv map *)
          let cfunc = find_c_fundec_by_uid uid flow in
-         let self_typ, args_typ, got_kwds = match cfunc.c_func_parameters with
-           | a::b::[] -> vtyp a, vtyp b, false
-           | a::b::_::[] ->
-              warn "ignoring keywords";
-              vtyp a, vtyp b, true
-           | _ -> assert false in
+         let args_types =
+           if List.length cfunc.c_func_parameters > 2 then
+             warn "ignoring keywords";
+           List.map vtyp cfunc.c_func_parameters in
          (* Call it with self, E_py_tuple(args) *)
          let self =
            (* woops, don't forget to convert back to C like values
               FIXME: that also applies to py_args? :/ *)
            match (fst self).addr_kind with
            | A_py_c_class v -> C.Ast.mk_c_address_of (mk_var v range) range
-           | _ -> Universal.Ast.mk_addr (fst self) ~etyp:self_typ range in
+           | _ -> Universal.Ast.mk_addr (fst self) ~etyp:(List.hd args_types) range in
          let self, args =
            match kind with
-           | "builtin_function_or_method" -> self, args
-           | "wrapper_descriptor"
-             | "method_descriptor" -> Universal.Ast.mk_addr (fst @@ object_of_expr @@ List.hd args) range, List.tl args
-           | _ -> panic_at range "Call of c function of kind %s unsupported" kind
+           | Builtin_function_or_method
+             -> self, args
+           | Wrapper_descriptor _ | Method_descriptor ->
+              Universal.Ast.mk_addr (fst @@ object_of_expr @@ List.hd args) range, List.tl args
          in
          let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
          debug "%s, self is %a, args: %a@.%a" name pp_expr self pp_expr py_args (format @@ Flow.print man.lattice.print) flow;
@@ -650,31 +702,63 @@ module Domain =
            (* FIXME: okay, lets cheat here *)
            mk_c_null range
          in
+         (* FIXME: if |args| = 1, no need to eval py args *)
          man.eval py_args flow >>$
            (fun py_args flow ->
              let addr_py_args = addr_of_object @@ object_of_expr py_args in
-             let args = Universal.Ast.mk_addr addr_py_args ~etyp:args_typ range in
-             let cfunc_args = if got_kwds then [self; args; py_kwds] else [self; args] in
-             let call = mk_c_call cfunc cfunc_args range in
+             let cfunc_args =
+               match List.length cfunc.c_func_parameters with
+               | 1 -> [self]
+               | 2 -> self ::
+                        (Universal.Ast.mk_addr addr_py_args ~etyp:(List.nth args_types 1) range) :: []
+               | 3 -> self ::
+                        (Universal.Ast.mk_addr addr_py_args ~etyp:(List.nth args_types 1) range)
+                        :: py_kwds :: []
+               | _ -> assert false in
+             let call = match kind with
+               | Wrapper_descriptor (Some wrapper_name) ->
+                  let wrapper = C.Ast.find_c_fundec_by_name wrapper_name flow in
+                  let wrapper_args =
+                    match List.length wrapper.c_func_parameters with
+                    | 2 ->
+                       let self = List.hd cfunc_args in
+                       self ::
+                         (mk_c_address_of (mk_expr (E_c_function cfunc) range ~etyp:(mk_c_fun_typ cfunc)) range) :: []
+                    | 3 | 4 ->
+                       let self, args, kwds_or_nothing = match cfunc_args with
+                         | [a] -> a, mk_c_null range, []
+                         | [a;b] -> a,b,[]
+                         | a::b::c -> a, b, c
+                         | _ -> assert false in
+                       self :: args ::
+                         (mk_c_address_of (mk_expr (E_c_function cfunc) range ~etyp:(mk_c_fun_typ cfunc)) range) ::
+                             kwds_or_nothing
+                    | _ -> assert false
+                  in
+                  mk_c_call wrapper wrapper_args range
+               | _ ->
+                  mk_c_call cfunc cfunc_args range
+             in
              let open C.Common.Points_to in
              man.eval call flow >>$
                fun call_res flow ->
-               match cfunc.c_func_return with
-               | T_c_integer _ ->
-                  (* FIXME: if return is integer, it's probably an _init function, let's return None. Check return value as well *)
-                  debug "got an integer, probably an init";
-                  assert (String.sub name (String.length name - 5) 5 = "_init");
-                  assume
-                    (mk_binop ~etyp:T_bool call_res O_eq (mk_zero range) range)
-                    man flow
-                    ~fthen:(fun flow ->
-                      man.eval (mk_py_none range) flow
-                    )
-                    ~felse:(fun flow ->
-                      check_consistent_null name man flow range
-                      (* check that an exception is set and raise it? *)
-                    )
-               | _ ->
+               (* FIXME: assert that type of result is PyObject* *)
+               (* match cfunc.c_func_return with
+                * | T_c_integer _ ->
+                *    (\* FIXME: if return is integer, it's probably an _init function, let's return None. Check return value as well *\)
+                *    debug "got an integer, probably an init";
+                *    assert (String.sub name (String.length name - 5) 5 = "_init");
+                *    assume
+                *      (mk_binop ~etyp:T_bool call_res O_eq (mk_zero range) range)
+                *      man flow
+                *      ~fthen:(fun flow ->
+                *        man.eval (mk_py_none range) flow
+                *      )
+                *      ~felse:(fun flow ->
+                *        check_consistent_null name man flow range
+                *        (\* check that an exception is set and raise it? *\)
+                *      )
+                * | _ -> *)
                   debug "call result %s %a" name pp_expr call_res;
                   (* (format @@ Flow.print man.lattice.print) flow; *)
                   try

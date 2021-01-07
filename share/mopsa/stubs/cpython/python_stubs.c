@@ -192,3 +192,66 @@ int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
     Py_DECREF(o);
     return -1;
 }
+
+
+static PyObject *
+wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
+{
+    initproc func = (initproc)wrapped;
+
+    if (func(self, args, kwds) < 0)
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+wrap_lenfunc(PyObject *self, PyObject *args, void *wrapped)
+{
+    lenfunc func = (lenfunc)wrapped;
+    Py_ssize_t res;
+
+    /* if (!check_num_args(args, 0)) */
+    /*     return NULL; */
+    res = (*func)(self);
+    if (res == -1 && PyErr_Occurred())
+        return NULL;
+    return PyLong_FromSsize_t(res);
+}
+
+// FIXME: incomplete, defined in abstract.c
+Py_ssize_t
+PyNumber_AsSsize_t(PyObject *item, PyObject *err)
+{
+    Py_ssize_t result;
+    PyObject *runerr;
+    PyObject *value = PyNumber_Index(item);
+    if (value == NULL)
+        return -1;
+
+    /* We're done if PyLong_AsSsize_t() returns without error. */
+    result = PyLong_AsSsize_t(value);
+    return result;
+}
+
+
+// FIXME: incomplete, defined in abstract.c
+PyObject*
+PyNumber_Index(PyObject *item)
+{
+    PyObject *result = NULL;
+    if (item == NULL) {
+        return null_error();
+    }
+
+    if (PyLong_Check(item)) {
+        Py_INCREF(item);
+        return item;
+    }//    if (!PyIndex_Check(item))
+    else
+    {
+        PyErr_Format(PyExc_TypeError,
+                     "'%.200s' object cannot be interpreted "
+                     "as an integer", item->ob_type->tp_name);
+        return NULL;
+    }
+}
