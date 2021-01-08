@@ -255,3 +255,37 @@ PyNumber_Index(PyObject *item)
         return NULL;
     }
 }
+
+
+
+void *
+PyMem_Malloc(size_t size)
+{
+    if (size == 0)
+        size = 1;
+    return malloc(size);
+}
+
+void *
+PyMem_Calloc(size_t nelem, size_t elsize)
+{
+    if (nelem == 0 || elsize == 0) {
+        nelem = 1;
+        elsize = 1;
+    }
+    return calloc(nelem, elsize);
+}
+
+void *
+PyMem_Realloc(void *ptr, size_t size)
+{
+    if (size == 0)
+        size = 1;
+    return realloc(ptr, size);
+}
+
+void
+PyMem_Free(void *ptr)
+{
+    free(ptr);
+}
