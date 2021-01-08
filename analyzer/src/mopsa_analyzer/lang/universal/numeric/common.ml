@@ -186,7 +186,7 @@ let () =
         fun next avk ->
           match avk with
           | V_int_interval -> Bot.Nb I.minf_inf
-          | V_int_interval_fast -> (Bot.BOT:int_itv)
+          | V_int_interval_fast -> Bot.Nb I.minf_inf
           | V_int_congr_interval -> (Bot.Nb I.minf_inf,Bot.Nb C.minf_inf)
           | V_float_interval p ->
             begin match p with
