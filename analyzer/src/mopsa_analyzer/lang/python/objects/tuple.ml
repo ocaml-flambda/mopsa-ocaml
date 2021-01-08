@@ -158,10 +158,29 @@ struct
                man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
                Eval.empty
            with Nonconstantinteger ->
+             debug "nonconstant %a" pp_expr (List.hd (List.tl eargs));
+             let mk_itv_bound = ItvUtils.IntItv.of_bound_bot in
+             let mk_itv = ItvUtils.IntItv.of_int_bot in
+             let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (OptionExt.none_to_exn @@ snd @@ object_of_expr @@ List.hd @@ List.tl eargs)) flow in
+             debug "itv = %a" ItvUtils.IntItv.fprint_bot itv;
+             let map_itv (f: int -> 'a) (itv: ItvUtils.IntItv.t_with_bot) : 'a list =
+               match itv with
+               | Bot.BOT -> []
+               | Bot.Nb itv ->
+                  List.map (fun x -> f (Z.to_int x)) (ItvUtils.IntItv.to_list itv) in
+             let pos_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv 0 (List.length tuple_vars - 1)) |>
+                             map_itv (fun ppos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars ppos) range) flow) in
+             let neg_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv (- List.length tuple_vars) (-1)) |>
+                                  map_itv (fun npos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + npos)) range) flow) in
+             let ootb_accesses =
+               if (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.MINF) (ItvUtils.IntItv.B.of_int (- List.length tuple_vars - 1)))) ||
+                    (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.of_int (List.length tuple_vars)) (ItvUtils.IntItv.B.PINF))) then
+                 (man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
+                    Eval.empty) :: []
+               else []
+             in
              Eval.join_list ~empty:(fun () -> assert false)
-               ((man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-                 Eval.empty)
-                :: (List.map (fun var -> man.eval   (mk_var ~mode:(Some STRONG) var range) flow) tuple_vars))
+               (ootb_accesses @ pos_accesses @ neg_accesses)
         )
       |> OptionExt.return
 
