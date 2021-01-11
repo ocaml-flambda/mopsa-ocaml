@@ -750,38 +750,45 @@ struct
       | Framework.Engines.Interactive.Q_debug_variable_value var ->
          let open Framework.Engines.Interactive in
          let cur = get_env T_cur man flow in
-         let aset = AMap.find var cur in
-         let subvalues = ASet.fold (fun pyaddr acc ->
-                             match pyaddr with
-                             | Def addr ->
-                                let s = Format.asprintf "%a" (format PyAddr.print) pyaddr in
-                                if List.exists (fun a' -> compare_addr  addr (OptionExt.none_to_exn a') = 0)
-                                     [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
-                                  (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
-                                else if compare_addr (OptionExt.none_to_exn !addr_integers) addr = 0 then
-                                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
-                                      let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
-                                      (s, int_info) :: acc
-                                else if compare_addr (OptionExt.none_to_exn !addr_float) addr = 0 then
-                                  let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
-                                  let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
-                                  (s, float_info) :: acc
-                                else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
-                                  let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
-                                  let str_info =
-                                    {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
-                                     var_value_type = T_string;
-                                     var_sub_value = None} in
-                                  (s, str_info) :: acc
-                                else
-                                  let addr_info = man.ask (Universal.Ast.Q_debug_addr_value addr) flow in
-                                  (s, addr_info) :: acc
-                             | _ -> acc
-                           ) aset [] in
-         {var_value = None;
-          var_value_type = T_any;
-          var_sub_value = Some (Named_sub_value subvalues)}
-         |> OptionExt.return
+         begin match AMap.find_opt var cur with
+         | None ->
+            None
+         | Some aset ->
+            let subvalues =
+              ASet.fold (fun pyaddr acc ->
+                  match pyaddr with
+                  | Def addr ->
+                     let s = Format.asprintf "%a" (format PyAddr.print) pyaddr in
+                     if List.exists (fun a' -> compare_addr  addr (OptionExt.none_to_exn a') = 0)
+                          [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
+                       (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
+                     else if compare_addr (OptionExt.none_to_exn !addr_integers) addr = 0 then
+                       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
+                       (s, int_info) :: acc
+                     else if compare_addr (OptionExt.none_to_exn !addr_float) addr = 0 then
+                       let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
+                       (s, float_info) :: acc
+                     else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
+                       let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let str_info =
+                         {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
+                          var_value_type = T_string;
+                          var_sub_value = None} in
+                       (s, str_info) :: acc
+                     else
+                       let addr_info = man.ask (Universal.Ast.Q_debug_addr_value addr) flow in
+                       (s, addr_info) :: acc
+                  | _ -> acc
+                ) aset []
+            in
+            let r =
+              {var_value = None;
+               var_value_type = T_any;
+               var_sub_value = Some (Named_sub_value subvalues)} in
+            r |> OptionExt.return
+         end
 
       | _ -> None
 
@@ -789,7 +796,7 @@ struct
   let print_state printer m =
     pprint ~path:[Key "addrs"] printer (pbox AMap.print m)
 
-  
+
   let print_expr _ _ _ _ = ()
 
 end
