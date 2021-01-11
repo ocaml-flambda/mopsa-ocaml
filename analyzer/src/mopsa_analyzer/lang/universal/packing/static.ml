@@ -433,7 +433,8 @@ struct
       | _ ->
         Map.bindings a |>
         List.map (fun (pack,aa) -> Format.asprintf "pack(%a)" (format Strategy.print) pack,aa) |>
-        pp_smap
+          pp_map
+          (unformat Format.pp_print_string)
           Domain.print_state
           printer
           ~mopen:"" ~mclose:"" ~msep:"" ~mbind:":"

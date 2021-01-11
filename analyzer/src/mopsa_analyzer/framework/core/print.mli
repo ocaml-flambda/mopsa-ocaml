@@ -51,7 +51,7 @@ type print_object =
   | Int    of Z.t
   | Float  of float
   | String of string
-  | Map    of print_object Mopsa_utils.MapExt.StringMap.t * map_symbols
+  | Map    of (print_object * print_object) list * map_symbols
   | List   of print_object list * list_symbols
 
 
@@ -92,7 +92,7 @@ type print_selector =
 type print_path = print_selector list
 (** Path of a print object *)
 
-val find_print_object : printer -> print_path -> print_object
+(* val find_print_object : printer -> print_path -> print_object *)
 (** [find_print_object printer path] returns the object placed at [path] in [printer] *)
 
 
@@ -158,10 +158,10 @@ val pp_obj_list :
     Useful for printing heterogenous lists.
 *)
 
-val pp_smap :
-  ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
-  (printer -> 'v -> unit) ->
-  (printer -> (string * 'v) list -> unit)
+(* val pp_smap :
+ *   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
+ *   (printer -> 'v -> unit) ->
+ *   (printer -> (string * 'v) list -> unit) *)
 (** [pp_smap ~path:p fv printer l] prints a map from a list [l] of pairs of string keys and values.
     Values are boxed with function [fv]. *)
 
@@ -173,9 +173,9 @@ val pp_map :
 (** [pp_smap ~path:p fk fv printer l] prints a map from a list [l] of pairs of keys and values.
     Keys are boxed with function [fk] and values with function [fv]. *)
 
-val pp_obj_smap :
-  ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
-  (printer -> (string * print_object) list -> unit)
+(* val pp_obj_smap :
+ *   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
+ *   (printer -> (string * print_object) list -> unit) *)
 (** [pp_obj_smap ~path:p printer l] prints a map from a list of pairs of string keys and value objects *)
 
 val pp_obj_map :

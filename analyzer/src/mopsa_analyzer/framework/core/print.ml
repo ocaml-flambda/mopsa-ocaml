@@ -52,7 +52,7 @@ type print_object =
   | Int    of Z.t
   | Float  of float
   | String of string
-  | Map    of print_object MapExt.StringMap.t * map_symbols
+  | Map    of (print_object * print_object) list * map_symbols
   | List   of print_object list * list_symbols
 
 let default_map_symbols = { mopen = ""; msep = ","; mclose = ""; mbind = ":" }
@@ -96,24 +96,24 @@ type print_selector =
 
 type print_path = print_selector list
 
-let find_print_object printer path =
-  let rec iter p s =
-    match p,s with
-    | [],_ -> s
-    | Key k::tl, Map (m,_) -> iter tl (StringMap.find k m)
-    | Key k::tl, Empty -> Empty
-    | Key _::_,_ -> Exceptions.panic "find_print_object: key selector on non-map object"
-    | Index i::tl, List (l,_) -> begin try iter tl (List.nth l i) with Failure _ -> raise Not_found end
-    | Index i::tl, Empty -> Empty
-    | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
-    | Head::tl, List (l,_) -> begin try iter tl (List.hd l) with Failure _ -> raise Not_found end
-    | Head::tl, Empty -> Empty
-    | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
-    | Tail::tl, List (l,_) -> begin try iter tl (ListExt.last l) with Failure _ -> raise Not_found end
-    | Tail::tl, Empty -> Empty
-    | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
-  in
-  iter path printer.body
+(* let find_print_object printer path =
+ *   let rec iter p s =
+ *     match p,s with
+ *     | [],_ -> s
+ *     | Key k::tl, Map (m,_) -> iter tl (StringMap.find k m)
+ *     | Key k::tl, Empty -> Empty
+ *     | Key _::_,_ -> Exceptions.panic "find_print_object: key selector on non-map object"
+ *     | Index i::tl, List (l,_) -> begin try iter tl (List.nth l i) with Failure _ -> raise Not_found end
+ *     | Index i::tl, Empty -> Empty
+ *     | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
+ *     | Head::tl, List (l,_) -> begin try iter tl (List.hd l) with Failure _ -> raise Not_found end
+ *     | Head::tl, Empty -> Empty
+ *     | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
+ *     | Tail::tl, List (l,_) -> begin try iter tl (ListExt.last l) with Failure _ -> raise Not_found end
+ *     | Tail::tl, Empty -> Empty
+ *     | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
+ *   in
+ *   iter path printer.body *)
 
 
 (****************************************************************************)
@@ -123,8 +123,8 @@ let find_print_object printer path =
 let pprint ?(path=[]) printer obj =
   let rec iter p o =
     match p,o with
-    | Key k::tl, Map (m,sym) -> Map (StringMap.add k (iter tl (try StringMap.find k m with Not_found -> Empty)) m, sym)
-    | Key k::tl, Empty -> Map (StringMap.singleton k (iter tl Empty), default_map_symbols)
+    | Key k::tl, Map (m,sym) -> Map ((String k, (iter tl (try snd @@ List.find (fun (k',_) -> match k' with | String k' -> k = k' | _ -> false) m with Not_found -> Empty)))::m, sym)
+    | Key k::tl, Empty -> Map ((String k, iter tl Empty)::[], default_map_symbols)
     | Key _::_,_ -> Exceptions.panic "print: key selector on non-map object"
     | Index i::tl, List (l,sym) -> List (List.mapi (fun j e -> if i = j then iter tl e else e) l, sym)
     | Index i::tl, Empty -> List (List.init (i+1) (fun j -> if i = j then iter tl Empty else Empty), default_list_symbols)
@@ -137,7 +137,7 @@ let pprint ?(path=[]) printer obj =
     | Tail::_,_ -> Exceptions.panic "print: tail selector on non-list object"
     | [],_ ->
       match o,obj with
-      | Map(m1,s1),Map(m2,s2) -> Map(StringMap.map2zo (fun k v1 -> v1) (fun k v2 -> v2) (fun k v1 v2 -> v2) m1 m2, s2)
+      | Map(m1,s1),Map(m2,s2) -> Map(m1 @ m2, s2)
       | List(l1,s1),List(l2,s2) -> List(l1@l2, s2)
       | _ -> obj
   in
@@ -155,11 +155,12 @@ let rec pp_print_object fmt = function
         sym.mopen
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.msep)
            (fun fmt (k,v) ->
-              fprintf fmt "@[<hov2>%s %s @,%a@]"
-                k sym.mbind
+              fprintf fmt "@[<hov2>%a %s @,%a@]"
+                pp_print_object k
+                sym.mbind
                 pp_print_object v
            )
-        ) (StringMap.bindings m)
+        ) m
         sym.mclose
     )
   | List (l,sym) ->
@@ -238,18 +239,15 @@ let pp_list ?(path=[]) ?(lopen="") ?(lsep=",") ?(lclose="") f printer l =
   pp_obj_list ~path ~lopen ~lsep ~lclose printer
     (List.map (pbox f) l)
 
-let pp_obj_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") printer l =
-  let m = StringMap.of_list l in
-  pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
+(* let pp_obj_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") printer l =
+ *   pprint ~path printer (Map (l, {mopen; msep; mclose; mbind})) *)
 
 let pp_obj_map ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") printer l =
-  let m = List.map (fun (k,v) -> (sprint pprint k, v)) l |>
-          StringMap.of_list in
-  pprint ~path printer (Map (m, {mopen; msep; mclose; mbind}))
+  pprint ~path printer (Map (l, {mopen; msep; mclose; mbind}))
 
-let pp_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") fv printer l =
-  pp_obj_smap ~path ~mopen ~msep ~mclose ~mbind printer
-    (List.map (fun (k,v) -> (k,pbox fv v)) l)
+(* let pp_smap ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") fv printer l =
+ *   pp_obj_smap ~path ~mopen ~msep ~mclose ~mbind printer
+ *     (List.map (fun (k,v) -> (k,pbox fv v)) l) *)
 
 let pp_map ?(path=[]) ?(mopen="") ?(msep=",") ?(mclose="") ?(mbind=":") fk fv printer l =
   pp_obj_map ~path ~mopen ~msep ~mclose ~mbind printer
@@ -268,9 +266,8 @@ let rec print_object_to_json = function
   | Float f   -> `Float f
   | String s  -> `String s
   | Map (m,_) ->
-    `Assoc (
-      StringMap.bindings m |>
-      List.map (fun (k,v) -> k, print_object_to_json v)
+    `List (
+      List.map (fun (k,v) -> `Assoc (("key", print_object_to_json k)::("value", print_object_to_json v)::[])) m
     )
   | List (l,_) -> `List (List.map print_object_to_json l)
 
@@ -280,8 +277,13 @@ let rec json_to_print_object = function
   | `Int n -> Int (Z.of_int n)
   | `Float f -> Float f
   | `String s -> String s
-  | `Assoc a ->
-    let m = List.map (fun (k,v) -> (k,json_to_print_object v)) a |>
-            StringMap.of_list in
-    Map(m,default_map_symbols)
+  | `Assoc _ -> assert false
+  | `List m when List.for_all (fun v -> match v with
+                                        | `Assoc (("key", _)::("value", _)::[]) -> true
+                                        | _ -> false) m ->
+     let m = List.map (fun kv -> match kv with
+                                 | `Assoc (("key", k)::("value", v)::[]) ->
+                                    (json_to_print_object k,json_to_print_object v)
+                                 | _ -> assert false) m in
+     Map(m,default_map_symbols)
   | `List l -> List(List.map json_to_print_object l,default_list_symbols)
