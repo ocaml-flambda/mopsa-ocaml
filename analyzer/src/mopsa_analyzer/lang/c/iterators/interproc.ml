@@ -209,6 +209,7 @@ struct
           man.eval exp' flow
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
+           warn_at range "%a" pp_assumption_kind (Soundness.A_ignore_undefined_function c_func_org_name);
           let flow =
             Flow.add_local_assumption
               (Soundness.A_ignore_undefined_function c_func_org_name)
