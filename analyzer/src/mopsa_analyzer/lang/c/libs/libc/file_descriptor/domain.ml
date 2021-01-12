@@ -375,7 +375,7 @@ struct
 
   let exec stmt man flow  =
     match skind stmt with
-    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr)}) ->
+    | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr, _)}) ->
       remove addr man flow |>
       Post.return |>
       OptionExt.return

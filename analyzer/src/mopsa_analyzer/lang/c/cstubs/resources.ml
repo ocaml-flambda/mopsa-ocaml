@@ -113,12 +113,12 @@ struct
 
   let is_resource_addr_expr e =
     match ekind e with
-    | E_addr a -> is_resouce_addr a
+    | E_addr (a, _) -> is_resouce_addr a
     | _ -> false
 
   let extract_resource_addr e =
     match ekind e with
-    | E_addr ({ addr_kind = A_stub_resource _ } as a) -> a
+    | E_addr ({ addr_kind = A_stub_resource _ } as a, _) -> a
     | _ -> assert false
 
   let exec stmt man flow  =
@@ -159,7 +159,7 @@ struct
     let alloc = mk_alloc_addr (A_stub_resource res) range in
     man.eval alloc flow >>$ fun eaddr flow ->
     match ekind eaddr with
-    | E_addr addr ->
+    | E_addr (addr, _) ->
       (* Add bytes attribute *)
       let bytes = mk_bytes_var addr in
       man.exec (mk_add_var bytes eaddr.erange) flow >>%

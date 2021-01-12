@@ -98,7 +98,6 @@ struct
   let add p v mode a =
     if var_mode p mode = STRONG
     then Map.set p v a
-
     else
       let old = Map.find p a in
       Map.set p (PointerSet.join v old) a
@@ -431,7 +430,7 @@ struct
   let exec_invalidate_base e range man flow =
     let valid_base, invalid_base = match ekind e with
       | E_var (v,_) -> mk_var_base v, mk_var_base v ~valid:false ~invalidation_range:(Some range)
-      | E_addr a -> mk_addr_base a, mk_addr_base a ~valid:false ~invalidation_range:(Some range)
+      | E_addr (a, _) -> mk_addr_base a, mk_addr_base a ~valid:false ~invalidation_range:(Some range)
       | _ -> assert false
     in
     let flow = map_env T_cur (fun a ->
@@ -1017,7 +1016,7 @@ struct
 
   (** {2 Pretty printer} *)
   (** ****************** *)
-  
+
   let print_state printer a =
     pprint ~path:[Key "pointers"] printer (pbox Map.print a)
 
