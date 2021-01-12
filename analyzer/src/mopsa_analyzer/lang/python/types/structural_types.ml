@@ -90,12 +90,12 @@ struct
   let exec stmt man flow =
     let range = stmt.srange in
     match skind stmt with
-    | S_assign ({ekind = E_addr ({addr_mode} as la)}, {ekind = E_py_object (a, _)}) ->
+    | S_assign ({ekind = E_addr (la, om)}, {ekind = E_py_object (a, _)}) ->
       let cur = get_env T_cur man flow in
       if mem a cur then
         let tys = find a cur in
         let cur =
-          if addr_mode = STRONG || not (mem la cur) then
+          if addr_mode la om = STRONG || not (mem la cur) then
             add la tys cur
           else
             let old_tys = find la cur in
@@ -119,7 +119,7 @@ struct
        let cur = get_env T_cur man flow in
        let ncur = List.fold_left (fun ncur eaddr ->
                       match ekind eaddr with
-                      | E_addr a -> begin match find_opt a cur with
+                      | E_addr (a, _) -> begin match find_opt a cur with
                                     | None -> ncur
                                     | Some attrset -> add a attrset ncur
                                     end
@@ -127,13 +127,11 @@ struct
                     ) empty addrs in
        set_env T_cur ncur man flow |> Post.return |> OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}, addrs) ->
        (* FIXME: and A_py_class too? *)
        let cur = get_env T_cur man flow in
        let attrs = find a cur in
-       let addrs = List.map (fun eaddr -> match ekind eaddr with
-                                          | E_addr a -> a
-                                          | _ -> assert false) addrs in
+       let addrs = List.map Addr.from_expr addrs in
        let addrs_attrs =
          fun attr -> List.map (fun addr -> mk_addr_attr addr attr (T_py None)) addrs in
        let ncur = List.fold_left (fun cur addr ->
@@ -148,13 +146,13 @@ struct
          man.exec (mk_block expand_stmts range) |> OptionExt.return
 
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}, addrs) ->
        let cur = get_env T_cur man flow in
        let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in
        let newa, ncur, fold_stmts =
          List.fold_left (fun (newa, ncur, stmts) a' ->
              match ekind a' with
-             | E_addr a' ->
+             | E_addr (a', _) ->
                 begin match find_opt a' ncur  with
                  | None -> newa, remove a' cur, stmts
                  | Some va' ->
@@ -167,7 +165,7 @@ struct
          man.exec (mk_block fold_stmts range) |> OptionExt.return
 
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, _)}, {ekind = E_addr (a', _)}) ->
       let cur = get_env T_cur man flow in
       let old_a = find a cur in
       let to_rename_stmt = mk_block (AttrSet.fold_u (fun attr renames ->
@@ -188,8 +186,8 @@ struct
       man.exec to_rename_stmt flow |>
         OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a)}
-      | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}
+      | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a, _)} ->
        let cur = get_env T_cur man flow in
        let old_a = find_opt a cur |> OptionExt.default AttrSet.empty  in
        let to_remove_stmt =
@@ -200,7 +198,7 @@ struct
        let flow = set_env T_cur ncur man flow in
        man.exec   to_remove_stmt flow |> OptionExt.return
 
-    | S_add ({ekind = E_addr a}) ->
+    | S_add ({ekind = E_addr (a, _)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
       let ncur = add a AttrSet.empty cur in
@@ -428,7 +426,7 @@ struct
   let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_variables_linked_to ({ekind = E_addr a} as e) ->
+    | Q_variables_linked_to ({ekind = E_addr (a, _)} as e) ->
        if List.exists (fun a' -> compare_addr a (OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
        else
        let range = erange e in

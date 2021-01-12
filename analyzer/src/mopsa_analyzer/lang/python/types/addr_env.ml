@@ -404,10 +404,10 @@ struct
        end
        |> OptionExt.return
 
-    | S_expand (({ekind = E_addr a} as e1), addrs) ->
+    | S_expand (({ekind = E_addr (a, _)} as e1), addrs) ->
        let cur = get_env T_cur man flow in
        let addrs_aset = List.map (fun eaddr -> match ekind eaddr with
-                                               | E_addr addr -> PyAddr.Def addr
+                                               | E_addr (addr, _) -> PyAddr.Def addr
                                                | _ -> assert false) addrs |> ASet.of_list in
        let ncur = AMap.map
                     (fun aset ->
@@ -421,7 +421,7 @@ struct
               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
                  List.fold_left (fun acc ea' ->
                      match ekind ea' with
-                     | E_addr a' ->
+                     | E_addr (a', _) ->
                         Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice (Flow.add tk d man.lattice acc)
                      | _ -> assert false) acc addrs
               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow in
@@ -439,8 +439,8 @@ struct
        |> OptionExt.return
 
 
-    | S_fold (({ekind = E_addr a'} as e2), [{ekind = E_addr a} as e1])
-      | S_rename (({ekind = E_addr a} as e1), ({ekind = E_addr a'} as e2)) ->
+    | S_fold (({ekind = E_addr (a', om')} as e2), [{ekind = E_addr (a, om)} as e1])
+      | S_rename (({ekind = E_addr (a, om)} as e1), ({ekind = E_addr (a', om')} as e2)) ->
        let cur = get_env T_cur man flow in
        let rename addr = if PyAddr.compare addr (PyAddr.Def a) = 0 then PyAddr.Def a' else addr in
        let ncur = AMap.map (ASet.map rename) cur in
@@ -475,8 +475,8 @@ struct
                          | A_py_method(func, (ainst, oe), mclass) when compare_addr a ainst = 0 ->
                             let addr' = {addr with addr_kind = A_py_method(func, (a', oe), mclass)} in
                             let skind = match skind stmt with
-                              | S_fold _ -> S_fold ({e2 with ekind = E_addr addr'}, [{e1 with ekind = E_addr addr}])
-                              | S_rename _ -> S_rename ({e1 with ekind = E_addr addr}, {e2 with ekind = E_addr addr'})
+                              | S_fold _ -> S_fold ({e2 with ekind = E_addr (addr', om')}, [{e1 with ekind = E_addr (addr, om)}])
+                              | S_rename _ -> S_rename ({e1 with ekind = E_addr (addr, om)}, {e2 with ekind = E_addr (addr', om')})
                               | _ -> assert false
                             in
                             flow >>% man.exec   {stmt with skind}
@@ -505,11 +505,11 @@ struct
        flow |> Post.return |> OptionExt.return
 
 
-    | S_remove {ekind = E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
        flow |> Post.return |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr a}
-    | S_remove {ekind = E_addr a} ->
+    | S_invalidate {ekind = E_addr (a, _)}
+    | S_remove {ekind = E_addr (a, _)} ->
        let cur = get_env T_cur man flow in
        let ncur = AMap.map (ASet.remove (Def a)) cur in
        let flow = set_env T_cur ncur man flow in
@@ -547,12 +547,10 @@ struct
     let range = tag_range range "alloc_%s" bltin in
     let cls = fst @@ find_builtin bltin in
     man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
- (fun eaddr flow ->
-        let addr = match ekind eaddr with
-          | E_addr a -> a
-          | _ -> assert false in
+      (fun eaddr flow ->
+        let addr = Addr.from_expr eaddr in
         man.exec   (mk_add eaddr range) flow >>%
-        Eval.singleton (mk_py_object (addr, oe) range)
+          Eval.singleton (mk_py_object (addr, oe) range)
       )
 
   let eval exp man flow =

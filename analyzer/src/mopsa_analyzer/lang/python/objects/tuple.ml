@@ -91,11 +91,6 @@ struct
     | E_py_object (a, _) -> var_of_addr a
     | _ -> assert false
 
-  let addr_of_expr exp = match ekind exp with
-    | E_addr a -> a
-    | _ -> Exceptions.panic "%a@\n" pp_expr exp
-
-
   let rec eval exp man flow =
     let range = erange exp in
     if is_py_exp exp then
@@ -104,7 +99,7 @@ struct
       let addr_tuple = mk_alloc_addr (A_py_tuple (List.length els)) range in
       man.eval   addr_tuple flow >>$
  (fun eaddr_tuple flow ->
-          let addr_tuple = addr_of_expr eaddr_tuple in
+          let addr_tuple = Addr.from_expr eaddr_tuple in
           let els_vars = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun acc vari eli ->
               acc >>% man.exec
@@ -196,21 +191,19 @@ struct
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__iter__" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args
-        ["tuple"]
-        (fun args flow ->
+       Utils.check_instances f man flow range args
+         ["tuple"]
+         (fun args flow ->
            let tuple = List.hd args in
            let addr_iterator = mk_alloc_addr (Py_list.A_py_iterator ("tuple_iterator", Some 0)) range in
            man.eval   addr_iterator flow >>$
- (fun addr_it flow ->
-               let addr_it = match ekind addr_it with
-                 | E_addr a -> a
-                 | _ -> assert false in
+             (fun addr_it flow ->
+               let addr_it = Addr.from_expr addr_it in
                man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) tuple range) flow >>%
-               Eval.singleton (mk_py_object (addr_it, None) range)
+                 Eval.singleton (mk_py_object (addr_it, None) range)
              )
-        )
-      |> OptionExt.return
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks? *)
@@ -242,7 +235,7 @@ struct
       let addr_tuple = mk_alloc_addr (A_py_tuple (List.length i)) range in
       man.eval   addr_tuple flow >>$
  (fun eaddr_tuple flow ->
-          let addr_tuple = addr_of_expr eaddr_tuple in
+          let addr_tuple = Addr.from_expr eaddr_tuple in
           let els_var = var_of_addr addr_tuple in
           let flow = List.fold_left2 (fun flow vari eli ->
                          flow >>% man.exec
@@ -258,15 +251,15 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_remove {ekind = E_addr ({addr_kind = A_py_tuple _} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)} ->
        let vas = var_of_addr a in
        List.fold_left (fun flow v -> flow >>% man.exec   (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_tuple _} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)} ->
        let vas = var_of_addr a in
        List.fold_left (fun flow v -> flow >>% man.exec   (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)}, {ekind = E_addr (a', _)}) ->
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
@@ -274,7 +267,7 @@ struct
         (Post.return flow) vas vas'
       |> OptionExt.return
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, [{ekind = E_addr a'}]) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)}, [{ekind = E_addr (a', _)}]) ->
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
@@ -282,7 +275,7 @@ struct
         (Post.return flow) vas vas'
       |> OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_tuple _} as a)}, [{ekind = E_addr a'}]) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)}, [{ekind = E_addr (a', _)}]) ->
       let vas = var_of_addr a in
       let vas' = var_of_addr a' in
       List.fold_left2 (fun flow v v' ->
@@ -297,7 +290,7 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_tuple _} as addr)} as e) ->
+    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_tuple _} as addr, _)} as e) ->
        let range = erange e in
        OptionExt.return @@
          List.fold_left (fun vset var ->

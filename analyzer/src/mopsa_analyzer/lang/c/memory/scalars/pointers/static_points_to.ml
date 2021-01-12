@@ -80,8 +80,8 @@ let rec eval_opt exp : static_points_to option =
   | E_constant(C_top t) when is_c_pointer_type t ->
     Top |> OptionExt.return
 
-  | E_addr (addr) ->
-    AddrOf(mk_addr_base addr, mk_zero exp.erange, None) |> OptionExt.return
+  | E_addr (addr, mode) ->
+    AddrOf(mk_addr_base addr, mk_zero exp.erange, mode) |> OptionExt.return
 
   | x when is_c_int_type exp.etyp || is_numeric_type exp.etyp ->
     Top |> OptionExt.return

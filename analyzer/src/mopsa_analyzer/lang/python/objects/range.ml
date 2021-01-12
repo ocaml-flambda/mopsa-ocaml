@@ -63,9 +63,7 @@ struct
     let cls = fst @@ find_builtin bltin in
     man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
       (fun eaddr flow ->
-        let addr = match ekind eaddr with
-          | E_addr a -> a
-          | _ -> assert false in
+        let addr = Addr.from_expr eaddr in
         man.exec   (mk_add eaddr range) flow >>%
         Eval.singleton (mk_py_object (addr, oe) range)
       )
@@ -85,9 +83,7 @@ struct
                 let start, stop, step = match args with a::b::c::[] -> a,b,c | _ -> assert false in
                 man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "slice")) (tag_range range "alloc_slice")) flow >>$
                   (fun eaddr flow ->
-                    let addr = match ekind eaddr with
-                      | E_addr a -> a
-                      | _ -> assert false in
+                    let addr = Addr.from_expr eaddr in
                     let obj = mk_py_object (addr, None) range in
                     man.exec   (mk_add eaddr range) flow >>%
                     man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
@@ -197,19 +193,17 @@ struct
                  let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
                  let alloc_range = tag_range range "alloc_%s" "range" in
                  man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
- (fun eaddr flow ->
-                     let addr = match ekind eaddr with
-                       | E_addr a -> a
-                       | _ -> assert false in
+                   (fun eaddr flow ->
+                     let addr = Addr.from_expr eaddr in
                      let obj = mk_py_object (addr, None) range in
                      man.exec    (mk_add eaddr range) flow >>%
-                     man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
-                     man.exec   (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
-                     man.exec   (mk_assign (mk_py_attr obj "step" range) step range) >>%
-                     Eval.singleton obj
+                       man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                       man.exec   (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                       man.exec   (mk_assign (mk_py_attr obj "step" range) step range) >>%
+                       Eval.singleton obj
                    )
               )
-          )
+        )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__contains__", _))}, _)}, args, []) ->
       (* isinstance(arg1, range) && isinstance(arg2, int) ? *)
@@ -232,28 +226,26 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args
-        ["range"]
-        (fun r flow ->
+       Utils.check_instances f man flow range args
+         ["range"]
+         (fun r flow ->
            let range_obj = List.hd r in
            let alloc_range = tag_range range "alloc_%s" "range" in
            man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range_iterator")) alloc_range) flow >>$
- (fun eaddr flow ->
-               let addr = match ekind eaddr with
-                 | E_addr a -> a
-                 | _ -> assert false in
+             (fun eaddr flow ->
+               let addr = Addr.from_expr eaddr in
                let obj = mk_py_object (addr, None) range in
                (* FIXME: replace stop by length which should be computed, see rangeobject.c:197 *)
                flow |>
-               man.exec    (mk_add eaddr range) >>%
-               man.exec   (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) >>%
-               man.exec   (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) >>%
-               man.exec   (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) >>%
-               man.exec   (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:(T_py None) range) range) >>%
-               (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
-               Eval.singleton obj)
-        )
-      |> OptionExt.return
+                 man.exec    (mk_add eaddr range) >>%
+                 man.exec   (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) >>%
+                 man.exec   (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) >>%
+                 man.exec   (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) >>%
+                 man.exec   (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:(T_py None) range) range) >>%
+                 (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
+                 Eval.singleton obj)
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__reversed__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args

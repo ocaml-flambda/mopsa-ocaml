@@ -110,7 +110,7 @@ struct
     (* allocate a resource *)
     man.eval (mk_stub_alloc_resource "alloca" range) flow >>$ fun e flow ->
     match ekind e with
-    | E_addr addr ->
+    | E_addr (addr, _) ->
       (* add the resource to local state *)
       let flow = map_env T_cur (add addr) man flow in
       (* add the address to memory state *)
