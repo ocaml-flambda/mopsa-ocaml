@@ -70,6 +70,9 @@ struct
       in
       man.exec stmt flow |> OptionExt.return
 
+    | S_c_do_while(body, {ekind = E_constant (C_int z)}) when Z.equal z Z.zero ->
+       man.exec body flow |> OptionExt.return
+
     | S_c_do_while(body, cond) ->
       let range = stmt.srange in
       let stmt = Universal.Ast.(
