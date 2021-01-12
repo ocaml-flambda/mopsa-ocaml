@@ -1,4 +1,4 @@
-(* Truc commun au multilangage: addr du tas/variable/fonction
+012(* Truc commun au multilangage: addr du tas/variable/fonction
    Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
            Var -> Valeur ~> Addr -> Valeur
  *)
@@ -144,11 +144,6 @@ module Domain =
                 set p (Nt (ValueSet.singleton a)) in
       set_env T_cur r man flow
 
-    let addr_of_exp e =
-      match ekind e with
-      | E_addr a -> a
-      | _ -> assert false
-
     (* Creates stmt binder_addr · obj_name = obj_addr *)
     let bind_in_python binder_addr obj_name obj_addr range man flow =
       (if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_integers) = 0 then
@@ -190,7 +185,7 @@ module Domain =
             | _ -> assert false in
           man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range) flow >>$
             fun methd_eaddr flow ->
-            let methd_addr = addr_of_exp methd_eaddr in
+            let methd_addr = Addr.from_expr methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
             (* bind method to binder *)
             bind_in_python binder_addr methd_name methd_addr range man flow
@@ -234,7 +229,7 @@ module Domain =
                 debug "points_to %a" pp_points_to member_points_to;
                 man.eval (mk_alloc_addr (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range) flow >>$
                   fun member_descr flow ->
-                  let member_descr = addr_of_exp member_descr in
+                  let member_descr = Addr.from_expr member_descr in
                   let flow = set_singleton member_points_to  member_descr man flow in
                   man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
                     bind_in_python binder_addr member_name member_descr range man
@@ -262,7 +257,7 @@ module Domain =
           | _ -> assert false in
         man.eval (mk_alloc_addr (Python.Addr.A_py_c_module module_name) range) flow >>$
           fun module_addr flow ->
-          let m_addr = addr_of_exp module_addr in
+          let m_addr = Addr.from_expr module_addr in
           let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
           let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
           Eval.singleton module_addr (add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow)
@@ -298,7 +293,7 @@ module Domain =
            | P_fun fundec ->
               man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range) flow >>$
                 (fun fun_eaddr flow ->
-                  let fun_addr = addr_of_exp fun_eaddr in
+                  let fun_addr = Addr.from_expr fun_eaddr in
                   let flow = set_singleton func fun_addr man flow in
                   bind_in_python cls_addr name fun_addr range man flow)
               |> post_to_flow man
@@ -351,7 +346,7 @@ module Domain =
           | _ -> assert false in
         man.eval (mk_alloc_addr (Python.Addr.A_py_c_class cls_var) range) flow >>$
           fun cls_eaddr flow ->
-          let cls_addr = addr_of_exp cls_eaddr in
+          let cls_addr = Addr.from_expr cls_eaddr in
           let flow = set_singleton cls cls_addr man flow in
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
@@ -498,7 +493,7 @@ module Domain =
            (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
            man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
              fun inst_eaddr flow ->
-             let inst_addr = addr_of_exp inst_eaddr in
+             let inst_addr = Addr.from_expr inst_eaddr in
              let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
              debug "%a allocated! Forcing %a %a" pp_expr inst_eaddr pp_expr (mk_var bytes range) pp_expr (List.hd @@ List.tl args);
              (* No need to put this into the equiv, since it's the same thing? *)
@@ -520,10 +515,10 @@ module Domain =
              debug "allocating int at range %a callstack %a" pp_range range Callstack.pp_callstack (Flow.get_callstack flow);
              man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
                fun int_addr flow ->
-               debug "got int_addr %a" pp_addr (addr_of_exp int_addr);
-               man.exec (mk_assign (mk_var (mk_addr_attr (addr_of_exp int_addr) "value" T_int) range) earg range) flow >>%
+               debug "got int_addr %a" pp_addr (Addr.from_expr int_addr);
+               man.exec (mk_assign (mk_var (mk_addr_attr (Addr.from_expr int_addr) "value" T_int) range) earg range) flow >>%
                  (* FIXME: addr vs py_object, we'll need to clean things somehow... *)
-                 Eval.singleton (mk_addr (addr_of_exp int_addr) range)
+                 Eval.singleton (mk_addr (Addr.from_expr int_addr) range)
            )
          |> OptionExt.return
 
@@ -609,7 +604,7 @@ module Domain =
                                      begin match KeySet.choose @@ Top.detop @@ EquivBaseAddrs.find_inverse type_addr (get_env T_cur man flow) with
                                         | P_block ({base_kind = Var v}, _, _) ->
                                            let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
-                                           let obj = mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range in
+                                           let obj = mk_addr ~mode:(Some STRONG) ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range in
                                            post_to_flow man
                                              (
                                                man.exec (mk_add (mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range) range) flow >>%
@@ -721,7 +716,7 @@ module Domain =
                fun py_pos flow ->
                debug "PyTuple_GetItem, py_pos = %a" pp_expr py_pos;
                man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
-                           [py_tuple; mk_py_object (addr_of_exp py_pos, Some (mk_var (mk_addr_attr (addr_of_exp py_pos) "value" T_int) range)) range] range) flow >>$
+                           [py_tuple; mk_py_object (Addr.from_expr py_pos, Some (mk_var (mk_addr_attr (Addr.from_expr py_pos) "value" T_int) range)) range] range) flow >>$
                  fun py_elem flow ->
                  (* FIXME: Python~>C boundary *)
                  debug "PyTuple_GetItem: %a" pp_expr py_elem;
@@ -899,12 +894,12 @@ module Domain =
            ) in
 
          (match ekind addr_value with
-          | E_addr {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
+          | E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}}, _) ->
              (* Python~>C boundary *)
              (* FIXME: We're moving from Python to C, so we need to attach
                 integer values to the addresses (not precise in the python
                p        art but necessary here. *)
-             man.exec (mk_assign (mk_var (mk_addr_attr (addr_of_exp addr_value) "value" T_int) range) (OptionExt.none_to_exn @@ snd @@ object_of_expr value) range) flow >>%
+             man.exec (mk_assign (mk_var (mk_addr_attr (Addr.from_expr addr_value) "value" T_int) range) (OptionExt.none_to_exn @@ snd @@ object_of_expr value) range) flow >>%
                call
           | _ ->
              call flow)
