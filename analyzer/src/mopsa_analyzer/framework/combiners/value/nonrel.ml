@@ -383,12 +383,12 @@ struct
 
   let exec stmt man ctx (map:t) : t option =
     match skind stmt with
-    | S_remove { ekind = E_var (v, _) }  ->
+    | S_remove { ekind = E_var (v, _) } when Value.accept_type v.vtyp ->
       VarMap.remove v map |>
       OptionExt.return
 
     | S_add { ekind = E_var (v, _) } when Value.accept_type v.vtyp ->
-      (* Check of the variable is already present *)
+      (* Check if the variable is already present *)
       if VarMap.mem v map
       then OptionExt.return map
       else

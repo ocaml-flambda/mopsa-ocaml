@@ -589,6 +589,7 @@ meta_analyzer_requires
 enable_byte
 disable_python
 disable_c
+LLVM_CCLIBS
 LLVM_MAJOR_VERSION
 CLANG
 LLVMCONFIG
@@ -3912,6 +3913,13 @@ else
 fi
 
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
+
+
+    if test $LLVM_MAJOR_VERSION -ge 10; then
+       LLVM_CCLIBS="-lclang-cpp"
+    else
+       LLVM_CCLIBS=" -lclangFrontend -lclangSerialization -lclangDriver -lclangTooling -lclangParse -lclangSema  -lclangAnalysis -lclangEdit -lclangAST -lclangLex -lclangBasic"
+    fi
 
   fi
 
