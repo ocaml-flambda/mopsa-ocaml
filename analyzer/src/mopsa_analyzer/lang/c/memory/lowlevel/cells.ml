@@ -51,7 +51,7 @@ struct
 
   let name = "c.memory.lowlevel.cells"
 
-  
+
   (** {2 Memory cells} *)
   (** **************** *)
 
@@ -485,7 +485,7 @@ struct
               raise NotPossible
           with
           | NotPossible -> None
-    
+
 
 
   (** Add a cell and its constraints *)
@@ -586,6 +586,13 @@ struct
     | Cell of cell * mode option
     | Region of base * Z.t (** offset lower bound *) * Z.t (** offset higher bound *) * Z.t (** offset step *)
     | Top
+
+  let pp_expansion fmt = function
+    | Cell (c, om) ->
+       Format.fprintf fmt "Cell(%a, %a)" pp_cell c (OptionExt.print pp_mode) om
+    | Region (b, l, u, s) ->
+       Format.fprintf fmt "Region(%a, %a, %a, %a)" pp_base b Z.pp_print l Z.pp_print u Z.pp_print s
+    | Top -> Format.fprintf fmt "T"
 
 
   let rec is_interesting_base = function
@@ -835,7 +842,7 @@ struct
     let t = under_type p.etyp in
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
-    | Top -> 
+    | Top ->
       man.eval (mk_top (void_to_char t) range) flow
 
     | Region (base,lo,hi,step) ->
@@ -863,7 +870,7 @@ struct
         mk_numeric_cell_var_expr c ~mode range
     in
     man.eval v flow ~route:scalar
-  
+
 
   let eval exp man flow =
     match ekind exp with
@@ -1048,8 +1055,8 @@ struct
       (fun acc bb ->
          Post.bind (exec_remove bb range man) acc
       ) (Post.return flow) bl
-    
-         
+
+
 
   (** Compute the interval of an offset *)
   let offset_interval offset range man flow : Itv.t =
