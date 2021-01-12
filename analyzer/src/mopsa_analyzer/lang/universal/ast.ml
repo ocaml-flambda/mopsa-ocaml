@@ -444,11 +444,16 @@ type expr_kind +=
   | E_alloc_addr of addr_kind * mode
 
   (** Head address. *)
-  | E_addr of addr
+  | E_addr of addr * mode option
 
   (** Length of array or string *)
   | E_len of expr
 
+
+let addr_mode (a:addr) (omode: mode option) : mode =
+  match omode with
+  | None -> a.addr_mode
+  | Some m -> m
 
 
 let () =
@@ -478,8 +483,12 @@ let () =
             (fun () -> compare_mode m1 m2);
           ]
 
-        | E_addr(a1), E_addr(a2) ->
-          compare_addr a1 a2
+        | E_addr(a1, om1), E_addr(a2, om2) ->
+           Compare.compose
+             [
+               (fun () -> compare_addr a1 a2);
+               (fun () -> Compare.option compare_mode om1 om2);
+             ]
 
         | E_len(a1), E_len(a2) -> compare_expr a1 a2
 
@@ -498,7 +507,9 @@ let () =
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
         | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
-        | E_addr (addr) -> fprintf fmt "%a" pp_addr addr
+        | E_addr (addr, None) -> fprintf fmt "%a" pp_addr addr
+        | E_addr (addr, Some STRONG) -> fprintf fmt "strong(%a)" pp_addr addr
+        | E_addr (addr, Some WEAK) -> fprintf fmt "weak(%a)" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
       );
@@ -690,7 +701,7 @@ let () =
         | S_print_expr el ->
           {exprs = el; stmts = []},
           (function {exprs} -> {stmt with skind = S_print_expr exprs})
-          
+
         | S_free _ -> leaf stmt
 
         | _ -> default stmt
@@ -829,21 +840,21 @@ let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
 
-let mk_addr addr ?(etyp=T_addr) range = mk_expr ~etyp (E_addr addr) range
+let mk_addr addr ?(etyp=T_addr) ?(mode=None) range = mk_expr ~etyp (E_addr (addr, mode)) range
 
 let mk_alloc_addr ?(mode=STRONG) addr_kind range =
   mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
 
 let weaken_addr_expr e =
   match ekind e with
-  | E_addr {addr_mode = WEAK} -> e
-  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = WEAK}}
+  | E_addr ({addr_mode = WEAK}, _) -> e
+  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = WEAK}, om)}
   | _ -> assert false
 
 let strongigy_addr_expr e =
   match ekind e with
-  | E_addr {addr_mode = STRONG} -> e
-  | E_addr addr -> {e with ekind = E_addr {addr with addr_mode = STRONG}}
+  | E_addr ({addr_mode = STRONG}, _) -> e
+  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = STRONG}, om)}
   | _ -> assert false
 
 let is_int_type = function
@@ -913,7 +924,7 @@ let mk_fold_addr a al range =
   mk_fold (mk_addr a range) (List.map (fun aa -> mk_addr aa range) al) range
 
 let rec expr_to_const e : constant option =
-  if not (is_numeric_type e.etyp) then None else 
+  if not (is_numeric_type e.etyp) then None else
   match ekind e with
   | E_constant c -> Some c
 
@@ -1043,7 +1054,7 @@ struct
   let print = unformat pp_addr
   let from_expr e =
     match ekind e with
-    | E_addr addr -> addr
+    | E_addr (addr, _) -> addr
     | _ -> assert false
 end
 
