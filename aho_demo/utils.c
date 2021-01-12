@@ -150,9 +150,10 @@ pymod_get_string(PyObject* obj, TRIE_LETTER_TYPE** word, ssize_t* wordlen, bool*
     char* bytes;
 #endif
 
-#if defined PEP393_UNICODE
+#if defined PEP393_UNICODE// the next if/else is the code actually used
     if (F(PyUnicode_Check)(obj)) {
     PyUnicode_READY(obj);
+    // Mopsa comment: internal string repr in CPython is a mess, let's assume they use Py_UCS4 representation.
     if (PyUnicode_KIND(obj) == PyUnicode_4BYTE_KIND) {
             *word = (TRIE_LETTER_TYPE*)(PyUnicode_4BYTE_DATA(obj));
             *wordlen = PyUnicode_GET_LENGTH(obj);

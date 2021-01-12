@@ -20,6 +20,7 @@
 #include <iso646.h>
 
 #define DEBUG
+#define AHOCORASICK_UNICODE
 
 /* #if defined(_MSC_VER)       // Visual Studio compiler */
 /* #   include "windows.h" */

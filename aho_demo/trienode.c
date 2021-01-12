@@ -48,10 +48,15 @@ trienode_get_next(TrieNode* node, const TRIE_LETTER_TYPE letter) {
     ASSERT(node);
     next = (Pair*)node->next;
 
-    for (i=0; i < node->n; i++)
+    TRIE_LETTER_TYPE tmp;
+    Pair tmp2;
+    for (i=0; i < node->n; i++) {
+        tmp = next[i].letter;
         if (next[i].letter == letter) {
+            tmp2 = next[i];
             return next[i].child;
         }
+    }
 
     return NULL;
 }
@@ -197,4 +202,3 @@ trienode_dump_to_file(TrieNode* node, FILE* f) {
         }
     }
 }
-

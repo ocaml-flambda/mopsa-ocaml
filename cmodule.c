@@ -27,13 +27,14 @@ Cbox_init(Cbox *self, PyObject *args2, PyObject *kwds)
 {
     PyObject *c;
     int *d;
-    if(!PyArg_ParseTuple(args2, "Oi", &c, &d))
+    if(!PyArg_ParseTuple(args2, "OO", &c, &d))
         return -1;// 0 ~> assertion fails + coredump
 
     if(c)
         self->contents = c;
     if(d)
         self->counter = d;
+    assert (PyUnicode_Check(d));
 //    _mopsa_print();
     return 0; // -1 ~> coredump o/
 }
@@ -81,8 +82,10 @@ static PyTypeObject CboxType = {
 static PyObject*
 c_typ(PyObject *self, PyObject *args)
 {
-    printf("%s", PyModule_GetName(self));
-    return (PyObject*) Py_TYPE(&CboxType);
+    PyObject* a;
+    if(!PyArg_ParseTuple(args, "O", &a))
+        return -1;// 0 ~> assertion fails + coredump
+    return (PyObject*) Py_TYPE(a);
 }
 
 static PyObject*

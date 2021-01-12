@@ -289,3 +289,10 @@ PyMem_Free(void *ptr)
 {
     free(ptr);
 }
+
+void
+_PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
+{
+    *(PyTypeObject**) ((char*)obj + offsetof(PyObject, ob_type)) = type;
+    _mopsa_print();
+}
