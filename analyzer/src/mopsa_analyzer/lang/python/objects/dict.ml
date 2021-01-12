@@ -103,9 +103,6 @@ struct
 
   let viewseq_of_addr a = mk_addr_attr a "view_seq" (T_py None)
 
-  let addr_of_expr exp = match ekind exp with
-    | E_addr a -> a
-    | _ -> Exceptions.panic "%a@\n" pp_expr exp
 
   let addr_of_eobj exp = match ekind exp with
     | E_py_object (a, _) -> a
@@ -128,7 +125,7 @@ struct
       let addr_dict = mk_alloc_addr A_py_dict range in
       man.eval   addr_dict flow >>$
  (fun eaddr_dict flow ->
-          let addr_dict = addr_of_expr eaddr_dict in
+          let addr_dict = Addr.from_expr eaddr_dict in
           let els_keys, els_vals = var_of_addr addr_dict in
           let flow = List.fold_left2 (fun acc key valu ->
               acc >>%
@@ -249,7 +246,7 @@ struct
            let a = mk_alloc_addr (Py_list.A_py_iterator ("dict_keyiterator", None)) range in
            man.eval   a flow >>$
  (fun addr_it flow ->
-                 let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
+                 let addr_it = Addr.from_expr addr_it in
                  man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict range) flow >>%
                    Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -286,7 +283,7 @@ struct
            let a = mk_alloc_addr (A_py_dict_view viewname) range in
            man.eval   a flow >>$
  (fun addr_it flow ->
-               let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
+               let addr_it = Addr.from_expr addr_it in
                man.exec   (mk_assign (mk_var (viewseq_of_addr addr_it) range) dict range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -304,15 +301,15 @@ struct
       Utils.check_instances n man flow range args [case]
         (fun args flow ->
           man.eval   (mk_var (viewseq_of_addr @@ addr_of_eobj @@ List.hd args) range) flow >>$
- (fun dict_eobj flow ->
-                let a = mk_alloc_addr (Py_list.A_py_iterator (itname, None)) range in
-                man.eval   a flow >>$
- (fun addr_it flow ->
-                      let addr_it = match ekind addr_it with E_addr a -> a | _ -> assert false in
-                      man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow >>%
-                        Eval.singleton (mk_py_object (addr_it, None) range)
-                    )
-              )
+            (fun dict_eobj flow ->
+              let a = mk_alloc_addr (Py_list.A_py_iterator (itname, None)) range in
+              man.eval   a flow >>$
+                (fun addr_it flow ->
+                  let addr_it = Addr.from_expr addr_it in
+                  man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict_eobj range) flow >>%
+                    Eval.singleton (mk_py_object (addr_it, None) range)
+                )
+            )
         )
       |> OptionExt.return
 
@@ -416,7 +413,7 @@ struct
         | _ -> assert false in
       man.eval   addr_dict flow >>$
  (fun eaddr_dict flow ->
-          let addr_dict = addr_of_expr eaddr_dict in
+          let addr_dict = Addr.from_expr eaddr_dict in
           let keys_var, values_var = var_of_addr addr_dict in
           let stmts = mk_block (
               List.map (fun (var, annot) ->
@@ -436,7 +433,7 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict} as a, _)}, {ekind = E_addr (a', _)}) ->
       let kva, vva = var_of_addr a in
       let kva', vva' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var kva pp_var kva';
@@ -445,65 +442,65 @@ struct
       flow >>% man.exec   (mk_rename_var vva vva' range)
       |> OptionExt.return
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_dict} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_dict} as a, _)}, addrs) ->
        let kva, vva = var_of_addr a in
        let kvas, vvas = List.split @@ List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_dict} as a') -> var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_dict} as a', _) -> var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
          man.exec   (mk_fold_var kva kvas range) >>%
          man.exec   (mk_fold_var vva vvas range) |>
          OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_dict} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_dict} as a, _)}, addrs) ->
        let kva, vva = var_of_addr a in
        let kvas, vvas = List.split @@ List.map (fun ea' -> match ekind ea' with
-                                                           | E_addr ({addr_kind = A_py_dict} as a') -> var_of_addr a'
+                                                           | E_addr ({addr_kind = A_py_dict} as a', _) -> var_of_addr a'
                                                            | _ -> assert false) addrs in
        flow |>
          man.exec   (mk_expand_var kva kvas range) >>%
          man.exec   (mk_expand_var vva vvas range) |>
          OptionExt.return
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_dict} as a, _)} ->
        let kva, vva = var_of_addr a in
        flow |>
          man.exec   (mk_remove_var kva range) >>%
          man.exec   (mk_remove_var vva range) |>
          OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict} as a, _)} ->
        let kva, vva = var_of_addr a in
        flow |>
          man.exec   (mk_remove_var kva range) >>%
          man.exec   (mk_remove_var vva range) |>
          OptionExt.return
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_dict_view _} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_dict_view _} as a, _)} ->
        let va = viewseq_of_addr a in
        flow |> man.exec   (mk_remove_var va range) |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a, _)}, {ekind = E_addr (a', _)}) ->
        let va = viewseq_of_addr a in
        let va' = viewseq_of_addr a' in
        man.exec   (mk_rename_var va va' range) flow |> OptionExt.return
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a, _)}, addrs) ->
        let va = viewseq_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_dict_view _} as a') -> viewseq_of_addr a'
+                                      | E_addr ({addr_kind = A_py_dict_view _} as a', _) -> viewseq_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec   (mk_fold_var va vas range) flow |> OptionExt.return
 
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_dict_view _} as a, _)}, addrs) ->
        let va = viewseq_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_dict_view _} as a') -> viewseq_of_addr a'
+                                      | E_addr ({addr_kind = A_py_dict_view _} as a', _) -> viewseq_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec   (mk_expand_var va vas range) flow |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict_view _} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_dict_view _} as a, _)} ->
        let va = viewseq_of_addr a in
        man.exec   (mk_remove_var va range) flow |> OptionExt.return
 
@@ -513,7 +510,7 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_dict} as addr)} as e) ->
+    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_dict} as addr, _)} as e) ->
        let range = erange e in
        let keys_var = kvar_of_addr addr in
        let values_var = vvar_of_addr addr in

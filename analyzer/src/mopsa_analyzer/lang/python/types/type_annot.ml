@@ -711,8 +711,8 @@ struct
          )
        |> OptionExt.return
 
-    | S_fold ({ekind = E_py_annot {ekind = E_addr a'}}, [{ekind = (E_addr a)}])
-    | S_rename ({ekind = E_py_annot {ekind = (E_addr a)}}, {ekind = E_addr a'}) ->
+    | S_fold ({ekind = E_py_annot {ekind = E_addr (a', _)}}, [{ekind = (E_addr (a, _))}])
+    | S_rename ({ekind = E_py_annot {ekind = (E_addr (a, _))}}, {ekind = E_addr (a', _)}) ->
       let cur = get_env T_cur man flow in
       debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange (format TVMap.print) cur;
       let ncur =
@@ -728,7 +728,7 @@ struct
       set_env T_cur ncur man flow
       |> Post.return |> OptionExt.return
 
-    | S_expand ({ekind = E_py_annot {ekind = E_addr a}}, addrs) ->
+    | S_expand ({ekind = E_py_annot {ekind = E_addr (a, _)}}, addrs) ->
        let cur = get_env T_cur man flow in
        let cur = TVMap.fold (fun k v cur ->
            match k with
@@ -736,7 +736,7 @@ struct
               List.fold_left
                 (fun cur eaddr ->
                   match ekind eaddr with
-                  | E_addr addr ->
+                  | E_addr (addr, _) ->
                      TVMap.add (Class {vk with vkind = V_addr_attr(addr, s)}) v cur
                   | _ -> assert false
                 ) cur addrs

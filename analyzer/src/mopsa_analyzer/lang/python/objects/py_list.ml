@@ -145,10 +145,6 @@ struct
     | E_py_object (a, _) -> itindex_var_of_addr a
     | _ -> assert false
 
-  let addr_of_expr exp = match ekind exp with
-    | E_addr a -> a
-    | _ -> Exceptions.panic "%a@\n" pp_expr exp
-
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
@@ -158,7 +154,7 @@ struct
       let addr_list = mk_alloc_addr A_py_list range in
       man.eval addr_list flow >>$
         (fun eaddr_list flow ->
-            let addr_list = addr_of_expr eaddr_list in
+            let addr_list = Addr.from_expr eaddr_list in
             let els_var = var_of_addr addr_list in
             let flow = List.fold_left (fun acc el ->
                            let stmt = mk_assign (mk_var els_var range) el range in
@@ -228,7 +224,7 @@ struct
                            let addr_list = mk_alloc_addr A_py_list range in
                            man.eval   addr_list flow >>$
                              (fun eaddr_list flow ->
-                               let addr_list = addr_of_expr eaddr_list in
+                               let addr_list = Addr.from_expr eaddr_list in
                                let slicedlist_var = var_of_addr addr_list in
                                man.eval list   flow >>$
                                  (fun list flow ->
@@ -344,7 +340,7 @@ struct
                let addr_list = mk_alloc_addr A_py_list range in
                man.eval   addr_list flow >>$
                  (fun list_addr flow ->
-                     let alist_addr = addr_of_expr list_addr in
+                     let alist_addr = Addr.from_expr list_addr in
                      let els_res_var = var_of_addr alist_addr in
                      let els_res_length = length_var_of_addr alist_addr in
                      Cases.bind_list evargs (man.eval  ) flow |>
@@ -439,7 +435,7 @@ struct
                (* WOOPS: this alloc may trigger an address renaming invalidating els_list and len_list *)
                man.eval   addr_list flow >>$
                  (fun eaddr_list flow ->
-                     let addr_list = addr_of_expr eaddr_list in
+                     let addr_list = Addr.from_expr eaddr_list in
                      let els_var = var_of_addr addr_list in
                      let els_len = length_var_of_addr addr_list in
                      Cases.bind_list evargs (man.eval  ) flow |>
@@ -680,7 +676,7 @@ struct
            let a = mk_alloc_addr (A_py_iterator ("list_iterator", None)) range in
            man.eval   a flow >>$
  (fun eaddr_it flow ->
-                 let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+                 let addr_it = Addr.from_expr eaddr_it in
                  flow |>
                    man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
                    man.exec  (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) >>%
@@ -746,7 +742,7 @@ struct
            man.eval   a flow >>$
  (fun eaddr_it flow ->
                (* FIXME list_reverseiterator index *)
-               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               let addr_it = Addr.from_expr eaddr_it in
                flow |>
                  man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) >>%
                  man.exec  (mk_assign (mk_var (itindex_var_of_addr addr_it) range) (mk_int 0 range) range) >>%
@@ -820,7 +816,7 @@ struct
            let a = mk_alloc_addr (A_py_iterator ("enumerate", None)) range in
            man.eval   a flow >>$
  (fun eaddr_it flow ->
-               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               let addr_it = Addr.from_expr eaddr_it in
                man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -860,10 +856,8 @@ struct
            let list1, list2 = match args with | [_; l1; l2] -> l1, l2 | _ -> assert false in
            let a = mk_alloc_addr (A_py_iterator ("zip", None)) range in
            man.eval   a flow >>$
- (fun eaddr_it flow ->
-               let addr_it = match ekind eaddr_it with
-                 | E_addr a -> a
-                 | _ -> assert false in
+             (fun eaddr_it flow ->
+               let addr_it = Addr.from_expr eaddr_it in
                flow |>
                  man.exec   (mk_assign (mk_var (itseq_of_addr  addr_it) range) list1 range) >>%
                  man.exec   (mk_assign (mk_var (itseq2_of_addr addr_it) range) list2 range) >>%
@@ -976,7 +970,7 @@ struct
       let addr_list = mk_alloc_addr A_py_list range in
       man.eval   addr_list flow >>$
  (fun eaddr_list flow ->
-          let addr_list = addr_of_expr eaddr_list in
+          let addr_list = Addr.from_expr eaddr_list in
           let els_var = var_of_addr addr_list in
           let len_var = length_var_of_addr addr_list in
           let stmt = mk_stmt (S_py_annot (mk_var els_var range, mk_expr ~etyp:(T_py None) (E_py_annot i) range)) range in
@@ -1012,7 +1006,7 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_remove {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_list} as a, _)} ->
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
@@ -1020,7 +1014,7 @@ struct
          man.exec  (mk_remove_var la range) >>%
          Post.return |> OptionExt.return
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)} ->
        let va = itseq_of_addr a in
        let flow = man.exec   (mk_remove_var va range) flow in
        flow >>%
@@ -1032,7 +1026,7 @@ struct
          )
        |> OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)}, {ekind = E_addr (a', _)}) ->
        let va = itseq_of_addr a in
        let va' = itseq_of_addr a' in
        flow |>
@@ -1044,7 +1038,7 @@ struct
          ) >>%
          man.exec   (mk_rename_var va va' range) |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)} ->
        let va = itseq_of_addr a in
        flow |>
          man.exec   (mk_remove_var va range) >>%
@@ -1056,8 +1050,8 @@ struct
          ) |>
          OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, addrs)
-      | S_fold ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)}, addrs)
+      | S_fold ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)}, addrs) ->
        let mk_stmt = match skind stmt with
          | S_expand _ -> mk_expand_var
          | S_fold _  -> mk_fold_var
@@ -1065,7 +1059,7 @@ struct
        let va = itseq_of_addr a in
        let vas = List.map (fun ea' ->
                      match ekind ea' with
-                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itseq_of_addr a'
+                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a', _) when kind = kind' -> itseq_of_addr a'
                      | _ -> assert false) addrs in
        flow |>
          man.exec   (mk_stmt va vas range) >>%
@@ -1074,14 +1068,14 @@ struct
                (mk_stmt (itindex_var_of_addr a)
                   (List.map (fun ea' ->
                      match ekind ea' with
-                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a') when kind = kind' -> itindex_var_of_addr a'
+                     | E_addr ({addr_kind = A_py_iterator (kind', _)} as a', _) when kind = kind' -> itindex_var_of_addr a'
                      | _ -> assert false) addrs)
                   range)
            else
              fun x -> Post.return x )
        |> OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_list} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_list} as a, _)} ->
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        flow |>
@@ -1090,8 +1084,8 @@ struct
          OptionExt.return
 
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs)
-      | S_fold ({ekind = E_addr ({addr_kind = A_py_list} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_list} as a, _)}, addrs)
+      | S_fold ({ekind = E_addr ({addr_kind = A_py_list} as a, _)}, addrs) ->
        Debug.debug ~channel:"addrenv" "fold py_list";
        let mk_stmt = match skind stmt with
          | S_expand _ -> mk_expand_var
@@ -1100,14 +1094,14 @@ struct
        let va = var_of_addr a in
        let la = length_var_of_addr a in
        let vas, las = List.split @@ List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_list} as a') -> var_of_addr a', length_var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_list} as a', _) -> var_of_addr a', length_var_of_addr a'
                                       | _ -> assert false) addrs in
        flow |>
          man.exec   (mk_stmt va vas range) >>%
          man.exec  (mk_stmt la las range) |>
          OptionExt.return
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a, _)}, {ekind = E_addr (a', _)}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
       (* working on lists entails smashed element variable being index by the address, meaning we need to rename them *)
       let va = var_of_addr a in
@@ -1149,7 +1143,7 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
     fun query man flow ->
     match query with
-    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr)} as e) ->
+    | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr, _)} as e) ->
        let range = erange e in
        let content_var = var_of_addr addr in
        let length_var = length_var_of_addr addr in
