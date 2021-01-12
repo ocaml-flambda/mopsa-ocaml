@@ -609,21 +609,26 @@ module Domain =
                                      begin match KeySet.choose @@ Top.detop @@ EquivBaseAddrs.find_inverse type_addr (get_env T_cur man flow) with
                                         | P_block ({base_kind = Var v}, _, _) ->
                                            let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
+                                           let obj = mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range in
                                            post_to_flow man
                                              (
                                                man.exec (mk_add (mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range) range) flow >>%
                                                  man.exec (mk_add_var bytes range) >>%
                                                  man.exec (mk_assign (mk_var ~mode:(Some STRONG) bytes range) (mk_z ~typ:(T_c_integer C_unsigned_long) (sizeof_type pyobject_typ) range) range) >>%
-                                                 (* man.exec (mk_assign
-                                                  *             (mk_c_arrow_access_by_name (mk_addr ~etyp:(under_type @@ vtyp @@ List.hd assign_helper.c_func_parameters) addr range) "ob_type" range)
-                                                  *             (\* (add _ _ range ~etyp:()) *\)
-                                                  *
-                                                  *             (mk_c_address_of (mk_var {v with vtyp = vtyp @@ List.nth assign_helper.c_func_parameters 1} range) range)
-                                                  *             range) *)
-                                                 man.exec (mk_expr_stmt
-                                                             (mk_c_call assign_helper
-                                                                [mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range;
-                                                                 mk_c_address_of (mk_var {v with vtyp = under_type @@ vtyp @@ List.nth assign_helper.c_func_parameters 1} range) range] range) range)
+                                                 man.exec (mk_assign
+                                                             (mk_c_deref (mk_c_cast
+                                                                            (add (mk_c_cast obj (T_c_pointer s8) range) (mk_int 8 range) range)
+                                                                            (T_c_pointer (vtyp @@ List.nth assign_helper.c_func_parameters 1)) range) range)
+
+                                                             (mk_c_address_of (mk_var {v with vtyp = under_type @@ vtyp @@ List.nth assign_helper.c_func_parameters 1} range) range)
+                                                             range) >>%
+                                                 fun flow ->
+                                                 debug "result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
+                                                 Post.return flow
+                                                 (* man.exec (mk_expr_stmt
+                                                  *             (mk_c_call assign_helper
+                                                  *                [mk_addr ~etyp:(vtyp @@ List.hd assign_helper.c_func_parameters) addr range;
+                                                  *                 mk_c_address_of (mk_var {v with vtyp = under_type @@ vtyp @@ List.nth assign_helper.c_func_parameters 1} range) range] range) range) *)
                                              )
                                         | _ -> assert false
                                         end
