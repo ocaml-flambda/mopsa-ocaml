@@ -292,7 +292,25 @@ PyMem_Free(void *ptr)
 
 void
 _PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
+// in practice, only used to get the types PyObject and PyTypeObject...
 {
     *(PyTypeObject**) ((char*)obj + offsetof(PyObject, ob_type)) = type;
     _mopsa_print();
+}
+
+void
+init_flags()
+{
+    PyType_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TYPE_SUBCLASS;
+    PyBaseObject_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
+    PyLong_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LONG_SUBCLASS;
+    PyUnicode_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_UNICODE_SUBCLASS;
+    PyList_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LIST_SUBCLASS;
+}
+
+void set_default_flags(PyTypeObject *t)
+{
+    // should be 284160
+    // 9, 10, 12, 14, 18
+    t->tp_flags = Py_TPFLAGS_HEAPTYPE | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_VERSION_TAG;
 }
