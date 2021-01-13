@@ -106,6 +106,9 @@ sig
   val rename : key -> key -> t -> t
   (** [rename k k' a] renames key [k] to [k'] in [a] *)
 
+  val rename_inverse : value -> value -> t -> t
+  (** [rename k k' a] renames value [v] to [v'] in [a] *)
+
   val singleton :key -> value -> t
   (** [singleton k v] createw a map with the singleton binding [(k,{v})] *)
 

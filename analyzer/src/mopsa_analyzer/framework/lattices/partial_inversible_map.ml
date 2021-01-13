@@ -306,6 +306,16 @@ struct
     let a = remove k a in
     set k' v a
 
+  (** Rename value [v] to [v'] *)
+  let rename_inverse (v: Value.t) (v': Value.t) (a:t) : t =
+    let ks = find_inverse v a in
+    let a = remove_inverse v a in
+    match ks with
+    | TOP ->
+       assert(a = TOP);
+       TOP
+    | Nt ks ->
+       add_inverse v' ks a
 
   (** Create a map with singleton binding [(k,{v})] *)
   let singleton (k:Key.t) (v:Value.t) : t =
