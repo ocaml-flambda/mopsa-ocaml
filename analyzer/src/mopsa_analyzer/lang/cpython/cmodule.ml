@@ -387,7 +387,7 @@ module Domain =
         | A_py_module _ -> true
       | _ -> false
 
-    let rec python_to_c_boundary addr range man flow =
+    let rec python_to_c_boundary addr ?(size=None) range man flow =
       if not @@ is_py_addr addr then flow else
       let pyobject_typ, pytypeobject_typ =
         let assign_helper = C.Ast.find_c_fundec_by_name "_PyType_Assign_Helper" flow in
@@ -400,7 +400,11 @@ module Domain =
          FIXME: addr rename/old does not switch from U to C it seems for Python addresses:
                 I think the current domain should be in charge of dispatching correctly... :(
        *)
-      if EquivBaseAddrs.mem_inverse addr (get_env T_cur man flow) then flow else
+      debug "python_to_c_boundary %a" pp_addr addr;
+      if EquivBaseAddrs.mem_inverse addr (get_env T_cur man flow) then
+        let () = debug "%a already converted according to equiv" pp_addr addr in
+        flow
+      else
         let type_addr = match akind addr with
           | A_py_instance a -> a
           | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
@@ -440,11 +444,17 @@ module Domain =
         in
         let obj = mk_addr ~mode:(Some STRONG) ~etyp:(T_c_pointer pyobject_typ) addr range in
         let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
+        let bytes_size = match size with
+          | None ->
+             let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) in
+             mk_z ~typ:(T_c_integer C_unsigned_long) size range
+          | Some s -> s in
+        let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None) addr man flow in
         post_to_flow man
           (
             man.exec (mk_add (mk_addr ~etyp:(T_c_pointer pyobject_typ) addr range) range) flow >>%
               man.exec (mk_add_var bytes range) >>%
-              man.exec (mk_assign (mk_var ~mode:(Some STRONG) bytes range) (mk_z ~typ:(T_c_integer C_unsigned_long) (sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ)) range) range) >>%
+              man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               debug "obj = %a, type_obj = %a" pp_expr obj pp_expr type_obj;
               (* this is obj->ob_type = type *)
@@ -580,15 +590,17 @@ module Domain =
              (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
              man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
                fun inst_eaddr flow ->
-               let inst_addr = Addr.from_expr inst_eaddr in
-               let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
-               debug "%a allocated! Forcing %a %a" pp_expr inst_eaddr pp_expr (mk_var bytes range) pp_expr (List.hd @@ List.tl args);
-               (* No need to put this into the equiv, since it's the same thing? *)
-               (* let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base inst_addr) (mk_zero range) None) inst_addr man flow in *)
-               man.exec (mk_add_var bytes range) flow >>%
-                 man.exec (mk_assign (mk_var bytes range) (List.hd @@ List.tl args) range) >>%
-                 man.exec (mk_add inst_eaddr range) >>%
-                 Eval.singleton inst_eaddr
+               (* FIXME: clean python_to_c_boundary on cls_addr? *)
+               let flow = python_to_c_boundary (Addr.from_expr inst_eaddr) ~size:(Some (List.hd @@ List.tl args)) range man flow in
+               debug "dangerous boundary done?@.%a" (format @@ Flow.print man.lattice.print) flow;
+               (* let inst_addr = Addr.from_expr inst_eaddr in
+                * let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
+                * debug "%a allocated! Forcing %a %a" pp_expr inst_eaddr pp_expr (mk_var bytes range) pp_expr (List.hd @@ List.tl args);
+                * (\* let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base inst_addr) (mk_zero range) None) inst_addr man flow in *\)
+                * man.exec (mk_add_var bytes range) flow >>%
+                *   man.exec (mk_assign (mk_var bytes range) (List.hd @@ List.tl args) range) >>%
+                *   man.exec (mk_add inst_eaddr range) >>% *)
+                 Eval.singleton inst_eaddr flow
            )
          |> OptionExt.return
 
@@ -838,10 +850,13 @@ module Domain =
                | _ ->
                   mk_c_call cfunc cfunc_args range
              in
+             debug "state=%a@." (format print) (get_env T_cur man flow);
              let flow =
                List.fold_left (fun flow arg ->
                    match ekind arg with
-                   | E_addr (a, _) -> python_to_c_boundary a range man flow
+                   | E_addr (a, _) ->
+                      debug "[%s] applying boundary on %a" name pp_addr a;
+                      python_to_c_boundary a range man flow
                    | _ -> flow
                  )
                  flow
