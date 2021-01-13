@@ -22,7 +22,7 @@
 (** Lattice of partial inversible maps.
 
     Sets of partial maps M ∈ ℘(𝕂 ⇀ 𝕍) from concrete keys set 𝕂 to
-    concrete values set 𝕍 are abstracted as a set of partial maps ℳ ∈ 
+    concrete values set 𝕍 are abstracted as a set of partial maps ℳ ∈
     𝕂 ⇀ (℘(𝕍) ∪ {⊤}).
 *)
 
@@ -79,7 +79,7 @@ sig
 
   val find : key -> t -> ValueSet.t with_top
   (** [find k a] find the set of values attached to key [k] in
-      [a]. Raise [Not_found] of the key is not found. 
+      [a]. Raise [Not_found] of the key is not found.
   *)
 
   val find_inverse : value -> t -> KeySet.t with_top
@@ -111,6 +111,9 @@ sig
 
   val mem :key -> t -> bool
   (** [mem k a] check whether a binding [(k,-)] exists in [a] *)
+
+  val mem_inverse :value -> t -> bool
+  (** [mem v a] check whether a binding [(_,v)] exists in [a] *)
 
   val fold :(key -> ValueSet.t with_top -> 'a -> 'a) -> t -> 'a -> 'a
   (** [fold f a init] folds function [f] over elements [(k,vs)] in [a] *)

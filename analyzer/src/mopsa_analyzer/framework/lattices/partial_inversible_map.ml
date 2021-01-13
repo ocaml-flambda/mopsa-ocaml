@@ -23,7 +23,7 @@
 (** Lattice of partial inversible maps.
 
     Sets of partial maps M ∈ ℘(𝕂 ⇀ 𝕍) from concrete keys set 𝕂 to
-    concrete values set 𝕍 are abstracted as a set of partial maps ℳ ∈ 
+    concrete values set 𝕍 are abstracted as a set of partial maps ℳ ∈
     𝕂 ⇀ (℘(𝕍) ∪ {⊤}).
 *)
 
@@ -322,6 +322,14 @@ struct
     | TOP -> true
     | Nbt m -> Relation.mem_domain k m.relations ||
                KeySet.mem k m.top_keys
+
+  (** Check whether a binding [(-,v)] exists in [a] *)
+  let mem_inverse (v:Value.t) (a:t) : bool =
+    match a with
+    | BOT -> false
+    | TOP -> true
+    | Nbt m -> Relation.mem_codomain v m.relations ||
+                 not @@ Relation.DomSet.is_empty m.top_keys
 
   (** [fold f a init] folds function [f] over elements [(k,vs)] *)
   let fold (f:Key.t -> ValueSet.t with_top -> 'a -> 'a) (a:t) (init:'a) : 'a =

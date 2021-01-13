@@ -31,7 +31,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   module DomMap = MapExt.Make(Dom)
   module CoDomSet = SetExt.Make(CoDom)
   module CoDomMap = MapExt.Make(CoDom)
-    
+
   type t = {
       img: CoDomSet.t DomMap.t;
       inv: DomSet.t CoDomMap.t
@@ -45,7 +45,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   type codom = CoDom.t
   type codom_set = CoDomSet.t
   type binding = dom * codom
-            
+
   let empty =
     { img = DomMap.empty;
       inv = CoDomMap.empty;
@@ -59,7 +59,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   let is_image_empty x r =
     not (DomMap.mem x r.img)
-    
+
   let is_inverse_empty y r =
     not (CoDomMap.mem y r.inv)
 
@@ -77,7 +77,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let mk r img inv =
     if r.img == img && r.inv == inv then r
     else { img; inv; }
-    
+
   (* internal function: does not update inv *)
   let set_img x ys r =
     if CoDomSet.is_empty ys then mk r (DomMap.remove x r.img) r.inv
@@ -88,7 +88,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     if DomSet.is_empty xs then mk r r.img (CoDomMap.remove y r.inv)
     else mk r r.img (CoDomMap.add y xs r.inv)
 
-    
+
   let set_image x ys r =
     (* update inv *)
     CoDomSet.fold2_diff
@@ -96,7 +96,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
       (fun y r -> set_inv y (DomSet.add x (inverse y r)) r)
       (image x r) ys
       (* update img *)
-      (set_img x ys r)  
+      (set_img x ys r)
 
   let set_inverse y xs r =
     (* update img *)
@@ -105,9 +105,9 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
       (fun x r -> set_img x (CoDomSet.add y (image x r)) r)
       (inverse y r) xs
       (* update inv *)
-      (set_inv y xs r)  
-    
-    
+      (set_inv y xs r)
+
+
   let add x y r =
     mk
       r
@@ -123,16 +123,16 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   let add_inverse_set y xs r =
     set_inverse y (DomSet.union (inverse y r) xs) r
-    
+
   let remove_image_set x ys r =
     set_image x (CoDomSet.diff (image x r) ys) r
 
   let remove_inverse_set y xs r =
     set_inverse y (DomSet.diff (inverse y r) xs) r
-    
+
   let remove_image x r =
     set_image x CoDomSet.empty r
-    
+
   let remove_inverse y r =
     set_inverse y DomSet.empty r
 
@@ -142,14 +142,16 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let mem_domain x r =
     DomMap.mem x r.img
 
-        
+  let mem_codomain x r =
+    CoDomMap.mem x r.inv
+
   let of_list l =
     List.fold_left (fun r (x,y) -> add x y r) empty l
 
   let min_binding r =
     let x,ys = DomMap.min_binding r.img in
     x, CoDomSet.min_elt ys
-    
+
   let max_binding r =
     let x,ys = DomMap.max_binding r.img in
     x, CoDomSet.max_elt ys
@@ -157,12 +159,12 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
   let choose r =
     let x,ys = DomMap.choose r.img in
     x, CoDomSet.choose ys
-       
+
   let cardinal r =
     DomMap.fold (fun _ i r -> r + CoDomSet.cardinal i) r.img 0
 
 
-    
+
   let iter f r =
     DomMap.iter (fun x i -> CoDomSet.iter (fun y -> f x y) i) r.img
 
@@ -178,7 +180,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     fold
       (fun x y acc -> let x',y' = f x y in add x' y' acc)
       r empty
-    
+
   let domain_map f r =
     DomMap.fold
       (fun x ys r -> add_image_set (f x) ys r)
@@ -191,7 +193,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   let for_all f r =
     DomMap.for_all (fun x i -> CoDomSet.for_all (fun y -> f x y) i) r.img
-    
+
   let exists f r =
     DomMap.exists (fun x i -> CoDomSet.exists (fun y -> f x y) i) r.img
 
@@ -203,12 +205,12 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
           ys r
       ) r.img r
 
-    
+
   (* binary operations *)
-    
+
   let compare r1 r2 =
     DomMap.compare CoDomSet.compare r1.img r2.img
-    
+
   let equal r1 r2 =
     DomMap.equal CoDomSet.equal r1.img r2.img
 
@@ -261,14 +263,14 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
          (fun y xs1 xs2 r -> set_inv y (DomSet.diff xs1 xs2) r)
          r1.inv r2.inv
 
-    
+
   let iter2 f1 f2 f r1 r2 =
     DomMap.iter2o
     (fun x -> CoDomSet.iter (f1 x))
     (fun x -> CoDomSet.iter (f2 x))
     (fun x -> CoDomSet.iter2 (f1 x) (f2 x) (f x))
     r1.img r2.img
-    
+
   let iter2_diff f1 f2 r1 r2 =
     DomMap.iter2o
     (fun x -> CoDomSet.iter (f1 x))
@@ -283,7 +285,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     (fun x -> CoDomSet.fold (f2 x))
     (fun x -> CoDomSet.fold2 (f1 x) (f2 x) (f x))
     r1.img r2.img acc
-    
+
   let fold2_diff f1 f2 r1 r2 =
     DomMap.fold2zo
     (fun x -> CoDomSet.fold (f1 x))
@@ -298,7 +300,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     (fun x -> CoDomSet.for_all (f2 x))
     (fun x -> CoDomSet.for_all2 (f1 x) (f2 x) (f x))
     r1.img r2.img
-    
+
   let for_all2_diff f1 f2 r1 r2 =
     DomMap.for_all2o
     (fun x -> CoDomSet.for_all (f1 x))
@@ -313,17 +315,17 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
     (fun x -> CoDomSet.exists (f2 x))
     (fun x -> CoDomSet.exists2 (f1 x) (f2 x) (f x))
     r1.img r2.img
-    
+
   let exists2_diff f1 f2 r1 r2 =
     DomMap.exists2o
     (fun x -> CoDomSet.exists (f1 x))
     (fun x -> CoDomSet.exists (f2 x))
     (fun x -> CoDomSet.exists2_diff (f1 x) (f2 x))
     r1.img r2.img
-    
- 
+
+
   (* domain operations *)
-    
+
   let iter_domain f r =
     DomMap.iter f r.img
 
@@ -380,10 +382,10 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
   let elements_domain r =
     List.rev (DomMap.fold (fun x _ l -> x::l) r.img [])
-    
+
 
   (* codomain operations *)
-    
+
   let iter_codomain f r =
     CoDomMap.iter f r.inv
 
@@ -423,10 +425,10 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
 
 
 
-    
+
   (* printing *)
 
-    
+
   type relation_printer = {
       print_empty: string;
       print_begin: string;
@@ -436,7 +438,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
       print_sep: string;
       print_end: string;
     }
-                   
+
   let printer_default = {
       print_empty="{}";
       print_begin="{";
@@ -446,7 +448,7 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
       print_sep=";";
       print_end="}";
     }
-                      
+
   let print_gen o printer dom codom ch s =
     if is_empty s then o ch printer.print_empty else (
       let first = ref true in
@@ -463,11 +465,11 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
       o ch printer.print_end
     )
   (* internal printing helper *)
-    
+
   let print printer dom codom ch l = print_gen output_string printer dom codom ch l
   let bprint printer dom codom ch l = print_gen Buffer.add_string printer dom codom ch l
   let fprint printer dom codom ch l = print_gen Format.pp_print_string printer dom codom ch l
-                              
+
   let to_string printer dom codom l =
     let b = Buffer.create 10 in
     print_gen (fun () s -> Buffer.add_string b s) printer
@@ -475,5 +477,5 @@ module Make(Dom: OrderedType)(CoDom: OrderedType) = struct
               (fun () k -> Buffer.add_string b (codom k))
               () l;
     Buffer.contents b
-    
+
 end

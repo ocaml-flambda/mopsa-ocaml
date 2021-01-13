@@ -160,6 +160,10 @@ module type S = sig
   (** [mem x r] returns [true] if a binding ([x],-) is present in [r].
   *)
 
+  val mem_codomain: codom -> t -> bool
+  (** [mem x r] returns [true] if a binding (-,[-]) is present in [r].
+  *)
+
   val of_list: binding list -> t
   (** [of_list l] returns a relation constructed from the list of bindings. *)
 
