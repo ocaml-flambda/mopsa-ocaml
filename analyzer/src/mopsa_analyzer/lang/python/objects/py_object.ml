@@ -209,30 +209,32 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__setattr__", _))}, _)}, [lval; attr; rval], []) ->
-      man.eval   (mk_py_type lval range) flow >>$
- (fun class_of_lval flow ->
-          let mro = mro (object_of_expr class_of_lval) in
-          search_mro man attr
-            ~cls_found:(fun cls flow ->
-                man.eval   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
- (fun obj' flow ->
-                    assume (mk_py_hasattr (mk_py_type obj' range) "__set__" range)
-                      man flow
-                      ~fthen:(fun flow ->
-                          man.eval (mk_py_call (mk_py_attr (mk_py_type obj' range) "__set__" range) [obj'; lval; rval] range) flow
-                        )
-                      ~felse:(
-                        man.eval
-                          (mk_py_ll_setattr lval attr rval range)
-                      )
-                  )
-              )
-            ~nothing_found:(man.eval
-                              (mk_py_ll_setattr lval attr rval range))
-            range mro flow
-        )
-      |> OptionExt.return
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__setattr__", _))}, _)}, [lval; attr; rval], []) ->
+       man.eval   (mk_py_type lval range) flow >>$
+         (fun class_of_lval flow ->
+           let mro = mro (object_of_expr class_of_lval) in
+           man.eval attr flow >>$
+             fun attr flow ->
+             search_mro man attr
+               ~cls_found:(fun cls flow ->
+                 man.eval   (mk_py_ll_getattr (mk_py_object cls range) attr range) flow >>$
+                   (fun obj' flow ->
+                     assume (mk_py_hasattr (mk_py_type obj' range) "__set__" range)
+                       man flow
+                       ~fthen:(fun flow ->
+                         man.eval (mk_py_call (mk_py_attr (mk_py_type obj' range) "__set__" range) [obj'; lval; rval] range) flow
+                       )
+                       ~felse:(
+                         man.eval
+                           (mk_py_ll_setattr lval attr rval range)
+                       )
+                   )
+               )
+               ~nothing_found:(man.eval
+                                 (mk_py_ll_setattr lval attr rval range))
+               range mro flow
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__delattr__", _))}, _)}, [lval; attr], [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__delattr__", _))}, _)}, [lval; attr], []) ->
