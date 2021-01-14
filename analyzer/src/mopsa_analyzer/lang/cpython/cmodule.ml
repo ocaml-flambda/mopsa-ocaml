@@ -2,23 +2,14 @@
    Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
            Var -> Valeur ~> Addr -> Valeur
  *)
-
-(* FIXME: boundaries between C and Python should be applied systematically *)
-(* FIXME: Python value should have proper ob_type defined at least.
-          Or: we should intercept the calls.
-          what if PyLong_Check(python user defined object)?
-          -> if it's not in the equiv class, then we need to force the ob_type
-*)
 (*
   TODO:
    - parameter conversion Python~>C isn't done in all cases
    - support more things in PyParse_Tuple
    - support PyBuild_Value
-   - support members in class declarations?
    - prendre les range d'allocation du python plutôt... (ou avoir range+cs pour les kinds d'addr concernés)
 *)
-(* Intercepts call to PyModule_Create and PyModule_AddObject *)
-
+(* FIXME: assert offset = [0, 0] for Points_to *)
 open Mopsa
 open Sig.Abstraction.Domain
 open Universal.Ast
@@ -118,7 +109,7 @@ module Domain =
                 (fun points_to flow ->
                   match points_to with
                   | P_block({base_kind = String (s, _, _)}, offset, _) ->
-                     Cases.singleton s flow (* FIXME: assert offset = [0, 0] *)
+                     Cases.singleton s flow
                   | P_null ->
                      raise Null_found
                   | _ -> assert false
@@ -131,7 +122,7 @@ module Domain =
                 (fun points_to flow ->
                   match points_to with
                   | P_block({base_kind = String (s, _, _)}, offset, _) ->
-                     Cases.singleton (Some s) flow (* FIXME: assert offset = [0, 0] *)
+                     Cases.singleton (Some s) flow
                   | P_null ->
                      Cases.singleton None flow
                   | _ -> panic "points_to %a" pp_points_to points_to
@@ -416,7 +407,6 @@ module Domain =
             let type_obj = mk_addr ~etyp:(T_c_pointer pytypeobject_typ) addr range in
             let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None) addr man flow in
             let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
-            (* FIXME: set ob_type field too? *)
             (* if cls: should call set_default_flags *)
             post_to_flow man
               (
@@ -472,8 +462,7 @@ module Domain =
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
-      (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
-      (* FIXME: proper handling *)
+      (* FIXME: refactor *)
       | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_MemoryError" ->
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "MemoryError") range) flow
          |> OptionExt.return
@@ -487,6 +476,7 @@ module Domain =
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "OverflowError") range) flow
          |> OptionExt.return
 
+      (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
       | E_c_builtin_call ("PyModule_Create2", [module_decl; _]) ->
          let addr_type = fst @@ Python.Addr.find_builtin "type" in
          let cur = get_env T_cur man flow in
@@ -590,17 +580,9 @@ module Domain =
              (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
              man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
                fun inst_eaddr flow ->
-               (* FIXME: clean python_to_c_boundary on cls_addr? *)
+
                let flow = python_to_c_boundary (Addr.from_expr inst_eaddr) ~size:(Some (List.hd @@ List.tl args)) range man flow in
-               debug "dangerous boundary done?@.%a" (format @@ Flow.print man.lattice.print) flow;
-               (* let inst_addr = Addr.from_expr inst_eaddr in
-                * let bytes = C.Cstubs.Aux_vars.mk_bytes_var inst_addr in
-                * debug "%a allocated! Forcing %a %a" pp_expr inst_eaddr pp_expr (mk_var bytes range) pp_expr (List.hd @@ List.tl args);
-                * (\* let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base inst_addr) (mk_zero range) None) inst_addr man flow in *\)
-                * man.exec (mk_add_var bytes range) flow >>%
-                *   man.exec (mk_assign (mk_var bytes range) (List.hd @@ List.tl args) range) >>%
-                *   man.exec (mk_add inst_eaddr range) >>% *)
-                 Eval.singleton inst_eaddr flow
+               Eval.singleton inst_eaddr flow
            )
          |> OptionExt.return
 
@@ -609,7 +591,6 @@ module Domain =
          man.eval ~translate:"Universal" (List.hd args) flow >>$
            (fun earg flow ->
              (* FIXME: forced to attach the value as an addr_attr in universal, and convert it afterwards when going back to python... *)
-             (* FIXME: handle addr renaming and propagate it to the value attribute *)
              debug "allocating int at range %a callstack %a" pp_range range Callstack.pp_callstack (Flow.get_callstack flow);
              man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
                fun int_addr flow ->
@@ -681,6 +662,7 @@ module Domain =
                          Eval.singleton (mk_zero  range) flow
                      else
                        let convert_single pos output_ref flow =
+                         debug "convert_single %c %a" fmt_str.[pos] pp_expr output_ref;
                          match fmt_str.[pos] with
                          | 'O' ->
                             man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$
@@ -699,7 +681,7 @@ module Domain =
                                  As such, it should handle integer translation.
                                  Python function call PyLong_AsLong *)
                               (fun obj flow ->
-                                match ekind obj, ekind (List.hd refs) with
+                                match ekind obj, ekind output_ref with
                                 | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
                                    (* FIXME: check it's an integer *)
                                    if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
@@ -980,7 +962,41 @@ module Domain =
 
       | _ -> None
 
-    let exec stmt man flow = None
+    let exec stmt man flow =
+      let range = srange stmt in
+      match skind stmt with
+      (* FIXME: propagate it to the value attribute *)
+      | S_rename ({ekind = E_addr (src, _)}, {ekind = E_addr (dst, _)}) when is_py_addr src && is_py_addr dst ->
+         let cur = get_env T_cur man flow in
+         (* change cur on both sides *)
+         (* NB: we should remove points_to base_addr/addr bindings in favor of a set for those. This would simplify this step too *)
+         let ncur, c_rename_needed =
+           let points_to_src = find_inverse src cur in
+           let cur = remove_inverse src cur in
+           match points_to_src with
+           | Top.TOP ->
+              assert(cur = EquivBaseAddrs.top);
+              EquivBaseAddrs.top, true
+           | Nt pt ->
+              let src_pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base src) (mk_zero range) None in
+              if KeySet.mem src_pt pt then
+                let dst_pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base dst) (mk_zero range) None in
+                let pt' = KeySet.add dst_pt (KeySet.remove src_pt pt) in
+                add_inverse dst pt' cur, true
+              else
+                add_inverse dst pt cur, false
+         in
+         let flow = set_env T_cur ncur man flow in
+         (* delegate to C if needed *)
+         (if c_rename_needed then
+            man.exec ~route:(Semantic "C") stmt flow
+          else
+            Post.return flow) >>%
+           (* delegate to python *)
+           man.exec ~route:(Semantic "Python") stmt
+         |> OptionExt.return
+
+      | _ -> None
 
     let ask _ _ _ = None
 
