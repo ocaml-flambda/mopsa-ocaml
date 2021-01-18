@@ -823,6 +823,15 @@ struct
     let stmt = mk_forget_var v range in
     man.exec stmt ~route:scalar flow
 
+  (** Compute the interval of an offset *)
+  let offset_interval offset range man flow : Itv.t =
+    let evl = man.eval offset flow ~translate:"Universal" in
+    Cases.reduce_result
+      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
+      ~join:Itv.join
+      ~meet:Itv.meet
+      ~bottom:Itv.bottom
+      evl
 
   (** {2 Initial state} *)
   (** ***************** *)
@@ -841,6 +850,7 @@ struct
     (* Expand *p into cells *)
     let t = under_type p.etyp in
     expand p range man flow >>$ fun expansion flow ->
+    debug "expansion = %a" pp_expansion expansion;
     match expansion with
     | Top ->
       man.eval (mk_top (void_to_char t) range) flow
@@ -871,6 +881,67 @@ struct
     in
     man.eval v flow ~route:scalar
 
+  let assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctyp2 range man flow =
+    debug "assume_exists_ne2 TODO";
+    Post.return flow
+
+  let assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow =
+    let itv_a = offset_interval a range man flow in
+    let itv_b = offset_interval b range man flow in
+    match itv_a, itv_b with
+    | BOT, _ | _, BOT -> Post.return flow
+    | Nb (_, itv_amax), Nb (itv_bmin, _) ->
+       let safe_itv = ItvUtils.IntItv.of_bound itv_amax itv_bmin in
+       let cur = get_env T_cur man flow in
+       let cell_find base offset =
+         OffCells.find offset (CellSet.find base cur.cells) in
+       let instantiate_i_with offset =
+         Visitor.map_expr
+           (fun expr -> match ekind expr with
+                        | E_var ({vkind = Scalars.Machine_numbers.Domain.V_c_num v}, _) when compare_var v i = 0 ->
+                           Keep (mk_z offset ~typ:v.vtyp range)
+                        | _ -> VisitParts expr)
+           (fun stmt -> VisitParts stmt)
+       in
+       List.fold_left (fun post offset ->
+           let cells1 = cell_find base1 offset in
+           let cells2 = cell_find base2 offset in
+           if Cells.is_empty cells1 && Cells.is_empty cells2 then
+             let () = debug "empty cells at offset %a" Z.pp_print offset in post
+           else
+             let () = debug "cells1 = %a, cells2 = %a" (format Cells.print) cells1 (format Cells.print) cells2 in
+             let o1 = instantiate_i_with offset offset1 in
+             let o2 = instantiate_i_with offset offset2 in
+             let x1 = mk_lval base1 o1 ctype1 mode1 range in
+             let x2 = mk_lval base2 o2 ctype2 mode2 range in
+             debug "forcing %a = %a, types = %a, %a" pp_expr x1 pp_expr x2 pp_typ ctype1 pp_typ ctype2;
+             post >>% man.exec (mk_assume (eq x1 x2 range) range)
+         ) (Post.return flow) (ItvUtils.IntItv.to_list safe_itv)
+
+
+  let eval_forall_eq2 i a b lval1 lval2 range man flow =
+    let ctype1 = (remove_casts lval1).etyp
+    and ctype2 = (remove_casts lval2).etyp in
+    let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
+    let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow in
+
+    evl1 >>$ fun bo1 flow ->
+    match bo1 with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base1,offset1,mode1) ->
+      if not (is_interesting_base base1) then Eval.singleton (mk_top T_bool range) flow
+      else
+        evl2 >>$ fun bo2 flow ->
+        match bo2 with
+        | None -> Eval.singleton (mk_top T_bool range) flow
+        | Some (base2,offset2,mode2) ->
+          if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
+          else
+            Eval.join
+              (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+              (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+
+
 
   let eval exp man flow =
     match ekind exp with
@@ -884,6 +955,14 @@ struct
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
+      when is_c_scalar_type lval1.etyp && is_c_scalar_type lval2.etyp && is_var_in_expr i lval1 && is_var_in_expr i lval2
+      ->
+       eval_forall_eq2 i a b (remove_casts lval1) (remove_casts lval2) exp.erange man flow |>
+       OptionExt.return
 
     | _ -> None
 
@@ -1057,16 +1136,6 @@ struct
       ) (Post.return flow) bl
 
 
-
-  (** Compute the interval of an offset *)
-  let offset_interval offset range man flow : Itv.t =
-    let evl = man.eval offset flow ~translate:"Universal" in
-    Cases.reduce_result
-      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
-      ~join:Itv.join
-      ~meet:Itv.meet
-      ~bottom:Itv.bottom
-      evl
 
 
   (** Forget the value of an lval *)

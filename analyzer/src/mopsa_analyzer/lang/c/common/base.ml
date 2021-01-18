@@ -173,3 +173,19 @@ end
 
 module BaseSet = SetExt.Make(Base)
 module BaseMap = MapExt.Make(Base)
+
+let mk_lval base offset typ mode range =
+  let base_addr = match base.base_kind with
+    | Var v -> mk_c_address_of (mk_var v ~mode range) range
+    | Addr a -> mk_addr ~mode a range
+    | String (s,kind,t) -> mk_c_string s ~kind range in
+  let addr =
+    mk_c_cast
+      ( add
+          (mk_c_cast base_addr (T_c_pointer s8) range)
+          offset
+          ~typ:(T_c_pointer s8)
+          range )
+      (T_c_pointer typ)
+      range in
+  mk_c_deref addr range
