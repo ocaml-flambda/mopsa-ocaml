@@ -316,11 +316,13 @@ module Domain =
             let args = match exc_msg with
               | None -> []
               | Some s -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}] in
+            (* clean C exception state for next times *)
+            man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>%
             man.exec (Python.Ast.mk_raise
                         (Python.Ast.mk_py_call
                            (Python.Ast.mk_py_object (exc_addr, None) range)
                            args range)
-                        range) flow >>%
+                        range) >>%
               Eval.empty
       with Null_found ->
         man.exec (Python.Ast.mk_raise
