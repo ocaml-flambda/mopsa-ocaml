@@ -1,0 +1,7 @@
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
+CONFIG=python/multilanguage.json
+SHAREDIR=$(realpath ${MOPSADIR}/share/mopsa)
+
+OCAMLRUNPARAM=b ${MOPSADIR}/bin/mopsa-python -config=${CONFIG} -I ${SHAREDIR}/stubs/cpython $@ # -heap-use-hash-format $@
