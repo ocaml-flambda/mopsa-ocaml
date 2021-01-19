@@ -3,7 +3,6 @@ variables:
   MOPSA_U: "./bin/mopsa-universal -unittest"
   MOPSA_PYTYP: "./bin/mopsa-python-types -unittest -unittest-filter=test_types"
   MOPSA_PYVAL: "./bin/mopsa-python       -unittest -unittest-filter=test_values"
-  MOPSA_CPYTHON: "./bin/mopsa-cpython"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
@@ -578,8 +577,9 @@ test-typpete 43/43:
   script:
     - eval `opam config env`
     - echo $CPY_FILE
+    - echo $PWD
     - cd analyzer/tests/cpython
-    - ./bin/mopsa-cpython -unittest $CPY_FILE
+    - ../../../bin/mopsa-cpython -unittest $CPY_FILE
 
 test-cpython 1/1:
   variables:
