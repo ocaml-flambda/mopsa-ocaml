@@ -316,3 +316,20 @@ void set_default_flags(PyTypeObject *t)
     // 9, 10, 12, 14, 18
     t->tp_flags = Py_TPFLAGS_HEAPTYPE | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_VERSION_TAG;
 }
+
+
+Py_UCS4* PyUnicode_AsUCS4Copy(PyObject *unicode)
+{
+    // let's be imprecise: we malloc a buffer of the good size, but don't copy anything
+    Py_ssize_t s = PyUnicode_GetLength(unicode);
+    Py_UCS4* ret = malloc(s * sizeof(Py_UCS4));
+    if(ret)
+    {
+        return ret;
+    }
+    else
+    {
+        PyErr_NoMemory();
+        return NULL;
+    }
+}
