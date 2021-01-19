@@ -578,7 +578,8 @@ test-typpete 43/43:
   script:
     - eval `opam config env`
     - echo $CPY_FILE
-    - ./bin/mopsa-cpython -unittest analyzer/tests/cpython/$CPY_FILE
+    - cd analyzer/tests/cpython
+    - ./bin/mopsa-cpython -unittest $CPY_FILE
 
 test-cpython 1/1:
   variables:
