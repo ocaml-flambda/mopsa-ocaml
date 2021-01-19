@@ -582,5 +582,5 @@ test-typpete 43/43:
 
 test-cpython 1/1:
   variables:
-    PY_FILE: 'basic_tests.py'
+    CPY_FILE: 'basic_tests.py'
   extends: .test-cpython
