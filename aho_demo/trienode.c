@@ -14,6 +14,7 @@ static TrieNode*
 trienode_new(const char eow) {
     TrieNode* node = (TrieNode*)memory_alloc(sizeof(TrieNode));
     if (node) {
+        // ??? initialization of both fields in a union?
         node->output.integer = 0;
         node->output.object = NULL;
         node->fail      = NULL;
@@ -127,23 +128,24 @@ trieletter_get_ith_unsafe(TrieNode* node, size_t index) {
 
 
 static TrieNode*
-trienode_set_next(TrieNode* node, const TRIE_LETTER_TYPE letter, TrieNode* child) {
+trienode_set_next(TrieNode* sn_node, const TRIE_LETTER_TYPE letter, TrieNode* child) {
 
     int n;
-    void* next;
+    Pair* sn_next; // MODIF, WAS   void* next;
 
-    ASSERT(node);
+    ASSERT(sn_node);
     ASSERT(child);
-    ASSERT(trienode_get_next(node, letter) == NULL);
+    ASSERT(trienode_get_next(sn_node, letter) == NULL);
 
-    n = node->n;
-    next = (TrieNode**)memory_realloc(node->next, (n + 1) * (sizeof(Pair)));
-    if (next) {
-
-        node->next = next;
-        node->next[n].letter = letter;
-        node->next[n].child = child;
-        node->n += 1;
+    n = sn_node->n;
+    /* sn_next = (Pair*)memory_alloc((n+1) * sizeof(Pair)); */
+    /* memcpy(sn_next, sn_node->next, n*sizeof(Pair)); */
+    sn_next = (Pair*)memory_realloc(sn_node->next, (n + 1) * (sizeof(Pair))); // modif, was TrieNode**?!
+    if (sn_next) {
+        sn_node->next = sn_next;
+        sn_node->next[n].letter = letter;
+        sn_node->next[n].child = child;
+        sn_node->n += 1;
 
         return child;
     }

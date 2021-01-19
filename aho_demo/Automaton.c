@@ -136,15 +136,16 @@ automaton_new(PyTypeObject* self, PyObject* args, PyObject* kwargs) {
                 values = NULL;
             }
 
-            if (automaton_unpickle(automaton, bytes_list, values)) {
-                automaton->kind     = kind;
-                automaton->store    = store;
-                automaton->key_type = key_type;
-                automaton->count    = word_count;
-                automaton->longest_word = longest_word;
-            }
-            else
-                goto error;
+            PyErr_SetString(PyExc_TypeError, "unpickling disabled");
+            /* if (automaton_unpickle(automaton, bytes_list, values)) { */
+            /*     automaton->kind     = kind; */
+            /*     automaton->store    = store; */
+            /*     automaton->key_type = key_type; */
+            /*     automaton->count    = word_count; */
+            /*     automaton->longest_word = longest_word; */
+            /* } */
+            /* else */
+            /*     goto error; */
         }
     }
     else {

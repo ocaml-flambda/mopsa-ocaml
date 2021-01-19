@@ -17,7 +17,7 @@ trie_add_word(Automaton* automaton, const TRIE_LETTER_TYPE* word, const size_t w
     TrieNode* node;
     TrieNode* child;
     unsigned i;
-
+    TrieNode* sn;
     if (automaton->kind == EMPTY) {
         ASSERT(automaton->root == NULL);
         automaton->root = trienode_new(false);
@@ -31,10 +31,16 @@ trie_add_word(Automaton* automaton, const TRIE_LETTER_TYPE* word, const size_t w
         const TRIE_LETTER_TYPE letter = word[i];
 
         child = trienode_get_next(node, letter);
+        0;
+
         if (child == NULL) {
             child = trienode_new(false);
+            0;
             if (LIKELY(child != NULL)) {
-                if (UNLIKELY(trienode_set_next(node, letter, child) == NULL)) {
+
+                sn = trienode_set_next(node, letter, child);
+                0;
+                if (UNLIKELY(sn == NULL)) {
                     memory_free(child);
                     return NULL;
                 }
@@ -47,7 +53,11 @@ trie_add_word(Automaton* automaton, const TRIE_LETTER_TYPE* word, const size_t w
         }
 
         node = child;
+        0;
+
     }
+
+    0;
 
     if (node->eow == false) {
         node->eow = true;

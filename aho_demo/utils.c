@@ -152,26 +152,26 @@ pymod_get_string(PyObject* obj, TRIE_LETTER_TYPE** word, ssize_t* wordlen, bool*
 
 #if defined PEP393_UNICODE// the next if/else is the code actually used
     if (F(PyUnicode_Check)(obj)) {
-    PyUnicode_READY(obj);
-    // Mopsa comment: internal string repr in CPython is a mess, let's assume they use Py_UCS4 representation.
-    if (PyUnicode_KIND(obj) == PyUnicode_4BYTE_KIND) {
-            *word = (TRIE_LETTER_TYPE*)(PyUnicode_4BYTE_DATA(obj));
-            *wordlen = PyUnicode_GET_LENGTH(obj);
-            *is_copy = false;
-            Py_INCREF(obj);
+        // MODIFICATION: I don't want to dive too much into the low-level implementation of strings in CPython (there are different representations etc. We'll try to stay within the limited API, this way we don't do too many low-level accesses and we can stub the needed functions
+        /* PyUnicode_READY(obj); */
+        /* if (PyUnicode_KIND(obj) == PyUnicode_4BYTE_KIND) { */
+        /*     *word = (TRIE_LETTER_TYPE*)(PyUnicode_4BYTE_DATA(obj)); */
+        /*     *wordlen = PyUnicode_GET_LENGTH(obj); */
+        /*     *is_copy = false; */
+        /*     Py_INCREF(obj); */
 
-        return obj;
-    } else {
+        /*     return obj; */
+        /* } else { */
         *word = PyUnicode_AsUCS4Copy(obj);
-        *wordlen = PyUnicode_GET_LENGTH(obj);
+        *wordlen = PyUnicode_GetLength(obj); // modification PyUnicode_GET_LENGTH(obj);
         *is_copy = true;
         // No INCREF - we have our copy
         return obj;
-    }
+        //}
     }
     else {
-    PyErr_SetString(PyExc_TypeError, "string expected");
-    return NULL;
+        PyErr_SetString(PyExc_TypeError, "string expected");
+        return NULL;
     }
 #elif defined PY3K
 #   ifdef AHOCORASICK_UNICODE
