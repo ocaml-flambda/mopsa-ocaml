@@ -184,7 +184,6 @@ module Domain =
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
            ~fthen:(fun true_flow ->
-             debug "Assertion failed!";
              (* No exception raised => assertion failed *)
              Py_mopsa.check man (mk_py_false range) range flow
            )
@@ -193,11 +192,11 @@ module Domain =
              assume
                (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
                ~fthen:(fun true_flow ->
-                 debug "Good exception!";
-                 man.eval (mk_py_true range) flow
+                 Py_mopsa.check man (mk_py_true range) range flow >>$
+                   fun _ flow ->
+                   man.eval (mk_py_true range) flow
                )
                ~felse:(fun false_flow ->
-                 debug "Bad exception!";
                  Py_mopsa.check man (mk_py_false range) range flow
                )
                man false_flow
