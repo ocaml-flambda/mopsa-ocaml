@@ -115,6 +115,8 @@ struct
     match init with
     | None                 -> [],[(None,Z.one, offset, typ)]
     | Some (C_init_expr e) -> [(e,offset, typ)],[]
+    (* a scalar initializer can be optionnaly enclosed in braces *)
+    | Some (C_init_list ([C_init_expr e], _)) -> [(e,offset, typ)],[]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
@@ -131,6 +133,11 @@ struct
       else
         let nn = Z.mul n (sizeof_type under_typ) in
         [],[(None,nn,offset,u8)]
+
+    (* a string literal can be optionally enclosed in braces *)
+    | Some (C_init_list ([C_init_expr {ekind = E_constant(C_c_string _); } as i], _))
+         when is_c_int_array_type typ ->
+       flatten_array_init (Some i) offset typ range
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i =
@@ -158,7 +165,7 @@ struct
       in
       aux 0
 
-    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t}) ->
+    | Some (C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t}) ->
       let rec aux i =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
