@@ -33,8 +33,18 @@ void PyErr_SetString(PyObject* exc, const char* msg){
 //    _mopsa_print();
 }
 
+PyObject*
+PyErr_Format(PyObject* exc, const char* fmt, ...)
+{
+    _mopsa_print();
+    va_list args;
+    va_start(args, fmt);
+    char* msg;
+    vasprintf(&msg, fmt, args);
+    va_end(args);
+    PyErr_SetString(exc, msg);
+    return NULL;
 }
-
 
 int PyType_ReadyCheat(PyTypeObject *type)
 {
