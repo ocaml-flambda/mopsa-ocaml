@@ -66,6 +66,13 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
     return obj;
 }
 
+PyObject *
+PyType_GenericNew(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    return type->tp_alloc(type, 0);
+}
+
+
 PyObject*
 _PyObject_New(PyTypeObject *type)
 {
