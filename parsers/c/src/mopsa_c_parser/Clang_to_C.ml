@@ -295,6 +295,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     | C.UnaryTransformType t -> type_qual range t.C.unary_underlying_type
     | C.TypeOfExprType { C.expr_type = Some t; } -> type_qual range t
     | C.TypeOfType t -> type_qual range t
+    | C.VectorType (t,s,k) ->
+       T_vector { vector_type = type_qual range t; vector_size = s; vector_kind = k; },
+       no_qual
     | _ -> error range "unhandled type" (C.string_of_type t)
 
                  
@@ -788,6 +791,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
               );
               if variable_is_global var.var_kind then []
               else [S_local_declaration var, range]
+           | C.StaticAssertDecl a ->
+              if a.C.assert_is_failed then
+                warning decl.C.decl_range "static assertion failed: %s" a.C.assert_msg;
+              []
            | _ -> error range "unhandled declaration in function" (C.decl_kind_name d.C.decl_kind)
          )
          decls
@@ -1030,7 +1037,16 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
 
    | C.FullExpr e | C.ConstantExpr e ->
       expr func e
+
+   | C.ConvertVectorExpr e ->
+      E_convert_vector (expr func e), typ, range
+
+   | C.ExtVectorElementExpr (e,s) ->
+      E_vector_element (expr func e, s), typ, range
      
+   | ShuffleVectorExpr ea ->
+      E_shuffle_vector (Array.map (expr func) ea), typ, range
+
    | e -> error range "unhandled expression" (C.expr_kind_name e)
 
 
@@ -1092,6 +1108,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        debug string_of_func_decl d
 
     | C.EmptyDecl -> ()
+
+    | C.StaticAssertDecl a ->
+       if a.C.assert_is_failed then
+         warning decl.C.decl_range "static assertion failed: %s" a.C.assert_msg
+
     | _ -> error decl.C.decl_range "unhandled toplevel declaration" (C.decl_kind_name decl.C.decl_kind)
 
   in

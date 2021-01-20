@@ -713,12 +713,22 @@ let is_c_char_type (t:typ) =
   | T_c_integer (C_signed_char | C_unsigned_char) -> true
   | _ -> false
 
+let is_c_string_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_array (t,_) -> is_c_char_type t
+  | _ -> false
+
 (** [is_c_int_type t] tests whether [t] is an integer type *)
 let is_c_int_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_bool -> true
   | T_c_enum _ -> true
   | T_c_integer _ -> true
+  | _ -> false
+
+let is_c_int_array_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_array (t,_) -> is_c_int_type t
   | _ -> false
 
 let is_c_signed_int_type (t:typ) =

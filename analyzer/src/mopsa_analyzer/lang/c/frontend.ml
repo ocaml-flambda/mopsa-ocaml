@@ -522,12 +522,37 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_var_args e -> Ast.E_c_var_args (from_expr ctx e)
     | C_AST.E_conditional (cond,e1,e2) -> Ast.E_c_conditional(from_expr ctx cond, from_expr ctx e1, from_expr ctx e2)
 
+    (* the following operations are removed from the AST by simplification
+       in the parser, before calling the frontend
+     *)
     | C_AST.E_binary_conditional (_,_) -> Exceptions.panic_at erange "E_binary_conditional not supported"
     | C_AST.E_compound_assign (_,_,_,_,_) -> Exceptions.panic_at erange "E_compound_assign not supported"
     | C_AST.E_comma (_,_) -> Exceptions.panic_at erange "E_comma not supported"
     | C_AST.E_increment (_,_,_) -> Exceptions.panic_at erange "E_increment not supported"
     | C_AST.E_compound_literal _ -> Exceptions.panic_at erange "E_compound_literal not supported"
+
+    (* atomic builtins are stubbed in .h header and should not be encountered
+       here
+     *)
     | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
+
+    (* vector builtins are not supported
+       we display a warning but output an AST so that we can analyzer programs
+       which include headers and libraries with vector builtins but do
+       not actually use them
+     *)
+    | C_AST.E_convert_vector e ->
+       if !opt_warn_all then warn_at erange "__builtin_convertvector not supported";
+       (from_expr ctx e).ekind
+
+    | C_AST.E_vector_element (e,s) ->
+       if !opt_warn_all then warn_at erange "__builtin_vectorelement not supported";
+       (from_expr ctx e).ekind
+
+    | C_AST.E_shuffle_vector a ->
+       if !opt_warn_all then warn_at erange "__builtin_shufflevector not supported";
+       (from_expr ctx a.(0)).ekind
+
   in
   mk_expr ekind erange ~etyp
 
@@ -719,7 +744,12 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
       x
   | C_AST.T_bitfield (t,n) -> Ast.T_c_bitfield (from_unqual_typ ctx t, n)
   | C_AST.T_complex _ -> failwith "C_AST.T_complex not supported"
-
+  | C_AST.T_vector v ->
+     (* translate vector into array type *)
+     let t = from_typ ctx v.vector_type in
+     (* size is in bytes, length is in units of t *)
+     let len = Z.div (Z.of_int v.vector_size) (sizeof_type t) in
+     Ast.T_c_array (t, Ast.C_array_length_cst len)
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
   | C_AST.Char SIGNED -> Ast.C_signed_char
