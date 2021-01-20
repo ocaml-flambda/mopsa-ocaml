@@ -206,7 +206,10 @@ let resolve_alias
   : Ast.stub
   =
   (* Find the alias *)
-  let cst = Hashtbl.find stubs alias in
+  let cst =
+    try Hashtbl.find stubs alias
+    with Not_found -> Exceptions.panic "cannot find alias stub %s" alias
+  in
 
   (* Resolve scoping of variables *)
   let cst2 = Passes.Scoping.doit cst in
