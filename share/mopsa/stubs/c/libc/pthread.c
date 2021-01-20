@@ -22,30 +22,24 @@
 /*
   libc stub
   based on header from glibc-2.27-r6
+
+  We have no multi-thread support in Mospa.
+
+  Nevertheless, we currenty implement pthread_once to ensure that the 
+  init_routine function is correctly called in sequential analyses.
 */
 
-#include <errno.h>
+#include <pthread.h>
 #include "mopsa_libc_utils.h"
 
-int _errno;
-
-/*$
- * ensures: return == &_errno;
+/*
+ * Ensure that init_rountine is called.
  */
-int *__errno_location (void);
-
-
-/*$$$
- * local: char* addr = _mopsa_new_readonly_string();
- * assigns: program_invocation_name;
- * ensures: program_invocation_name' == addr;
- */
-char *program_invocation_name;
-
-/*$$$
- * local: char* addr = _mopsa_new_readonly_string();
- * assigns: program_invocation_short_name;
- * ensures: program_invocation_short_name' == addr;
- */
-char *program_invocation_short_name;
-
+int pthread_once(pthread_once_t *once_control, void (*init_routine) (void))
+{
+  if (!(*once_control))  {
+    (*init_routine)();
+    *once_control = 1;
+  }
+  return 0;
+}
