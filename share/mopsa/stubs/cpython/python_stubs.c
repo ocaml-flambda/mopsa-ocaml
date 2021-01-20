@@ -33,9 +33,6 @@ void PyErr_SetString(PyObject* exc, const char* msg){
 //    _mopsa_print();
 }
 
-void PyLong_AsLong_Helper(){
-    PyErr_SetString(PyExc_OverflowError,
-                    "Python int too large to convert to C long");
 }
 
 

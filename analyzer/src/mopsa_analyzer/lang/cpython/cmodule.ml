@@ -471,6 +471,15 @@ module Domain =
                    Post.return flow
           )
 
+    let c_set_exception c_exn message range man flow =
+      man.exec (mk_c_call_stmt
+                  (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                  [
+                    mk_var (search_c_globals_for flow c_exn) range;
+                    mk_c_string message range
+                  ]
+                  range) flow
+
 
     let pylong_to_c_type arg range man flow (type_min_value, type_max_value, type_name) =
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
@@ -662,8 +671,10 @@ module Domain =
       | E_c_builtin_call ("PyUnicode_GetLength", args) ->
          (* FIXME: cheating on py_ssize_t *)
          (* let py_ssize_t = C.Ast.ul in *)
+         debug "GetLength %a@.%a" pp_expr (List.hd args) (format @@ Flow.print man.lattice.print) flow;
          resolve_c_pointer_into_addr (List.hd args) man flow >>$
            (fun addr flow ->
+             debug "addr is %a" pp_addr addr;
              (* FIXME: if not called on a string, this should fail *)
              man.eval (mk_expr ~etyp:T_int (E_len (mk_var (mk_addr_attr addr "value" T_string) range)) range) flow >>$
                fun str_length flow ->
@@ -696,13 +707,9 @@ module Domain =
 
                      if String.length fmt_str <> size then
                        let () = debug "wrong number of arguments" in
-                       man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
-                                   [mk_var (search_c_globals_for flow "PyExc_TypeError") range;
-                                    mk_c_string
-                                      (Format.asprintf "function takes exactly %d arguments (%d given)" (String.length fmt_str) size)
-                                      range] range) flow >>$
-                         fun _ flow ->
-                         Eval.singleton (mk_zero  range) flow
+                       c_set_exception "PyExc_TypeError" (Format.asprintf "function takes exactly %d arguments (%d given)" (String.length fmt_str) size) range man flow >>%
+                         fun flow ->
+                         Eval.singleton (mk_zero range) flow
                      else
                        let convert_single pos output_ref flow =
                          debug "convert_single %c %a" fmt_str.[pos] pp_expr output_ref;
@@ -740,12 +747,13 @@ module Domain =
                                                    c
                                                    (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_AsLong" flow) [mk_addr addr range] range)
                                                    range) flow >>%
+                                         (* FIXME: need to check value wrt INT_MIN and INT_MAX then. cf getargs.c:787 *)
                                          fun flow -> Cases.return 1 flow
                                    else
                                      let () = debug "wrong type for convert_single integer" in
                                      (* set error *)
-                                     man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow) [mk_var (search_c_globals_for flow "PyExc_TypeError") range; mk_c_string "an integer is required (got type ???)" range] range) flow >>$
-                                       fun _ flow ->
+                                     c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                                       fun flow ->
                                        Cases.return 0 flow
                                 | _ -> assert false
                               )
