@@ -35,42 +35,62 @@ class Test(unittest.TestCase):
         with self.assertRaises(SystemError):
             basic.forget_raise()
 
-    def test_c_class(self):
-        a = A(1)
-        c = basic.Cbox(a, 3)
-        self.assertIsInstance(c, basic.Cbox)
-        self.assertEqual(c.getcontents(), a)
-        self.assertEqual(c.contents, a)
-        # self.assertEqual(c.counter, 3)
-        # c.incr()
-        # self.assertEqual(c.counter, 4)
-        # c.counter += 3
-        # self.assertEqual(c.counter, 7)
+    # def test_c_class(self):
+    #     a = A(1)
+    #     c = basic.Cbox(a, 3)
+    #     self.assertIsInstance(c, basic.Cbox)
+    #     self.assertEqual(c.getcontents(), a)
+    #     self.assertEqual(c.contents, a)
+    #     self.assertEqual(c.counter, 3)
+    #     self.assertEqual(c.incr(), None)
+    #     self.assertEqual(c.counter, 4)
+    #     c.counter += 3
+    #     self.assertEqual(c.counter, 7)
 
     # def test_member_type_restriction(self):
     #     c = basic.Cbox(1, 3)
-    #     c.counter = 'abcd'# fixme
+    #     with self.assertRaises(TypeError):
+    #         c.counter = 'abcd'
 
-    def test_member_readonly_flag(self):
-        c = basic.Cbox(1, 3)
-        with self.assertRaises(AttributeError):
-            c.contents = 2
+    # def test_member_readonly_flag(self):
+    #     c = basic.Cbox(1, 3)
+    #     with self.assertRaises(AttributeError):
+    #         c.contents = 2
 
+    # def test_unicode_check_length(self):
+    #     c = basic.Cbox('abcdef', 3)
+    #     self.assertEqual(c.counter, 6)
 
-    def test_unicode_check_length(self):
-        c = basic.Cbox('abcdef', 3)
-        self.assertEqual(c.counter, 6)
+    def test_id_check(self):
+        with self.assertRaises(TypeError):
+            basic.id_check()
+        with self.assertRaises(TypeError):
+            basic.id_check(1,2)
+        self.assertEqual(basic.id_check(1), 1)
+        self.assertEqual(basic.id_check('abc'), 'abc')
+        a = A(3)
+        self.assertEqual(basic.id_check(a), a)
+
+    def test_counter(self):
+        # FIXME: if tp_methods is NULL, should not iterate
+        # tests: PyType_GenericNew, sq_len+wrapper, PyLong_Check, PyLong_AsSsize_t
+        with self.assertRaises(TypeError):
+            basic.Counter('abcd')
+        c = basic.Counter(3)
+        self.assertEqual(c.__len__(), 3)
+        self.assertEqual(basic.Counter(-2).__len__(), -2)
+        c = basic.Counter(-1)
+        with self.assertRaises(TypeError):
+            c.__len__()
+
 
 if __name__ == "__main__":
     unittest.main()
 
 
 
-# essayer une classe avec un alloc sutom et l'autre avec PyObject_New
+# try using PyObject_New? or  essayer une classe avec un alloc sutom et l'autre avec PyObject_New
 
-# int/str conversion after function <- through "fst" function returning fst argument?
 
 # tp_len + check wrapper (d'autres wrapper?)
 # Long_Check
-
-# PyTuple_Size, PyTuple_GetItem
