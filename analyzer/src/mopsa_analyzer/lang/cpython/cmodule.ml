@@ -99,6 +99,7 @@ module Domain =
           "PyLong_FromLong";
           "PyLong_FromSsize_t";
           "PyLong_AsLong";
+          "PyLong_AsSsize_t";
           "PyUnicode_GetLength";
         ];
 
@@ -470,6 +471,39 @@ module Domain =
                    Post.return flow
           )
 
+
+    let pylong_to_c_type arg range man flow (type_min_value, type_max_value, type_name) =
+         (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
+         resolve_c_pointer_into_addr arg man flow >>$
+           (fun addr flow ->
+             match akind addr with
+             | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+                  fun int_value flow ->
+                  let max_value = mk_z type_max_value ~typ:T_int range in
+                  let min_value = mk_z type_min_value ~typ:T_int range in
+                  let overflow_check =
+                    log_and
+                       (le int_value max_value range)
+                       (ge int_value min_value range)
+                       range in
+                  assume
+                    overflow_check
+                    man flow
+                    ~fthen:(Eval.singleton int_value)
+                    ~felse:(fun flow ->
+                      (* Overflow: need to set the error and then return -1 *)
+                      c_set_exception "PyExc_OverflowError" (Format.asprintf "Python int too large to convert to C %s" type_name) range man flow >>%
+                        Eval.singleton (mk_int ~typ:T_int (-1) range)
+                    )
+             | _ ->
+                c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                  fun flow ->
+                  Eval.singleton (mk_int ~typ:T_int (-1) range) flow
+           )
+
+
+
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
@@ -613,30 +647,16 @@ module Domain =
          |> OptionExt.return
 
 
+      | E_c_builtin_call ("PyLong_AsSsize_t", args) ->
+         let ssize_t_max = Z.of_string "18446744073709551615" in
+         let ssize_t_min = Z.of_string "-1" in
+         pylong_to_c_type (List.hd args) range man flow (ssize_t_min, ssize_t_max, "Ssize_t")
+         |> OptionExt.return
+
       | E_c_builtin_call ("PyLong_AsLong", args) ->
-         (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
-         resolve_c_pointer_into_addr (List.hd args) man flow >>$
-           (fun addr flow ->
-             (* FIXME: if PyLong_AsLong is not called on an integer, this should fail *)
-             man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
-               fun int_value flow ->
-               let long_max = mk_z (Z.of_string "9223372036854775807") ~typ:T_int range in
-               assume
-                 (mk_binop ~etyp:T_bool
-                    (mk_binop ~etyp:T_bool int_value O_le long_max range)
-                    O_log_and
-                    (mk_binop ~etyp:T_bool int_value O_ge (mk_unop ~etyp:T_int O_minus long_max range) range)
-                    range)
-                 man flow
-                 ~fthen:(Eval.singleton int_value)
-                 ~felse:(fun flow ->
-                   (* Overflow: need to set the error and then return -1 *)
-                   let helper = C.Ast.find_c_fundec_by_name "PyLong_AsLong_Helper" flow in
-                   man.eval (mk_c_call helper [] range) flow >>$
-                     fun _ flow ->
-                     Eval.singleton (mk_int ~typ:T_int (-1) range) flow
-                 )
-           )
+         let long_max = Z.of_string "9223372036854775807" in
+         let long_min = Z.of_string "-9223372036854775807" in
+         pylong_to_c_type (List.hd args) range man flow (long_min, long_max, "long")
          |> OptionExt.return
 
       | E_c_builtin_call ("PyUnicode_GetLength", args) ->
