@@ -1,3 +1,4 @@
+(* FIXME: wrap try/with check_consistent_null + handling of addresses in C->Python boundary *)
 (* Truc commun au multilangage: addr du tas/variable/fonction
    Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
            Var -> Valeur ~> Addr -> Valeur
@@ -202,7 +203,16 @@ module Domain =
             new_method_from_def binder_addr methd_descr methd man flow)
         |> post_to_flow man
       in
-      fold_until_null add_method 0 flow
+      assume
+        (ne
+           (mk_c_arrow_access_by_name expr field_name range)
+           (mk_c_null range)
+           ~etyp:T_bool range) man flow
+        ~fthen:(fun flow ->
+          Post.return @@ fold_until_null add_method 0 flow)
+        ~felse:(fun flow ->
+          debug "add_pymethoddef %s %a: NULL found, nothing to do" field_name pp_expr expr;
+          Post.return flow)
 
 
     let add_pymemberdef binder_addr expr man flow =
@@ -230,7 +240,18 @@ module Domain =
           )
         |> post_to_flow man
       in
-      fold_until_null add_member 0 flow
+      assume
+        (ne
+           (mk_c_arrow_access_by_name expr "tp_members" range)
+           (mk_c_null range)
+           ~etyp:T_bool range) man flow
+        ~fthen:(fun flow ->
+          fold_until_null add_member 0 flow |>
+            Post.return)
+        ~felse:(fun flow ->
+          debug "add_pymemberdef %a tp_members: NULL found, nothing to do" pp_expr expr;
+          Post.return flow)
+
 
 
     let new_module_from_def expr man flow =
@@ -254,7 +275,9 @@ module Domain =
           let m_addr = Addr.from_expr module_addr in
           let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
           let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
-          Eval.singleton module_addr (add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow)
+          add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
+            >>% Eval.singleton module_addr
+
 
     let resolve_c_pointer_into_addr expr man flow =
       resolve_pointer expr man flow >>$
@@ -351,9 +374,8 @@ module Domain =
             bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>%
               fun flow ->
               assume
-                (mk_binop
+                (ne
                    (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
-                   O_ne
                    (mk_c_null range)
                    ~etyp:T_bool range)
                 man flow
@@ -366,13 +388,16 @@ module Domain =
                 fun flow ->
                 (* FIXME: *)
                 debug "add_pymethoddef@.%a" (format @@ Flow.print man.lattice.print) flow;
-                let flow = add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow in
-                let flow = add_pymemberdef cls_addr ecls man flow in
-                let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
-                Cases.singleton cls_addr flow
+                add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow >>%
+                  add_pymemberdef cls_addr ecls man >>%
+                  fun flow ->
+                  let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
+                  Cases.singleton cls_addr flow
 
     let is_py_addr addr =
       match akind addr with
+      (* FIXME: other container addresses *)
+      | Python.Objects.Py_list.A_py_list
       | A_py_instance _
         | A_py_class _
         | A_py_c_class _
@@ -386,6 +411,7 @@ module Domain =
     let rec python_to_c_boundary addr oe ?(size=None) range man flow =
       (* FIXME: give py_object so that the boundary handles translation of integers with value addr_attr *)
       if not @@ is_py_addr addr then flow else
+      if EquivBaseAddrs.is_bottom (get_env T_cur man flow) then let () = debug "python_to_c_boundary: bottom state, skipping" in flow else
       let pyobject_typ, pytypeobject_typ =
         let assign_helper = C.Ast.find_c_fundec_by_name "_PyType_Assign_Helper" flow in
         under_pointer_type @@ vtyp @@ List.hd assign_helper.c_func_parameters,
@@ -406,6 +432,7 @@ module Domain =
           | A_py_instance a -> a
           | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
           | A_py_class _ -> fst @@ find_builtin "type"
+          | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
           | _ -> panic_at range "parent addr of %a?" pp_addr addr in
         let flow, is_cls =
           match akind addr with
