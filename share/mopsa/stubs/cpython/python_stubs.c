@@ -49,6 +49,8 @@ PyErr_Format(PyObject* exc, const char* fmt, ...)
 int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
+    type->tp_flags =
+        (type->tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY;
     type->tp_alloc = PyType_GenericAlloc;
     return 0;
 }
@@ -212,8 +214,8 @@ static PyObject *
 wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
 {
     initproc func = (initproc)wrapped;
-
-    if (func(self, args, kwds) < 0)
+    int r = func(self, args, kwds);
+    if (r < 0)
         return NULL;
     Py_RETURN_NONE;
 }
@@ -345,5 +347,27 @@ Py_UCS4* PyUnicode_AsUCS4Copy(PyObject *unicode)
     {
         PyErr_NoMemory();
         return NULL;
+    }
+}
+
+int PyParseTuple_int_helper(PyObject *obj, int *result)
+{
+    long ival = PyLong_AsLong(obj);
+    if(ival == -1 && PyErr_Occurred()) {
+        return 0;
+    }
+    else if (ival > INT_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "signed integer is greater than maximum");
+        return 0;
+    }
+    else if (ival < INT_MIN) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "signed integer is less than minimum");
+        return 0;
+    }
+    else {
+        *result = ival;
+        return 1;
     }
 }

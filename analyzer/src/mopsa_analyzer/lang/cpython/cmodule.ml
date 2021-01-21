@@ -1,17 +1,22 @@
-(* FIXME: wrap try/with check_consistent_null + handling of addresses in C->Python boundary *)
+(*
+  FIXME:
+  - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
+  - handle rename_addr, fold_addr for recency allocation (in future, also handle what is used by the AGC?)
+  - triggering S_add(addr) should be sent to the correct domains...
+  - support PyBuild_Value
+  - assert offset = [0, 0] for Points_to
+
+ *)
 (* Truc commun au multilangage: addr du tas/variable/fonction
    Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
            Var -> Valeur ~> Addr -> Valeur
  *)
 (*
   TODO:
-  - triggering S_add(addr) should be sent to the correct domains...
    - parameter conversion Python~>C isn't done in all cases
    - support more things in PyParse_Tuple
-   - support PyBuild_Value
    - prendre les range d'allocation du python plutôt... (ou avoir range+cs pour les kinds d'addr concernés)
 *)
-(* FIXME: assert offset = [0, 0] for Points_to *)
 open Mopsa
 open Sig.Abstraction.Domain
 open Universal.Ast
@@ -131,7 +136,7 @@ module Domain =
                      Cases.singleton None flow
                   | _ -> panic "points_to %a" pp_points_to points_to
                 ) in
-      assert(Cases.cardinal r <= 1);
+      (* assert(Cases.cardinal r <= 1); *)
       r
 
     let set_singleton p a man flow =
@@ -701,7 +706,7 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyLong_AsLong", args) ->
-         let long_max = Z.of_string "9223372036854775807" in
+         let long_max = Z.of_string  "9223372036854775807" in
          let long_min = Z.of_string "-9223372036854775807" in
          pylong_to_c_type (List.hd args) range man flow (long_min, long_max, "long")
          |> OptionExt.return
@@ -783,12 +788,17 @@ module Domain =
                                        flow >>%
                                        fun flow ->
                                        debug "value should be stored %a@.%a" pp_var (mk_addr_attr addr "value" T_int) (format @@ Flow.print man.lattice.print) flow;
-                                       man.exec (mk_assign
-                                                   c
-                                                   (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_AsLong" flow) [mk_addr addr range] range)
-                                                   range) flow >>%
-                                         (* FIXME: need to check value wrt INT_MIN and INT_MAX then. cf getargs.c:787 *)
-                                         fun flow -> Cases.return 1 flow
+                                       assume (mk_c_call
+                                                 (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
+                                                 [mk_addr addr range; mk_c_address_of c range]
+                                                 range)
+                                         man flow
+                                         ~fthen:(fun flow ->
+                                           Cases.return 1 flow
+                                         )
+                                         ~felse:(fun flow ->
+                                           Cases.return 0 flow
+                                         )
                                    else
                                      let () = debug "wrong type for convert_single integer" in
                                      (* set error *)
