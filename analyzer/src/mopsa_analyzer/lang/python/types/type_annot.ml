@@ -322,7 +322,7 @@ struct
             | "bool" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, OptionExt.return @@ mk_top T_bool range) range) flow
             | "int" ->
-               T_string.Domain.allocate_builtin ~mode:WEAK man range flow "int" (OptionExt.return @@ mk_top T_int range)
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, OptionExt.return @@ mk_top T_int range) range) flow
             | "float" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, OptionExt.return @@ mk_top (T_float F_DOUBLE) range) range) flow
             | "str" ->

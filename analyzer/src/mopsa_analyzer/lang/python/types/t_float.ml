@@ -234,10 +234,7 @@ module Domain =
         ["float"]
         (fun e flow ->
             man.eval  (mk_unop O_cast  ~etyp:T_int (Utils.extract_oobject @@ List.hd e) range) flow >>$
-              (fun e flow ->
-                Addr_env.Domain.allocate_builtin man range flow "int" (Some e)
-              (* Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow) *)
-              )
+ (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
         ) |> OptionExt.return
 
       | _ -> None
