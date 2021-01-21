@@ -111,22 +111,8 @@ module Domain =
 
       set_env T_cur EquivBaseAddrs.empty man flow
 
-    exception Null_found
     let mk_avalue_from_pyaddr addr typ range =
       mk_var (mk_addr_attr addr "value" typ) range
-
-    let get_name_of expr man flow =
-      let r = resolve_pointer expr man flow >>$
-                (fun points_to flow ->
-                  match points_to with
-                  | P_block({base_kind = String (s, _, _)}, offset, _) ->
-                     Cases.singleton s flow
-                  | P_null ->
-                     raise Null_found
-                  | _ -> assert false
-                ) in
-      assert(Cases.cardinal r <= 1);
-      r
 
     let safe_get_name_of expr man flow =
       let r = resolve_pointer expr man flow >>$
@@ -178,9 +164,12 @@ module Domain =
 
     let new_method_from_def binder_addr methd_kind methd man flow =
       let range = erange methd in
-      get_name_of (mk_c_member_access_by_name methd "ml_name" range) man flow >>$
-        fun methd_name flow ->
-        resolve_pointer (mk_c_member_access_by_name methd "ml_meth" range) man flow >>$
+      safe_get_name_of (mk_c_member_access_by_name methd "ml_name" range) man flow >>$
+        fun omethd_name flow ->
+        match omethd_name with
+        | None -> Cases.singleton false flow
+        | Some methd_name ->
+          resolve_pointer (mk_c_member_access_by_name methd "ml_meth" range) man flow >>$
           fun methd_function flow ->
           let methd_fundec = match methd_function with
             | P_fun f -> f
@@ -190,13 +179,15 @@ module Domain =
             let methd_addr = Addr.from_expr methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
             (* bind method to binder *)
-            bind_in_python binder_addr methd_name methd_addr range man flow
+            bind_in_python binder_addr methd_name methd_addr range man flow >>%
+              Cases.singleton true
 
     let rec fold_until_null func c flow =
-      try
-        fold_until_null func (c+1) (func c flow)
-      with Null_found -> flow
-
+      func c flow >>$
+        (fun continue flow ->
+          if continue then fold_until_null func (c+1) flow
+          else Post.return flow
+        )
 
     (* add_pymethoddef "tp_methods" cls_addr "method_descriptor" ecls man flow *)
     let add_pymethoddef field_name binder_addr methd_descr expr man flow =
@@ -208,7 +199,6 @@ module Domain =
                     range) flow >>$
           (fun methd flow ->
             new_method_from_def binder_addr methd_descr methd man flow)
-        |> post_to_flow man
       in
       assume
         (ne
@@ -216,7 +206,7 @@ module Domain =
            (mk_c_null range)
            ~etyp:T_bool range) man flow
         ~fthen:(fun flow ->
-          Post.return @@ fold_until_null add_method 0 flow)
+          fold_until_null add_method 0 flow)
         ~felse:(fun flow ->
           debug "add_pymethoddef %s %a: NULL found, nothing to do" field_name pp_expr expr;
           Post.return flow)
@@ -232,20 +222,23 @@ module Domain =
                     (mk_int pos range)
                     range) flow >>$
           (fun member flow ->
-            get_name_of (mk_c_member_access_by_name member "name" range) man flow >>$
-              fun member_name flow ->
-              debug "name is %s" member_name;
-              resolve_pointer (mk_c_address_of member range) man flow >>$
-                fun member_points_to flow ->
-                debug "points_to %a" pp_points_to member_points_to;
-                man.eval (mk_alloc_addr (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range) flow >>$
-                  fun member_descr flow ->
-                  let member_descr = Addr.from_expr member_descr in
-                  let flow = set_singleton member_points_to  member_descr man flow in
-                  man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
-                    bind_in_python binder_addr member_name member_descr range man
+            safe_get_name_of (mk_c_member_access_by_name member "name" range) man flow >>$
+              fun omember_name flow ->
+              match omember_name with
+              | None -> Cases.singleton false flow
+              | Some member_name ->
+                 debug "name is %s" member_name;
+                resolve_pointer (mk_c_address_of member range) man flow >>$
+                  fun member_points_to flow ->
+                  debug "points_to %a" pp_points_to member_points_to;
+                  man.eval (mk_alloc_addr (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range) flow >>$
+                    fun member_descr flow ->
+                    let member_descr = Addr.from_expr member_descr in
+                    let flow = set_singleton member_points_to  member_descr man flow in
+                    man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
+                      bind_in_python binder_addr member_name member_descr range man >>%
+                      Cases.singleton true
           )
-        |> post_to_flow man
       in
       assume
         (ne
@@ -253,8 +246,7 @@ module Domain =
            (mk_c_null range)
            ~etyp:T_bool range) man flow
         ~fthen:(fun flow ->
-          fold_until_null add_member 0 flow |>
-            Post.return)
+          fold_until_null add_member 0 flow)
         ~felse:(fun flow ->
           debug "add_pymemberdef %a tp_members: NULL found, nothing to do" pp_expr expr;
           Post.return flow)
@@ -270,21 +262,19 @@ module Domain =
             b) execute @_m·n = @_f
        *)
       let range = erange expr in
-      resolve_pointer (mk_c_arrow_access_by_name expr "m_name" range) man flow >>$
-        fun points_to flow ->
-        let module_name = match points_to with
-          | P_block({base_kind = String (s, _, _)}, offset, _) -> s
-          | P_null ->
-             raise Null_found
-          | _ -> assert false in
-        man.eval (mk_alloc_addr (Python.Addr.A_py_c_module module_name) range) flow >>$
-          fun module_addr flow ->
-          let m_addr = Addr.from_expr module_addr in
-          let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
-          let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
-          add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
-            >>% Eval.singleton module_addr
-
+      safe_get_name_of (mk_c_arrow_access_by_name expr "m_name" range) man flow >>$
+        (fun omodule_name flow ->
+        match omodule_name with
+        | None -> assert false
+        | Some module_name ->
+           man.eval (mk_alloc_addr (Python.Addr.A_py_c_module module_name) range) flow >>$
+             fun module_addr flow ->
+             let m_addr = Addr.from_expr module_addr in
+             let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
+             let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
+             add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
+             >>% Eval.singleton module_addr
+        )
 
     let resolve_c_pointer_into_addr expr man flow =
       (* None if Null is found, Some addr otherwise *)
@@ -646,8 +636,9 @@ module Domain =
              fun module_oaddr flow ->
              let module_addr = OptionExt.none_to_exn module_oaddr in
 
-             get_name_of obj_name man flow >>$
-               fun obj_name flow ->
+             safe_get_name_of obj_name man flow >>$
+               fun oobj_name flow ->
+               let obj_name = OptionExt.none_to_exn oobj_name in
 
                resolve_c_pointer_into_addr obj man flow >>$
                  fun obj_oaddr flow ->
@@ -730,8 +721,9 @@ module Domain =
 
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
-         get_name_of fmt man flow >>$
-           (fun fmt_str flow ->
+         safe_get_name_of fmt man flow >>$
+           (fun ofmt_str flow ->
+             let fmt_str = OptionExt.none_to_exn ofmt_str in
              resolve_c_pointer_into_addr args man flow >>$
                (fun oaddr flow ->
                  let addr = OptionExt.none_to_exn oaddr in
