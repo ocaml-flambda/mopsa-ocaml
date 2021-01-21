@@ -112,6 +112,8 @@ module Domain =
       set_env T_cur EquivBaseAddrs.empty man flow
 
     exception Null_found
+    let mk_avalue_from_pyaddr addr typ range =
+      mk_var (mk_addr_attr addr "value" typ) range
 
     let get_name_of expr man flow =
       let r = resolve_pointer expr man flow >>$
@@ -147,7 +149,7 @@ module Domain =
     (* Creates stmt binder_addr · obj_name = obj_addr *)
     let bind_in_python binder_addr obj_name obj_addr range man flow =
       (if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_integers) = 0 then
-        man.eval (mk_var (mk_addr_attr obj_addr "value" T_int) range) flow >>$
+        man.eval (mk_avalue_from_pyaddr obj_addr T_int range) flow >>$
           fun int_value flow ->
           Cases.return (Some int_value) flow
       else
@@ -527,7 +529,7 @@ module Domain =
              let addr = OptionExt.none_to_exn oaddr in
              match akind addr with
              | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+                man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
                   fun int_value flow ->
                   let max_value = mk_z type_max_value ~typ:T_int range in
                   let min_value = mk_z type_min_value ~typ:T_int range in
@@ -720,7 +722,7 @@ module Domain =
              let addr = OptionExt.none_to_exn oaddr in
              debug "addr is %a" pp_addr addr;
              (* FIXME: if not called on a string, this should fail *)
-             man.eval (mk_expr ~etyp:T_int (E_len (mk_var (mk_addr_attr addr "value" T_string) range)) range) flow >>$
+             man.eval (mk_expr ~etyp:T_int (E_len (mk_avalue_from_pyaddr addr T_string range)) range) flow >>$
                fun str_length flow ->
                Eval.singleton str_length flow
            )
@@ -782,12 +784,13 @@ module Domain =
                                    (* FIXME: check it's an integer *)
                                    if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
                                      man.exec
-                                       (mk_assign (mk_var (mk_addr_attr addr "value" T_int) range)
+                                       (mk_assign
+                                          (mk_avalue_from_pyaddr addr T_int range)
                                           (OptionExt.none_to_exn oe)
                                           range)
                                        flow >>%
                                        fun flow ->
-                                       debug "value should be stored %a@.%a" pp_var (mk_addr_attr addr "value" T_int) (format @@ Flow.print man.lattice.print) flow;
+                                       debug "value should be stored %a@.%a" pp_expr (mk_avalue_from_pyaddr addr T_int range) (format @@ Flow.print man.lattice.print) flow;
                                        assume (mk_c_call
                                                  (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
                                                  [mk_addr addr range; mk_c_address_of c range]
@@ -862,7 +865,7 @@ module Domain =
                fun py_pos flow ->
                debug "PyTuple_GetItem, py_pos = %a" pp_expr py_pos;
                man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
-                           [py_tuple; mk_py_object (Addr.from_expr py_pos, Some (mk_var (mk_addr_attr (Addr.from_expr py_pos) "value" T_int) range)) range] range) flow >>$
+                           [py_tuple; mk_py_object (Addr.from_expr py_pos, Some (mk_avalue_from_pyaddr (Addr.from_expr py_pos) T_int range)) range] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
                  let flow = python_to_c_boundary addr_py_elem oe_py_elem range man flow in
@@ -955,11 +958,11 @@ module Domain =
                       begin
                         match akind addr with
                         | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                           man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+                           man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
                              fun int_value flow ->
                              Eval.singleton (mk_py_object (addr, Some int_value) range) flow
                         | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                           man.eval (mk_var (mk_addr_attr addr "value" T_string) range) flow >>$
+                           man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
                              fun str_value flow ->
                              Eval.singleton (mk_py_object (addr, Some str_value) range) flow
                         | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
@@ -1019,11 +1022,11 @@ module Domain =
                   begin
                     match akind addr with
                     | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                       man.eval (mk_var (mk_addr_attr addr "value" T_int) range) flow >>$
+                       man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
                          fun int_value flow ->
                          Eval.singleton (mk_py_object (addr, Some int_value) range) flow
                     | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                       man.eval (mk_var (mk_addr_attr addr "value" T_string) range) flow >>$
+                       man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
                          fun str_value flow ->
                          Eval.singleton (mk_py_object (addr, Some str_value) range) flow
                     | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
