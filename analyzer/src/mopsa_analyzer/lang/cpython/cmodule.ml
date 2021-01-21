@@ -285,20 +285,10 @@ module Domain =
           else
           let aset = Top.detop @@ find points_to (get_env T_cur man flow) in
           debug "got %a" (ValueSet.fprint SetExt.printer_default pp_addr) aset;
-          match ValueSet.cardinal aset with
-          | 0 ->
-             (* FIXME: shouldn't happen anymore *)
-             warn_at expr.erange "resolve_c_pointer_into_addr of %a does not work, falling back" pp_points_to points_to;
-             begin match points_to with
-             | P_block({base_kind = Addr a}, _, _) ->
-                Cases.singleton (Some a) flow
-             | _ ->
-                (* FIXME: if we forget to call PyType_Ready on a C type, we might end up here.*)
-                assert false
-             end
-          | 1 ->
-             Cases.singleton (OptionExt.return @@ ValueSet.choose aset) flow
-          | _ -> assert false
+          if ValueSet.cardinal aset = 1 then
+            Cases.singleton (OptionExt.return @@ ValueSet.choose aset) flow
+          else
+            assert false
         )
 
     (* bind function pointed to by expr, as cls.name in python side *)
@@ -402,6 +392,7 @@ module Domain =
       match akind addr with
       (* FIXME: other container addresses *)
       | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Tuple.A_py_tuple _
       | A_py_instance _
         | A_py_class _
         | A_py_c_class _
@@ -431,6 +422,7 @@ module Domain =
       let type_addr = match akind addr with
         | A_py_instance a -> a
         | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
+        | Python.Objects.Tuple.A_py_tuple _ -> fst @@ find_builtin "tuple"
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
         | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
         | _ -> panic_at range "parent addr of %a?" pp_addr addr in
@@ -585,6 +577,14 @@ module Domain =
              let add_class_equivs descr flow  =
                List.fold_left (fun flow (c, py) ->
                    add_class_equiv c py flow) flow descr in
+             let add_exc_equivs descr flow =
+               (* let flow = add_class_equivs descr flow in *)
+               List.fold_left (fun flow (_, py) ->
+                   let py_addr = fst @@ Python.Addr.find_builtin py in
+                   set_singleton
+                     (mk_c_points_to_bloc (C.Common.Base.mk_addr_base py_addr) (mk_zero (Location.mk_program_range [])) None)
+                   py_addr man flow) flow descr
+             in
              let flow =
                let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
                let true_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_true in
@@ -613,14 +613,19 @@ module Domain =
                    ("PyLong_Type", "int");
                    ("PyUnicode_Type", "str");
                    ("PyList_Type", "list");
+                   (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
+                 ]
+                 flow in
+             let flow =
+               add_exc_equivs
+                 [
                    ("PyExc_MemoryError", "MemoryError");
                    ("PyExc_TypeError", "TypeError");
                    ("PyExc_OverflowError", "OverflowError");
                    ("PyExc_AttributeError", "AttributeError");
                    ("PyExc_SystemError", "SystemError");
-                   (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
                  ]
-                 flow in
+               flow in
              let init_flags = C.Ast.find_c_fundec_by_name "init_flags" flow in
              post_to_flow man @@ man.exec (mk_expr_stmt (mk_c_call init_flags [] range) range) flow
            else
@@ -775,25 +780,19 @@ module Domain =
                                    debug "got obj = %a" pp_expr obj;
                                    (* FIXME: check it's an integer *)
                                    if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-                                     man.exec
-                                       (mk_assign
-                                          (mk_avalue_from_pyaddr addr T_int range)
-                                          (OptionExt.none_to_exn oe)
-                                          range)
-                                       flow >>%
-                                       fun flow ->
-                                       debug "value should be stored %a@.%a" pp_expr (mk_avalue_from_pyaddr addr T_int range) (format @@ Flow.print man.lattice.print) flow;
-                                       assume (mk_c_call
-                                                 (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
-                                                 [mk_addr addr range; mk_c_address_of c range]
-                                                 range)
-                                         man flow
-                                         ~fthen:(fun flow ->
-                                           Cases.return 1 flow
-                                         )
-                                         ~felse:(fun flow ->
-                                           Cases.return 0 flow
-                                         )
+                                     let flow = python_to_c_boundary addr oe range man flow in
+                                     debug "value should be stored %a@.%a" pp_expr (mk_avalue_from_pyaddr addr T_int range) (format @@ Flow.print man.lattice.print) flow;
+                                     assume (mk_c_call
+                                               (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
+                                               [mk_addr addr range; mk_c_address_of c range]
+                                               range)
+                                       man flow
+                                       ~fthen:(fun flow ->
+                                         Cases.return 1 flow
+                                       )
+                                       ~felse:(fun flow ->
+                                         Cases.return 0 flow
+                                       )
                                    else
                                      let () = debug "wrong type for convert_single integer" in
                                      (* set error *)
