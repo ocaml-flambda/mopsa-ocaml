@@ -579,9 +579,10 @@ test-typpete 43/43:
     - echo $CPY_FILE
     - echo $PWD
     - cd analyzer/tests/cpython
-    - ../../../bin/mopsa-cpython $CPY_FILE | grep "Assertion failure: 31 total"
+    - ../../../bin/mopsa-cpython $CPY_FILE | grep $BASIC_CHECK
 
 test-cpython 1/1:
   variables:
     CPY_FILE: 'basic_tests.py'
+    BASIC_CHECK: 'Assertion failure: 31 total'
   extends: .test-cpython
