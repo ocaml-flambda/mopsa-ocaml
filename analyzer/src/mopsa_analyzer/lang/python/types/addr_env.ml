@@ -150,7 +150,12 @@ struct
     | None ->
        Post.return flow
     | Some aset ->
-       let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
+       (* let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in *)
+       let check_baddr a = ASet.exists (fun a2 ->
+                               match a2 with
+                               | Def a2 ->
+                                  compare_addr_kind (akind a2) (akind (OptionExt.none_to_exn !a)) = 0
+                               | _ -> false) aset in
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
@@ -750,8 +755,10 @@ struct
          let cur = get_env T_cur man flow in
          begin match AMap.find_opt var cur with
          | None ->
+            Debug.debug ~channel:"query" "None in addr_env";
             None
          | Some aset ->
+            Debug.debug ~channel:"query" "For %a, aset = %a in addr_env" pp_var var (format ASet.print) aset;
             let subvalues =
               ASet.fold (fun pyaddr acc ->
                   match pyaddr with
@@ -760,7 +767,7 @@ struct
                      if List.exists (fun a' -> compare_addr  addr (OptionExt.none_to_exn a') = 0)
                           [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
                        (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
-                     else if compare_addr (OptionExt.none_to_exn !addr_integers) addr = 0 then
+                     else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind addr) = 0 then
                        let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
                        let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
                        (s, int_info) :: acc

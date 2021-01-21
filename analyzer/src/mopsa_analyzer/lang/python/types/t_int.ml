@@ -59,7 +59,7 @@ struct
     | E_constant (C_top (T_py (Some Int))), T_py _
     | E_constant (C_int _), T_py _
     | E_constant (C_int_interval _), T_py _ ->
-      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some {exp with etyp=T_int}) range) flow |> OptionExt.return
+       Addr_env.Domain.allocate_builtin man range flow "int" (Some {exp with etyp=T_int}) |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "bool", _)}, _)}, [arg], []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__new__", _))}, _)}, [_; arg], []), _ ->
@@ -198,13 +198,13 @@ struct
                          let res =
                            fun flow ->
                            if is_reverse_operator f then
-                             Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
+                             Addr_env.Domain.allocate_builtin man range flow "int" (Some (mk_binop (Utils.extract_oobject e2) (match Operators.methfun_to_binop f with
                                                                                                                                                      | O_py_floor_div -> O_div
-                                                                                                                                                     | x -> x) (Utils.extract_oobject e1) range ~etyp:T_int)) range) flow
+                                                                                                                                                     | x -> x) (Utils.extract_oobject e1) range ~etyp:T_int))
                            else
-                             Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
+                             Addr_env.Domain.allocate_builtin man range flow "int" (Some (mk_binop (Utils.extract_oobject e1) (match Operators.methfun_to_binop f with
                                                                                                                                                      | O_py_floor_div -> O_div
-                                                                                                                                                     | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) range) flow in
+                                                                                                                                                     | x -> x) (Utils.extract_oobject e2) range ~etyp:T_int)) in
                          if is_arith_div_fun "int" f then
                            assume (mk_binop ~etyp:(T_py None) (if is_reverse_operator f then e1 else e2) O_eq (mk_zero ~typ:(T_py None) range) range) man flow
                              ~fthen:(fun flow ->
@@ -234,7 +234,7 @@ struct
           assume
             (mk_py_isinstance_builtin e "int" range)
             ~fthen:(fun true_flow ->
-                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)) range) true_flow)
+              Addr_env.Domain.allocate_builtin man range flow "int" (Some (mk_unop (Operators.methfun_to_unop f) (Utils.extract_oobject el) range ~etyp:T_int)))
             ~felse:(fun false_flow ->
                 let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
                 man.eval   expr false_flow)

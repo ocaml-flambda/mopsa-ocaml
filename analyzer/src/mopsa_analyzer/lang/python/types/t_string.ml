@@ -413,7 +413,7 @@ module Domain =
           (fun eargs flow ->
             man.eval   (mk_expr ~etyp:T_int (E_len (extract_oobject @@ List.hd eargs)) range) flow >>$
               fun l flow ->
-              Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some l) range) flow
+              allocate_builtin man range flow "int" (Some l)
           )
         |> OptionExt.return
 
