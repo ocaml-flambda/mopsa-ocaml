@@ -1112,7 +1112,13 @@ module Domain =
          let flow = set_env T_cur ncur man flow in
          (* delegate to C if needed *)
          (if c_rename_needed then
-            man.exec ~route:(Semantic "C") stmt flow
+            let post = man.exec ~route:(Semantic "C") stmt flow in
+            match akind src with
+            | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+               post >>% man.exec (mk_rename (mk_avalue_from_pyaddr src T_int range) (mk_avalue_from_pyaddr dst T_int range) range)
+            | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+               post >>% man.exec (mk_rename (mk_avalue_from_pyaddr src T_string range) (mk_avalue_from_pyaddr dst T_string range) range)
+            | _ -> post
           else
             Post.return flow) >>%
            (* delegate to python *)
