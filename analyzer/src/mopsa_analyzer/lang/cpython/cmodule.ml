@@ -320,34 +320,34 @@ module Domain =
       (* this corresponds to _Py_CheckFunctionResult in Objects/call.c *)
       (* check that exc_state is not NULL and raise the corresponding exception+message *)
       (* if exc_state is NULL raise the specific error PyExc_SystemError("... returned NULL without setting an error") *)
-      let exc_state = search_c_globals_for flow "exc_state" in
-      let exc_msg = search_c_globals_for flow "exc_msg" in
-      (* FIXME: call PyErr_Occured() != NULL rather? *)
-      resolve_c_pointer_into_addr (mk_var exc_state range) man flow >>$
-        fun oexc_addr flow ->
-        match oexc_addr with
-        | Some exc_addr ->
-          safe_get_name_of (mk_var exc_msg range) man flow >>$
-            fun exc_msg flow ->
-            debug "%s: exc_addr: %a, exc_msg: %a" function_name pp_addr exc_addr (OptionExt.print Format.pp_print_string) exc_msg;
-            let args = match exc_msg with
-              | None -> []
-              | Some s -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}] in
-            (* clean C exception state for next times *)
-            man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>%
-            man.exec (Python.Ast.mk_raise
-                        (Python.Ast.mk_py_call
-                           (Python.Ast.mk_py_object (exc_addr, None) range)
-                           args range)
-                        range) >>%
-              Eval.empty
-        | None ->
-           debug "%s: NULL found" function_name;
-           man.exec (Python.Ast.mk_raise
-                       (Python.Ast.mk_py_call
-                          (Python.Ast.mk_py_object (fst @@ find_builtin "SystemError", None) range)
-                          [{(Universal.Ast.mk_string (Format.asprintf "%s returned NULL without setting an error" function_name) range) with etyp=(T_py None)}] range)
-                       range) flow >>% Eval.empty
+      let exc  = search_c_globals_for flow "exc" in
+      man.eval (mk_var exc range) flow >>$
+        fun exc flow ->
+        resolve_c_pointer_into_addr (mk_c_arrow_access_by_name exc "exc_state" range) man flow >>$
+          fun oexc_addr flow ->
+          match oexc_addr with
+          | Some exc_addr ->
+             safe_get_name_of (mk_c_arrow_access_by_name exc "exc_msg" range) man flow >>$
+               fun exc_msg flow ->
+               debug "%s: exc_addr: %a, exc_msg: %a" function_name pp_addr exc_addr (OptionExt.print Format.pp_print_string) exc_msg;
+               let args = match exc_msg with
+                 | None -> []
+                 | Some s -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}] in
+               (* clean C exception state for next times *)
+               man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>%
+                 man.exec (Python.Ast.mk_raise
+                             (Python.Ast.mk_py_call
+                                (Python.Ast.mk_py_object (exc_addr, None) range)
+                                args range)
+                             range) >>%
+                 Eval.empty
+          | None ->
+             debug "%s: NULL found" function_name;
+             man.exec (Python.Ast.mk_raise
+                         (Python.Ast.mk_py_call
+                            (Python.Ast.mk_py_object (fst @@ find_builtin "SystemError", None) range)
+                            [{(Universal.Ast.mk_string (Format.asprintf "%s returned NULL without setting an error" function_name) range) with etyp=(T_py None)}] range)
+                         range) flow >>% Eval.empty
 
 
     let new_class_from_def ecls man flow =

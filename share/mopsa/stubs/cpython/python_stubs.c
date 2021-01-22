@@ -1,48 +1,63 @@
-// stubs used by the analysis
-PyObject* exc_state = NULL;
-char* exc_msg = NULL;
+/* // stubs used by the analysis */
+typedef struct {
+    PyObject* exc_state;
+    char* exc_msg;
+} exc_data;
+
+exc_data *exc;
 
 PyObject*
 PyErr_NoMemory()
 {
-    exc_state = PyExc_MemoryError;
-//    _mopsa_print();
+    exc = malloc(sizeof(exc_data));
+    _mopsa_assume(exc != NULL);
+    exc->exc_state = PyExc_MemoryError;
     return NULL;
 }
 
 PyObject*
 PyErr_Occurred()
 {
-    return exc_state;
-};
+    return exc->exc_state;
+}
+
+char* PyErr_GetMsg() // not a real cpython function
+{
+    return exc->exc_msg;
+}
 
 void
 PyErr_Clear()
 {
-    exc_state = NULL;
-    exc_msg = NULL;
+    exc = malloc(sizeof(exc_data));
+    _mopsa_assume(exc != NULL);
+    exc->exc_state = NULL;
+    exc->exc_msg = NULL;
 }
 
-void PyErr_SetNone(PyObject* exc) {
-    exc_state = exc;
+void PyErr_SetNone(PyObject* o) {
+    exc = malloc(sizeof(exc_data));
+    _mopsa_assume(exc != NULL);
+    exc->exc_state = o;
 }
 
-void PyErr_SetString(PyObject* exc, const char* msg){
-    exc_state = exc;
-    exc_msg = msg;
+void PyErr_SetString(PyObject* o, const char* msg){
+    exc = malloc(sizeof(exc_data));
+    _mopsa_assume(exc != NULL);
+    exc->exc_state = o;
+    exc->exc_msg = msg;
 //    _mopsa_print();
 }
 
 PyObject*
-PyErr_Format(PyObject* exc, const char* fmt, ...)
+PyErr_Format(PyObject* o, const char* fmt, ...)
 {
-    _mopsa_print();
     va_list args;
     va_start(args, fmt);
     char* msg;
     vasprintf(&msg, fmt, args);
     va_end(args);
-    PyErr_SetString(exc, msg);
+    PyErr_SetString(o, msg);
     return NULL;
 }
 
