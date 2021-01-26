@@ -12,6 +12,7 @@ PyErr_NoMemory()
     exc = malloc(sizeof(exc_data));
     _mopsa_assume(exc != NULL);
     exc->exc_state = PyExc_MemoryError;
+    exc->exc_msg = NULL;
     return NULL;
 }
 
@@ -39,6 +40,7 @@ void PyErr_SetNone(PyObject* o) {
     exc = malloc(sizeof(exc_data));
     _mopsa_assume(exc != NULL);
     exc->exc_state = o;
+    exc->exc_msg = NULL;
 }
 
 void PyErr_SetString(PyObject* o, const char* msg){

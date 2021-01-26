@@ -1,6 +1,7 @@
 (*
   FIXME:
   - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
+    + if a builtin int/str abstract value's can be changed, it needs to be update
   - handle rename_addr, fold_addr for recency allocation (in future, also handle what is used by the AGC?)
   - triggering S_add(addr) should be sent to the correct domains...
   - support PyBuild_Value
@@ -108,6 +109,7 @@ module Domain =
         let () = warn "changing %a into strong integer addr %a to improve C precision" pp_addr addr pp_addr strong in
         strong
       else addr
+
     let init _ man flow =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ())
         [
@@ -450,22 +452,10 @@ module Domain =
           let flow, is_cls =
             match akind addr with
             | A_py_class _ ->
+               (* FIXME: do this after setting the bytes var *)
                let type_obj = mk_addr ~etyp:(T_c_pointer pytypeobject_typ) addr range in
                let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None) addr man flow in
-               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
-               (* if cls: should call set_default_flags *)
-               post_to_flow man
-                 (
-                   man.exec
-                     (mk_expr_stmt
-                        (mk_c_call
-                           set_default_flags_func
-                           [type_obj]
-                           range)
-                        range) flow >>% fun flow ->
-                                        debug "cls flags result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
-                                        Post.return flow
-                 ), true
+               flow, true
             | _ ->
                (* let's check our parent is correct first *)
                python_to_c_boundary type_addr None range man flow, false
@@ -490,6 +480,24 @@ module Domain =
             man.exec (mk_add_var bytes range) >>%
             man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
             fun flow ->
+            let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
+            let flow =
+              if is_cls then
+                (* if cls: should call set_default_flags *)
+                post_to_flow man
+                  (
+                    man.exec
+                      (mk_expr_stmt
+                         (mk_c_call
+                            set_default_flags_func
+                            [obj]
+                            range)
+                         range) flow >>%
+                      fun flow ->
+                      debug "cls flags result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
+                      Post.return flow
+                  )
+              else flow in
             debug "obj = %a, type_obj = %a" pp_expr obj pp_expr type_obj;
             (* this is obj->ob_type = type *)
             man.exec (mk_assign
@@ -643,11 +651,13 @@ module Domain =
                  ]
                flow in
              let init_flags = C.Ast.find_c_fundec_by_name "init_flags" flow in
-             post_to_flow man @@ man.exec (mk_expr_stmt (mk_c_call init_flags [] range) range) flow
+             (man.exec (mk_expr_stmt (mk_c_call init_flags [] range) range) flow >>% fun flow ->
+             let init_exc_state = C.Ast.find_c_fundec_by_name "PyErr_Clear" flow in
+             man.exec (mk_expr_stmt (mk_c_call init_exc_state [] range) range) flow)
            else
-             flow
+             Post.return flow
          in
-         new_module_from_def module_decl man flow
+         new_module_from_def module_decl man (post_to_flow man flow)
          |> OptionExt.return
 
 
