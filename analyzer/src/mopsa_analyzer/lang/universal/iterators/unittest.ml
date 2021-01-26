@@ -91,7 +91,9 @@ let () =
 
 (* Analysis alarms *)
 type check      += CHK_ASSERT_FAIL
-type alarm_kind += A_assert_fail of expr (** condition *)
+type alarm_kind +=
+    | A_assert_fail of expr (** condition *)
+    | A_assert_may_fail of expr
 
 
 let () =
@@ -102,16 +104,20 @@ let () =
   register_alarm {
     check = (fun next -> function
         | A_assert_fail _ -> CHK_ASSERT_FAIL
+        | A_assert_may_fail _ -> CHK_ASSERT_FAIL
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_assert_fail(c1), A_assert_fail(c2) -> compare_expr c1 c2
+        | A_assert_may_fail(c1), A_assert_may_fail(c2) -> compare_expr c1 c2
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
         | A_assert_fail(cond) ->
-          Format.fprintf fmt "Assertion '%a' violated" (Debug.bold pp_expr) cond
+          Format.fprintf fmt "Assertion '%a' always false" (Debug.bold pp_expr) cond
+        | A_assert_may_fail(cond) ->
+          Format.fprintf fmt "Assertion '%a' may be false" (Debug.bold pp_expr) cond
         | a -> next fmt a
       );
     join = (fun next a1 a2 -> next a1 a2)
@@ -123,6 +129,12 @@ let raise_assert_fail ?(force=false) cond man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_assert_fail cond) cs cond.erange in
   Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
+
+let raise_assert_may_fail ?(force=false) cond man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_assert_may_fail cond) cs cond.erange in
+  Flow.raise_alarm alarm ~bottom:true ~force man.lattice flow
+
 
 let safe_assert_check range man flow =
   Flow.add_safe_check CHK_ASSERT_FAIL range flow
@@ -187,6 +199,11 @@ struct
         ~felse:(fun fail_flow ->
             raise_assert_fail cond man fail_flow |>
             Post.return
+        )
+        ~fboth:(fun true_flow false_flow ->
+          Post.join
+            (Post.return @@ safe_assert_check cond.erange man true_flow)
+            (Post.return @@ raise_assert_may_fail cond man false_flow)
         )
         man flow
       |> OptionExt.return
