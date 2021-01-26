@@ -122,12 +122,12 @@ struct
       let in_flow_cur = post_to_flow man in_flow_cur in
       begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
-           let ret = match func.fun_return_type with
+           let call_oexp = match func.fun_return_type with
              | None -> None
-             | Some _ -> Some (Common.mk_return_var exp)
+             | Some _ -> Some exp
            in
                        (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
-          inline func params locals body ret range man in_flow_cur |>
+          inline func params locals body call_oexp range man in_flow_cur |>
           bind (fun oeval_case out_flow ->
               debug "in bind@\n";
               match oeval_case with

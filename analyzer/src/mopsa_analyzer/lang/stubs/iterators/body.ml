@@ -613,7 +613,7 @@ struct
         match stub.stub_func_return_type with
         | None -> None, flow
         | Some t ->
-          let return = Universal.Iterators.Interproc.Common.mk_return_var exp in
+          let return = Universal.Iterators.Interproc.Common.mk_return exp None in
           let flow = man.exec (mk_add_var return exp.erange) flow |> post_to_flow man in
           Some return, flow
       in

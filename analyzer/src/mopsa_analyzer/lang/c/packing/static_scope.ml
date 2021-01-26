@@ -246,7 +246,7 @@ struct
           packs_of_function ~user_only caller.call_fun_uniq_name
 
     (* Return variables are also part of the caller and the callee packs *)
-    | Var { vkind = Universal.Iterators.Interproc.Common.V_return call } ->
+    | Var { vkind = Universal.Iterators.Interproc.Common.V_return (call, _) } ->
       let cs = find_ctx Context.callstack_ctx_key ctx in
       if is_empty_callstack cs
       then []

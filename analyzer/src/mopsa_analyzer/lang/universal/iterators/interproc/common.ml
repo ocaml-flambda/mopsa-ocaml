@@ -32,7 +32,6 @@ let debug fmt = Debug.debug ~channel:name fmt
 
 let opt_continue_on_recursive_call : bool ref = ref true
 
-
 let () =
   register_domain_option name {
     key = "-stop-rec";
@@ -42,6 +41,16 @@ let () =
     default = " continue with top during recursive calls"
   }
 
+let opt_split_return_variables_by_range : bool ref = ref false
+
+let () =
+  register_domain_option name {
+      key = "-split-returns";
+      category = "Interprocedural Analysis";
+      doc = "";
+      spec = ArgExt.Set opt_split_return_variables_by_range;
+      default = " split return variables by their location in the program"
+    }
 
 (** {2 Return flow token} *)
 (** ===================== *)
@@ -70,31 +79,39 @@ let () =
 
 
 (** Return variable of a function call *)
-type var_kind += V_return of expr
+type var_kind += V_return of expr (* call expression *)
+                             * range option (* return range *)
 
 (** Registration of the kind of return variables *)
 let () =
   register_var {
     print = (fun next fmt v ->
         match v.vkind with
-        | V_return e -> Format.fprintf fmt "ret(%a)" pp_expr e
+        | V_return (e, None) -> Format.fprintf fmt "ret(%a)" pp_expr e
+        | V_return (e, Some r) -> Format.fprintf fmt "ret(%a)@%a)" pp_expr e pp_range r
         | _ -> next fmt v
       );
     compare = (fun next v1 v2 ->
         match v1.vkind, v2.vkind with
-        | V_return e1, V_return e2 ->
+        | V_return (e1, ro1), V_return (e2, ro2) ->
           Compare.compose [
             (fun () -> compare_expr e1 e2);
             (fun () -> compare_range e1.erange e2.erange);
+            (fun () -> (OptionExt.compare compare_range) ro1 ro2);
           ]
         | _ -> next v1 v2
       );
   }
 
 (** Constructor of return variables *)
-let mk_return_var call =
-  let uniq_name = Format.asprintf "ret(%a)@@%a" pp_expr call pp_range call.erange in
-  mkv uniq_name (V_return call) call.etyp
+let mk_return call ro =
+  let uniq_name, ro =
+    match ro with
+    | Some r when !opt_split_return_variables_by_range ->
+       Format.asprintf "ret(%a)@@%a@@%a" pp_expr call pp_range call.erange pp_range r, ro
+    | _ ->
+       Format.asprintf "ret(%a)@@%a" pp_expr call pp_range call.erange, None in
+  mkv uniq_name (V_return (call, ro)) call.etyp
 
 
 
@@ -103,9 +120,9 @@ let mk_return_var call =
 
 module ReturnKey = GenContextKey(
   struct
-    type 'a t = var
-    let print pp fmt v =
-      Format.fprintf fmt "Return var: %a" pp_var v
+    type 'a t = expr
+    let print pp fmt expr =
+      Format.fprintf fmt "Returning call: %a" pp_expr expr
   end
   )
 
@@ -197,14 +214,14 @@ let init_fun_params f args range man flow =
 
 
 (** Execute function body and save the return value *)
-let exec_fun_body f body ret range man flow =
+let exec_fun_body f params locals body call_oexp range man flow =
   (* Save the return variable in the context and backup the old one *)
   let oldreturn, flow1 =
-    match ret with
+    match call_oexp with
     | None -> None, flow
-    | Some ret ->
+    | Some call ->
       (try Some (find_ctx return_key (Flow.get_ctx flow)) with Not_found -> None),
-      Flow.set_ctx (add_ctx return_key ret (Flow.get_ctx flow)) flow in
+      Flow.set_ctx (add_ctx return_key call (Flow.get_ctx flow)) flow in
 
   (* Clear all return flows *)
   let flow2 = Flow.filter (fun tk env ->
@@ -248,66 +265,90 @@ let exec_fun_body f body ret range man flow =
       flow4 flow3
   in
 
+  let mk_return tk_orange range =
+    match call_oexp with
+    | None ->
+       mk_unit range
+    | Some call ->
+       mk_var (mk_return call tk_orange) range in
   (* Create a separate post-state for each return flow in flow3 *)
-  let postl =
+  let remove_locals =
+    (* Remove local variables from the environment. Remove of parameters is
+              postponed after finishing the statement, to keep relations between
+                        the passed arguments and the return value. *)
+    man.exec
+      (mk_block (List.map (fun v -> mk_remove_var v range) locals) range) in
+  let add_cleaners return =
+    Cases.add_cleaners
+      (List.map (fun v -> mk_remove_var v range) params @
+         (match call_oexp with
+          | None -> []
+          | Some _ -> [mk_remove return range])) in
+
+  let evals =
     Flow.fold (fun acc tk env ->
         match tk with
         | T_cur | T_return _ ->
-          let flow = Flow.set T_cur env man.lattice flow5 in
-          Post.return flow :: acc
+           let flow = Flow.set T_cur env man.lattice flow5 in
+           let return = match tk with
+             | T_cur -> mk_return None range
+             | T_return tk_range -> mk_return (Some tk_range) range
+             | _ -> assert false in
+           (
+             remove_locals flow >>%
+             man.eval return |>
+               add_cleaners return
+           )
+           :: acc
 
         | _ -> acc
       )
       [] flow3
   in
 
-  Cases.join_list postl ~empty:(fun () -> Post.return flow5)
-
+  Eval.join_list ~empty:(fun () ->
+      let return = mk_return None range in
+      Post.return flow5 >>% remove_locals >>% man.eval return |> add_cleaners return
+      ) evals
 
 (** Inline a function call *)
-let inline f params locals body ret range man flow =
-  let post =
-    match check_recursion f range (Flow.get_callstack flow) with
-    | true ->
-      begin
-        let flow =
-          Flow.add_local_assumption
-            (A_ignore_recursion_side_effect f.fun_orig_name)
-            range flow
-        in
-        match ret with
-        | None -> Post.return flow
-        | Some v ->
-          if !opt_continue_on_recursive_call then
-            man.exec (mk_add_var v range) flow >>%
-            man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
-          else
-            panic_at range "recursive call on function %s" f.fun_orig_name
-      end
+let inline f params locals body call_oexp range man flow =
+  match check_recursion f range (Flow.get_callstack flow) with
+  | true ->
+     begin
+       let flow =
+         Flow.add_local_assumption
+           (A_ignore_recursion_side_effect f.fun_orig_name)
+           range flow
+       in
+       let post = match call_oexp with
+         | None -> Post.return flow
+         | Some e ->
+            if !opt_continue_on_recursive_call then
+              let v = mk_return e None in
+              man.exec (mk_add_var v range) flow >>%
+                man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+            else
+              panic_at range "recursive call on function %s" f.fun_orig_name in
+       post >>% fun flow ->
+                match call_oexp with
+                | None ->
+                   Eval.singleton (mk_unit range) flow ~cleaners:(
+                       List.map (fun v ->
+                           mk_remove_var v range
+                         ) params
+                     )
 
-    | false ->
-      exec_fun_body f body ret range man flow >>%
-      (* Remove local variables from the environment. Remove of parameters is
-         postponed after finishing the statement, to keep relations between
-         the passed arguments and the return value. *)
-      man.exec (mk_block (List.map (fun v ->
-          mk_remove_var v range
-        ) locals) range)
-  in
-  post >>% fun flow ->
-  match ret with
-  | None ->
-    Eval.singleton (mk_unit range) flow ~cleaners:(
-      List.map (fun v ->
-          mk_remove_var v range
-        ) params
-    )
+                | Some e ->
+                   let v = mk_return e None in
+                   man.eval (mk_var v range) flow
+                   |> Cases.add_cleaners (
+                          mk_remove_var v range ::
+                            List.map (fun v ->
+                                mk_remove_var v range
+                              ) params
+                        )
+     end
 
-  | Some v ->
-    man.eval (mk_var v range) flow
-    |> Cases.add_cleaners (
-      mk_remove_var v range ::
-      List.map (fun v ->
-          mk_remove_var v range
-        ) params
-    )
+  | false ->
+     exec_fun_body f params locals body call_oexp range man flow
