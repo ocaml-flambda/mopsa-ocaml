@@ -120,6 +120,7 @@ module Domain =
           "PyArg_ParseTuple";
           "PyTuple_Size";
           "PyTuple_GetItem";
+          "PyTuple_GetSlice";
           "PyLong_FromLong";
           "PyLong_FromSsize_t";
           "PyLong_AsLong";
@@ -892,6 +893,32 @@ module Domain =
                  debug "PyTuple_GetItem: %a" pp_expr py_elem;
                  Eval.singleton (mk_addr addr_py_elem range) flow
            )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyTuple_GetSlice", [tuple; start; stop]) ->
+         (
+           debug "%a" pp_expr exp;
+           resolve_c_pointer_into_addr tuple man flow >>$
+             fun oaddr flow ->
+             let addr = OptionExt.none_to_exn oaddr in
+             let py_tuple = Python.Ast.mk_py_object (addr, None) range in
+             c_int_to_python start man flow start.erange >>$
+               fun py_start flow ->
+               debug "py_start = %a" pp_expr py_start;
+               c_int_to_python stop man flow stop.erange >>$
+                 fun py_stop flow ->
+                 debug "py_stop = %a" pp_expr py_stop;
+                 man.eval
+                   (mk_expr (Python.Ast.E_py_slice_subscript
+                               (py_tuple, py_start, py_stop, Python.Ast.mk_py_none range))
+                      range)
+                   flow >>$
+                   fun py_slice flow ->
+                   debug "resulting slice: %a" pp_expr py_slice;
+                   let addr_py_slice, oe_py_slice = object_of_expr py_slice in
+                   let c_addr, flow = python_to_c_boundary addr_py_slice None oe_py_slice range man flow in
+                   Eval.singleton c_addr flow
+         )
          |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
