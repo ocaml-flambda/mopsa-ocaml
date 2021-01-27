@@ -42,20 +42,26 @@ module Domain =
 
     let exec _ _ _ = None
 
-    let test_functions_from_cls (cls: Ast.py_clsdec) : Ast.py_fundec list =
+    let test_functions_and_setup_from_cls (cls: Ast.py_clsdec) : (Ast.py_fundec option * Ast.py_fundec list) =
       match skind cls.py_cls_body with
       | S_block (stmts, _) ->
-        List.fold_left (fun tests stmt ->
+        List.fold_left (fun (osetup, tests) stmt ->
             match skind stmt with
-            | S_py_function f when String.sub f.py_func_var.vname 0 4 = "test" ->
-              f :: tests
-            | _ -> tests) [] stmts
+            | S_py_function f ->
+               if String.sub f.py_func_var.vname 0 4 = "test" then
+                 (osetup, f :: tests)
+               else if get_orig_vname f.py_func_var = "setUp" then
+                 (Some f, tests)
+               else
+                 (osetup, tests)
+            | _ -> (osetup, tests)) (None, []) stmts
       | _ -> assert false
 
     let eval exp man flow =
       let range = exp.erange in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
+       (* FIXME: tearDown *)
        debug "Search for all classes that inherit from TestCase";
        let test_cases = man.ask Universal.Heap.Recency.Q_allocated_addresses flow |>
                           List.filter (fun addr ->
@@ -70,7 +76,7 @@ module Domain =
                             | _ -> assert false
                           )
        in
-       debug "|tests| = %d" (List.length test_cases);
+       debug "|tests classes| = %d" (List.length test_cases);
 
        let flow =
          List.fold_left (fun flow (cls_addr, cls_decl) ->
@@ -78,6 +84,8 @@ module Domain =
              let tmp = mktmp ~typ:(T_py None) () in
              let tmpvar = mk_var tmp range in
              let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
+             let osetup, test_functions = test_functions_and_setup_from_cls cls_decl in
+             debug "osetup = %a" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup);
              let test_calls =
                List.rev @@
                  List.map
@@ -86,11 +94,18 @@ module Domain =
                      mk_stmt (S_expression (mk_py_call
                                               (mk_var func.py_func_var range)
                                               [tmpvar] range)) range )
-                   (test_functions_from_cls cls_decl)
+                   test_functions
              in
              flow >>%
                man.exec assign_alloc >>%
-               man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) range) >>%
+               fun flow ->
+               (
+                 match osetup with
+                 | None -> Post.return flow
+                 | Some setup ->
+                    man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
+               ) >>%
+               man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
                man.exec (mk_remove_var tmp range)
            ) (Post.return flow) test_cases in
        flow >>%
