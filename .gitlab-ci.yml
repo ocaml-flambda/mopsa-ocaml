@@ -580,7 +580,7 @@ test-typpete 43/43:
     - echo $PWD
     - cd analyzer/tests/cpython
     - ../../../bin/mopsa-cpython $CPY_FILE > log || true
-    - grep 'Assertion failure. 38 total, .*37 safe' log
+    - grep 'Assertion failure. 39 total, .*38 safe' log || (cat log && false)
 
 test-cpython 1/1:
   variables:
