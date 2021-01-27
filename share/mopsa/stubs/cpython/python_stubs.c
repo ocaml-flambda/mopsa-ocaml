@@ -1,5 +1,5 @@
 /* // stubs used by the analysis */
-typedef struct {
+typedef struct exc_data {
     PyObject* exc_state;
     char* exc_msg;
 } exc_data;
@@ -250,6 +250,51 @@ wrap_lenfunc(PyObject *self, PyObject *args, void *wrapped)
         return NULL;
     return PyLong_FromSsize_t(res);
 }
+
+static PyObject *
+tp_new_wrapper(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    PyTypeObject *type, *subtype, *staticbase;
+    PyObject *arg0, *res;
+    PyTypeObject *type1;
+
+    /* if (self == NULL || !PyType_Check(self)) */
+    /*     Py_FatalError("__new__() called with non-type 'self'"); */
+    type = (PyTypeObject *)self;
+    /* if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) < 1) { */
+    /*     PyErr_Format(PyExc_TypeError, */
+    /*                  "%s.__new__(): not enough arguments", */
+    /*                  type->tp_name); */
+    /*     return NULL; */
+    /* } */
+    arg0 = PyTuple_GetItem(args, 0);
+    type1 = &PyLong_Type;
+    /* if (!PyType_Check(arg0)) { */
+    /*     PyErr_Format(PyExc_TypeError, */
+    /*                  "%s.__new__(X): X is not a type object (%s)", */
+    /*                  type->tp_name, */
+    /*                  Py_TYPE(arg0)->tp_name); */
+    /*     return NULL; */
+    /* } */
+    subtype = (PyTypeObject *)arg0;
+    /* if (!PyType_IsSubtype(subtype, type)) { */
+    /*     PyErr_Format(PyExc_TypeError, */
+    /*                  "%s.__new__(%s): %s is not a subtype of %s", */
+    /*                  type->tp_name, */
+    /*                  subtype->tp_name, */
+    /*                  subtype->tp_name, */
+    /*                  type->tp_name); */
+    /*     return NULL; */
+    /* } */
+
+    args = PyTuple_GetSlice(args, 1, PyTuple_Size(args));
+    /* if (args == NULL) */
+    /*     return NULL; */
+    res = type->tp_new(subtype, args, kwds);
+    /* Py_DECREF(args); */
+    return res;
+}
+
 
 // FIXME: incomplete, defined in abstract.c
 Py_ssize_t

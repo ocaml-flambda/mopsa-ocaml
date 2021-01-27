@@ -382,7 +382,10 @@ module Domain =
           let flow = set_singleton cls cls_addr man flow in
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
-          bind_function_in "__new__" (mk_c_arrow_access_by_name ecls "tp_new" range) cls_addr Builtin_function_or_method man flow >>%
+          bind_function_in "__new__"
+            (* (mk_c_arrow_access_by_name ecls "tp_new" range) *)
+            (mk_c_address_of (mk_expr (E_c_function (C.Ast.find_c_fundec_by_name "tp_new_wrapper" flow)) range) range)
+            cls_addr Builtin_function_or_method man flow >>%
             fun flow ->
             bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>%
               fun flow ->
