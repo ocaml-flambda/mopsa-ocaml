@@ -425,14 +425,28 @@ module Domain =
         | A_py_module _ -> true
       | _ -> false
 
-    let rec python_to_c_boundary addr oe ?(size=None) range man flow =
+    let points_to_to_c_expr pt typ range =
+      match pt with
+      | P_block ({base_kind = Var v} as base, offset, _) ->
+         mk_base_offset_pointer base offset typ range
+      | P_block ({base_kind = Addr a}, _, _) ->
+         mk_addr ~etyp:typ a range
+      | _ -> assert false
+
+    let py_addr_to_c_expr addr typ range man flow =
+      points_to_to_c_expr (KeySet.choose @@ Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow)) typ range
+
+    let rec python_to_c_boundary addr oaddr_ctyp oe ?(size=None) range man (flow: 'a flow) : (expr * 'a flow) =
       (* FIXME: give py_object so that the boundary handles translation of integers with value addr_attr *)
-      if not @@ is_py_addr addr then flow else
-      if EquivBaseAddrs.is_bottom (get_env T_cur man flow) then let () = debug "python_to_c_boundary: bottom state, skipping" in flow else
       let pyobject_typ, pytypeobject_typ =
         let assign_helper = C.Ast.find_c_fundec_by_name "_PyType_Assign_Helper" flow in
         under_pointer_type @@ vtyp @@ List.hd assign_helper.c_func_parameters,
         under_pointer_type @@ vtyp @@ List.hd @@ List.tl assign_helper.c_func_parameters in
+      let addr_ctyp = match oaddr_ctyp with
+        | None -> T_c_pointer pyobject_typ
+        | Some s -> s in
+      if not @@ is_py_addr addr then mk_addr ~etyp:addr_ctyp addr range, flow else
+      if EquivBaseAddrs.is_bottom (get_env T_cur man flow) then let () = debug "python_to_c_boundary: bottom state, skipping" in mk_addr addr ~etyp:addr_ctyp range, flow else
       (* when a python object enters the C scope for the first time, a few things must be done:
          - if it's an instance, set the ob_type pointer correctly so that Py_TYPE works
          - if it's a class,  set the tp_flag correctly (then Py..._Check will be precise)
@@ -440,7 +454,7 @@ module Domain =
          FIXME: addr rename/old does not switch from U to C it seems for Python addresses:
                 I think the current domain should be in charge of dispatching correctly... :(
        *)
-      debug "python_to_c_boundary %a %a" pp_range range pp_addr addr;
+      let () = debug "python_to_c_boundary %a %a %a" pp_range range pp_addr addr pp_typ addr_ctyp in
       let type_addr = match akind addr with
         | A_py_instance a -> a
         | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
@@ -448,30 +462,23 @@ module Domain =
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
         | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
         | _ -> panic_at range "parent addr of %a?" pp_addr addr in
-      let post =
-        if EquivBaseAddrs.mem_inverse addr (get_env T_cur man flow) then
-          let () = debug "%a already converted according to equiv" pp_addr addr in
-          Post.return flow
-        else
-          let flow, is_cls =
+      let c_addr, post =
+        let inverse = Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow) in
+        match KeySet.choose_opt inverse with
+        | Some inverse ->
+           let () = debug "%a already converted according to equiv: %a" pp_addr addr pp_points_to inverse in
+           points_to_to_c_expr inverse addr_ctyp range, Post.return flow
+        | None ->
+          let type_c_addr, flow, is_cls =
             match akind addr with
             | A_py_class _ ->
-               (* FIXME: do this after setting the bytes var *)
-               let type_obj = mk_addr ~etyp:(T_c_pointer pytypeobject_typ) addr range in
-               let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None) addr man flow in
-               flow, true
+               mk_addr type_addr ~etyp:(T_c_pointer pytypeobject_typ) range, flow, true
             | _ ->
                (* let's check our parent is correct first *)
-               python_to_c_boundary type_addr None range man flow, false
+               let type_c_addr, flow = python_to_c_boundary type_addr (Some (T_c_pointer pytypeobject_typ)) None range man flow in
+               type_c_addr, flow, false
           in
-          let type_obj =
-            match KeySet.choose @@ Top.detop @@ EquivBaseAddrs.find_inverse type_addr (get_env T_cur man flow) with
-            | P_block ({base_kind = Var v}, _, _) ->
-               mk_c_address_of (mk_var {v with vtyp = pytypeobject_typ} range) range
-            | P_block ({base_kind = Addr a}, _, _) ->
-               mk_addr ~etyp:pytypeobject_typ a range
-            | _ -> assert false
-          in
+          (* let type_obj = py_addr_to_c_expr type_addr pytypeobject_typ range man flow in *)
           let obj = mk_addr ~mode:(Some STRONG) ~etyp:(T_c_pointer pyobject_typ) addr range in
           let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
           let bytes_size = match size with
@@ -479,37 +486,41 @@ module Domain =
                let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) in
                mk_z ~typ:(T_c_integer C_unsigned_long) size range
             | Some s -> s in
-          let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None) addr man flow in
-          man.exec (mk_add (mk_addr ~etyp:(T_c_pointer pyobject_typ) addr range) range) flow >>%
-            man.exec (mk_add_var bytes range) >>%
-            man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
-            fun flow ->
-            let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
-            let flow =
-              if is_cls then
-                (* if cls: should call set_default_flags *)
-                post_to_flow man
-                  (
-                    man.exec
-                      (mk_expr_stmt
-                         (mk_c_call
-                            set_default_flags_func
-                            [obj]
-                            range)
-                         range) flow >>%
-                      fun flow ->
-                      debug "cls flags result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
-                      Post.return flow
-                  )
-              else flow in
-            debug "obj = %a, type_obj = %a" pp_expr obj pp_expr type_obj;
-            (* this is obj->ob_type = type *)
-            man.exec (mk_assign
-                        (mk_c_deref (mk_c_cast
-                                       (add (mk_c_cast obj (T_c_pointer s8) range) (mk_int 8 range) range)
-                                       (T_c_pointer (T_c_pointer pytypeobject_typ)) range) range)
-                        type_obj
-                        range) flow
+          let pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None in
+          let flow = set_singleton pt addr man flow in
+          obj,
+          (
+            man.exec (mk_add obj range) flow >>%
+              man.exec (mk_add_var bytes range) >>%
+              man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
+              fun flow ->
+              let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
+              let flow =
+                if is_cls then
+                  (* if cls: should call set_default_flags *)
+                  post_to_flow man
+                    (
+                      man.exec
+                        (mk_expr_stmt
+                           (mk_c_call
+                              set_default_flags_func
+                              [obj]
+                              range)
+                           range) flow >>%
+                        fun flow ->
+                        debug "cls flags result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
+                        Post.return flow
+                    )
+                else flow in
+              (* debug "obj = %a, type_obj = %a" pp_expr obj pp_expr type_obj; *)
+              (* this is obj->ob_type = type *)
+              man.exec (mk_assign
+                          (mk_c_deref (mk_c_cast
+                                         (add (mk_c_cast obj (T_c_pointer s8) range) (mk_int 8 range) range)
+                                         (T_c_pointer (T_c_pointer pytypeobject_typ)) range) range)
+                          type_c_addr
+                          range) flow
+          )
       in
       let post =
         match akind type_addr with
@@ -523,7 +534,7 @@ module Domain =
                        (mk_avalue_from_pyaddr addr T_string range)
                        (OptionExt.none_to_exn oe) range)
         | _ -> post in
-      post_to_flow man post
+      c_addr, post_to_flow man post
 
 
     let c_set_exception c_exn message range man flow =
@@ -534,7 +545,6 @@ module Domain =
                     mk_c_string message range
                   ]
                   range) flow
-
 
     let pylong_to_c_type arg range man flow (type_min_value, type_max_value, type_name) =
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
@@ -567,6 +577,11 @@ module Domain =
                   Eval.singleton (mk_int ~typ:T_int (-1) range) flow
            )
 
+    let c_int_to_python arg man flow range =
+      man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow) [arg] range) flow >>$
+        fun py_pos flow ->
+        Eval.singleton (mk_py_object (Addr.from_expr py_pos, Some (mk_avalue_from_pyaddr (Addr.from_expr py_pos) T_int range)) range) flow
+
 
 
     let eval exp man flow =
@@ -584,6 +599,9 @@ module Domain =
          |> OptionExt.return
       | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_OverflowError" ->
          Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "OverflowError") range) flow
+         |> OptionExt.return
+      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_ValueError" ->
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "ValueError") range) flow
          |> OptionExt.return
 
       (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
@@ -652,6 +670,7 @@ module Domain =
                    ("PyExc_OverflowError", "OverflowError");
                    ("PyExc_AttributeError", "AttributeError");
                    ("PyExc_SystemError", "SystemError");
+                   ("PyExc_ValueError", "ValueError");
                  ]
                flow in
              let init_flags = C.Ast.find_c_fundec_by_name "init_flags" flow in
@@ -709,9 +728,8 @@ module Domain =
              (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
              man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
                fun inst_eaddr flow ->
-
-               let flow = python_to_c_boundary (Addr.from_expr inst_eaddr) None ~size:(Some (List.hd @@ List.tl args)) range man flow in
-               Eval.singleton inst_eaddr flow
+               let c_addr, flow = python_to_c_boundary (Addr.from_expr inst_eaddr) None None ~size:(Some (List.hd @@ List.tl args)) range man flow in
+               Eval.singleton c_addr flow
            )
          |> OptionExt.return
 
@@ -724,9 +742,9 @@ module Domain =
              man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
                fun int_addr flow ->
                debug "got int_addr %a, putting %a as value" pp_addr (Addr.from_expr int_addr) pp_expr earg;
-               let flow = python_to_c_boundary (Addr.from_expr int_addr) (Some earg) range man flow in
+               let c_addr, flow = python_to_c_boundary (Addr.from_expr int_addr) None (Some earg) range man flow in
                  (* FIXME: addr vs py_object, we'll need to clean things somehow... *)
-                 Eval.singleton (mk_addr (Addr.from_expr int_addr) range) flow
+               Eval.singleton c_addr flow
            )
          |> OptionExt.return
 
@@ -795,8 +813,8 @@ module Domain =
                                 | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
                                    debug "ParseTuple O ~> %a" pp_addr addr;
                                    let addr = strongify_int_addr_hack (tag_range range "convert_single[%d]" pos) (Flow.get_callstack flow) addr in
-                                   let flow = python_to_c_boundary addr oe range man flow in
-                                   man.exec (mk_assign c (mk_addr addr range) range) flow >>%
+                                   let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+                                   man.exec (mk_assign c c_addr range) flow >>%
                                      fun flow -> Cases.return 1 flow
                                 | _ -> assert false
                               )
@@ -811,12 +829,12 @@ module Domain =
                                    debug "got obj = %a" pp_expr obj;
                                    if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
                                      let addr = strongify_int_addr_hack (tag_range range "convert_single[%d]" pos) (Flow.get_callstack flow) addr in
-                                     let flow = python_to_c_boundary addr oe range man flow in
+                                     let c_addr, flow = python_to_c_boundary addr None oe range man flow in
                                      (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
                                      debug "value should be stored %a@.%a" pp_expr (mk_avalue_from_pyaddr addr T_int range) (format @@ Flow.print man.lattice.print) flow;
                                      assume (mk_c_call
                                                (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
-                                               [mk_addr addr range; mk_c_address_of c range]
+                                               [c_addr; mk_c_address_of c range]
                                                range)
                                        man flow
                                        ~fthen:(fun flow ->
@@ -884,17 +902,16 @@ module Domain =
            (fun oaddr flow ->
              let addr = OptionExt.none_to_exn oaddr in
              let py_tuple = Python.Ast.mk_py_object (addr, None) range in
-             man.eval (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow) [pos] range) flow >>$
-               fun py_pos flow ->
-               debug "PyTuple_GetItem, py_pos = %a" pp_expr py_pos;
+             c_int_to_python pos man flow range >>$ fun py_obj flow ->
+               debug "PyTuple_GetItem, py_pos = %a" pp_expr py_obj;
                man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
-                           [py_tuple; mk_py_object (Addr.from_expr py_pos, Some (mk_avalue_from_pyaddr (Addr.from_expr py_pos) T_int range)) range] range) flow >>$
+                           [py_tuple; py_obj] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
                  let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
-                 let flow = python_to_c_boundary addr_py_elem oe_py_elem range man flow in
-                 debug "PyTuple_GetItem: %a" pp_expr py_elem;
-                 Eval.singleton (mk_addr addr_py_elem range) flow
+                 let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
+                 debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                 man.eval c_addr flow
            )
          |> OptionExt.return
 
@@ -996,7 +1013,7 @@ module Domain =
                    match ekind arg with
                    | E_addr (a, _) ->
                       debug "[%s] applying boundary on %a" name pp_addr a;
-                      python_to_c_boundary a None range man flow
+                      let _, flow = python_to_c_boundary a None None arg.erange man flow in flow (* FIXME: arguments need to be changed *)
                    | _ -> flow
                  )
                  flow
@@ -1005,7 +1022,7 @@ module Domain =
              man.eval call flow >>$
                fun call_res flow ->
                debug "call result %s %a@.%a" name pp_expr call_res (format @@ Flow.print man.lattice.print) flow;
-                 resolve_c_pointer_into_addr call_res man flow >>$
+               resolve_c_pointer_into_addr call_res man flow >>$
                    fun oaddr flow ->
                    match oaddr with
                    | Some addr ->
@@ -1041,33 +1058,12 @@ module Domain =
          let descr_typ, inst_typ, cls_typ = match cfunc.c_func_parameters with
            | [a;b;c] -> vtyp a, vtyp b, vtyp c
            | _ -> assert false in
-         let c_cls_inst =
-           (* FIXME: replace choose *)
-           match KeySet.choose @@ Top.detop @@
-                   EquivBaseAddrs.find_inverse
-                     (fst @@ object_of_expr cls_inst)
-                     (get_env T_cur man flow) with
-           | P_block ({base_kind = Var v}, _, _) ->
-              mk_c_address_of (mk_var v range) range
-           | P_block ({base_kind = Addr a}, _, _) ->
-              mk_addr ~etyp:cls_typ a range
-           | _ -> assert false
-         in
+         let c_cls_inst = py_addr_to_c_expr (fst @@ object_of_expr cls_inst) cls_typ range man flow in
          let addr_inst = addr_of_object ~etyp:inst_typ inst in
-         let c_descriptor =
-           match KeySet.choose @@ Top.detop @@
-                   EquivBaseAddrs.find_inverse
-                     (fst @@ object_of_expr member_descr_instance)
-                     (get_env T_cur man flow) with
-           | P_block ({base_kind = Var v} as base, offset, _) ->
-              mk_base_offset_pointer base offset (under_type descr_typ) range
-           | P_block ({base_kind = Addr a}, _, _) ->
-              mk_addr ~etyp:cls_typ a range
-           | _ -> assert false
-         in
+         let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
          let cfunc_args = [c_descriptor; addr_inst; c_cls_inst] in
          let call = mk_c_call cfunc cfunc_args range in
-         debug "calling %a" pp_expr call;
+         debug "[%a] calling %a" pp_expr exp pp_expr call;
          (
            resolve_c_pointer_into_addr call man flow >>$
              (fun oaddr flow ->
@@ -1104,20 +1100,12 @@ module Domain =
          let addr_of_eobject x = addr_of_object @@ object_of_expr x in
          let addr_inst = addr_of_eobject inst in
          let addr_value = addr_of_eobject value in
-         let c_descriptor =
-           match KeySet.choose @@ Top.detop @@
-                   EquivBaseAddrs.find_inverse
-                     (fst @@ object_of_expr member_descr_instance)
-                     (get_env T_cur man flow) with
-           | P_block ({base_kind = Var v} as base, offset, _) ->
-              mk_base_offset_pointer base offset (under_type descr_typ) range
-           | _ -> assert false
-         in
+         let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
          let addr_inst = strongify_int_addr_hack (tag_range range "addr_inst") (Flow.get_callstack flow) addr_inst in
          let addr_value = strongify_int_addr_hack (tag_range range "addr_value") (Flow.get_callstack flow) addr_value in
-           let flow = python_to_c_boundary addr_inst (snd @@ object_of_expr inst) range man flow in
-         let flow = python_to_c_boundary addr_value (snd @@ object_of_expr value) range man flow in
-         let cfunc_args = [mk_addr ~etyp:inst_typ addr_inst range; c_descriptor; mk_addr ~etyp:value_typ addr_value range] in
+         let c_addr_inst, flow = python_to_c_boundary addr_inst (Some inst_typ) (snd @@ object_of_expr inst) range man flow in
+         let c_addr_value, flow = python_to_c_boundary addr_value (Some value_typ) (snd @@ object_of_expr value) range man flow in
+         let cfunc_args = [c_addr_inst; c_descriptor; c_addr_value] in
          let call = mk_c_call cfunc cfunc_args range in
          (* FIXME: boundary for c_descriptor? *)
          assume (mk_binop ~etyp:T_c_bool call O_ge (mk_zero range) range) man flow
