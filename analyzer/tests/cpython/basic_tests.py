@@ -28,6 +28,7 @@ class Test(unittest.TestCase):
 
     def test_type_cclass(self):
         self.assertEqual(basic.typ(basic.Cbox(1, 0)), basic.Cbox)
+        self.assertEqual(basic.typ(basic.Cbox), type)
 
     def test_c_exn(self):
         with self.assertRaises(AttributeError):
@@ -51,17 +52,32 @@ class Test(unittest.TestCase):
         self.assertEqual(c.incr(), None)
         self.assertEqual(c.counter, 4)
         c.counter += 3
-        # self.assertEqual(c.counter, 7) FIXME
-        self.assertLessEqual(c.counter, 7)
+        self.assertEqual(c.counter, 7)
+
+    def test_c_casesplit(self):
+        a = A(1)
+        c = basic.Cbox(a, 3)
+        try:
+            c.maybe_incr()
+            d = c.counter
+            self.assertEqual(d, 4)
+        except SystemError:
+            pass
+
+    def test_c_casesplit2(self):
+        a = A(1)
+        c = basic.Cbox(a, 3)
+        try:
+            c.maybe_incr2()
+            d = c.counter
+            self.assertEqual(d, 4)
+        except SystemError:
+            pass
 
     def test_c_overflow(self):
         # overflowerror from PyLong_AsLong
         with self.assertRaises(OverflowError):
             c = basic.Cbox([], 9223372036854775808)
-
-    def test_c_overflow2(self):
-        # due to the current imprecisions, if we merge both overflow tests we get one more error...
-        # overflowerror from format 'i' rather than 'l'
         with self.assertRaises(OverflowError):
             c = basic.Cbox([], 9223372036854775807)
 
@@ -90,24 +106,29 @@ class Test(unittest.TestCase):
         self.assertEqual(basic.id_check(a), a)
 
     # counter tests: PyType_GenericNew, sq_len+wrapper, PyLong_Check, PyLong_AsSsize_t
-    def test_counter_1(self):
+    def test_counter(self):
         with self.assertRaises(TypeError):
             basic.Counter('abcd')
-
-    def test_counter_2(self):
         c1 = basic.Counter(3)
         self.assertEqual(c1.__len__(), 3)
-
-    def test_counter_3(self):
         c2 = basic.Counter(-2)
         self.assertEqual(c2.__len__(), -2) # FIXME
-
-    def test_counter_4(self):
-        # FIXME: due to stupid int imprecision, TypeError seems to not be always raised when another counter instance is created before
         c3 = basic.Counter(-1)
         with self.assertRaises(TypeError):
             c3.__len__()
 
+    def test_bools(self):
+        self.assertTrue(basic.return_true())
+        self.assertTrue(not basic.return_false())
+        self.assertTrue(basic.return_true() and not basic.return_false())
+
+    def test_none(self):
+        self.assertEqual(basic.return_none(), None)
+
+
+    def test_new_wrapper(self):
+        with self.assertRaises(SystemError):
+            c = basic.Cbox('a', -1)
 
 if __name__ == "__main__":
     unittest.main()

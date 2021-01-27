@@ -22,6 +22,10 @@ Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
         self->counter = 0;
     }
 
+    PyObject* l = PyTuple_GetItem(args1, 1);
+    if(PyLong_AsLong(l) == -1)
+        return NULL;
+
     return (PyObject *) self;
 }
 
@@ -60,9 +64,30 @@ Cbox_incr(Cbox *self, PyObject *args)
 }
 
 
+static PyObject*
+Cbox_maybe_incr(Cbox *self, PyObject *args)
+{
+    if(_mopsa_rand_s8()) {
+        return NULL;
+    }
+    self->counter++;
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+Cbox_maybe_incr2(Cbox *self, PyObject *args)
+{
+    PyObject* a = Cbox_maybe_incr(self, args);
+    return a;
+}
+
+
+
 static PyMethodDef Cbox_methods[] = {
     {"getcontents", (PyCFunction) Cbox_getcontents, METH_VARARGS, ""},
     {"incr", (PyCFunction) Cbox_incr, METH_VARARGS, ""},
+    {"maybe_incr", (PyCFunction) Cbox_maybe_incr, METH_VARARGS, ""},
+    {"maybe_incr2", (PyCFunction) Cbox_maybe_incr2, METH_VARARGS, ""},
     {NULL}  /* Sentinel */
 };
 
@@ -147,7 +172,31 @@ static PyTypeObject CounterType = {
     .tp_as_sequence = &counter_as_sequence
 };
 
+static PyObject*
+basic_return_true(PyObject *self, PyObject *args)
+{
+    Py_RETURN_TRUE;
+}
 
+static PyObject*
+basic_return_false(PyObject *self, PyObject *args)
+{
+    Py_RETURN_FALSE;
+}
+
+static PyObject*
+basic_return_bool(PyObject *self, PyObject *args)
+{
+    PyObject* r;
+    if(_mopsa_rand_s8()) { Py_RETURN_TRUE; }
+    else { Py_RETURN_FALSE; }
+}
+
+static PyObject*
+basic_return_none(PyObject *self, PyObject *args)
+{
+    Py_RETURN_NONE;
+}
 
 static PyObject*
 basic_typ(PyObject *self, PyObject *args)
@@ -183,11 +232,25 @@ basic_id_check(PyObject *self, PyObject *args)
     return PyTuple_GetItem(args, 0);
 }
 
+static PyObject*
+basic_random_fail(PyObject *self, PyObject *args)
+{
+    PyObject* r;
+    if(_mopsa_rand_s8()) { r = basic_id_check(self, args); }
+    else { r = basic_raise_exc(self, args); }
+    return r;
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
     {"forget_raise", (PyCFunction) basic_forget_raise, METH_VARARGS, ""},
     {"id_check", (PyCFunction) basic_id_check, METH_VARARGS, ""},
+    {"random_fail", (PyCFunction) basic_random_fail, METH_VARARGS, ""},
+    {"return_true", (PyCFunction) basic_return_true, METH_VARARGS, ""},
+    {"return_false", (PyCFunction) basic_return_false, METH_VARARGS, ""},
+    {"return_bool", (PyCFunction) basic_return_bool, METH_VARARGS, ""},
+    {"return_none", (PyCFunction) basic_return_none, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
