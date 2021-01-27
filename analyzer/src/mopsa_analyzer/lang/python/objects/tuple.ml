@@ -91,6 +91,16 @@ struct
     | E_py_object (a, _) -> var_of_addr a
     | _ -> assert false
 
+  let get_eobj_itv man flow e =
+    let mk_itv_from_z z  = Bot.Nb (ItvUtils.IntItv.cst z) in
+    match ekind @@ Utils.extract_oobject e with
+    | E_constant (C_int z) -> mk_itv_from_z z
+    | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> mk_itv_from_z (Z.neg z)
+    | _ ->
+       let e_num = Utils.extract_oobject e in
+       debug "need to ask the numerical domain for the value of %a" pp_expr e_num;
+       man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
+
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
@@ -131,50 +141,74 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple.__getitem__" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args
-        ["tuple"; "int"]
+      Utils.check_instances ~arguments_after_check:1 f man flow range args
+        ["tuple"]
         (fun eargs flow ->
-          (* FIXME: ask the intervals rather than do this hack *)
-           let exception Nonconstantinteger  in
-           let tuple = List.hd eargs in
-           let tuple_vars = var_of_eobj tuple in
-           try
-             debug "expr = %a" pp_expr (List.hd (List.tl args));
-             let pos = match ekind (List.hd (List.tl args)) with
-               | E_constant (C_int z) -> Z.to_int z
-               | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> - Z.to_int z
-               | _ -> raise Nonconstantinteger in
-             if 0 <= pos && pos < List.length tuple_vars then
-               man.eval   (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) flow
-             else if 0 > pos && pos >= - List.length tuple_vars then
-               man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + pos)) range) flow
-             else
-               man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-               Eval.empty
-           with Nonconstantinteger ->
-             debug "nonconstant %a" pp_expr (List.hd (List.tl eargs));
-             let mk_itv_bound = ItvUtils.IntItv.of_bound_bot in
-             let mk_itv = ItvUtils.IntItv.of_int_bot in
-             let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (OptionExt.none_to_exn @@ snd @@ object_of_expr @@ List.hd @@ List.tl eargs)) flow in
-             debug "itv = %a" ItvUtils.IntItv.fprint_bot itv;
-             let map_itv (f: int -> 'a) (itv: ItvUtils.IntItv.t_with_bot) : 'a list =
-               match itv with
-               | Bot.BOT -> []
-               | Bot.Nb itv ->
-                  List.map (fun x -> f (Z.to_int x)) (ItvUtils.IntItv.to_list itv) in
-             let pos_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv 0 (List.length tuple_vars - 1)) |>
-                             map_itv (fun ppos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars ppos) range) flow) in
-             let neg_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv (- List.length tuple_vars) (-1)) |>
-                                  map_itv (fun npos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + npos)) range) flow) in
-             let ootb_accesses =
-               if (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.MINF) (ItvUtils.IntItv.B.of_int (- List.length tuple_vars - 1)))) ||
-                    (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.of_int (List.length tuple_vars)) (ItvUtils.IntItv.B.PINF))) then
-                 (man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-                    Eval.empty) :: []
-               else []
-             in
-             Eval.join_list ~empty:(fun () -> assert false)
-               (ootb_accesses @ pos_accesses @ neg_accesses)
+          let tuple = List.hd eargs in
+          let tuple_vars = var_of_eobj tuple in
+          let pos = List.hd @@ List.tl eargs in
+          assume
+            (mk_py_isinstance_builtin pos "int" range)
+            man flow
+            ~fthen:(fun flow ->
+              let itv = get_eobj_itv man flow pos in
+              let mk_itv_bound = ItvUtils.IntItv.of_bound_bot in
+              let mk_itv = ItvUtils.IntItv.of_int_bot in
+              debug "itv = %a" ItvUtils.IntItv.fprint_bot itv;
+              let map_itv (f: int -> 'a) (itv: ItvUtils.IntItv.t_with_bot) : 'a list =
+                match itv with
+                | Bot.BOT -> []
+                | Bot.Nb itv ->
+                   List.map (fun x -> f (Z.to_int x)) (ItvUtils.IntItv.to_list itv) in
+              let pos_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv 0 (List.length tuple_vars - 1)) |>
+                                   map_itv (fun ppos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars ppos) range) flow) in
+              let neg_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv (- List.length tuple_vars) (-1)) |>
+                                   map_itv (fun npos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + npos)) range) flow) in
+              let ootb_accesses =
+                if (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.MINF) (ItvUtils.IntItv.B.of_int (- List.length tuple_vars - 1)))) ||
+                     (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.of_int (List.length tuple_vars)) (ItvUtils.IntItv.B.PINF))) then
+                  (man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
+                     Eval.empty) :: []
+                else []
+              in
+              Eval.join_list ~empty:(fun () -> assert false)
+                (ootb_accesses @ pos_accesses @ neg_accesses)
+            )
+            ~felse:(fun flow ->
+              assume (mk_py_isinstance_builtin pos "slice" range) man flow
+                ~fthen:(fun flow ->
+                  let tuple_length = List.length tuple_vars in
+                  man.eval (mk_py_call (mk_py_attr pos "indices" range) [mk_int tuple_length ~typ:(T_py None) range] range) flow >>$
+                    fun tuple_indices flow ->
+                    let get_nth n =
+                      mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int ~typ:(T_py None) n range] range in
+                    Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
+                      Cases.bind_result (fun sss flow ->
+                          let itvs = List.map (get_eobj_itv man flow) sss in
+                          if List.for_all (Bot.bot_apply (fun _ -> ItvUtils.IntItv.is_singleton) false) itvs then
+                            let start, stop, step = match List.map (function Bot.Nb (ItvUtils.IntBound.Finite l, _) -> Z.to_int l | _ -> assert false) itvs with
+                              | [a;b;c] -> a,b,c
+                              | _ -> assert false in
+                            let () = debug "slice, start=%d, stop=%d, step=%d" start stop step in
+                            let sliced_tuple =
+                              let rec slice pos acc =
+                                if pos >= stop then List.rev acc
+                                else
+                                  slice (pos+step) (mk_var (List.nth tuple_vars pos) range :: acc)
+                              in
+                              slice start [] in
+                            let () = debug "sliced_tuple = %a" (Format.pp_print_list pp_expr) sliced_tuple in
+                            man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple sliced_tuple) range) flow
+                          else
+                            panic_at range "FIXME: handle non-constant slices"
+                        )
+                )
+                ~felse:(fun flow ->
+                  let msg = Format.asprintf "tuple indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr pos) in
+                  man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
+                    Eval.empty
+                )
+            )
         )
       |> OptionExt.return
 
