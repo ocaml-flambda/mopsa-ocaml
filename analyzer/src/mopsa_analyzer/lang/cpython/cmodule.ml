@@ -43,6 +43,38 @@ let () =
         | _ -> next a1 a2);
     }
 
+type check += CHK_CPYTHON_CLASS_READY
+type alarm_kind += A_cpython_class_not_ready of expr
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_CPYTHON_CLASS_READY -> Format.fprintf fmt "CPython class not readied"
+      | a -> next fmt a)
+
+let () =
+  register_alarm {
+      check = (fun next -> function
+                | A_cpython_class_not_ready _ -> CHK_CPYTHON_CLASS_READY
+                | a -> next a);
+      compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_cpython_class_not_ready e1, A_cpython_class_not_ready e2 ->
+           compare_expr e1 e2
+        | _ -> next a1 a2
+      );
+      print = (fun next fmt -> function
+                | A_cpython_class_not_ready e ->
+                   Format.fprintf fmt "PyTypeObject %a has not been readied using PyType_Ready"
+                     pp_expr e
+                | m -> next fmt m);
+      join = (fun next -> next);
+    }
+
+let raise_cpython_class_not_ready ?(bottom=true) e range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_cpython_class_not_ready e) cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
 module Domain =
   struct
 
@@ -306,6 +338,17 @@ module Domain =
           debug "got %a" (ValueSet.fprint SetExt.printer_default pp_addr) aset;
           if ValueSet.cardinal aset = 1 then
             Cases.singleton (OptionExt.return @@ ValueSet.choose aset) flow
+          else if ValueSet.cardinal aset = 0 then
+            match points_to with
+            | P_block ({base_kind = Var v}, _, _) ->
+               begin match remove_typedef_qual @@ vtyp v with
+               | T_c_record {c_record_kind = C_struct; c_record_org_name} when c_record_org_name = "_typeobject" ->
+                  let range = erange expr in
+                  raise_cpython_class_not_ready (mk_var v range) range man flow |>
+                  Cases.empty
+               | _ -> assert false
+               end
+            | _ -> assert false
           else
             assert false
         )
@@ -530,6 +573,7 @@ module Domain =
                        (mk_avalue_from_pyaddr addr T_int range)
                        (OptionExt.none_to_exn oe) range)
         | A_py_class (C_builtin "str", _) ->
+           debug "boundary @ %a, assigning %a.value = %a" pp_range range pp_addr addr (OptionExt.print pp_expr) oe;
            post >>% man.exec (mk_assign
                        (mk_avalue_from_pyaddr addr T_string range)
                        (OptionExt.none_to_exn oe) range)
