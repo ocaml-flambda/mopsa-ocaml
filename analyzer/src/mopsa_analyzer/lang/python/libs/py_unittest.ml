@@ -42,19 +42,19 @@ module Domain =
 
     let exec _ _ _ = None
 
-    let test_functions_and_setup_from_cls (cls: Ast.py_clsdec) : (Ast.py_fundec option * Ast.py_fundec list) =
+    let test_functions_and_setup_from_cls (cls: Ast.py_clsdec) (osetup, test_functions) : (Ast.py_fundec option * Ast.py_fundec list) =
       match skind cls.py_cls_body with
       | S_block (stmts, _) ->
         List.fold_left (fun (osetup, tests) stmt ->
             match skind stmt with
             | S_py_function f ->
-               if String.sub f.py_func_var.vname 0 4 = "test" then
+               if String.sub f.py_func_var.vname 0 4 = "test" && not (List.exists (fun f' -> get_orig_vname f.py_func_var = get_orig_vname f'.py_func_var) test_functions) then
                  (osetup, f :: tests)
-               else if get_orig_vname f.py_func_var = "setUp" then
+               else if get_orig_vname f.py_func_var = "setUp" && osetup = None then
                  (Some f, tests)
                else
                  (osetup, tests)
-            | _ -> (osetup, tests)) (None, []) stmts
+            | _ -> (osetup, tests)) (osetup, test_functions) stmts
       | _ -> assert false
 
     let eval exp man flow =
@@ -66,47 +66,71 @@ module Domain =
        let test_cases = man.ask Universal.Heap.Recency.Q_allocated_addresses flow |>
                           List.filter (fun addr ->
                             match addr.addr_kind with
-                            | A_py_class(cls, _ :: ({addr_kind = A_py_class (C_user u, _)}, _) :: _) ->
-                               get_orig_vname u.py_cls_var = "TestCase"
+                            | A_py_class(cls, _ :: mro) ->
+                               List.exists (fun (addr, _) ->
+                                   match akind addr with
+                                   | A_py_class (C_user u, _) ->
+                                      get_orig_vname u.py_cls_var = "TestCase"
+                                   | _ -> false
+                                 ) mro
                             | _ -> false
                           ) |>
                         List.map (fun addr ->
                             match addr.addr_kind with
                             | A_py_class(C_user cls, _) -> addr, cls
                             | _ -> assert false
-                          )
+                          ) |>
+                          List.sort (fun (a1, _) (a2, _) ->
+                              match akind a1, akind a2 with
+                              | A_py_class(C_user cls1, _),
+                                A_py_class(C_user cls2, _) ->
+                                 compare_var cls1.py_cls_var cls2.py_cls_var
+                              | _ -> assert false)
        in
        debug "|tests classes| = %d" (List.length test_cases);
 
        let flow =
          List.fold_left (fun flow (cls_addr, cls_decl) ->
+             debug "starting with %a" pp_addr cls_addr;
            (* create tmp, alloc class in tmp, run tests, delete tmp *)
              let tmp = mktmp ~typ:(T_py None) () in
              let tmpvar = mk_var tmp range in
              let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
-             let osetup, test_functions = test_functions_and_setup_from_cls cls_decl in
-             debug "osetup = %a, |test_functions|=%d" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup) (List.length test_functions);
-             let test_calls =
-               List.rev @@
-                 List.map
-                   (fun func ->
-                     get_orig_vname func.py_func_var,
-                     mk_stmt (S_expression (mk_py_call
-                                              (mk_var func.py_func_var range)
-                                              [tmpvar] range)) range )
-                   test_functions
+             let osetup, test_functions =
+               let mro = match akind cls_addr with
+                 | A_py_class(C_user cls, mro) -> mro
+                 | _ -> assert false in
+               List.fold_left (fun (osetup, test_functions) cls ->
+                   match akind @@ fst cls with
+                   | A_py_class (C_user cls, _) ->
+                      debug "cls %a" pp_var cls.py_cls_var;
+                      test_functions_and_setup_from_cls cls (osetup, test_functions)
+                   | _ -> (osetup, test_functions)) (None, []) mro
              in
-             flow >>%
-               man.exec assign_alloc >>%
-               fun flow ->
-               (
-                 match osetup with
-                 | None -> Post.return flow
-                 | Some setup ->
-                    man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
-               ) >>%
-               man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
-               man.exec (mk_remove_var tmp range)
+             if List.length test_functions > 0 then
+               let () = debug "osetup = %a, |test_functions|=%d" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup) (List.length test_functions) in
+               let test_calls =
+                 List.rev @@
+                   List.map
+                     (fun func ->
+                       get_orig_vname func.py_func_var,
+                       mk_stmt (S_expression (mk_py_call
+                                                (mk_var func.py_func_var range)
+                                                [tmpvar] range)) range )
+                     test_functions
+               in
+               flow >>%
+                 man.exec assign_alloc >>%
+                 fun flow ->
+                 (
+                   match osetup with
+                   | None -> Post.return flow
+                   | Some setup ->
+                      man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
+                 ) >>%
+                   man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
+                   man.exec (mk_remove_var tmp range)
+             else flow
            ) (Post.return flow) test_cases in
        flow >>%
        man.eval (mk_py_none range)
