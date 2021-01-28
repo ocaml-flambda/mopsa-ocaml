@@ -65,13 +65,18 @@ class TestCase:
     def assertRaises(self, exn):
         return ExceptionContext(exn)
 
+    def assertRaisesRegex(self, exn, regex):
+        # FIXME: and the message?
+        return ExceptionContext(exn, regex)
+
     @mopsa.builtin("unittest.TestCase.fail")
     def fail(self, msg): pass
 
 #  ExceptionContext is NOT a mopsa.builtin, since __init__ and __enter__ are defined here
 class ExceptionContext(object):
-    def __init__(self, exn):
+    def __init__(self, exn, regex=None):
         self.expected = exn
+        self.regex = regex
 
     def __enter__(self):
         return self

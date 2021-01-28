@@ -85,7 +85,7 @@ module Domain =
              let tmpvar = mk_var tmp range in
              let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
              let osetup, test_functions = test_functions_and_setup_from_cls cls_decl in
-             debug "osetup = %a" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup);
+             debug "osetup = %a, |test_functions|=%d" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup) (List.length test_functions);
              let test_calls =
                List.rev @@
                  List.map
@@ -210,23 +210,46 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
-           ~fthen:(fun true_flow ->
+           ~fthen:(fun flow ->
              (* No exception raised => assertion failed *)
              Py_mopsa.check man (mk_py_false range) range flow
            )
-           ~felse:(fun false_flow ->
+           ~felse:(fun flow ->
              (* Check that the caught exception is an instance of the expected exception *)
              assume
                (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
                ~fthen:(fun true_flow ->
-                 Py_mopsa.check man (mk_py_true range) range flow >>$
-                   fun _ flow ->
-                   man.eval (mk_py_true range) flow
+                 man.eval (mk_py_attr self "regex" range) flow >>$
+                   fun reg flow ->
+                   debug "now!";
+                   assume (eq ~etyp:(T_py None) reg (mk_py_none range) range)
+                     man flow
+                     ~fthen:(fun flow ->
+                       Py_mopsa.check man (mk_py_true range) range flow >>$
+                         fun _ flow ->
+                         man.eval (mk_py_true range) flow
+                     )
+                     ~felse:(fun flow ->
+                       let regex = Universal.Strings.Powerset.StringPower.choose @@
+                                     man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
+                       man.eval (mk_py_index_subscript (mk_py_attr exn "args" range) (mk_zero ~typ:(T_py None) range) range) flow >>$
+                         fun exc_msg flow ->
+                         let exc_msg = Universal.Strings.Powerset.StringPower.choose @@ man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
+                         let re = Str.regexp regex in
+                         warn_at range "assertRaisesRegex hackish implementation";
+                         if Str.string_match re exc_msg 0 then
+                           Py_mopsa.check man (mk_py_true range) range flow >>$
+                             fun _ flow ->
+                             man.eval (mk_py_true range) flow
+                         else
+                           Py_mopsa.check man (mk_py_false range) range flow
+
+                     )
                )
-               ~felse:(fun false_flow ->
+               ~felse:(fun flow ->
                  Py_mopsa.check man (mk_py_false range) range flow
                )
-               man false_flow
+               man flow
            )
            man flow
          |> OptionExt.return
