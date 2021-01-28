@@ -91,16 +91,6 @@ struct
     | E_py_object (a, _) -> var_of_addr a
     | _ -> assert false
 
-  let get_eobj_itv man flow e =
-    let mk_itv_from_z z  = Bot.Nb (ItvUtils.IntItv.cst z) in
-    match ekind @@ Utils.extract_oobject e with
-    | E_constant (C_int z) -> mk_itv_from_z z
-    | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> mk_itv_from_z (Z.neg z)
-    | _ ->
-       let e_num = Utils.extract_oobject e in
-       debug "need to ask the numerical domain for the value of %a" pp_expr e_num;
-       man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
-
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
@@ -151,7 +141,7 @@ struct
             (mk_py_isinstance_builtin pos "int" range)
             man flow
             ~fthen:(fun flow ->
-              let itv = get_eobj_itv man flow pos in
+              let itv = Utils.get_eobj_itv man flow pos in
               let mk_itv_bound = ItvUtils.IntItv.of_bound_bot in
               let mk_itv = ItvUtils.IntItv.of_int_bot in
               debug "itv = %a" ItvUtils.IntItv.fprint_bot itv;
@@ -184,7 +174,7 @@ struct
                       mk_py_call (mk_py_attr tuple_indices "__getitem__" range) [mk_int ~typ:(T_py None) n range] range in
                     Cases.bind_list [get_nth 0; get_nth 1; get_nth 2] (man.eval  ) flow |>
                       Cases.bind_result (fun sss flow ->
-                          let itvs = List.map (get_eobj_itv man flow) sss in
+                          let itvs = List.map (Utils.get_eobj_itv man flow) sss in
                           if List.for_all (Bot.bot_apply (fun _ -> ItvUtils.IntItv.is_singleton) false) itvs then
                             let start, stop, step = match List.map (function Bot.Nb (ItvUtils.IntBound.Finite l, _) -> Z.to_int l | _ -> assert false) itvs with
                               | [a;b;c] -> a,b,c

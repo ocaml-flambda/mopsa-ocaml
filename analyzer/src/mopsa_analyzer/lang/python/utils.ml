@@ -178,3 +178,14 @@ let change_evar_type t evar =
 let extract_oobject e = match ekind e with
   | E_py_object (_, Some a) -> a
   | _ -> assert false
+
+let get_eobj_itv man flow e =
+  let open Universal.Ast in
+  let mk_itv_from_z z  = Bot.Nb (ItvUtils.IntItv.cst z) in
+  match ekind @@ extract_oobject e with
+  | E_constant (C_int z) -> mk_itv_from_z z
+  | E_unop (O_minus, {ekind=E_constant (C_int z)}) -> mk_itv_from_z (Z.neg z)
+  | _ ->
+     let e_num = extract_oobject e in
+     debug "need to ask the numerical domain for the value of %a" pp_expr e_num;
+     man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
