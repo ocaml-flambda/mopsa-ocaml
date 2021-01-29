@@ -150,6 +150,7 @@ module Domain =
           "PyType_Ready";
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
+          "Py_BuildValue";
           "PyTuple_Size";
           "PyTuple_GetItem";
           "PyTuple_GetSlice";
@@ -781,6 +782,7 @@ module Domain =
         | E_c_builtin_call ("PyLong_FromLong", args) ->
          man.eval ~translate:"Universal" (List.hd args) flow >>$
            (fun earg flow ->
+             debug "eval ~translate:Universal %a ~> %a" pp_expr (List.hd args) pp_expr earg;
              (* FIXME: forced to attach the value as an addr_attr in universal, and convert it afterwards when going back to python... *)
              debug "allocating int at range %a callstack %a" pp_range range Callstack.pp_callstack (Flow.get_callstack flow);
              man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
@@ -922,6 +924,21 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("Py_BuildValue", fmt::refs) ->
+         safe_get_name_of fmt man flow >>$
+           (fun ofmt_str flow ->
+             let fmt_str = OptionExt.none_to_exn ofmt_str in
+             match fmt_str with
+             | "i" ->
+                let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
+                (* FIXME: cast to long *)
+                (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
+                man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.hd refs) sl range] range) flow
+             | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
+           )
+         |> OptionExt.return
+
+
       | E_c_builtin_call ("PyTuple_Size", [arg]) ->
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
@@ -946,6 +963,7 @@ module Domain =
            (fun oaddr flow ->
              let addr = OptionExt.none_to_exn oaddr in
              let py_tuple = Python.Ast.mk_py_object (addr, None) range in
+             (* NB: alternative to c_int_to_python would be to make a query directly? *)
              c_int_to_python pos man flow range >>$ fun py_obj flow ->
                debug "PyTuple_GetItem, py_pos = %a" pp_expr py_obj;
                man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
