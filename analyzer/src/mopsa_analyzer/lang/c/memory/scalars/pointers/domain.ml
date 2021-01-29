@@ -950,7 +950,7 @@ struct
 
 
     (* 𝔼⟦ (bool)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+    | E_c_cast(p, _) when exp |> etyp |> is_c_bool_type &&
                           p   |> etyp |> is_c_pointer_type ->
       eval_points_to p man flow |> OptionExt.lift (fun evl ->
           evl >>$ fun pt flow ->
@@ -964,7 +964,7 @@ struct
         )
 
     (* 𝔼⟦ (int)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+    | E_c_cast(p, implicit) when exp |> etyp |> is_c_int_type &&
                           p   |> etyp |> is_c_pointer_type ->
       eval_points_to p man flow |> OptionExt.lift (fun evl ->
           evl >>$ fun pt flow ->
@@ -972,16 +972,13 @@ struct
           | P_null ->
             Eval.singleton (mk_zero exp.erange) flow
           | P_top | P_invalid ->
-            let l,u = rangeof exp.etyp in
-            Eval.singleton (mk_z_interval l u exp.erange) flow
+            let e = mk_z_interval Z.zero max_pointer_value ~typ:size_type p.erange in
+            let e = { e with ehistory = p :: p.ehistory } in
+            man.eval { exp with ekind = E_c_cast (e, implicit) } flow
           | P_block _ | P_fun _ ->
-            let l,u = rangeof exp.etyp in
-            if is_c_signed_int_type exp.etyp then
-              Eval.join
-                (Eval.singleton (mk_z_interval l Z.(of_int (-1)) exp.erange) flow)
-                (Eval.singleton (mk_z_interval Z.one u exp.erange) flow)
-            else
-              Eval.singleton (mk_z_interval l u exp.erange) flow
+            let e = mk_z_interval Z.one max_pointer_value ~typ:size_type p.erange in
+            let e = { e with ehistory = p :: p.ehistory } in
+            man.eval { exp with ekind = E_c_cast (e, implicit) } flow
         )
 
     (* 𝔼⟦ !ptr ⟧ *)
