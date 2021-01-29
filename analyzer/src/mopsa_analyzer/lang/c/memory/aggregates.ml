@@ -265,7 +265,7 @@ struct
         man.exec stmt flow
 
       | [] when is_c_global_scope scope ->
-        let stmt = mk_assign (mk_var v range) (mk_zero range) range in
+        let stmt = mk_assign (mk_var v range) (mk_zero ~typ:v.vtyp range) range in
         man.exec stmt flow
 
       | _ ->
