@@ -183,6 +183,18 @@ let div (a:t) (b:t) :t =
         else Finite (Z.div x y)
 (** Division. Always defined: 0 / 0 = 0, x / +∞ = 0, x / 0 = sign(x) * ∞ *)
 
+let ediv (a:t) (b:t) :t =
+  match b with
+  | PINF | MINF -> zero
+  | Finite y ->
+     match a with
+     | PINF -> infinite (Z.sign y)
+     | MINF -> infinite (-(Z.sign y))
+     | Finite x ->
+        if y = Z.zero then infinite (Z.sign x)
+        else Finite (Z.ediv x y)
+(** Euclidian division. Always defined: 0 / 0 = 0, x / +∞ = 0, x / 0 = sign(x) * ∞ *)
+
 let rem (a:t) (b:t) : t =
   match a with
   | PINF | MINF -> invalid_arg "IntBound.rem"
@@ -192,10 +204,23 @@ let rem (a:t) (b:t) : t =
      | Finite y ->
         if y = Z.zero then invalid_arg "IntBound.rem"
         else Finite (Z.rem x y)
-(** Reminder. rem x y has the sign of x, rem x (-y) = rem x y, and rem x +∞ = x. 
+(** Remainder. rem x y has the sign of x, rem x (-y) = rem x y, and rem x +∞ = x. 
     rem +∞ y and rem x 0 are undefined (invalid argument exception).
 *)
-               
+
+let erem (a:t) (b:t) : t =
+  match a with
+  | PINF | MINF -> invalid_arg "IntBound.rem"
+  | Finite x ->
+     match b with
+     | PINF | MINF -> a
+     | Finite y ->
+        if y = Z.zero then invalid_arg "IntBound.rem"
+        else Finite (Z.erem x y)
+(** Euclidian remainder. erem x y >= 0, rem x y < |b| and a = b * ediv a b + erem a b.
+    rem +∞ y and rem x 0 are undefined (invalid argument exception).
+*)
+
 let shift_left (a:t) (b:t) : t =
   match a with
   | PINF -> PINF | MINF -> MINF

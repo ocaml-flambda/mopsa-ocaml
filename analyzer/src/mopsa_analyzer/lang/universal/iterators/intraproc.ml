@@ -47,6 +47,7 @@ struct
     | E_unop(O_log_not, ee) -> ee
     | E_binop(O_log_and,e1,e2) -> mk_log_or (negate_bool_expr e1) (negate_bool_expr e2) e.erange
     | E_binop(O_log_or,e1,e2) -> mk_log_and (negate_bool_expr e1) (negate_bool_expr e2) e.erange
+    | E_binop(O_log_xor, e1, e2) -> mk_log_xor (negate_bool_expr e1) e2 e.erange
     | E_binop(op,e1,e2) when is_comparison_op op -> mk_binop e1 (negate_comparison_op op) e2 e.erange ~etyp:T_bool
     | _ -> mk_not e e.erange
 
@@ -188,6 +189,20 @@ struct
         ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       |> OptionExt.return
 
+    | E_binop (O_log_xor, e1, e2)
+      when is_universal_type exp.etyp ->
+      let s1 =
+        assume e1 man flow
+          ~fthen:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
+          ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
+      in
+      let s2 =
+        assume (mk_not e1 exp.erange) man flow
+          ~fthen:(fun flow -> man.eval e2 flow ~translate:"Universal")
+          ~felse:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
+      in
+      Eval.join s1 s2 |>
+      OptionExt.return
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) })
       when is_universal_type exp.etyp ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>

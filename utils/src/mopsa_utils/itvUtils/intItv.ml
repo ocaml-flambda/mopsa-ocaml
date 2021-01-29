@@ -374,11 +374,27 @@ let div_unmerged (ab:t) ((a',b'):t) : t list =
     Returns a list of 0, 1, or 2 intervals to remain precise.
  *)
 
+let ediv_unmerged (ab:t) ((a',b'):t) : t list =
+  (* division by an interval of constant sign *)
+  let div_pos ab ab' = minmax4 B.ediv ab ab' in
+  (* split denominator and do 2 cases *)
+  (if B.is_positive_strict b' then [div_pos ab (B.max a' B.one, b')] else [])@
+  (if B.is_negative_strict a' then [div_pos ab (a', B.min b' B.minus_one)] else [])
+(** Euclidian division (towards -oo).
+    Returns a list of 0, 1, or 2 intervals to remain precise.
+ *)
+
 let div (a:t) (b:t) : t_with_bot =
   join_list (div_unmerged a b)
 (** Division (with truncation).
     Returns a single (possibly empty) overapproximating interval.
  *)
+
+let ediv (a:t) (b:t) : t_with_bot =
+  join_list (ediv_unmerged a b)
+(** Division (euclidian, towards -oo)
+    Returns a single (possibly empty) overapproximating interval.
+*)
 
 let rem ((a,b):t) (ab':t) : t_with_bot =
   (* x % y = x % |y| *)
@@ -401,6 +417,20 @@ let rem ((a,b):t) (ab':t) : t_with_bot =
       (* general case *)
       Nb (B.neg m, m)
 (** Remainder. Uses the C semantics for remainder (%). *)
+
+let erem ((a,b):t) (ab':t) : t_with_bot =
+  (* x erem y = x erem |y| *)
+  let a',b' = abs ab' in
+  if B.is_zero b' then BOT else (* case [a,b] erem {0} ⟹ ⊥ *)
+    let m = B.pred b' in
+    if B.equal a' b' && B.equal (B.ediv a a') (B.ediv b a') then
+      (* case [a,b] erem {a'} and [a,b] ⊆ [a'k,a'(k+1)-1] *)
+      Nb (B.erem a a', B.erem b a')
+    else
+      (* general case *)
+      Nb (B.zero, m)
+(** Euclidian remainder. rounding towards -oo *)
+
 
 let pow (ab:t) (ab':t) : t =
   minmax4 B.pow ab ab'
@@ -685,6 +715,21 @@ let bwd_div ((a,a'):t) ((b,b'):t) (r:t) : (t*t) with_bot =
   in
   bot_merge2 aa bb
 
+let bwd_ediv ((a,a'):t) ((b,b'):t) (r:t) : (t*t) with_bot =
+  (* m = max [b,b'] - 1 *)
+  let m = B.pred (B.max (B.abs b) (B.abs b')) in
+  (* md = approximate r erem b *)
+  let md = B.zero, m in
+  (* aa = r * b + r erem b *)
+  let aa = meet (a,a') (add (mul r (b,b')) md) in
+  (* (bb = a ediv r)  ∨ (bb = b ∧ (a - r erem b) = r = 0) *)
+  let ax = sub (a,a') md in
+  let bb =
+    if contains_zero ax && contains_zero r then Nb (b,b')
+    else meet_bot (Nb (b,b')) (ediv ax r)
+  in
+  bot_merge2 aa bb
+
 let bwd_pow = bwd_default_binary
 
 let bwd_bit_not (a:t) (r:t) : t_with_bot =
@@ -700,6 +745,7 @@ let bwd_bit_xor (a:t) (b:t) (r:t) : (t*t) with_bot =
 
 
 let bwd_rem : t -> t -> t -> (t*t) with_bot= bwd_default_binary
+let bwd_erem : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_wrap (ab :t) range (r:t) : t_with_bot = bwd_default_unary ab r
 let bwd_shift_left : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_shift_right : t -> t -> t -> (t*t) with_bot = bwd_default_binary
