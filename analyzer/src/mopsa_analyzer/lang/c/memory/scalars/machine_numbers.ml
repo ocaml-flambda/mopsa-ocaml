@@ -189,13 +189,13 @@ struct
 
 
   (** [check_overflow cexp nexp ...] checks whether the C expression
-      [cexp] produces an integer overflow and returns and transforms
-      its numeric evaluation [nexp] accordingly *)
+      [cexp] produces an integer overflow and transforms its numeric
+      evaluation [nexp] accordingly *)
   let check_overflow cexp ?(nexp=c2num cexp) man flow =
     let range = cexp.erange in
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
-    let do_check raise_alarm =
+    let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ in
       let ritv = Itv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
@@ -209,9 +209,9 @@ struct
           if raise_alarm
           then
             if Itv.meet itv ritv |> Itv.is_bottom then
-              raise_c_integer_overflow_alarm ~warning:false cexp nexp man flow flow
+              raise_c_integer_overflow_alarm ~warning:false exp nexp typ man flow flow
             else
-              raise_c_integer_overflow_alarm ~warning:true cexp nexp man flow flow
+              raise_c_integer_overflow_alarm ~warning:true exp nexp typ man flow flow
           else flow
         in
         Eval.singleton cexp flow' |>
@@ -227,16 +227,16 @@ struct
       do_check !opt_unsigned_arithmetic_overflow
 
     (* Implicit casts to signed integers *)
-    | E_c_cast(_, false) when is_c_signed_int_type typ ->
-      do_check !opt_signed_implicit_cast_overflow
+    | E_c_cast(e, false) when is_c_signed_int_type typ ->
+      do_check ~exp:e !opt_signed_implicit_cast_overflow
 
     (* Implicit casts to unsigned integers *)
-    | E_c_cast(_, false) when not (is_c_signed_int_type typ) ->
-      do_check !opt_unsigned_implicit_cast_overflow
+    | E_c_cast(e, false) when not (is_c_signed_int_type typ) ->
+      do_check ~exp:e !opt_unsigned_implicit_cast_overflow
 
     (* Explicit casts *)
-    | E_c_cast(_, true) ->
-      do_check !opt_explicit_cast_overflow
+    | E_c_cast(e, true) ->
+      do_check ~exp:e !opt_explicit_cast_overflow
 
     | _ -> panic_at range "check_overflow: unsupported expression %a" pp_expr cexp
 

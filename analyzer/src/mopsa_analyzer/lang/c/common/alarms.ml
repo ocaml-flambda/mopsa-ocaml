@@ -323,11 +323,11 @@ let () =
       );  }
 
 
-let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp man input_flow error_flow =
+let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp typ man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
-  let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,cexp.etyp)) cs cexp'.erange in
+  let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,typ)) cs cexp'.erange in
   Flow.raise_alarm alarm ~bottom:false ~warning man.lattice error_flow
 
 let safe_c_integer_overflow_check range man flow =
