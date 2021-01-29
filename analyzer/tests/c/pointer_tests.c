@@ -338,3 +338,32 @@ void test_pointer_as_condition() {
     _mopsa_assert_unreachable();
   }
 }
+
+void test_cast_string_to_int() {
+  unsigned long a = "abcd";
+  _mopsa_assert(a > 0);
+}
+
+void test_cast_var_address_to_int() {
+  int a;
+  unsigned long b = &a;
+  _mopsa_assert(b > 0);
+}
+
+void test_cast_array_to_int() {
+  int a[10];
+  unsigned long b = a;
+  _mopsa_assert(b > 0);
+}
+
+void test_cast_function_pointer_to_int() {
+  unsigned long a = incr;
+  _mopsa_assert(a > 0);
+}
+
+void test_cast_pointer_to_int() {
+  int a = 10;
+  int *p = &a;
+  unsigned long b = p;
+  _mopsa_assert(b > 0);
+}
