@@ -23,10 +23,9 @@
   IntItvTest - Unit tests for integer intervals.
  *)
 
-
+open Mopsa_utils
 open Bot
-module B = Intervals.IntBound
-open Intervals.IntItv
+open ItvUtils.IntItv
 
 
 let max_exhaustive = 50
@@ -327,8 +326,11 @@ let test () =
   test_binop "-" (binop sub Z.sub);
   test_binop "*" (binop mul Z.mul);
   test_binop "/" (binop_bot div Z.div);
+  test_binop "/↓" (binop_bot ediv Z.ediv);
   test_binop "unmerged /" (binop_unmerged div_unmerged Z.div);
+  test_binop "unmerged /↓" (binop_unmerged ediv_unmerged Z.ediv);
   test_binop "%" (binop_bot rem Z.rem);
+  test_binop "%↓" (binop_bot erem Z.erem);
   test_shift "<<" (binop_bot shift_left (fun a b -> Z.shift_left a (Z.to_int b)));
   test_shift ">>" (binop_bot shift_right (fun a b -> Z.shift_right a (Z.to_int b)));
   test_shift ">>>" (binop_bot shift_right_trunc (fun a b -> Z.div a (Z.shift_left Z.one (Z.to_int b))));
@@ -361,7 +363,9 @@ let test () =
   test_bwd_binop "bwd -" (bwd_binop bwd_sub Z.sub);
   test_bwd_binop "bwd *" (bwd_binop bwd_mul Z.mul);
   test_bwd_binop "bwd /" (bwd_binop bwd_div Z.div);
+  test_bwd_binop "bwd /↓" (bwd_binop bwd_ediv Z.ediv);
   test_bwd_binop "bwd %" (bwd_binop bwd_rem Z.rem);
+  test_bwd_binop "bwd %↓" (bwd_binop bwd_erem Z.erem);
   test_bwd_unop "bwd ~" (bwd_unop bwd_bit_not Z.lognot);
   test_bwd_binop "bwd ^" (bwd_binop bwd_bit_xor Z.logxor);
   test_bwd_binop "bwd |" (bwd_binop bwd_bit_or Z.logor);

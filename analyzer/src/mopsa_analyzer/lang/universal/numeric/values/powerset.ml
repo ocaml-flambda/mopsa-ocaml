@@ -183,6 +183,12 @@ struct
           of_bool
             (contains_nonzero a1 && contains_nonzero a2)
             (contains_zero a1 || contains_zero a2)
+        | O_log_xor ->
+          of_bool
+            ((contains_nonzero a1 && contains_zero a2) ||
+             (contains_zero a1 && contains_nonzero a2))
+            ((contains_zero a1 && contains_zero a2) ||
+             (contains_nonzero a1 && contains_nonzero a2))
         | _     -> top
       with Z.Overflow -> TOP
 

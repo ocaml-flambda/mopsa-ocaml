@@ -166,7 +166,9 @@ struct
     | O_minus -> Apron.Texpr1.Sub
     | O_mult  -> Apron.Texpr1.Mul
     | O_div   -> Apron.Texpr1.Div
+    | O_ediv  -> Apron.Texpr1.Div
     | O_mod   -> Apron.Texpr1.Mod
+    | O_erem  -> Apron.Texpr1.Mod
     | _ -> raise ImpreciseExpression
 
   let typ_to_apron = function
@@ -235,6 +237,14 @@ struct
       let x_apr', bnd = Binding.var_to_apron bnd x' in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
       (Apron.Texpr1.Var x_apr, abs, bnd, x_apr' :: l)
+
+    | E_binop((O_ediv|O_erem) as binop, e1, e2) ->
+      let binop' = binop_to_apron binop in
+      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
+      let e2', abs, bnd, l = exp_to_apron e2 (abs,bnd) l in
+      let typ' = typ_to_apron exp.etyp in
+      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Down else !opt_float_rounding in
+      Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
 
     | E_binop(binop, e1, e2) ->
       let binop' = binop_to_apron binop in
@@ -313,6 +323,13 @@ struct
       let e1', abs, bnd, l = bexp_to_apron e1 (abs,bnd) l in
       let e2', abs, bnd, l = bexp_to_apron e2 (abs,bnd) l in
       Dnf.mk_and e1' e2', abs, bnd, l
+
+    | E_binop(O_log_xor, e1, e2) ->
+      let e1' = mk_binop ~etyp:T_bool e1 O_eq (mk_zero ~typ:T_int exp.erange) exp.erange in
+      let e2' = mk_binop ~etyp:T_bool e1 O_eq (mk_zero ~typ:T_int exp.erange) exp.erange in
+      let e1', abs, bnd, l = exp_to_apron e1' (abs,bnd) l in
+      let e2', abs, bnd, l = exp_to_apron e2' (abs,bnd) l in
+      Dnf.singleton (Apron.Tcons1.DISEQ, e1', T_bool, e2', T_bool), abs, bnd, l
 
     | E_unop(O_log_not, exp') ->
       let dnf, abs, bnd, l = bexp_to_apron exp' (abs,bnd) l in
