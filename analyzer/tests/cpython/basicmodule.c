@@ -56,6 +56,13 @@ Cbox_getcontents(Cbox *self, PyObject *args)
     return res;
 }
 
+static PyObject*
+Cbox_getcounter(Cbox *self, PyObject *args)
+{
+    PyObject* res = Py_BuildValue("i", self->counter); // self->contents
+    return res;
+}
+
 static PyObject *
 Cbox_incr(Cbox *self, PyObject *args)
 {
@@ -85,6 +92,7 @@ Cbox_maybe_incr2(Cbox *self, PyObject *args)
 
 static PyMethodDef Cbox_methods[] = {
     {"getcontents", (PyCFunction) Cbox_getcontents, METH_VARARGS, ""},
+    {"getcounter", (PyCFunction) Cbox_getcounter, METH_VARARGS, ""},
     {"incr", (PyCFunction) Cbox_incr, METH_VARARGS, ""},
     {"maybe_incr", (PyCFunction) Cbox_maybe_incr, METH_VARARGS, ""},
     {"maybe_incr2", (PyCFunction) Cbox_maybe_incr2, METH_VARARGS, ""},
@@ -240,6 +248,7 @@ basic_random_fail(PyObject *self, PyObject *args)
     else { r = basic_raise_exc(self, args); }
     return r;
 }
+
 
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},

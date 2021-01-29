@@ -81,6 +81,14 @@ class Test(unittest.TestCase):
         with self.assertRaises(OverflowError):
             c = basic.Cbox([], 9223372036854775807)
 
+    def test_buildvalue(self):
+        class A: pass
+        a = A()
+        c = basic.Cbox(a, 3)
+        c.incr()
+        d = c.getcounter()
+        self.assertEqual(d, 4)
+
     def test_member_type_restriction(self):
         c = basic.Cbox(1, 3)
         with self.assertRaises(TypeError):
