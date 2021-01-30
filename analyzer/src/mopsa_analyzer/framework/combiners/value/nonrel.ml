@@ -353,6 +353,17 @@ struct
       (if b then join else meet) a1 a2 |>
       OptionExt.return
 
+    | E_binop (O_log_xor, e1, e2) ->
+      filter ctx e1 b a |> OptionExt.bind @@ fun a1 ->
+      filter ctx e2 b a |> OptionExt.bind @@ fun a2 ->
+      filter ctx e1 (not b) a |> OptionExt.bind @@ fun na1 ->
+      filter ctx e2 (not b) a |> OptionExt.bind @@ fun na2 ->
+      (if b
+       then join (meet a1 na2) (meet na1 a2)
+       else join (meet a1 a2) (meet na1 na2)
+      ) |>
+      OptionExt.return
+
     (* arithmetic comparison part, handled by Value *)
     | E_binop (op, e1, e2) when is_comparison_op op ->
       (* evaluate forward each argument expression *)

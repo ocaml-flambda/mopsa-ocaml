@@ -97,10 +97,10 @@ struct
 
   let zero =
     singleton Z.zero
-  
+
   let is_zero x =
     equal x (singleton Z.zero)
-  
+
   let contains_zero a =
     mem Z.zero a
 
@@ -147,7 +147,7 @@ struct
              ) a2 acc
         ) a1 empty
       |> bound
-      
+
   let binop op t1 a1 t2 a2 tr =
     if is_bottom a1 || is_bottom a2 then bottom else
     if is_top a1 || is_top a2 then top else
@@ -183,8 +183,17 @@ struct
           of_bool
             (contains_nonzero a1 && contains_nonzero a2)
             (contains_zero a1 || contains_zero a2)
+        | O_log_xor ->
+          of_bool
+            ((contains_nonzero a1 && contains_zero a2) ||
+             (contains_zero a1 && contains_nonzero a2))
+            ((contains_zero a1 && contains_zero a2) ||
+             (contains_nonzero a1 && contains_nonzero a2))
         | _     -> top
       with Z.Overflow -> TOP
+
+  let join (a1: t) (a2: t) : t =
+    Powerset.join a1 a2 |> bound
 
   let widen ctx (a1:t) (a2:t) : t =
     (*if subset a2 a1 then a1 else TOP*)

@@ -137,6 +137,7 @@ type float_class =
 type operator +=
   (* Unary operators *)
   | O_sqrt              (** Square root *)
+  | O_abs               (** Absolute value *)
   | O_bit_invert        (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
 
@@ -146,6 +147,8 @@ type operator +=
   | O_mult       (** * *)
   | O_div        (** / *)
   | O_mod        (** % *)
+  | O_ediv       (** euclidian division *)
+  | O_erem       (** remainder for euclidian division *)
   | O_pow        (** power *)
   | O_bit_and    (** & *)
   | O_bit_or     (** | *)
@@ -175,8 +178,11 @@ let () =
         | O_mult       -> pp_print_string fmt "*"
         | O_div        -> pp_print_string fmt "/"
         | O_mod        -> pp_print_string fmt "%"
+        | O_ediv       -> pp_print_string fmt "/↓"
+        | O_erem       -> pp_print_string fmt "%↓"
         | O_pow        -> pp_print_string fmt "**"
         | O_sqrt       -> pp_print_string fmt "sqrt"
+        | O_abs        -> pp_print_string fmt "abs"
         | O_bit_invert -> pp_print_string fmt "~"
         | O_wrap(l,u)  -> fprintf fmt "wrap(%a, %a)" Z.pp_print l Z.pp_print u
         | O_concat     -> pp_print_string fmt "@"
@@ -782,7 +788,9 @@ let add e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_plus e2 range ~etyp:typ
 let sub e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_minus e2 range ~etyp:typ
 let mul e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mult e2 range ~etyp:typ
 let div e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_div e2 range ~etyp:typ
+let ediv e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_ediv e2 range ~etyp:typ
 let _mod_ e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_mod e2 range ~etyp:typ
+let erem e1 e2 ?(typ=e1.etyp) range = mk_binop e1 O_erem e2 range ~etyp:typ
 
 let succ e range = add e one range
 let pred e range = sub e one range
@@ -804,8 +812,10 @@ let mk_ge = ge
 
 let log_or e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_or e2 ~etyp range
 let log_and e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_and e2 ~etyp range
+let log_xor e1 e2 ?(etyp=T_bool) range = mk_binop e1 O_log_xor e2 ~etyp range
 let mk_log_or = log_or
 let mk_log_and = log_and
+let mk_log_xor = log_xor
 
 (* float classes *)
 
@@ -1012,7 +1022,18 @@ let rec expr_to_const e : constant option =
       | _ -> None
     end
 
-  | E_binop(O_plus | O_minus | O_mult | O_div as op, e1, e2) ->
+  | E_binop(O_log_xor, e1, e2) ->
+    begin
+      match expr_to_const e1, expr_to_const e2 with
+      | Some (C_bool b1), Some (C_bool b2) ->
+        Some (C_bool (if b1 then not b2 else b2))
+      | Some (C_top T_bool), _
+      | _, Some (C_top T_bool) ->
+        Some (C_top T_bool)
+      | _ -> None
+    end
+
+  | E_binop(O_plus | O_minus | O_mult | O_div | O_mod | O_ediv | O_erem as op, e1, e2) ->
     begin
       match expr_to_const e1, expr_to_const e2 with
       | Some (C_int n1), Some (C_int n2) ->
@@ -1022,6 +1043,9 @@ let rec expr_to_const e : constant option =
           | O_minus -> Some (C_int (Z.sub n1 n2))
           | O_mult -> Some (C_int (Z.mul n1 n2))
           | O_div -> if Z.equal n2 Z.zero then None else Some (C_int (Z.div n1 n2))
+          | O_mod -> if Z.equal n2 Z.zero then None else Some (C_int (Z.rem n1 n2))
+          | O_ediv -> if Z.equal n2 Z.zero then None else Some (C_int (Z.ediv n1 n2))
+          | O_erem -> if Z.equal n2 Z.zero then None else Some (C_int (Z.erem n1 n2))
           | _ -> None
         end
       | _ -> None

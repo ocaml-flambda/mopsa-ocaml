@@ -90,6 +90,7 @@ struct
     | O_div    -> bot_absorb2 C.div a1 a2
     | O_log_or   -> bot_lift2 C.log_or a1 a2
     | O_log_and  -> bot_lift2 C.log_and a1 a2
+    | O_log_xor -> bot_lift2 C.log_xor a1 a2
     | O_mod    -> bot_absorb2 C.rem a1 a2
     | O_bit_rshift -> bot_absorb2 C.shift_right a1 a2
     | O_bit_lshift -> bot_absorb2 C.shift_left a1 a2
