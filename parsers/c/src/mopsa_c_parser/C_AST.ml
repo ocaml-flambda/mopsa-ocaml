@@ -34,6 +34,7 @@ type uid = Clang_AST.uid
 (** Unique identifiers (for variables and functions). *)
 
 module UidMap = Map.Make(struct type t=uid let compare=compare end)
+module UidSet = Set.Make(struct type t=uid let compare=compare end)
 
 module StringMap = Map.Make(String)
 

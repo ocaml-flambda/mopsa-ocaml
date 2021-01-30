@@ -169,7 +169,7 @@ int sched_getaffinity (__pid_t __pid, size_t __cpusetsize,
 
 // from cpu-set.h
 
-size_t _mopsa_cpu_alloc_size(size_t __setsize) {
+static size_t _mopsa_cpu_alloc_size(size_t __setsize) {
   return __CPU_ALLOC_SIZE(__setsize);
 }
 

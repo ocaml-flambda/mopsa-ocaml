@@ -32,13 +32,13 @@
  * requires: __size > 0;
  * local: size_t src_len = strlen(__src);
  * ensures: return == src_len;
- * 
+ *
  * case "small" {
  *   assumes: __size > src_len;
  *   assigns: __dst[0, __size);
  *   ensures: forall size_t i in [0, src_len]: (__dst[i])' == __src[i];
  * }
- * 
+ *
  * case "large" {
  *   assumes: __size <= src_len;
  *   assigns: __dst[0, __size);
@@ -54,14 +54,14 @@ size_t strlcpy(char *__dst, const char *__src, size_t __size);
  * local: size_t src_len = strlen(__src);
  * local: size_t dst_len = strlen(__dst);
  * ensures: return == src_len + dst_len;
- * 
+ *
  * case "small" {
  *   assumes: __size > src_len + dst_len;
  *   assigns: __dst[0, __size);
  *   ensures: forall size_t i in [0, dst_len): (__dst[i])' == __dst[i];
  *   ensures: forall size_t i in [0, src_len]: (__dst[dst_len + i])' == __src[i];
  * }
- * 
+ *
  * case "large" {
  *   assumes: __size > dst_len and __size <= src_len + dst_len;
  *   assigns: __dst[0, __size);
@@ -69,7 +69,7 @@ size_t strlcpy(char *__dst, const char *__src, size_t __size);
  *   ensures: forall size_t i in [0, __size-dst_len-1): (__dst[dst_len + i])' == __src[i];
  *   ensures: (__dst[__size-1])' == 0;
  * }
- * 
+ *
  * case "too_large" {
  *   assumes: __size <= dst_len;
  * }
@@ -82,13 +82,13 @@ size_t strlcat(char *__dst, const char *__src, size_t __size);
  *
  * case "small" {
  *   assumes: len1 < __str_len;
- *   ensures: return == NULL or 
+ *   ensures: return == NULL or
  *            (len1 >= len2 and in_bytes(return, __str, len1 - len2));
  * }
  *
  * case "large" {
  *   assumes: len1 >= __str_len;
- *   ensures: return == NULL or 
+ *   ensures: return == NULL or
  *            (__str_len >= len2 and in_bytes(return, __str, __str_len - len2));
  * }
  */

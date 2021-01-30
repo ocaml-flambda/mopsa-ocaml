@@ -24,9 +24,10 @@
 
   The definition of the AST types returned by Clang_parser.
 
-  Tested with Clang 5.0 up to 7.0.1.
-  As it was initially based on Clang 4, some features introduced in
-  Clang 5 and later may be missing.
+  Tested with Clang 5.0 up to 11.0.1
+  It was initially based on Clang 4. Although we tried to keep it up to
+  date, some features introduced in later Clang may be missing (especially
+  C++, which is not generally tested).
  *)
 
 

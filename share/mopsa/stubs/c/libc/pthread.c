@@ -25,7 +25,7 @@
 
   We have no multi-thread support in Mospa.
 
-  Nevertheless, we currenty implement pthread_once to ensure that the 
+  Nevertheless, we currenty implement pthread_once to ensure that the
   init_routine function is correctly called in sequential analyses.
 */
 

@@ -47,6 +47,9 @@ let log_rename = ref false
 let log_merge = ref false
 (* log when merging declarations *)
 
+let log_remove = ref false
+(* log when removed (unused) declarations *)
+
 
 (** {2 Config} *)
                   
@@ -60,6 +63,11 @@ let fix_va_list = true
 (* Clang 4 transforms va_list into struct __va_list_tag *; transform it back
    so that, after printing, Clang accepts the generated C code
    as it refuses to call __builtin_va_arg with anything other than va_list
+ *)
+
+let remove_unused_static = true
+(* remove static functions that are not referenced in a translation unit
+   to improve performance
  *)
 
                 
@@ -157,7 +165,7 @@ let has_stub_comment l =
     ) l
 
 
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) =
 
   
   (* utilities *)
@@ -176,6 +184,21 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     Hashtbl.add ctx.ctx_names unique name;
     if !log_rename && unique <> org then Printf.printf "renamed '%s' into '%s'\n" org unique;
     unique
+  in
+
+  (* map from functions id (None denotes the toplevel)
+     to static function referenced in the body
+   *)
+  let static_func_use = Hashtbl.create 16 in
+  let get_func_ref id =
+    try Hashtbl.find static_func_use id
+    with Not_found -> UidSet.empty
+  in
+  let add_func_ref (caller:func option) (callee:func) =
+    if callee.func_is_static then
+      let id = match caller with Some f -> Some f.func_uid | None -> None in
+      let old = get_func_ref id in
+      Hashtbl.replace static_func_use id (UidSet.add callee.func_uid old)
   in
 
   
@@ -653,8 +676,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
              func_com = [];
            }
       in
-      if prev = None then Hashtbl.add ctx.ctx_funcs org_name func;
-      if static then Hashtbl.replace ctx.ctx_tu_static_funcs org_name func;
+      if static then Hashtbl.replace ctx.ctx_tu_static_funcs org_name func
+      else if prev = None then Hashtbl.add ctx.ctx_funcs org_name func;
       Hashtbl.add ctx.ctx_tu_funcs f.C.function_uid func;
       (* fill in parameters & return *)
       let params = 
@@ -968,7 +991,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
    | C.DeclRefExpr d ->
       (match d.C.decl_kind with
        | C.VarDecl v -> E_variable (var_decl func v)
-       | C.FunctionDecl f -> E_function (func_decl f)
+       | C.FunctionDecl f ->
+          let decl = func_decl f in
+          add_func_ref func decl;
+          E_function decl
        | C.EnumConstantDecl e -> E_integer_literal e.C.enum_cst_val
        | k -> error decl.C.decl_range "unhandled reference to a declaration in expression" (C.decl_kind_name k)
       ), typ, range
@@ -1154,12 +1180,43 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         end;
       Hashtbl.add ctx.ctx_macros macro.C.macro_name macro
     ) macros;
-  
-  (match out with Some o -> close_out o | None -> ())
+
+
+  (* shifts static funcs to funcs *)
+  if remove_unused_static && not keep_static then (
+    (* functions transitively referenced by id *)
+    let rec close_func_ref id acc =
+      if UidSet.mem id acc then acc else
+        UidSet.fold close_func_ref
+          (get_func_ref (Some id)) (UidSet.add id acc)
+    in
+    (* functions transitively referenced by toplevel or non-static *)
+    let func_refs = ref (get_func_ref None) in
+    Hashtbl.iter
+      (fun _ f ->
+        if not f.func_is_static then func_refs := close_func_ref f.func_uid !func_refs
+      )
+      ctx.ctx_tu_funcs;
+    (* only keep referenced static functions *)
+    Hashtbl.iter
+      (fun name f ->
+        if UidSet.mem f.func_uid !func_refs then
+          Hashtbl.add ctx.ctx_funcs f.func_org_name f
+        else if !log_remove then
+          Printf.printf "removing static function %s not used in translation unit\n" name;
+      )
+      ctx.ctx_tu_static_funcs
+  )
+  else
+    (* keep all statics *)
+    Hashtbl.iter
+      (fun _ f -> Hashtbl.add ctx.ctx_funcs f.func_org_name f)
+      ctx.ctx_tu_static_funcs;
    
     
-                         
-                                                                           
+  (match out with Some o -> close_out o | None -> ())
+
+
 let link_project ctx =
   let cvt hash name =
     Hashtbl.fold

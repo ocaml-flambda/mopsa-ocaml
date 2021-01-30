@@ -260,7 +260,7 @@ and parse_db (dbfile: string) ctx : unit =
   (* make sure we get back to cwd in all cases *)
   Sys.chdir cwd
 
-and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache ignore ctx =
+and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string) enable_cache ignore ctx =
   if not (Sys.file_exists file) then panic "file %s not found" file;
   debug "parsing file %s" file;
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
@@ -271,14 +271,17 @@ and parse_file (cmd: string) ?nb (opts: string list) (file: string) enable_cache
               opts
   in
   input_files := file :: !input_files;
-  C_parser.parse_file cmd file opts' !opt_warn_all enable_cache ignore ctx
+  (* if adding a stub file, keep all static functions as they may be used
+     by stub annotations
+   *)
+  C_parser.parse_file cmd file opts' !opt_warn_all enable_cache stub ignore ctx
 
 
 and parse_stubs ctx () =
   (** Add Mopsa stubs *)
-  parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
+  parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
   (** Add compiler builtins *)
-  parse_file "clang" [] (Config.Paths.resolve_stub "c" "mopsa/compiler_builtins.c") false false ctx;
+  parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/compiler_builtins.c") false false ctx;
   if !opt_without_libc then ()
   else
     (** Add stubs of the included headers *)
@@ -302,7 +305,7 @@ and parse_stubs ctx () =
                 else
                   (* Parse the stub and collect new parsed headers *)
                   let before = Clang_to_C.get_parsed_files ctx |> Set.of_list in
-                  parse_file "clang" [] stub false false ctx;
+                  parse_file ~stub:true "clang" [] stub false false ctx;
                   let after = Clang_to_C.get_parsed_files ctx  |> Set.of_list in
                   Set.diff after before |>
                   Set.union acc
