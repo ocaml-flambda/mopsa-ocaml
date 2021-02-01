@@ -173,6 +173,9 @@ trie_longest(TrieNode* root, const TRIE_LETTER_TYPE* word, const size_t wordlen)
 
     node = root;
     for (i=0; i < wordlen; i++) {
+        _mopsa_assert(len <= i);
+        // FIXME: provable with polyhedron + static packing.
+        // packing to a multilingual analysis?
         node = trienode_get_next(node, word[i]);
         if (node == NULL)
             break;
