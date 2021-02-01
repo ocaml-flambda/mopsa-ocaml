@@ -122,6 +122,8 @@ let rec sizeof_type target t : Z.t =
   | T_enum e ->
      if not e.enum_defined then invalid_arg "sizeof_type: size of incomplete enum";
      Z.of_int (sizeof_int target e.enum_integer_type)
+  | T_vector v ->
+     Z.mul (sizeof_type target (fst v.vector_type)) (Z.of_int v.vector_size)
 (** Size (in bytes) of a type. Raises an Invalid_argument if the size is not a constant. *)
 
 
@@ -129,7 +131,7 @@ let sizeof_expr target (range:C.range) (result_type:type_qual) (t:typ) : expr =
   let rec doit t =
     match t with
     | T_void -> invalid_arg "sizeof_expr: size of void"
-    | T_bool | T_integer _ | T_float _ | T_pointer _ | T_record _ | T_enum _ | T_complex _ ->
+    | T_bool | T_integer _ | T_float _ | T_pointer _ | T_record _ | T_enum _ | T_complex _ | T_vector _ ->
        E_integer_literal (sizeof_type target t), result_type, range
     | T_array ((t,_),l) ->
        let len = match l with
@@ -166,6 +168,8 @@ let rec alignof_type target t : Z.t =
   | T_enum e ->
      if not e.enum_defined then invalid_arg "alignof_type: size of incomplete enum";
      Z.of_int (alignof_int target e.enum_integer_type)
+  | T_vector v ->
+     alignof_type target (fst v.vector_type)
 (** Alignment (in bytes) of a type. *)
 
 
@@ -180,6 +184,7 @@ let rec type_declarable = function
   | T_typedef t -> type_qual_declarable t.typedef_def
   | T_record r -> r.record_defined
   | T_enum e -> e.enum_defined
+  | T_vector v -> type_declarable (fst v.vector_type)
 
 and type_qual_declarable (t,q) =
   type_declarable t
@@ -249,6 +254,10 @@ type type_cmp = {
     (** if true, a typedef is replaced with its defining type during comparison *)
     cmp_ignore_array_size: bool;
     (** if true, arrays with undefined size compare equal to that of defined size *)
+    cmp_ignore_vector_size: bool;
+    (** if true, the size of vector types is ignored in comparison *)
+    cmp_ignore_vector_kind: bool;
+    (** if true, the kind of vector types is ignored in comparison *)
   }
 (** Comfigures the test equality functions, to allow various relaxation. *)
 
@@ -260,6 +269,8 @@ let cmp_compatible = {
     cmp_ignore_undefined = true;
     cmp_ignore_typedef = true;
     cmp_ignore_array_size = true;
+    cmp_ignore_vector_size = true;
+    cmp_ignore_vector_kind = true;
   }
 (** Type compatibility. *)
 
@@ -271,6 +282,8 @@ let cmp_unifiable = {
     cmp_ignore_undefined = true;
     cmp_ignore_typedef = false;
     cmp_ignore_array_size = true;
+    cmp_ignore_vector_size = true;
+    cmp_ignore_vector_kind = true;
   }
 (** Unifiable compatibility. *)
 
@@ -282,6 +295,8 @@ let cmp_equal = {
     cmp_ignore_undefined = false;
     cmp_ignore_typedef = false;
     cmp_ignore_array_size = false;
+    cmp_ignore_vector_size = false;
+    cmp_ignore_vector_kind = false;
   }
 (** Strict type equality. *)
 
@@ -374,6 +389,11 @@ let rec type_compare cmp gray (target:C.target_info) (t1:typ) (t2:typ) =
            )
          )
        )
+
+    | T_vector v1, T_vector v2 ->
+       type_qual_compare cmp gray target v1.vector_type v2.vector_type &&
+       (cmp.cmp_ignore_vector_size || v1.vector_size = v2.vector_size) &&
+       (cmp.cmp_ignore_vector_kind || v1.vector_kind = v2.vector_kind)
 
     | _ -> false
 
@@ -471,6 +491,14 @@ let rec type_unify gray target (t1:typ) (t2:typ) =
     | T_record r1, T_record r2 ->
        record_unify gray target r1 r2;
        t1
+
+    | T_vector v1, T_vector v2 ->
+       (* keep the minimum size and set kind to -1 if they differ *)
+       (* TODO: is that correct? *)
+       let t = type_qual_unify gray target v1.vector_type v2.vector_type in
+       let size = min v1.vector_size v2.vector_size in
+       let kind = if v1.vector_kind = v2.vector_kind then v1.vector_kind else -1 in
+       T_vector { vector_type = t; vector_size = size; vector_kind = kind; }
 
     | _ -> invalid_arg "type_unify: incompatible types"
 
@@ -654,7 +682,7 @@ let rec zero_init range (t:typ) : init =
      in
      I_init_list (List.map (fun f -> zero_init range (fst f.field_type)) l, None)
   | T_enum e -> I_init_expr (expr_integer_cst range e.enum_integer_type Z.zero)
-
+  | T_vector v ->  I_init_list ([], Some (zero_init range (fst v.vector_type)))
 
 
 (** {2 Statement utilities} *)
@@ -799,6 +827,11 @@ let resolve_scope (b:block) : block =
     | E_predefined _ -> ()
 
     | E_statement b -> block ctx b
+
+    | E_convert_vector e -> expr ctx e
+    | E_vector_element (e,_) -> expr ctx e
+    | E_shuffle_vector ea -> Array.iter (expr ctx) ea
+
 
   and expr_opt ctx eo = match eo with
     | None -> () | Some e -> expr ctx e

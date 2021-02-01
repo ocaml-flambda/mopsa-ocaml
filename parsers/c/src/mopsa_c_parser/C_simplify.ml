@@ -359,6 +359,24 @@ let simplify_func ctx (f:func) =
       in
       doit [] b.blk_stmts
 
+   | E_convert_vector e1 ->
+      let before1, e1, after1 = simplify_expr call e1 in
+      before1, (E_convert_vector e1, t, r), after1
+
+   | E_vector_element (e1,f) ->
+      let before1, e1, after1 = simplify_expr call e1 in
+      before1, (E_vector_element (e1, f), t, r), after1
+
+   | E_shuffle_vector ea ->
+      let ea = Array.copy ea in
+      let beforea, aftera = ref [], ref [] in
+      for i=0 to Array.length ea-1 do
+        let before, ee, after = simplify_expr call ea.(i) in
+        beforea := before@(!beforea);
+        aftera := after@(!aftera);
+        ea.(i) <- ee
+      done;
+      !beforea, (E_shuffle_vector ea, t, r), !aftera
 
   (* case of toplevel (statement) expressions: the returned value is not used *)
   and simplify_expr_stmt (call:bool) ((e,t,r):expr) : statement list =
@@ -412,7 +430,11 @@ let simplify_func ctx (f:func) =
    | E_predefined _
    | E_var_args _
    | E_atomic _
-   | E_compound_literal _ ->
+   | E_compound_literal _
+   | E_convert_vector _
+   | E_vector_element _
+   | E_shuffle_vector _
+     ->
        let before,e,after = simplify_expr call (e,t,r) in
        before@[S_expression e, r]@after
 
@@ -532,5 +554,5 @@ let simplify_func ctx (f:func) =
 
   in
   match f.func_body with
-  | Some body -> f.func_body <- Some (simplify_block false body |> resolve_scope)
+  | Some body -> f.func_body <- Some (simplify_block false body |> resolve_scope);
   | None -> ()

@@ -34,6 +34,7 @@ let parse_file
     (opts:string list)
     (warn_all:bool)
     (enable_cache:bool)
+    (keep_static:bool)
     (only_parse:bool)
     (ctx:Clang_to_C.context)
   =
@@ -73,7 +74,8 @@ let parse_file
     else
       Clang_to_C.add_translation_unit
         ctx (Filename.basename file)
-        r.parse_decl r.parse_files r.parse_comments r.parse_macros;
+        r.parse_decl r.parse_files r.parse_comments r.parse_macros
+        keep_static
   )
   else
     let errors =
