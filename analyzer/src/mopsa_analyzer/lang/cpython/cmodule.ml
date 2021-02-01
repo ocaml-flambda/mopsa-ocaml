@@ -241,7 +241,9 @@ module Domain =
                 (fun points_to flow ->
                   match points_to with
                   | P_block({base_kind = String (s, _, _)}, offset, _) ->
-                     Cases.singleton (Some s) flow
+                     Cases.singleton (Some (Top.Nt s)) flow
+                  | P_top ->
+                     Cases.singleton (Some Top.TOP) flow
                   | P_null ->
                      Cases.singleton None flow
                   | _ -> panic "points_to %a" pp_points_to points_to
@@ -291,6 +293,7 @@ module Domain =
         match omethd_name with
         | None -> Cases.singleton false flow
         | Some methd_name ->
+           let methd_name = Top.top_to_exn methd_name in
           resolve_pointer (mk_c_member_access_by_name methd "ml_meth" range) man flow >>$
           fun methd_function flow ->
           let methd_fundec = match methd_function with
@@ -349,6 +352,7 @@ module Domain =
               match omember_name with
               | None -> Cases.singleton false flow
               | Some member_name ->
+                 let member_name = Top.top_to_exn member_name in
                  debug "name is %s" member_name;
                 resolve_pointer (mk_c_address_of member range) man flow >>$
                   fun member_points_to flow ->
@@ -389,6 +393,7 @@ module Domain =
         match omodule_name with
         | None -> assert false
         | Some module_name ->
+           let module_name = Top.top_to_exn module_name in
            man.eval (mk_alloc_addr (Python.Addr.A_py_c_module module_name) range) flow >>$
              fun module_addr flow ->
              let m_addr = Addr.from_expr module_addr in
@@ -402,7 +407,7 @@ module Domain =
       (* None if Null is found, Some addr otherwise *)
       resolve_pointer expr man flow >>$
         (fun points_to flow ->
-          debug "searching for %a" pp_points_to points_to;
+          debug "[resolve_c_pointer %a] searching for %a" pp_expr expr pp_points_to points_to;
           if points_to = P_null then Cases.singleton None flow
           else
           let aset = Top.detop @@ find points_to (get_env T_cur man flow) in
@@ -419,7 +424,7 @@ module Domain =
                   Cases.empty
                | _ -> assert false
                end
-            | _ -> assert false
+            | _ -> panic_at expr.erange "%a" pp_points_to points_to;
           else
             assert false
         )
@@ -462,10 +467,12 @@ module Domain =
           | Some exc_addr ->
              safe_get_name_of (mk_c_arrow_access_by_name exc "exc_msg" range) man flow >>$
                fun exc_msg flow ->
-               debug "%s: exc_addr: %a, exc_msg: %a" function_name pp_addr exc_addr (OptionExt.print Format.pp_print_string) exc_msg;
+               debug "%s: exc_addr: %a, exc_msg: %a" function_name pp_addr exc_addr (OptionExt.print (Top.top_fprint Format.pp_print_string)) exc_msg;
                let args = match exc_msg with
                  | None -> []
-                 | Some s -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}] in
+                 | Some (Nt s) -> [{(Universal.Ast.mk_string s range) with etyp=(T_py None)}]
+                 | Some TOP -> [Python.Ast.mk_py_top T_string range]
+               in
                (* clean C exception state for next times *)
                man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>%
                  man.exec (Python.Ast.mk_raise
@@ -575,6 +582,7 @@ module Domain =
         | Python.Objects.Tuple.A_py_tuple _ -> fst @@ find_builtin "tuple"
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
         | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
+        | A_py_function _ -> fst @@ find_builtin "function"
         | _ -> panic_at range "parent addr of %a?" pp_addr addr in
       let c_addr, post =
         let inverse = Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow) in
@@ -790,7 +798,7 @@ module Domain =
 
              safe_get_name_of obj_name man flow >>$
                fun oobj_name flow ->
-               let obj_name = OptionExt.none_to_exn oobj_name in
+               let obj_name = Top.top_to_exn (OptionExt.none_to_exn oobj_name) in
 
                resolve_c_pointer_into_addr obj man flow >>$
                  fun obj_oaddr flow ->
@@ -875,7 +883,7 @@ module Domain =
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          safe_get_name_of fmt man flow >>$
            (fun ofmt_str flow ->
-             let fmt_str = OptionExt.none_to_exn ofmt_str in
+             let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
              resolve_c_pointer_into_addr args man flow >>$
                (fun oaddr flow ->
                  let addr = OptionExt.none_to_exn oaddr in
@@ -980,7 +988,7 @@ module Domain =
       | E_c_builtin_call ("Py_BuildValue", fmt::refs) ->
          safe_get_name_of fmt man flow >>$
            (fun ofmt_str flow ->
-             let fmt_str = OptionExt.none_to_exn ofmt_str in
+             let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
              match fmt_str with
              | "i" ->
                 let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
