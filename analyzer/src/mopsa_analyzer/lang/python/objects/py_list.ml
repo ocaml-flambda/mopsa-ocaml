@@ -929,7 +929,7 @@ struct
             ItvUtils.IntItv.fprint_bot u_maxsplit;
           (* if the separator is a char and maxsplit is a constant, let's work on u_self *)
           (* additional assumptions on u_self and u_sep could be lifted if needed *)
-          if StringPower.for_all (fun s -> String.length s = 1) u_sep && ItvUtils.IntItv.is_singleton (Bot.bot_to_exn u_maxsplit) && StringPower.cardinal u_self = 1 && StringPower.cardinal u_sep = 1 then
+          if not (StringPower.is_top u_self) && not (StringPower.is_top u_sep) && StringPower.for_all (fun s -> String.length s = 1) u_sep && ItvUtils.IntItv.is_singleton (Bot.bot_to_exn u_maxsplit) && StringPower.cardinal u_self = 1 && StringPower.cardinal u_sep = 1 then
             let splits =
               let sep = String.get (StringPower.choose u_sep) 0 in
               let splitted = String.split_on_char sep (StringPower.choose u_self) in
