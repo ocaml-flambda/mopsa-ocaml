@@ -35,7 +35,7 @@
  *
  * case "small" {
  *   assumes: __size > src_len;
- *   assigns: __dst[0, __size);
+ *   assigns: __dst[0, src_len];
  *   ensures: forall size_t i in [0, src_len]: (__dst[i])' == __src[i];
  * }
  *

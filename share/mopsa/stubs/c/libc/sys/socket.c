@@ -63,7 +63,7 @@ int socket (int __domain, int __type, int __protocol);
  *   local:   int fd0 = _mopsa_register_file_resource(f0);
  *   local:   int fd1 = _mopsa_register_file_resource(f1);
  *   assigns: __fds[0,1];
- *   ensures: __fds[0] == fd0 and __fds[1] == fd1;
+ *   ensures: (__fds[0])' == fd0 and (__fds[1])' == fd1;
  *   ensures: return == 0;
  * }
  *
