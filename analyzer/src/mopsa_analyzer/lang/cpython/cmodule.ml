@@ -75,6 +75,76 @@ let raise_cpython_class_not_ready ?(bottom=true) e range man flow =
   let alarm = mk_alarm (A_cpython_class_not_ready e) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let builtin_exceptions =
+  [
+    "PyExc_BaseException";
+    "PyExc_Exception";
+    "PyExc_StopAsyncIteration";
+    "PyExc_StopIteration";
+    "PyExc_GeneratorExit";
+    "PyExc_ArithmeticError";
+    "PyExc_LookupError";
+    "PyExc_AssertionError";
+    "PyExc_AttributeError";
+    "PyExc_BufferError";
+    "PyExc_EOFError";
+    "PyExc_FloatingPointError";
+    "PyExc_OSError";
+    "PyExc_ImportError";
+    "PyExc_ModuleNotFoundError";
+    "PyExc_IndexError";
+    "PyExc_KeyError";
+    "PyExc_KeyboardInterrupt";
+    "PyExc_MemoryError";
+    "PyExc_NameError";
+    "PyExc_OverflowError";
+    "PyExc_RuntimeError";
+    "PyExc_RecursionError";
+    "PyExc_NotImplementedError";
+    "PyExc_SyntaxError";
+    "PyExc_IndentationError";
+    "PyExc_TabError";
+    "PyExc_ReferenceError";
+    "PyExc_SystemError";
+    "PyExc_SystemExit";
+    "PyExc_TypeError";
+    "PyExc_UnboundLocalError";
+    "PyExc_UnicodeError";
+    "PyExc_UnicodeEncodeError";
+    "PyExc_UnicodeDecodeError";
+    "PyExc_UnicodeTranslateError";
+    "PyExc_ValueError";
+    "PyExc_ZeroDivisionError";
+    "PyExc_BlockingIOError";
+    "PyExc_BrokenPipeError";
+    "PyExc_ChildProcessError";
+    "PyExc_ConnectionError";
+    "PyExc_ConnectionAbortedError";
+    "PyExc_ConnectionRefusedError";
+    "PyExc_ConnectionResetError";
+    "PyExc_FileExistsError";
+    "PyExc_FileNotFoundError";
+    "PyExc_InterruptedError";
+    "PyExc_IsADirectoryError";
+    "PyExc_NotADirectoryError";
+    "PyExc_PermissionError";
+    "PyExc_ProcessLookupError";
+    "PyExc_TimeoutError";
+    "PyExc_EnvironmentError";
+    "PyExc_IOError";
+    "PyExc_Warning";
+    "PyExc_UserWarning";
+    "PyExc_DeprecationWarning";
+    "PyExc_PendingDeprecationWarning";
+    "PyExc_SyntaxWarning";
+    "PyExc_RuntimeWarning";
+    "PyExc_FutureWarning";
+    "PyExc_ImportWarning";
+    "PyExc_UnicodeWarning";
+    "PyExc_BytesWarning";
+    "PyExc_ResourceWarning";
+  ]
+
 module Domain =
   struct
 
@@ -633,20 +703,9 @@ module Domain =
       let range = erange exp in
       match ekind exp with
       (* FIXME: refactor *)
-      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_MemoryError" ->
-         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "MemoryError") range) flow
-         |> OptionExt.return
-      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_TypeError" ->
-         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "TypeError") range) flow
-         |> OptionExt.return
-      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_AttributeError" ->
-         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "AttributeError") range) flow
-         |> OptionExt.return
-      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_OverflowError" ->
-         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "OverflowError") range) flow
-         |> OptionExt.return
-      | E_var ({vkind = V_cvar v}, _) when v.cvar_uniq_name = "PyExc_ValueError" ->
-         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin "ValueError") range) flow
+      | E_var ({vkind = V_cvar v}, _) when List.mem v.cvar_uniq_name builtin_exceptions ->
+         let py_name = String.sub v.cvar_uniq_name 6 (String.length v.cvar_uniq_name - 6) in
+         Eval.singleton (mk_addr (fst @@ Python.Addr.find_builtin py_name) range) flow
          |> OptionExt.return
 
       (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
@@ -670,7 +729,8 @@ module Domain =
                    add_class_equiv c py flow) flow descr in
              let add_exc_equivs descr flow =
                (* let flow = add_class_equivs descr flow in *)
-               List.fold_left (fun flow (_, py) ->
+               List.fold_left (fun flow c ->
+                   let py = String.sub c 6 (String.length c - 6) in
                    let py_addr = fst @@ Python.Addr.find_builtin py in
                    set_singleton
                      (mk_c_points_to_bloc (C.Common.Base.mk_addr_base py_addr) (mk_zero (Location.mk_program_range [])) None)
@@ -708,15 +768,7 @@ module Domain =
                  ]
                  flow in
              let flow =
-               add_exc_equivs
-                 [
-                   ("PyExc_MemoryError", "MemoryError");
-                   ("PyExc_TypeError", "TypeError");
-                   ("PyExc_OverflowError", "OverflowError");
-                   ("PyExc_AttributeError", "AttributeError");
-                   ("PyExc_SystemError", "SystemError");
-                   ("PyExc_ValueError", "ValueError");
-                 ]
+               add_exc_equivs builtin_exceptions
                flow in
              let init_flags = C.Ast.find_c_fundec_by_name "init_flags" flow in
              (man.exec (mk_expr_stmt (mk_c_call init_flags [] range) range) flow >>% fun flow ->
