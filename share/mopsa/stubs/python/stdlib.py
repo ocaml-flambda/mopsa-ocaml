@@ -910,6 +910,10 @@ class ProcessLookupError(OSError): pass
 
 class TimeoutError(OSError): pass
 
+class EnvironmentError(OSError): pass
+
+class IOError(OSError): pass
+
 class ReferenceError(Exception): pass
 
 class RuntimeError(Exception): pass
