@@ -971,14 +971,8 @@ struct
           match pt with
           | P_null ->
             Eval.singleton (mk_zero exp.erange) flow
-          | P_top | P_invalid ->
-            let e = mk_z_interval Z.zero max_pointer_value ~typ:size_type p.erange in
-            let e = { e with ehistory = p :: p.ehistory } in
-            man.eval { exp with ekind = E_c_cast (e, implicit) } flow
-          | P_block _ | P_fun _ ->
-            let e = mk_z_interval Z.one max_pointer_value ~typ:size_type p.erange in
-            let e = { e with ehistory = p :: p.ehistory } in
-            man.eval { exp with ekind = E_c_cast (e, implicit) } flow
+          | P_top | P_invalid | P_block _ | P_fun _ ->
+            man.eval (mk_top exp.etyp exp.erange) flow
         )
 
     (* 𝔼⟦ !ptr ⟧ *)

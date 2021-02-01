@@ -936,8 +936,6 @@ let size_type =
           from_clang_int_type in
   T_c_integer t
 
-let max_pointer_value = rangeof size_type |> snd
-
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 
 let is_c_block_object_type = function T_c_block_object _ -> true | _ -> false
