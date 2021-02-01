@@ -88,11 +88,11 @@ module Domain =
                               | _ -> assert false)
        in
        debug "|tests classes| = %d" (List.length test_cases);
-
+       let init_flow = flow in
        let flow =
-         List.fold_left (fun flow (cls_addr, cls_decl) ->
-             debug "starting with %a" pp_addr cls_addr;
+         List.fold_left (fun acc (cls_addr, cls_decl) ->
            (* create tmp, alloc class in tmp, run tests, delete tmp *)
+             debug "%a, cur is bottom?" pp_addr cls_addr;
              let tmp = mktmp ~typ:(T_py None) () in
              let tmpvar = mk_var tmp range in
              let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
@@ -119,20 +119,25 @@ module Domain =
                                                 [tmpvar] range)) range )
                      test_functions
                in
-               flow >>%
-                 man.exec assign_alloc >>%
-                 fun flow ->
+               let flow = Flow.copy_ctx acc init_flow in
+               Flow.join man.lattice acc
+               (post_to_flow man
                  (
-                   match osetup with
-                   | None -> Post.return flow
-                   | Some setup ->
-                      man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
-                 ) >>%
-                   man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
-                   man.exec (mk_remove_var tmp range)
-             else flow
-           ) (Post.return flow) test_cases in
-       flow >>%
+                     man.exec assign_alloc flow >>%
+                     fun flow ->
+                     (
+                       match osetup with
+                       | None -> Post.return flow
+                       | Some setup ->
+                          man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
+                     ) >>%
+                       man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
+                       man.exec (mk_remove_var tmp range)
+                 )
+               )
+             else acc
+           ) flow test_cases in
+       Post.return flow >>%
        man.eval (mk_py_none range)
        |> OptionExt.return
 
