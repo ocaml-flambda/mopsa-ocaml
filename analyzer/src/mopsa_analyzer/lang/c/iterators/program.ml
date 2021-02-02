@@ -532,14 +532,23 @@ struct
       let globals = List.map fst prog.c_globals in
       (* Get local variables of all functions in the callstack, following the same order *)
       let locals = List.fold_right (fun call acc ->
-          let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
-          f.c_func_local_vars @ f.c_func_parameters @ acc
+                       try
+                         let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
+                         f.c_func_local_vars @ f.c_func_parameters @ acc
+                       with Not_found ->
+                         warn "Q_debug_variables: function %s not found in C definitions" call.Callstack.call_fun_orig_name;
+                         acc
                      ) cs []
       in
       let all_vars = globals @ locals in
       let records = List.fold_left (fun recmap var ->
-                        match vtyp var with
+                        match remove_typedef_qual @@ vtyp var with
                         | T_c_record r ->
+                           StringMap.add r.c_record_unique_name r recmap
+                        | T_c_pointer r when is_c_record_type r ->
+                           let r = match remove_typedef_qual r with
+                             | T_c_record r -> r
+                             | _ -> assert false in
                            StringMap.add r.c_record_unique_name r recmap
                         | _ -> recmap) StringMap.empty all_vars in
       debug "records cheatsheet:@.%a"
