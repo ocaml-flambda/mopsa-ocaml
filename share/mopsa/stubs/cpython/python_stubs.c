@@ -1,3 +1,7 @@
+#undef PyArg_ParseTuple
+#undef PyArg_ParseTupleAndKeywords
+#undef Py_BuildValue
+
 /* // stubs used by the analysis */
 typedef struct exc_data {
     PyObject* exc_state;
