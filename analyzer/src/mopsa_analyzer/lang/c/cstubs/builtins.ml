@@ -88,8 +88,8 @@ struct
   let eval exp man flow =
     match ekind exp with
 
-    | E_stub_builtin_call(BYTES, { ekind = E_addr (addr, _) }) ->
-      man.eval (mk_var (mk_bytes_var addr) exp.erange) flow |>
+    | E_stub_builtin_call(BYTES, { ekind = E_addr (addr, mode) }) ->
+      man.eval (mk_var (mk_bytes_var addr) ~mode:mode exp.erange) flow |>
       OptionExt.return
 
 
