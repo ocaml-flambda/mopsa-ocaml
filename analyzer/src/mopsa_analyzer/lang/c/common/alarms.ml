@@ -278,9 +278,17 @@ let unreachable_c_divide_by_zero_check range man flow =
 
 
 type check      += CHK_C_INTEGER_OVERFLOW
-type alarm_kind += A_c_integer_overflow of expr    (** integer expression *) *
-                                           int_itv (** expression value *) *
-                                           typ     (** overflowed type *) 
+
+type alarm_kind +=
+  (** Overflow raised by integer operations *)
+  | A_c_integer_overflow of expr    (** integer expression *) *
+                            int_itv (** expression value *) *
+                            typ     (** overflowed type *)
+
+  (** Overlow raised by a cast of a pointer to an interger type *)
+  | A_c_pointer_to_integer_overflow of expr (** pointer expression *) *
+                                       typ  (** cast type*)
+
 
 let () =
   register_check (fun next fmt -> function
@@ -291,13 +299,16 @@ let () =
 let () =
   register_alarm {
     check = (fun next -> function
-        | A_c_integer_overflow _      -> CHK_C_INTEGER_OVERFLOW
+        | A_c_integer_overflow _            -> CHK_C_INTEGER_OVERFLOW
+        | A_c_pointer_to_integer_overflow _ -> CHK_C_INTEGER_OVERFLOW
         | a -> next a
       );
     compare = (fun next a1 a2 ->
         match a1, a2 with
         | A_c_integer_overflow(e1,v1,t1), A_c_integer_overflow(e2,v2,t2) ->
           Compare.triple compare_expr compare_int_interval compare_typ (e1,v1,t1) (e2,v2,t2)
+        | A_c_pointer_to_integer_overflow(e1,t1), A_c_pointer_to_integer_overflow(e2,t2) ->
+          Compare.pair compare_expr compare_typ (e1,t1) (e2,t2)
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
@@ -309,6 +320,10 @@ let () =
             pp_const_or_interval v
             (Debug.bold pp_typ) t
             I.fprint type_range
+        | A_c_pointer_to_integer_overflow(e,t) ->
+          fprintf fmt "casting pointer '%a' to '%a' may result in an overflow"
+            (Debug.bold pp_expr) e
+            (Debug.bold pp_typ) t
         | a -> next fmt a
       );
     join = (fun next a1 a2 ->
@@ -329,6 +344,12 @@ let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp typ man input_flow
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
   let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,typ)) cs cexp'.erange in
   Flow.raise_alarm alarm ~bottom:false ~warning man.lattice error_flow
+
+let raise_c_pointer_to_integer_overflow_alarm ?(warning=true) exp typ range man flow =
+  let cs = Flow.get_callstack flow in
+  let exp' = get_orig_expr exp in
+  let alarm = mk_alarm (A_c_pointer_to_integer_overflow(exp',typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:false ~warning man.lattice flow
 
 let safe_c_integer_overflow_check range man flow =
   Flow.add_safe_check CHK_C_INTEGER_OVERFLOW range flow

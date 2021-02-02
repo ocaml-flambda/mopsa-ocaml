@@ -59,7 +59,8 @@ struct
   let universal = Semantic "Universal"
 
   let checks = [ CHK_C_INVALID_POINTER_COMPARE;
-                 CHK_C_INVALID_POINTER_SUB ]
+                 CHK_C_INVALID_POINTER_SUB;
+                 CHK_C_INTEGER_OVERFLOW ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -965,13 +966,25 @@ struct
 
     (* 𝔼⟦ (int)ptr ⟧ *)
     | E_c_cast(p, implicit) when exp |> etyp |> is_c_int_type &&
-                          p   |> etyp |> is_c_pointer_type ->
+                                 p   |> etyp |> is_c_pointer_type ->
       eval_points_to p man flow |> OptionExt.lift (fun evl ->
           evl >>$ fun pt flow ->
           match pt with
           | P_null ->
             Eval.singleton (mk_zero exp.erange) flow
           | P_top | P_invalid | P_block _ | P_fun _ ->
+            (* Check if an overflow is possible by comparing the size of the
+               cast type and the size of `size_t` (which is the size of a pointer). *)
+            let s = sizeof_type exp.etyp in
+            let st = sizeof_type size_type in
+            let flow =
+              if Z.(s < st) then
+                raise_c_pointer_to_integer_overflow_alarm ~warning:true p exp.etyp exp.erange man flow
+              else
+                safe_c_integer_overflow_check exp.erange man flow
+            in
+            (* XXX Returning ⊤ is too coarse! Pointers casted to integers and
+               re-casted again to pointers should be handled more precisely. *)
             man.eval (mk_top exp.etyp exp.erange) flow
         )
 
