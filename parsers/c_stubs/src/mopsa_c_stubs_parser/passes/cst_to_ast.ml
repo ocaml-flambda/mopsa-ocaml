@@ -577,6 +577,21 @@ let visit_local loc prj func =
     | L_new r -> Ast.L_new r.vname
     | L_call (f, args) ->
       let f = find_function f prj in
+      (* Check arguments number *)
+      let given = List.length args in
+      let accepted = Array.length f.content.func_parameters in
+      if not f.content.func_variadic then
+        ( if given <> accepted then
+            Exceptions.panic_at loc.range "function '%s' accepts %d argument%a, but %d given"
+              f.content.func_org_name
+              accepted Debug.plurial_int accepted
+              given )
+      else
+        ( if given < accepted then
+            Exceptions.panic_at loc.range "function '%s' accepts at least %d argument%a, but %d given"
+              f.content.func_org_name
+              accepted Debug.plurial_int accepted
+              given );
       Ast.L_call (f, visit_list visit_expr args prj func)
   in
   Ast.{ lvar; lval }
