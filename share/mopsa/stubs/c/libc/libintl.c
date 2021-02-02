@@ -115,7 +115,7 @@ char *ngettext (const char *__msgid1, const char *__msgid2,
 
 /*$
  * requires: valid_string(__domainname);
- * local: char* r = ngettext(__msgid1, __msgid2);
+ * local: char* r = ngettext(__msgid1, __msgid2, __n);
  * ensures: return == r;
  */
 char *dngettext (const char *__domainname, const char *__msgid1,
@@ -123,7 +123,7 @@ char *dngettext (const char *__domainname, const char *__msgid1,
 
 /*$
  * requires: valid_string(__domainname);
- * local: char* r = ngettext(__msgid1, __msgid2);
+ * local: char* r = ngettext(__msgid1, __msgid2, __n);
  * ensures: return == r;
  */
 char *dcngettext (const char *__domainname, const char *__msgid1,
