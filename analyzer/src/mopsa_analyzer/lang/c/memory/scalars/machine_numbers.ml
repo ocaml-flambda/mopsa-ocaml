@@ -191,8 +191,7 @@ struct
   (** [check_overflow cexp nexp ...] checks whether the C expression
       [cexp] produces an integer overflow and transforms its numeric
       evaluation [nexp] accordingly *)
-  let check_overflow cexp ?(nexp=c2num cexp) man flow =
-    let range = cexp.erange in
+  let check_overflow cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check ?(exp=cexp) raise_alarm =
@@ -209,9 +208,9 @@ struct
           if raise_alarm
           then
             if Itv.meet itv ritv |> Itv.is_bottom then
-              raise_c_integer_overflow_alarm ~warning:false exp nexp typ man flow flow
+              raise_c_integer_overflow_alarm ~warning:false exp nexp typ range man flow flow
             else
-              raise_c_integer_overflow_alarm ~warning:true exp nexp typ man flow flow
+              raise_c_integer_overflow_alarm ~warning:true exp nexp typ range man flow flow
           else flow
         in
         Eval.singleton cexp flow' |>
@@ -265,7 +264,7 @@ struct
       (i) the shift position is positive, and
       (ii) this position does not exceed the size of the shifted value
   *)
-  let check_shift cexp man flow =
+  let check_shift cexp range man flow =
     let t = cexp.etyp in
     let nexp = c2num cexp in
     let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
@@ -276,10 +275,10 @@ struct
     assume cond
       ~fthen:(fun tflow ->
           let tflow = safe_c_shift_check range man tflow in
-          check_overflow cexp ~nexp man tflow
+          check_overflow cexp ~nexp range man tflow
         )
       ~felse:(fun fflow ->
-          let flow' = raise_c_invalid_shift_alarm cexp n man flow fflow in
+          let flow' = raise_c_invalid_shift_alarm cexp n range man flow fflow in
           Eval.empty flow'
         )
       man flow
@@ -333,7 +332,7 @@ struct
       ->
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
-      check_overflow cexp man flow |>
+      check_overflow cexp exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ ~ e ⟧, type(e) = unsigned *)
@@ -374,7 +373,7 @@ struct
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
       let cexp = rebuild_c_expr exp [e;e'] in
-      check_shift cexp man flow |>
+      check_shift cexp exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
@@ -384,7 +383,7 @@ struct
       man.eval e flow >>$? fun e flow ->
       man.eval e' flow >>$? fun e' flow ->
       let cexp = rebuild_c_expr exp [e;e'] in
-      check_overflow cexp man flow |>
+      check_overflow cexp exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧ *)
@@ -445,7 +444,7 @@ struct
       ->
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
-      check_overflow cexp ~nexp:(get_expr_translation "Universal" e) man flow |>
+      check_overflow cexp ~nexp:(get_expr_translation "Universal" e) exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ (float)float ⟧ *)

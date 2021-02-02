@@ -338,11 +338,11 @@ let () =
       );  }
 
 
-let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp typ man input_flow error_flow =
+let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
   let itv = man.ask (mk_int_interval_query nexp) input_flow in
-  let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,typ)) cs cexp'.erange in
+  let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,typ)) cs range in
   Flow.raise_alarm alarm ~bottom:false ~warning man.lattice error_flow
 
 let raise_c_pointer_to_integer_overflow_alarm ?(warning=true) exp typ range man flow =
@@ -407,11 +407,11 @@ let () =
       );
   }
 
-let raise_c_invalid_shift_alarm ?(bottom=true) e shift man input_flow error_flow =
+let raise_c_invalid_shift_alarm ?(bottom=true) e shift range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let shift' = get_orig_expr shift in
   let shift_itv = man.ask (mk_int_interval_query shift) input_flow in
-  let alarm = mk_alarm (A_c_invalid_shift(e,shift',shift_itv)) cs shift.erange in
+  let alarm = mk_alarm (A_c_invalid_shift(e,shift',shift_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 let safe_c_shift_check range man flow =
