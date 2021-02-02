@@ -839,7 +839,7 @@ unsigned long long int wcstouq (const wchar_t *__restrict __nptr,
                                 int __base);
 
 /*$
- * local: long r = wcstol(__nptr, __endptr, __base, __loc);
+ * local: long r = wcstol(__nptr, __endptr, __base);
  * ensures: return == r;
  */
 long int wcstol_l (const wchar_t *__restrict __nptr,
@@ -847,7 +847,7 @@ long int wcstol_l (const wchar_t *__restrict __nptr,
                    locale_t __loc);
 
 /*$
- * local: unsigned long int r = wcstoul(__nptr, __endptr, __base, __loc);
+ * local: unsigned long int r = wcstoul(__nptr, __endptr, __base);
  * ensures: return == r;
  */
 unsigned long int wcstoul_l (const wchar_t *__restrict __nptr,
@@ -855,7 +855,7 @@ unsigned long int wcstoul_l (const wchar_t *__restrict __nptr,
                              int __base, locale_t __loc);
 
 /*$
- * local: long long int r = wcstoll(__nptr, __endptr, __base, __loc);
+ * local: long long int r = wcstoll(__nptr, __endptr, __base);
  * ensures: return == r;
  */
 long long int wcstoll_l (const wchar_t *__restrict __nptr,
@@ -863,7 +863,7 @@ long long int wcstoll_l (const wchar_t *__restrict __nptr,
                          int __base, locale_t __loc);
 
 /*$
- * local: unsigned long long int r = wcstoull(__nptr, __endptr, __base, __loc);
+ * local: unsigned long long int r = wcstoull(__nptr, __endptr, __base);
  * ensures: return == r;
  */
 unsigned long long int wcstoull_l (const wchar_t *__restrict __nptr,
@@ -871,21 +871,21 @@ unsigned long long int wcstoull_l (const wchar_t *__restrict __nptr,
                                    int __base, locale_t __loc);
 
 /*$
- * local: double r = wcstod(__nptr, __endptr, __loc);
+ * local: double r = wcstod(__nptr, __endptr);
  * ensures: return == r;
  */
 double wcstod_l (const wchar_t *__restrict __nptr,
                  wchar_t **__restrict __endptr, locale_t __loc);
 
 /*$
- * local: float r = wcstof(__nptr, __endptr, __loc);
+ * local: float r = wcstof(__nptr, __endptr);
  * ensures: return == r;
  */
 float wcstof_l (const wchar_t *__restrict __nptr,
                 wchar_t **__restrict __endptr, locale_t __loc);
 
 /*$
- * local: long double r = wcstold(__nptr, __endptr, __loc);
+ * local: long double r = wcstold(__nptr, __endptr);
  * ensures: return == r;
  */
 long double wcstold_l (const wchar_t *__restrict __nptr,
