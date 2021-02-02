@@ -53,7 +53,7 @@ struct
   let mk_lval base offset typ mode range =
     let base_addr = match base.base_kind with
       | Var v -> mk_c_address_of (mk_var v ~mode range) range
-      | Addr a -> mk_addr a range
+      | Addr a -> mk_addr ~mode a range
       | String (s,kind,t) -> mk_c_string s ~kind range in
     let addr =
       mk_c_cast

@@ -64,7 +64,7 @@ let eval_alloc ?(mode=STRONG) man kind range flow =
   man.eval exp flow >>$
     fun exp flow ->
     match ekind exp with
-    | E_addr (addr) -> Cases.singleton addr flow
+    | E_addr (addr, _) -> Cases.singleton addr flow
     | _ -> panic "eval_alloc: allocation returned a non-address express %a" pp_expr exp
 
 (*==========================================================================*)

@@ -78,10 +78,6 @@ module Domain =
       | E_py_object (a, _) -> var_of_addr a
       | _ -> assert false
 
-    let addr_of_expr exp = match ekind exp with
-      | E_addr a -> a
-      | _ -> assert false
-
     let checks = []
 
 
@@ -156,7 +152,7 @@ module Domain =
           ) range in
         man.eval   addr_func flow >>$
           (fun eaddr_list flow ->
-            let addr_func = addr_of_expr eaddr_list in
+            let addr_func = Addr.from_expr eaddr_list in
             let func_var = var_of_addr addr_func in
             man.exec (mk_assign (mk_var func_var range) func range) flow >>%
             Eval.singleton (mk_py_object (addr_func, None) range)

@@ -134,7 +134,7 @@ let is_base_expr e =
 let expr_to_base e =
   match ekind e with
   | E_var(v,_)                    -> mk_var_base v
-  | E_addr a                      -> mk_addr_base a
+  | E_addr (a,_)                  -> mk_addr_base a
   | E_constant (C_c_string (s,_)) -> mk_string_base s
   | _ -> assert false
 

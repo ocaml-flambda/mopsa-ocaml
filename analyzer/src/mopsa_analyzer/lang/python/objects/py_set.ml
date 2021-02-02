@@ -87,10 +87,6 @@ struct
     | E_py_object (a, _) -> var_of_addr a
     | _ -> assert false
 
-  let addr_of_expr exp = match ekind exp with
-    | E_addr a -> a
-    | _ -> Exceptions.panic "%a@\n" pp_expr exp
-
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
@@ -100,7 +96,7 @@ struct
       let addr_set = mk_alloc_addr A_py_set range in
       man.eval   addr_set flow >>$
  (fun eaddr_set flow ->
-          let addr_set = addr_of_expr eaddr_set in
+          let addr_set = Addr.from_expr eaddr_set in
           let els_var = var_of_addr addr_set in
           let flow = List.fold_left (fun acc el ->
                          acc >>% man.exec   (mk_assign (mk_var ~mode:(Some WEAK) els_var range) el range)) (Post.return flow) ls in
@@ -160,7 +156,7 @@ struct
            let a = mk_alloc_addr (Py_list.A_py_iterator ("set_iterator", None)) range in
            man.eval   a flow >>$
  (fun eaddr_it flow ->
-               let addr_it = match ekind eaddr_it with | E_addr a -> a | _ -> assert false in
+               let addr_it = Addr.from_expr eaddr_it in
                man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) set range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
@@ -229,34 +225,34 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
-    | S_remove {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_set} as a, _)} ->
        let va = var_of_addr a in
        flow |>
          man.exec   (mk_remove_var va range) |>
          OptionExt.return
 
-    | S_invalidate {ekind = E_addr ({addr_kind = A_py_set} as a)} ->
+    | S_invalidate {ekind = E_addr ({addr_kind = A_py_set} as a, _)} ->
        let va = var_of_addr a in
        flow |>
          man.exec   (mk_remove_var va range) |>
          OptionExt.return
 
-    | S_fold ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
+    | S_fold ({ekind = E_addr ({addr_kind = A_py_set} as a, _)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_set} as a', _) -> var_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec   (mk_fold_var va vas range) flow |>  OptionExt.return
 
-    | S_expand ({ekind = E_addr ({addr_kind = A_py_set} as a)}, addrs) ->
+    | S_expand ({ekind = E_addr ({addr_kind = A_py_set} as a, _)}, addrs) ->
        let va = var_of_addr a in
        let vas = List.map (fun ea' -> match ekind ea' with
-                                      | E_addr ({addr_kind = A_py_set} as a') -> var_of_addr a'
+                                      | E_addr ({addr_kind = A_py_set} as a', _) -> var_of_addr a'
                                       | _ -> assert false) addrs in
        man.exec   (mk_expand_var va vas range) flow |> OptionExt.return
 
 
-    | S_rename ({ekind = E_addr ({addr_kind = A_py_set} as a)}, {ekind = E_addr a'}) ->
+    | S_rename ({ekind = E_addr ({addr_kind = A_py_set} as a, _)}, {ekind = E_addr (a', _)}) ->
       let va = var_of_addr a in
       let va' = var_of_addr a' in
       debug "renaming %a into %a@\n" pp_var va pp_var va';

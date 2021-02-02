@@ -77,10 +77,8 @@ struct
           | cls :: tl ->
             let c = fst @@ object_of_expr cls in
             man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
- (fun eaddr flow ->
-                let addr = match ekind eaddr with
-                  | E_addr a -> a
-                  | _ -> assert false in
+              (fun eaddr flow ->
+                let addr = Addr.from_expr eaddr in
                 man.exec   (mk_add eaddr range) flow >>%
                 Eval.singleton (mk_py_object (addr, None) range)
               )
