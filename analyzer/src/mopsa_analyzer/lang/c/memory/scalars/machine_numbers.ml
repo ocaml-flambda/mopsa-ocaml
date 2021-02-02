@@ -401,7 +401,7 @@ struct
       let cexp' =
         match expr_to_z nexp with
         | None   -> cexp
-        | Some z -> mk_z z cexp.erange in
+        | Some z -> mk_z z ~typ:cexp.etyp cexp.erange in
       Eval.singleton cexp' flow |>
       Eval.add_translation "Universal" nexp |>
       OptionExt.return
