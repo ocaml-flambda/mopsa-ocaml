@@ -69,7 +69,6 @@ let set_ctx ctx cases =
   if ctx == get_ctx cases then
     cases
   else
-    (* FIXME: do we need to perform the update in every flow *)
     {cases=Dnf.map
       (fun (case,flow) -> (case, Flow.set_ctx ctx flow))
       cases.cases;
@@ -441,9 +440,7 @@ let remove_duplicates (compare_case: 'r case -> 'r case -> int) (lattice: 'a Lat
       conj'::remove_duplicates_in_disj tl'
   in
   let cases' = Dnf.from_list (remove_duplicates_in_disj (Dnf.to_list cases.cases)) in
-  (* FIXME: normalize needed? *)
-  normalize_ctx {cases=cases';
-                 ctx=cases.ctx}
+  {cases with cases=cases'}
 
 let remove_duplicate_results compare_results lattice cases =
   remove_duplicates
@@ -480,7 +477,7 @@ let bind_opt
          ctx',cases''.cases
       )
       (get_ctx cases) cases.cases in
-  set_ctx ctx {cases=ret; ctx} |>
+  set_ctx ctx {cases with cases = ret} |>
   OptionExt.return
 
 
@@ -534,7 +531,7 @@ let bind_conjunction
          let ctx' = get_ctx cases' in
          ctx',cases'.cases
       ) (get_ctx cases) cases.cases in
-  set_ctx ctx {cases=ret; ctx}
+  set_ctx ctx {cases with cases=ret}
 
 let bind_conjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)
@@ -581,7 +578,7 @@ let bind_disjunction
          let ctx' = get_ctx cases' in
          ctx',cases'.cases
       ) (get_ctx cases) cases.cases in
-  set_ctx ctx {cases=ret; ctx}
+  set_ctx ctx {cases with cases=ret}
 
 let bind_disjunction_result
     (f:'r list -> 'a flow -> ('a,'s) cases)
