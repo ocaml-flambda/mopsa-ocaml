@@ -754,8 +754,9 @@ struct
       OptionExt.return
 
     | S_assume(p) when is_c_pointer_type p.etyp ->
-      assume_ne p (mk_c_null stmt.srange) stmt.srange man flow |>
-      OptionExt.return
+      man.eval p flow >>$ (fun p flow ->
+        assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
+      |> OptionExt.return
 
     | _ -> None
 
