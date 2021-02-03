@@ -28,19 +28,18 @@
 #include <errno.h>
 #include "mopsa_libc_utils.h"
 
-/*$$
+/*$=
  * predicate no_overlap(s1, n1, s2, n2):
- *   n1 <= 0 or n2 <= 0 or
- *   base(s1) != base(s2) or
- *   (unsigned char*)s1 >= (unsigned char*)s2 + n2 or
- *   (unsigned char*)s2 >= (unsigned char*)s1 + n1
- * ;
+ *   if (n1 > 0 and n2 > 0 and base(s1) == base(s2)) then
+ *     (unsigned char*)s1 >= (unsigned char*)s2 + n2 or
+ *     (unsigned char*)s2 >= (unsigned char*)s1 + n1
+ *   end;
  */
 
 /*$
  * requires: no_overlap(__src, __len, __dest, __len);
- * requires: valid_bytes(__src, __len);
- * requires: valid_bytes(__dest, __len);
+ * requires: valid_bytes_or_fail(__src, __len);
+ * requires: valid_bytes_or_fail(__dest, __len);
  * assigns: ((unsigned char*)__dest)[0, __len);
  * ensures: forall size_t i in [0, __len): (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  * ensures: return == __dest;
@@ -50,14 +49,14 @@ void *memcpy (void *__restrict __dest, const void *__restrict __src,
 
 
 /*$
- * alias: memcpy;
+ * #alias memcpy;
  */
 void *__builtin_memcpy (void *__restrict __dest, const void *__restrict __src,
                         size_t __len);
 
 /*$
- * requires: valid_bytes(__src, __len);
- * requires: valid_bytes(__dest, __len);
+ * requires: valid_bytes_or_fail(__src, __len);
+ * requires: valid_bytes_or_fail(__dest, __len);
  * assigns: ((unsigned char*)__dest)[0, __len);
  * ensures: forall size_t i in [0, __len): (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  * ensures: return == __dest;
@@ -67,8 +66,8 @@ void *memmove (void *__dest, const void *__src, size_t __len);
 
 /*$
  * requires: no_overlap(__src, __n, __dest, __n);
- * requires: valid_bytes(__src, __n);
- * requires: valid_bytes(__dest, __n);
+ * requires: valid_bytes_or_fail(__src, __n);
+ * requires: valid_bytes_or_fail(__dest, __n);
  * assigns: ((unsigned char*)__dest)[0, __n);
  *
  * case "notfound" {
@@ -95,7 +94,7 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
 		      int __c, size_t __n);
 
 /*$
- * requires: valid_bytes(__dest, __len);
+ * requires: valid_bytes_or_fail(__dest, __len);
  * assigns: ((unsigned char*)__dest)[0, __len);
  * ensures: forall size_t i in [0, __len): (((unsigned char*)__dest)[i])' == __ch;
  * ensures: return == __dest;
@@ -104,8 +103,8 @@ void *memset (void *__dest, int __ch, size_t __len);
 
 
 /*$
- * requires: valid_bytes(__s1, __n);
- * requires: valid_bytes(__s2, __n);
+ * requires: valid_bytes_or_fail(__s1, __n);
+ * requires: valid_bytes_or_fail(__s2, __n);
  *
  * case "equal" {
  *   assumes: forall size_t i in [0, __n): ((unsigned char*)__s1)[i] == ((unsigned char*)__s2)[i];
@@ -125,7 +124,7 @@ void *memset (void *__dest, int __ch, size_t __len);
 int memcmp (const void *__s1, const void *__s2, size_t __n);
 
 /*$
- * requires: valid_bytes(__s, __n);
+ * requires: valid_bytes_or_fail(__s, __n);
  *
  * case "found" {
  *   assumes: exists size_t i in [0, __n): ((unsigned char*)__s)[i] == (unsigned char)__c;
@@ -145,7 +144,7 @@ void *memchr (const void *__s, int __c, size_t __n);
 
 
 /*$
- * requires: valid_ptr(__s);
+ * requires: valid_ptr_or_fail(__s);
  * requires: exists size_t i in [0, (bytes(__s) - offset(__s))): ((unsigned char*)__s)[i] == (unsigned char)__c;
  * ensures:  exists size_t i in [0, (bytes(__s) - offset(__s))): (
  *             ((unsigned char*)__s)[i] == (unsigned char)__c and
@@ -157,13 +156,13 @@ void *rawmemchr (const void *__s, int __c);
 
 
 /*$
- * alias: rawmemchr;
+ * #alias rawmemchr;
  */
 void *__rawmemchr (const void *__s, int __c);
 
 
 /*$
- * requires: valid_bytes(__s, __n);
+ * requires: valid_bytes_or_fail(__s, __n);
  *
  * case "found" {
  *   assumes: exists size_t i in [0, __n): ((unsigned char*)__s)[i] == (unsigned char)__c;
@@ -184,7 +183,7 @@ void *memrchr (const void *__s, int __c, size_t __n);
 
 
 /*$
- * requires: valid_string(__s);
+ * requires: valid_string_or_fail(__s);
  * ensures:  return in [0, size(__s) - offset(__s));
  * ensures:  __s[return] == 0;
  * ensures:  forall size_t j in [0, return): __s[j] != 0;
@@ -192,13 +191,13 @@ void *memrchr (const void *__s, int __c, size_t __n);
 size_t strlen (const char *__s);
 
 /*$
- * alias: strlen;
+ * #alias strlen;
  */
 size_t __builtin_strlen (const char *__s);
 
 
 /*$
- * requires: valid_bytes(__string, __maxlen) or valid_string(__string);
+ * requires: valid_bytes_or_fail(__string, __maxlen) or valid_string_or_fail(__string);
  *
  * case "string-smaller-than-maxlen" {
  *   assumes: valid_substring(__string, __maxlen);
@@ -217,7 +216,7 @@ size_t strnlen (const char *__string, size_t __maxlen);
 /*$
  * local: size_t src_len = strlen(__src);
  * requires: no_overlap(__src, src_len + 1, __dest, src_len + 1);
- * requires: valid_bytes(__dest, src_len + 1);
+ * requires: valid_bytes_or_fail(__dest, src_len + 1);
  * assigns: __dest[0, src_len];
  * ensures: forall size_t i in [0, src_len]: (__dest[i])' == __src[i];
  * ensures: return == __dest;
@@ -226,8 +225,8 @@ char *strcpy (char *__restrict __dest, const char *__restrict __src);
 
 
 /*$
- * requires: valid_bytes(__src, __len) or valid_string(__src);
- * requires: valid_bytes(__dest, __len);
+ * requires: valid_bytes_or_fail(__src, __len) or valid_string_or_fail(__src);
+ * requires: valid_bytes_or_fail(__dest, __len);
  * local: size_t src_len = strnlen(__src, __len);
  * requires: no_overlap(__src, src_len, __dest, src_len);
  * assigns: __dest[0, __len);
@@ -242,7 +241,7 @@ char *strncpy (char *__restrict __dest,
  * local: size_t src_len = strlen(__src);
  * local: size_t dest_len = strlen(__dest);
  * requires: no_overlap(__src, src_len + 1, __dest, dest_len + src_len + 1);
- * requires: valid_bytes(__dest, dest_len + src_len + 1);
+ * requires: valid_bytes_or_fail(__dest, dest_len + src_len + 1);
  * assigns: __dest[0, dest_len + src_len];
  * ensures: forall size_t i in [0, dest_len): (__dest[i])' == __dest[i];
  * ensures: forall size_t i in [0, src_len]: (__dest[dest_len + i])' == __src[i];
@@ -254,7 +253,7 @@ char *strcat (char *__restrict __dest, const char *__restrict __src);
  * local: size_t src_nlen = strnlen(__src, __len);
  * local: size_t dest_len = strlen(__dest);
  * requires: no_overlap(__src, src_nlen + 1, __dest, dest_len + src_nlen + 1);
- * requires: valid_bytes(__dest, dest_len + src_nlen + 1);
+ * requires: valid_bytes_or_fail(__dest, dest_len + src_nlen + 1);
  * assigns: __dest[0, dest_len + src_nlen];
  * ensures: forall size_t i in [0, dest_len): (__dest[i])' == __dest[i];
  * ensures: forall size_t i in [0, src_nlen): (__dest[dest_len + i])' == __src[i];
@@ -265,40 +264,40 @@ char *strncat (char *__restrict __dest, const char *__restrict __src,
                size_t __len);
 
 /*$
- * requires: valid_string(__s1);
- * requires: valid_string(__s2);
+ * requires: valid_string_or_fail(__s1);
+ * requires: valid_string_or_fail(__s2);
  */
 int strcmp (const char *__s1, const char *__s2);
 
 /*$
- * alias: strcmp;
+ * #alias strcmp;
  */
 int __builtin_strcmp (const char *__s1, const char *__s2);
 
 
 /*$
- * requires: valid_ptr(__s1);
- * requires: valid_ptr(__s2);
- * requires: valid_bytes(__s1, __n) or valid_string(__s1);
- * requires: valid_bytes(__s2, __n) or valid_string(__s2);
+ * requires: valid_ptr_or_fail(__s1);
+ * requires: valid_ptr_or_fail(__s2);
+ * requires: valid_bytes_or_fail(__s1, __n) or valid_string_or_fail(__s1);
+ * requires: valid_bytes_or_fail(__s2, __n) or valid_string_or_fail(__s2);
  */
 int strncmp (const char *__s1, const char *__s2, size_t __n);
 
 /*$
- * alias: strncmp;
+ * #alias strncmp;
  */
 int __builtin_strncmp (const char *__s1, const char *__s2, size_t __n);
 
 
 /*$
- * requires: valid_string(__s1);
- * requires: valid_string(__s2);
+ * requires: valid_string_or_fail(__s1);
+ * requires: valid_string_or_fail(__s2);
  */
 int strcoll (const char *__s1, const char *__s2);
 
 /*$
- * requires: valid_string(__src);
- * requires: valid_bytes(__dest, __n);
+ * requires: valid_string_or_fail(__src);
+ * requires: valid_bytes_or_fail(__dest, __n);
  * requires: no_overlap(__src, __n, __dest, __n);
  * assigns: __dest[0, __n);
  * ensures: return >= 0 and (return < __n implies (__dest[return])' == 0);
@@ -307,14 +306,14 @@ size_t strxfrm (char *__restrict __dest,
                 const char *__restrict __src, size_t __n);
 
 /*$
- * requires: valid_string(__s1);
- * requires: valid_string(__s2);
+ * requires: valid_string_or_fail(__s1);
+ * requires: valid_string_or_fail(__s2);
  */
 int strcoll_l (const char *__s1, const char *__s2, locale_t __l);
 
 /*$
- * requires: valid_string(__src);
- * requires: valid_bytes(__dest, __n);
+ * requires: valid_string_or_fail(__src);
+ * requires: valid_bytes_or_fail(__dest, __n);
  * requires: no_overlap(__src, __n, __dest, __n);
  * assigns: __dest[0, __n);
  * ensures: return >= 0 and (return < __n implies (__dest[return])' == 0);
@@ -340,7 +339,7 @@ size_t strxfrm_l (char *__dest, const char *__src, size_t __n, locale_t __l);
 char *strdup (const char *__s);
 
 /*$
- * alias: strdup;
+ * #alias strdup;
  */
 char *__strdup (const char *__s);
 
@@ -387,7 +386,7 @@ char *strndup (const char *__s, size_t __n);
 char *strchr (const char *__s, int __c);
 
 /*$
- * alias: strchr;
+ * #alias strchr;
  */
 char *__builtin_strchr (const char *__s, int __c);
 
@@ -434,22 +433,22 @@ char *strchrnul (const char *__s, int __c);
 //#endif
 
 /*$
- * requires: valid_string(__reject);
+ * requires: valid_string_or_fail(__reject);
  * local: size_t len = strlen(__s);
  * ensures: return in [0, len];
  */
 size_t strcspn (const char *__s, const char *__reject);
 
 /*$
- * requires: valid_string(__accept);
+ * requires: valid_string_or_fail(__accept);
  * local: size_t len = strlen(__s);
  * ensures: return in [0, len];
  */
 size_t strspn (const char *__s, const char *__accept);
 
 /*$
- * requires: valid_string(__s);
- * requires: valid_string(__accept);
+ * requires: valid_string_or_fail(__s);
+ * requires: valid_string_or_fail(__accept);
  * ensures: return == NULL or in_string(return, __s);
  */
 char *strpbrk (const char *__s, const char *__accept);
@@ -473,8 +472,8 @@ char *strtok (char *__restrict __s, const char *__restrict __delim);
 
 
 /*$
- * requires: valid_string(__delim);
- * requires: valid_ptr(__save_ptr);
+ * requires: valid_string_or_fail(__delim);
+ * requires: valid_ptr_or_fail(__save_ptr);
  *
  * case "first" {
  *   assumes: __s != NULL;
@@ -508,7 +507,7 @@ char *__strtok_r (char *__restrict __s,
 //#ifdef __USE_POSIX
 
 /*$
- * alias: __strtok_r;
+ * #alias __strtok_r;
  */
 char *strtok_r (char *__restrict __s, const char *__restrict __delim,
                 char **__restrict __save_ptr);
@@ -530,8 +529,8 @@ char *strcasestr (const char *__haystack, const char *__needle);
 //#ifdef __USE_GNU
 
 /*$
- * requires: valid_bytes(__haystack, __haystacklen);
- * requires: valid_bytes(__needle, __needlelen);
+ * requires: valid_bytes_or_fail(__haystack, __haystacklen);
+ * requires: valid_bytes_or_fail(__needle, __needlelen);
  * ensures: return == NULL or 
  *          (__haystacklen >= __needlelen and 
  *            in_bytes(return, __haystack, __haystacklen - __needlelen));
@@ -558,7 +557,7 @@ char *strerror (int __errnum);
 #if defined __USE_XOPEN2K && !defined __USE_GNU
 
 /*$
- * requires: valid_bytes(__buf, __buflen);
+ * requires: valid_bytes_or_fail(__buf, __buflen);
  * assigns: __buf[0, __buflen);
  *  assigns: _errno;
  * ensures: valid_primed_substring(__buf, __buflen);
@@ -571,7 +570,7 @@ int strerorr_r (int __errnum, char *__buf, size_t __buflen);
  * assigns: _errno;
  *
  * case "buf" {
- *   requires: valid_bytes(__buf, __buflen);
+ *   requires: valid_bytes_or_fail(__buf, __buflen);
  *   assigns: __buf[0, __buflen);
  *   ensures: valid_primed_substring(__buf, __buflen);
  *   ensures: return == __buf;
@@ -600,14 +599,14 @@ char *strerror_l (int __errnum, locale_t __l);
 //#ifdef __USE_MISC
 
 /*$
- * requires: valid_bytes(__s, __n);
+ * requires: valid_bytes_or_fail(__s, __n);
  * assigns: ((unsigned char*)__s)[0, __n);
  * ensures: forall size_t i in [0, __n): (((unsigned char*)__s)[i])' == 0;
  */
 void explicit_bzero (void *__s, size_t __n);
 
 /*$
- * requires: null_or_valid_ptr(__stringp);
+ * requires: null_or_valid_ptr_or_fail(__stringp);
  *
  * case "nop" {
  *   assumes: __stringp == NULL;
@@ -616,7 +615,7 @@ void explicit_bzero (void *__s, size_t __n);
  *
  * case "op" {
  *   assumes: __stringp != NULL;
- *   requires: valid_string(__delim);
+ *   requires: valid_string_or_fail(__delim);
  *   local: size_t l = strlen(*__stringp);
  *   assigns: (*__stringp)[0, l);
  *   ensures: (*__stringp)' == NULL or in_string((*__stringp)',*__stringp);
@@ -645,7 +644,7 @@ char *strsignal (int __sig);
 /*$
  * local: size_t src_len = strlen(__src);
  * requires: no_overlap(__src, src_len + 1, __dest, src_len + 1);
- * requires: valid_bytes(__dest, src_len + 1);
+ * requires: valid_bytes_or_fail(__dest, src_len + 1);
  * assigns: __dest[0, src_len];
  * ensures: forall size_t i in [0, src_len]: (__dest[i])' == __src[i];
  * ensures: return == __dest + src_len;
@@ -653,8 +652,8 @@ char *strsignal (int __sig);
 char *stpcpy (char *__restrict __dest, const char *__restrict __src);
 
 /*$
- * requires: valid_bytes(__src, __n) or valid_string(__src);
- * requires: valid_bytes(__dest, __n);
+ * requires: valid_bytes_or_fail(__src, __n) or valid_string_or_fail(__src);
+ * requires: valid_bytes_or_fail(__dest, __n);
  * assigns: __dest[0, __n);
  * local: size_t src_len = strnlen(__src, __n);
  * ensures: forall size_t i in [0, src_len): (__dest[i])' == __src[i];
@@ -669,8 +668,8 @@ char *stpncpy (char *__restrict __dest,
 //#ifdef __USE_GNU
 
 /*$
- * requires: valid_string(__s1);
- * requires: valid_string(__s2);
+ * requires: valid_string_or_fail(__s1);
+ * requires: valid_string_or_fail(__s2);
  */
 int strverscmp (const char *__s1, const char *__s2);
 
@@ -682,7 +681,7 @@ int strverscmp (const char *__s1, const char *__s2);
 char *strfry (char *__string);
 
 /*$
- * requires: valid_bytes(__s, __n);
+ * requires: valid_bytes_or_fail(__s, __n);
  * assigns: ((unsigned char*)__s)[0, __n);
  * ensures: return == __s;
  */

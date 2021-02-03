@@ -242,7 +242,7 @@ struct
   (** Set the minimal size of the argument block *)
   let set_arg_min_size arg min range man flow =
     let max = snd (rangeof ul) in
-    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES arg ~etyp:ul range) min (mk_z max range ) range) range) flow
+    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES [arg] ~etyp:ul range) min (mk_z max range ) range) range) flow
 
   (** Allocate an address for a symbolic argument *)
   let alloc_symbolic_arg range man flow =
@@ -277,7 +277,7 @@ struct
     man.exec (mk_add argv range) flow >>% fun flow ->
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
-    man.eval (mk_stub_builtin_call BYTES argv ~etyp:ul range) flow >>$ fun bytes flow ->
+    man.eval (mk_stub_builtin_call BYTES [argv] ~etyp:ul range) flow >>$ fun bytes flow ->
     let size = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in
     man.exec (mk_assign bytes (mk_z size range) range) flow >>% fun flow ->
 
@@ -363,7 +363,7 @@ struct
     man.exec (mk_assign argvv argv range) flow >>% fun flow ->
 
     (* Initialize its size to argc + 1 *)
-    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, argv)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [argv])) range ~etyp:ul) flow >>$ fun bytes flow ->
     man.eval argc flow >>$ fun scalar_argc flow ->
     man.exec (mk_assign bytes (mul
                                  (mk_z (sizeof_type (T_c_pointer s8)) range)
@@ -377,7 +377,7 @@ struct
     alloc_symbolic_arg range man flow >>$ fun arg flow ->
 
     (* Initialize the size of the argument *)
-    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, arg)) range ~etyp:ul) flow >>$ fun bytes flow ->
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [arg])) range ~etyp:ul) flow >>$ fun bytes flow ->
     man.exec (mk_assign bytes (mk_z (rangeof s32 |> snd) range) range) flow >>% fun flow ->
 
     (* Ensure that the argument is a valid string with at least one character *)

@@ -30,10 +30,8 @@ type stub = section list with_range
 (** ***************** *)
 
 and section =
-  | S_predicate of predicate with_range
   | S_case      of case with_range
   | S_leaf      of leaf
-  | S_alias     of alias with_range
 
 and leaf =
   | S_local     of local with_range
@@ -48,8 +46,6 @@ and case = {
   case_label     : string;
   case_body      : leaf list;
 }
-
-and alias = string
 
 (** {2 Stub leaf sections} *)
 (** ********************** *)
@@ -77,12 +73,6 @@ and assigns = {
 
 and free = expr with_range
 
-and predicate = {
-  predicate_var  : var;
-  predicate_args : var list;
-  predicate_body : formula with_range;
-}
-
 and message = {
   message_kind: message_kind;
   message_body: string;
@@ -91,7 +81,6 @@ and message = {
 and message_kind =
   | WARN
   | UNSOUND
-  | ALARM
 
 (** {2 Formulas} *)
 (** ************ *)
@@ -104,9 +93,8 @@ and formula =
   | F_forall    of var * c_qual_typ * set * formula with_range
   | F_exists    of var * c_qual_typ * set * formula with_range
   | F_in        of expr with_range * set
-  | F_predicate of var * expr with_range list
-
-
+  | F_otherwise of formula with_range * expr with_range
+  | F_if        of formula with_range * formula with_range * formula with_range
 
 (** {2 Expressions} *)
 (** *************** *)
@@ -132,7 +120,10 @@ and expr =
   | E_member    of expr with_range * string
   | E_arrow     of expr with_range * string
 
-  | E_builtin_call  of builtin * expr with_range
+  | E_conditional of expr with_range * expr with_range * expr with_range
+
+  | E_builtin_call  of builtin * expr with_range list
+  | E_raise         of string
 
   | E_sizeof_type   of c_qual_typ with_range
   | E_sizeof_expr   of expr with_range
@@ -206,11 +197,11 @@ and builtin =
   | BYTES
   | OFFSET
   | BASE
-  | VALID_PTR
   | VALID_FLOAT
   | FLOAT_INF
   | FLOAT_NAN
   | ALIVE
+  | RESOURCE
 
 
 (** {2 Types} *)
@@ -275,10 +266,6 @@ let merge_c_qual q1 q2 =
     c_qual_volatile = q1.c_qual_volatile || q2.c_qual_volatile;
     c_qual_restrict = q1.c_qual_restrict || q2.c_qual_restrict; }
 
-let is_alias (cst:stub) : bool =
-  match cst.content with
-  | [ S_alias _ ] -> true
-  | _ -> false
 
 (** {2 Pretty printers} *)
 (** ******************* *)
@@ -297,11 +284,11 @@ let pp_builtin fmt f =
   | INDEX -> pp_print_string fmt "index"
   | BASE   -> pp_print_string fmt "base"
   | PRIMED -> pp_print_string fmt "primed"
-  | VALID_PTR -> pp_print_string fmt "valid_ptr"
   | VALID_FLOAT -> pp_print_string fmt "valid_float"
   | FLOAT_INF   -> pp_print_string fmt "float_inf"
   | FLOAT_NAN   -> pp_print_string fmt "float_nan"
   | ALIVE       -> pp_print_string fmt "alive"
+  | RESOURCE    -> pp_print_string fmt "resource"
 
 let pp_list pp sep fmt l =
   pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
@@ -326,10 +313,12 @@ let rec pp_expr fmt exp =
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+  | E_conditional(c,e1,e2) -> fprintf fmt "%a?%a:%a" pp_expr c pp_expr e1 pp_expr e2
+  | E_builtin_call(f, args) -> fprintf fmt "%a(%a)" pp_builtin f (pp_list pp_expr ", ") args
   | E_sizeof_type t -> fprintf fmt "sizeof(%a)" pp_c_qual_typ t.content
   | E_sizeof_expr e -> fprintf fmt "sizeof(%a)" pp_expr e
   | E_return -> pp_print_string fmt "return"
+  | E_raise msg -> fprintf fmt "raise(\"%s\")" msg
 
 and pp_int_suffix fmt =
   function
@@ -418,8 +407,9 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, t, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
   | F_exists (x, t, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ t pp_var x pp_set set pp_formula f
-  | F_predicate (p, params) -> fprintf fmt "%a(%a)" pp_var p (pp_list pp_expr "@., ") params
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
+  | F_otherwise(f,e) -> fprintf fmt "%a otherwise %a" pp_formula f pp_expr e
+  | F_if (c,f1,f2) -> fprintf fmt "if %a then %a else %a end" pp_formula c pp_formula f1 pp_formula f2
 
 and pp_log_binop fmt =
   function
@@ -456,13 +446,6 @@ and pp_local_value fmt v =
   | L_new resource -> fprintf fmt "new %a" pp_resource resource
   | L_call (f, args) -> fprintf fmt "%a(%a)" pp_var f.content (pp_list pp_expr ", ") args
 
-
-let pp_predicate fmt (predicate:predicate with_range) =
-  fprintf fmt "predicate %a(%a): @[%a@];"
-    pp_var predicate.content.predicate_var
-    (pp_list pp_var ", ") predicate.content.predicate_args
-    pp_formula predicate.content.predicate_body
-
 let pp_requires fmt requires =
   fprintf fmt "requires : @[%a@];" pp_formula requires.content
 
@@ -483,7 +466,6 @@ let pp_free fmt free =
 let pp_message fmt msg =
   match msg.content.message_kind with
   | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
-  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
   | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf fmt sec =
@@ -501,15 +483,10 @@ let pp_case fmt case =
     case.case_label
     (pp_list pp_leaf "@\n") case.case_body
 
-let pp_alias fmt alias =
-  fprintf fmt "alias: %s;" alias.content
-
 let pp_section fmt sec =
   match sec with
   | S_leaf leaf -> pp_leaf fmt leaf
   | S_case case -> pp_case fmt case.content
-  | S_predicate pred -> pp_predicate fmt pred
-  | S_alias alias -> pp_alias fmt alias
 
 let pp_sections fmt secs =
   pp_print_list

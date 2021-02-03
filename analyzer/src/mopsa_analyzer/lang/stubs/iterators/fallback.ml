@@ -33,7 +33,7 @@ struct
 
   include GenStatelessDomainId(struct let name = "stubs.iterators.fallback" end)
 
-  let checks = [CHK_STUB_INVALID_REQUIRES]
+  let checks = []
 
   let init prog man flow = flow
   let ask query man flow = None
@@ -73,31 +73,6 @@ struct
     let efalse = exec_assume_quants nquants ncond range man flow >>% fun flow -> Eval.singleton (mk_false range) flow  in
     Eval.join etrue efalse
 
-  let exec_requires cond range man flow =
-    assume cond
-      ~fthen:(fun flow ->
-          safe_stub_requires range man flow |>
-          Post.return
-        )
-      ~felse:(fun flow ->
-          raise_stub_invalid_requires cond range man flow |>
-          Post.return
-        )
-      ~fnone:(fun flow ->
-          unreachable_stub_requires range man flow |>
-          Cases.empty
-        )
-      man flow
-
-
-  let exec stmt man flow =
-    match skind stmt with
-    | S_stub_requires(cond) ->
-      exec_requires cond stmt.srange man flow |>
-      OptionExt.return
-
-    | _ -> None
-
   let eval exp man flow =
     match ekind exp with
     | E_stub_quantified_formula (quants,cond) ->
@@ -105,6 +80,8 @@ struct
       OptionExt.return
 
     | _ -> None
+
+  let exec stmt man flow = None
 
 end
 

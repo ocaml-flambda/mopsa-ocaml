@@ -146,7 +146,7 @@ let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =
     when is_c_variable_length_array_type var.vtyp ||
          is_c_no_length_array_type var.vtyp
     ->
-    let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_var var range)) range ~etyp:ul in
+    let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [mk_var var range])) range ~etyp:ul in
     man.eval ~route bytes_expr flow ~translate:"Universal"
 
   | Var var ->
@@ -158,7 +158,8 @@ let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =
     Cases.singleton (mk_int (String.length str + char_len) range) flow
 
   | Addr addr ->
-    let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, mk_addr addr range)) range ~etyp:ul in
+    let bytes_expr = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [mk_addr addr range])) range ~etyp:ul in
+
     (* XXX for backward compatibility, the size is converted to Universal, but maybe it should be a C expression? *)
     man.eval ~route bytes_expr flow ~translate:"Universal"
 

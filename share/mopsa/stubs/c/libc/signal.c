@@ -29,12 +29,12 @@
 #include "mopsa_libc_utils.h"
 
 /*$
- * alias: signal;
+ * #alias signal;
  */
 __sighandler_t __sysv_signal (int __sig, __sighandler_t __handler);
 
 /*$
- * alias: signal;
+ * #alias signal;
  */
 __sighandler_t sysv_signal (int __sig, __sighandler_t __handler);
 
@@ -46,7 +46,7 @@ __sighandler_t sysv_signal (int __sig, __sighandler_t __handler);
 __sighandler_t signal (int __sig, __sighandler_t __handler);
 
 /*$
- * alias: signal;
+ * #alias signal;
  */
 __sighandler_t bsd_signal (int __sig, __sighandler_t __handler);
 
@@ -65,7 +65,7 @@ __sighandler_t bsd_signal (int __sig, __sighandler_t __handler);
 int kill (__pid_t __pid, int __sig);
 
 /*$
- * alias: kill;
+ * #alias kill;
  */
 int killpg (__pid_t __pgrp, int __sig);
 
@@ -368,7 +368,7 @@ int sigqueue (__pid_t __pid, int __sig, const union sigval __val);
 const char *const _sys_siglist[_NSIG];
 const char *const sys_siglist[_NSIG];
 
-/*$$$
+/*$!
  * assigns: _sys_siglist[0,_NSIG);
  * assigns: sys_siglist[0,_NSIG);
  * local: char* s = _mopsa_new_readonly_string();

@@ -152,7 +152,7 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    | E_stub_builtin_call(BYTES, { ekind = E_var(v,_) }) when is_c_variable_length_array_type v.vtyp ->
+    | E_stub_builtin_call(BYTES, [{ ekind = E_var(v,_) }]) when is_c_variable_length_array_type v.vtyp ->
       eval_bytes v exp.erange man flow |>
       OptionExt.return
 

@@ -313,7 +313,7 @@ val add_diagnostic : diagnostic -> report -> report
     [join_diagnostic] is used to join it with [d].
  *)
 
-val remove_diagnostic : range -> check -> report -> report
+val remove_diagnostic : diagnostic -> report -> report
 (** Remove a diagnostic from a report *)
 
 val find_diagnostic : range -> check -> report -> diagnostic

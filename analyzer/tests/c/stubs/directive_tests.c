@@ -9,7 +9,7 @@
 
 int x;
 
-/*$$$
+/*$!
  * assigns: x;
  * ensures: x' == 10;
  */
@@ -25,7 +25,7 @@ void test_init_integer() {
 
 int *p;
 
-/*$$$
+/*$!
  * assigns: p;
  * ensures: p' == &x;
  */
@@ -41,7 +41,7 @@ void test_init_pointer() {
 
 int a[10];
 
-/*$$$
+/*$!
  * assigns: a[0,9];
  * ensures: a[0]' == 20;
  */

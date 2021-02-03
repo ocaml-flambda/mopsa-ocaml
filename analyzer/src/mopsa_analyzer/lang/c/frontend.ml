@@ -132,16 +132,16 @@ type ctx = {
   ctx_vars: (int*string,var*C_AST.variable) Hashtbl.t;
   (* cache of variables of the project *)
 
-  ctx_global_preds: Mopsa_c_stubs_parser.Cst.predicate with_range list;
-  (* list of global stub predicates *)
+  ctx_macros: C_AST.macro StringMap.t;
+  (* cache of macros of the project *)
 
-  ctx_macros: string MapExt.StringMap.t;
-  (* cache of (parameter-less) macros of the project *)
+  ctx_predicates: Mopsa_c_stubs_parser.Passes.Preprocessor.predicate StringMap.t;
+  (* cache of stub predicates *)
 
   ctx_stubs: (string,Mopsa_c_stubs_parser.Cst.stub) Hashtbl.t;
   (* cache of stubs CST, used for resolving aliases *)
 
-  ctx_enums: Z.t MapExt.StringMap.t;
+  ctx_enums: Z.t StringMap.t;
   (* cache of enum values of the project *)
 }
 
@@ -190,8 +190,6 @@ let find_stubs_of_header header stubs =
 
 (** {2 Entry point} *)
 (** =============== *)
-
-exception StubAliasFound of string
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
@@ -329,35 +327,25 @@ and from_project prj =
     ) StringMap.empty funcs_and_origins
   in
 
-  (* Parse stub predicates *)
-  let preds = from_stub_global_predicates prj.proj_comments in
-
   (* Prepare the parsing context *)
   let ctx = {
       ctx_fun = funcs;
       ctx_type = Hashtbl.create 16;
       ctx_prj = prj;
       ctx_vars = Hashtbl.create 16;
-      ctx_global_preds = preds;
-      ctx_macros = StringMap.fold (fun name macro acc ->
-          if macro.Clang_AST.macro_params = [] then
-            let content = String.concat " " macro.Clang_AST.macro_contents in
-            MapExt.StringMap.add name content acc
-          else
-            acc
-        ) prj.proj_macros MapExt.StringMap.empty
-      ;
+      ctx_macros = prj.proj_macros;
+      ctx_predicates = from_stub_predicates prj.proj_comments;
       ctx_enums = StringMap.fold (fun _ enum acc ->
           enum.enum_values |> List.fold_left (fun acc v ->
-              MapExt.StringMap.add v.enum_val_org_name v.enum_val_value acc
+              StringMap.add v.enum_val_org_name v.enum_val_value acc
             ) acc
-        ) prj.proj_enums MapExt.StringMap.empty;
+        ) prj.proj_enums StringMap.empty;
       ctx_stubs = Hashtbl.create 16;
     }
   in
 
   (* Parse functions *)
-  let funcs_with_alias = List.fold_left (fun funcs_with_alias (f, o) ->
+  List.iter (fun (f, o) ->
       debug "parsing function %s" o.func_org_name;
       f.c_func_uid <- o.func_uid;
       f.c_func_org_name <- o.func_org_name;
@@ -367,24 +355,11 @@ and from_project prj =
       f.c_func_static_vars <- List.map (from_var ctx) o.func_static_vars;
       f.c_func_local_vars <- List.map (from_var ctx) o.func_local_vars;
       f.c_func_body <- from_body_option ctx (from_range o.func_range) o.func_body;
-      (* Parse stub of the function does not have a body or if it was listed  *)
+      (* Parse stub of functions that don't have a body or when they are
+         selected by the option '-use-stub' *)
       if f.c_func_body = None || List.mem f.c_func_org_name !opt_use_stub then
-        begin
-          try
-            f.c_func_stub <- from_stub_comment ctx o;
-            funcs_with_alias
-          with (StubAliasFound alias) ->
-            (f, o, alias) :: funcs_with_alias
-        end
-      else
-        funcs_with_alias
-    ) [] funcs_and_origins
-  in
-
-  (* Resolve stub aliases *)
-  List.iter (fun (f, o, alias) ->
-      f.c_func_stub <- from_stub_alias ctx o alias;
-    ) funcs_with_alias;
+        f.c_func_stub <- from_stub_comment ctx o
+    ) funcs_and_origins;
 
   (* Parse stub directives *)
   let directives = from_stub_directives ctx prj.proj_comments in
@@ -836,20 +811,16 @@ and from_range (range:C_AST.range) =
 (** ===================== *)
 
 and from_stub_comment ctx f =
-  match Mopsa_c_stubs_parser.Main.parse_function_comment f
+  try
+    let stub = Mopsa_c_stubs_parser.Main.parse_function_comment f
           ctx.ctx_prj
           ctx.ctx_macros
           ctx.ctx_enums
-          ctx.ctx_global_preds
-          ctx.ctx_stubs
-  with
-  | None -> None
-
-  | Some { stub_alias = Some alias } ->
-    raise (StubAliasFound alias)
-
-  | Some stub ->
+          ctx.ctx_predicates
+          ctx.ctx_stubs in
     Some (from_stub_func ctx f stub)
+  with Mopsa_c_stubs_parser.Main.StubNotFound ->
+    None
 
 and from_stub_func ctx f stub =
   debug "parsing stub %s" f.func_org_name;
@@ -905,7 +876,6 @@ and from_stub_message ctx msg =
 
 and from_stub_message_kind = function
   | WARN    -> WARN
-  | ALARM   -> ALARM
   | UNSOUND -> UNSOUND
 
 and from_stub_assigns ctx assign =
@@ -951,6 +921,8 @@ and from_stub_formula ctx f =
   | F_forall (v, s, f) -> F_forall(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_exists (v, s, f) -> F_exists(from_var ctx v, from_stub_set ctx s, from_stub_formula ctx f)
   | F_in (v, s) -> F_in(from_stub_expr ctx v, from_stub_set ctx s)
+  | F_otherwise (f, e) -> F_otherwise(from_stub_formula ctx f, from_stub_expr ctx e)
+  | F_if (c, f1, f2) -> F_if(from_stub_formula ctx c, from_stub_formula ctx f1, from_stub_formula ctx f2)
 
 and from_stub_set ctx s =
   match s with
@@ -974,7 +946,7 @@ and from_stub_expr ctx exp =
   | E_top t -> E_constant (C_top (from_typ ctx t))
   | E_int n -> E_constant (C_int n)
   | E_float f -> E_constant (C_float f)
-  | E_string s -> E_constant (C_string s)
+  | E_string s -> E_constant (C_c_string (s, C_char_ascii)) (* FIXME: support other character kinds *)
   | E_char c -> E_constant (C_c_character (Z.of_int c, Ast.C_char_ascii)) (* FIXME: support other character kinds *)
   | E_invalid -> E_constant C_c_invalid
   | E_var v -> E_var (from_var ctx v, None)
@@ -986,23 +958,11 @@ and from_stub_expr ctx exp =
   | E_subscript (a, i) -> E_c_array_subscript(from_stub_expr ctx a, from_stub_expr ctx i)
   | E_member (s, i, f) -> E_c_member_access(from_stub_expr ctx s, i, f)
   | E_arrow (p, i, f) -> E_c_arrow_access(from_stub_expr ctx p, i, f)
-  | E_builtin_call (PRIMED, arg) -> E_stub_primed(from_stub_expr ctx arg)
-  | E_builtin_call (f, arg) -> E_stub_builtin_call(from_stub_builtin f, from_stub_expr ctx arg)
+  | E_conditional(c, e1, e2) -> E_c_conditional(from_stub_expr ctx c, from_stub_expr ctx e1, from_stub_expr ctx e2)
+  | E_builtin_call (PRIMED, [arg]) -> E_stub_primed(from_stub_expr ctx arg)
+  | E_builtin_call (f, args) -> E_stub_builtin_call(f, List.map (from_stub_expr ctx) args)
   | E_return -> E_stub_return
-
-and from_stub_builtin f =
-  match f with
-  | PRIMED -> panic "from_stub_builtin: PRIMED should be translated before"
-  | LENGTH -> LENGTH
-  | OFFSET -> OFFSET
-  | INDEX  -> INDEX
-  | BASE -> BASE
-  | VALID_PTR -> VALID_PTR
-  | VALID_FLOAT -> VALID_FLOAT
-  | FLOAT_INF -> FLOAT_INF
-  | FLOAT_NAN -> FLOAT_NAN
-  | BYTES -> BYTES
-  | ALIVE -> ALIVE
+  | E_raise s -> E_stub_raise s
 
 and from_stub_log_binop = function
   | AND -> AND
@@ -1036,67 +996,20 @@ and from_stub_expr_unop = function
   | BNOT -> O_bit_invert
 
 
-
-and from_stub_global_predicates com_map =
-  let com_map = C_AST.RangeMap.filter (fun range com ->
-      Mopsa_c_stubs_parser.Main.is_global_predicate com
-    ) com_map
-  in
-  C_AST.RangeMap.fold (fun range com acc ->
-      Mopsa_c_stubs_parser.Main.parse_global_predicate_comment com @ acc
-    ) com_map []
-
-
-
-and from_stub_alias ctx f alias =
-  let stub = Mopsa_c_stubs_parser.Main.resolve_alias alias f ctx.ctx_prj ctx.ctx_stubs in
-
-  (* Check prototype matching *)
-  let params = Array.to_list f.func_parameters in
-  if List.length params = List.length stub.stub_params &&
-     List.for_all (fun (p1, p2) ->
-         p1.var_org_name = p2.var_org_name
-         (* FIXME: check types also *)
-       ) (List.combine params stub.stub_params)
-  then
-    Some   {
-      stub_func_name     = stub.stub_name;
-      stub_func_params   = List.map (from_var ctx) params;
-      stub_func_body     = List.map (from_stub_section ctx) stub.stub_body;
-      stub_func_range    = stub.stub_range;
-      stub_func_locals   = List.map (from_stub_local ctx) stub.stub_locals;
-      stub_func_assigns  = List.map (from_stub_assigns ctx) stub.stub_assigns;
-      stub_func_return_type =
-        match f.func_return with
-        | (T_void, _) -> None
-        | t -> Some (from_typ ctx t);
-    }
-
-  else
-    panic "prototypes of function %s and its alias %s do not match"
-      f.func_org_name alias
-
-
-
 and from_stub_directives ctx com_map =
-  let com_map = C_AST.RangeMap.filter (fun range com ->
-      Mopsa_c_stubs_parser.Main.is_directive com
-    ) com_map
-  in
   C_AST.RangeMap.fold (fun range com acc ->
-      match Mopsa_c_stubs_parser.Main.parse_directive_comment
-              com
-              range
-              ctx.ctx_prj
-              ctx.ctx_macros
-              ctx.ctx_enums
-              ctx.ctx_global_preds
-              ctx.ctx_stubs
-      with
-      | None -> acc
-
-      | Some stub ->
+      try
+        let stub = Mopsa_c_stubs_parser.Main.parse_directive_comment
+            com
+            range
+            ctx.ctx_prj
+            ctx.ctx_macros
+            ctx.ctx_enums
+            ctx.ctx_predicates
+            ctx.ctx_stubs
+        in
         from_stub_directive ctx stub :: acc
+      with Mopsa_c_stubs_parser.Main.StubNotFound -> acc
     ) com_map []
 
 
@@ -1108,6 +1021,15 @@ and from_stub_directive ctx stub =
     stub_directive_assigns = List.map (from_stub_assigns ctx) stub.stub_assigns;
   }
 
+and from_stub_predicates com_map =
+  C_AST.RangeMap.fold (fun range com acc ->
+      Mopsa_c_stubs_parser.Main.parse_predicates_comment com |>
+      List.fold_left
+        (fun acc pred ->
+           let name = pred.Mopsa_c_stubs_parser.Passes.Preprocessor.pred_name in
+           StringMap.add name pred acc
+        ) acc
+    ) com_map StringMap.empty
 
 (* Front-end registration *)
 let () =
