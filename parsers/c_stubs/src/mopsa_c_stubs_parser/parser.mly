@@ -42,7 +42,7 @@
 %token <string> IDENT
 
 (* Logical operators *)
-%token AND OR IMPLIES NOT
+%token AND OR IMPLIES NOT OTHERWISE
 
 (* Assignments (in locals only) *)
 %token ASSIGN
@@ -60,26 +60,32 @@
 %token LPAR RPAR
 %token LBRACK RBRACK
 %token LBRACE RBRACE
-%token COLON SEMICOL DOT COMMA
+%token COLON SEMICOL DOT COMMA QUESTION
 %token PRIME
-%token BEGIN END
+%token BEGIN_DELIM END_DELIM
 %token EOF
 
 (* Keywords *)
-%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES PREDICATE WARN ALARM UNSOUND ALIAS
+%token REQUIRES LOCAL ASSIGNS CASE ASSUMES ENSURES WARN UNSOUND
 %token TRUE FALSE
 %token FORALL EXISTS IN NEW
-%token FREE PRIMED RETURN LENGTH BYTES SIZEOF_TYPE SIZEOF_EXPR INDEX OFFSET BASE VALID_PTR CAST
-%token VALID_FLOAT FLOAT_INF FLOAT_NAN ALIVE
-
+%token FREE PRIMED RETURN LENGTH BYTES SIZEOF_TYPE SIZEOF_EXPR INDEX OFFSET BASE CAST
+%token RAISE
+%token VALID_FLOAT FLOAT_INF FLOAT_NAN
+%token ALIVE RESOURCE
+%token IF THEN ELSE END
+%token PREDICATE
 
 (* Types *)
 %token VOID CHAR INT LONG FLOAT DOUBLE SHORT
 %token SIGNED UNSIGNED CONST VOLATILE RESTRICT
 %token STRUCT UNION ENUM
 
+(* Preprocessor *)
+%token SHARP ALIAS
+
 (* Priorities of logical operators *)
-%right IMPLIES
+%right IMPLIES OTHERWISE
 %left OR
 %left AND
 %nonassoc FORALL EXISTS
@@ -91,14 +97,13 @@
 %start parse_type
 
 
-%type <Cst.stub option> parse_stub
+%type <Cst.stub> parse_stub
 %type <Cst.expr> parse_expr
 %type <Cst.c_qual_typ> parse_type
 %%
 
 parse_stub:
-  | BEGIN with_range(section_list) END EOF { Some $2 }
-  | EOF { None }
+  | BEGIN_DELIM with_range(section_list) END_DELIM EOF { $2 }
 
 parse_expr:
   | expr EOF { $1 }
@@ -114,8 +119,6 @@ section_list:
 section:
   | with_range(case_section) { S_case $1 }
   | leaf_section             { S_leaf $1 }
-  | with_range(predicate)    { S_predicate $1 }
-  | with_range(alias)        { S_alias $1 }
 
 (* Case section *)
 case_section:
@@ -162,30 +165,6 @@ local_value:
   | NEW resource { L_new $2 }
   | with_range(var) LPAR args RPAR { L_call ($1, $3) }
 
-(* Predicate section *)
-predicate:
-  | PREDICATE var COLON with_range(formula) SEMICOL
-    {
-      {
-        predicate_var = $2;
-        predicate_args = [];
-        predicate_body = $4;
-      }
-    }
-
-  | PREDICATE var LPAR var_list RPAR COLON with_range(formula) SEMICOL
-    {
-      {
-        predicate_var = $2;
-        predicate_args = $4;
-        predicate_body = $7;
-      }
-    }
-
-
-(* Alias section *)
-alias:
-  | ALIAS COLON IDENT SEMICOL { $3 }
 
 (* Assignment section *)
 assigns:
@@ -231,7 +210,6 @@ message:
 message_kind:
   | WARN    { WARN }
   | UNSOUND { UNSOUND }
-  | ALARM   { ALARM }
 
 
 (* Logic formula *)
@@ -240,13 +218,15 @@ primary_formula:
   | with_range(FALSE)                                 { F_bool false }
   | with_range(expr)                                  { F_expr $1 }
   | with_range(expr) IN set                           { F_in ($1, $3) }
-  | var LPAR args RPAR                                { F_predicate ($1, $3) }
 
 composed_formula:
   | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
   | NOT with_range(formula)                           { F_not $2 }
   | FORALL type_name var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
   | EXISTS type_name var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
+  | with_range(formula) OTHERWISE with_range(expr) { F_otherwise($1, $3) }
+  | IF with_range(formula) THEN with_range(formula) ELSE with_range(formula) END { F_if($2, $4, $6) }
+  | IF with_range(formula) THEN with_range(formula) END { F_if($2, $4, with_range (F_bool true) (from_lexing_range $startpos $endpos)) }
 
 formula:
   | LPAR composed_formula RPAR { $2 }
@@ -264,10 +244,11 @@ primary_expr:
 postfix_expr:
   | primary_expr                                 { $1 }
   | with_range(postfix_expr) LBRACK with_range(expr) RBRACK  { E_subscript ($1, $3) }
-  | with_range(postfix_expr) PRIME               { E_builtin_call (PRIMED, $1) } 
-  | builtin LPAR with_range(expr) RPAR           { E_builtin_call ($1, $3) }
+  | with_range(postfix_expr) PRIME               { E_builtin_call (PRIMED, [$1]) }
+  | builtin LPAR args RPAR                       { E_builtin_call ($1, $3) }
   | with_range(postfix_expr) DOT IDENT           { E_member ($1, $3) }
   | with_range(postfix_expr) ARROW IDENT         { E_arrow ($1, $3) }
+  | RAISE LPAR STRING_CONST RPAR                 { E_raise $3 }
 
 unary_expr:
   | postfix_expr { $1 }
@@ -322,8 +303,12 @@ lor_expr:
   | land_expr { $1 }
   | with_range(lor_expr) LOR with_range(land_expr)        { E_binop (LOR, $1, $3) }
 
-expr:
+conditional_expr:
   | lor_expr { $1 }
+  | with_range(lor_expr) QUESTION with_range(expr) COLON with_range(expr)  { E_conditional ($1, $3, $5) }
+
+expr:
+  | conditional_expr { $1 }
 
 
  
@@ -453,9 +438,9 @@ interval:
   	itv_open_ub=true; } }
 
 %inline log_binop:
-  | AND     { AND }
-  | OR      { OR }
-  | IMPLIES { IMPLIES }
+  | AND       { AND }
+  | OR        { OR }
+  | IMPLIES   { IMPLIES }
 
 %inline builtin:
   | LENGTH      { LENGTH }
@@ -464,21 +449,16 @@ interval:
   | OFFSET      { OFFSET }
   | BASE        { BASE }
   | PRIMED      { PRIMED }
-  | VALID_PTR   { VALID_PTR }
   | VALID_FLOAT { VALID_FLOAT }
   | FLOAT_INF   { FLOAT_INF }
   | FLOAT_NAN   { FLOAT_NAN }
   | ALIVE       { ALIVE }
+  | RESOURCE    { RESOURCE }
 
 args:
   |                             { [] }
   | with_range(expr) COMMA args { $1 :: $3 }
   | with_range(expr)            { [ $1 ] }
-
-var_list:
-  |                    { [] }
-  | var                { [$1] }
-  | var COMMA var_list { $1 :: $3 }
 
 
 resource:

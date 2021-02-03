@@ -3,11 +3,11 @@
  */
 
 /*$
- * ensures: cond implies (return == then);
+ * ensures: cond implies (return == othen);
  * ensures: !cond implies (return == orelse);
- * ensures: return == then or return == orelse;
+ * ensures: return == othen or return == orelse;
  */
-int check(int cond, int then, int orelse);
+int check(int cond, int othen, int orelse);
 
 void test_implies_without_overlapping() {
   int x = 1;

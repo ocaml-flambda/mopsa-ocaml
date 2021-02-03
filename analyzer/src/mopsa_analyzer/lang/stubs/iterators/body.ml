@@ -37,7 +37,7 @@ struct
       let name = "stubs.iterators.body"
     end)
 
-  let checks = [CHK_STUB_ALARM]
+  let checks = [CHK_STUB_CONDITION]
 
 
   (** Initialization of environments *)
@@ -84,7 +84,7 @@ struct
           negate_formula f2
         )) f.range
 
-   | F_binop (op, f1, f2) ->
+    | F_binop (op, f1, f2) ->
      with_range (F_binop (
          negate_log_binop op,
          negate_formula f1,
@@ -126,194 +126,157 @@ struct
         )
       ) f.range
 
+    | F_otherwise _ -> panic_at f.range "negation of 'otherwise' formulas not possible"
+
+    | F_if(c,f1,f2) ->
+      with_range (F_if (c, negate_formula f1, negate_formula f2)) f.range
 
   (** Translate a formula into prenex normal form *)
-  let rec to_prenex_formula f man flow =
+  let rec formula_to_prenex f =
     match f.content with
     | F_expr cond ->
-      Cases.singleton ([], cond) flow
+      [], cond
 
     | F_binop (AND, f1, f2) ->
-      to_prenex_formula f1 man flow >>$ fun (quants1, cond1) flow ->
-      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
-      Cases.singleton (quants1@quants2, mk_log_and cond1 cond2 f.range) flow
+      let quants1,cond1 = formula_to_prenex f1 in
+      let quants2,cond2 = formula_to_prenex f2 in
+      quants1@quants2, mk_log_and cond1 cond2 f.range
 
     | F_binop (OR, f1, f2) ->
-      to_prenex_formula f1 man flow >>$ fun (quants1, cond1) flow ->
-      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
-      Cases.singleton (quants1@quants2, mk_log_or cond1 cond2 f.range) flow
+      let quants1,cond1 = formula_to_prenex f1 in
+      let quants2,cond2 = formula_to_prenex f2 in
+      quants1@quants2, mk_log_or cond1 cond2 f.range
 
     | F_binop (IMPLIES, f1, f2) ->
-      to_prenex_formula (negate_formula f1) man flow >>$ fun (quants1, cond1) flow ->
-      to_prenex_formula f2 man flow >>$ fun (quants2, cond2) flow ->
-      Cases.singleton (quants1@quants2, mk_log_or cond1 cond2 f.range) flow
+      let quants1,cond1 = formula_to_prenex (negate_formula f1) in
+      let quants2,cond2 = formula_to_prenex f2 in
+      quants1@quants2, mk_log_or cond1 cond2 f.range
 
     | F_not ff ->
-      to_prenex_formula (negate_formula ff) man flow
+      formula_to_prenex (negate_formula ff)
 
     | F_in (e, S_interval (l, u)) ->
-      Cases.singleton ([], mk_in e l u f.range) flow
+      [], mk_in e l u f.range
 
-    | F_in (e, S_resource res ) ->
-      Cases.singleton ([], mk_stub_resource_mem e res f.range) flow
+    | F_in (e, S_resource res) ->
+      [], mk_stub_resource_mem e res f.range
 
-    | F_forall(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
-      Cases.singleton ((FORALL,v,s)::quants, cond) flow
+    | F_forall(v,s,ff) ->
+      let quants,cond = formula_to_prenex ff in
+      (FORALL,v,s)::quants, cond
 
-    | F_forall(v,(S_interval (lo,hi) as s),ff) ->
-      assume
-        (mk_le lo hi f.range)
-        ~fthen:(fun flow ->
-            man.exec (mk_add_var v f.range) flow >>%
-            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
-            Cases.singleton ((FORALL,v,s)::quants, cond) flow
-          )
-        ~felse:(fun flow ->
-            Cases.singleton ([],mk_true f.range) flow
-          )
-        man flow
+    | F_exists(v,s,ff) ->
+      let quants,cond = formula_to_prenex ff in
+      (EXISTS,v,s)::quants, cond
 
-    | F_exists(v,(S_resource _ as s),ff) ->
-      to_prenex_formula ff man flow >>$ fun (quants,cond) flow ->
-      Cases.singleton ((EXISTS,v,s)::quants, cond) flow
+    | F_otherwise(ff, e) ->
+      let quants,cond = formula_to_prenex ff in
+      quants, mk_stub_otherwise cond (Some e) f.range
 
-    | F_exists(v,(S_interval (lo,hi) as s),ff) ->
-      assume
-        (mk_le lo hi f.range)
-        ~fthen:(fun flow ->
-            man.exec (mk_add_var v f.range) flow >>%
-            man.exec (mk_assume (mk_in (mk_var v f.range) lo hi f.range) f.range) >>%
-            to_prenex_formula ff man >>$ fun (quants,cond) flow ->
-            Cases.singleton ((EXISTS,v,s)::quants, cond) flow
-          )
-        ~felse:(fun flow ->
-            Cases.singleton ([],mk_false f.range) flow
-          )
-        man flow
+    | F_if(c,f1,f2) ->
+      let quants,cond = formula_to_prenex c in
+      let quants1,cond1 = formula_to_prenex f1 in
+      let quants2,cond2 = formula_to_prenex f2 in
+      quants@quants1@quants2, mk_stub_if cond cond1 cond2 f.range
 
-  (** Evaluate a quantified formula *)
-  let eval_prenex_formula cond_to_stmt quants cond range man flow : 'a flow =
-    let cond' =
-      match quants with
-      | [] -> cond
-      | _ -> mk_stub_quantified_formula quants cond range
+  (** Translate a prenex encoding (i.e. quantifiers and a condition) into an expression *)
+  let prenex_to_expr quants cond range =
+    (* Function to get variables in a condition (and avoid the alarm expression in `otherwise` *)
+    let rec vars_of_condition cond =
+      fold_expr
+        (fun acc e ->
+           match ekind e with
+           | E_var (v,_) -> Keep (VarSet.add v acc)
+           | E_stub_otherwise(ee, _) -> Keep (VarSet.union (vars_of_condition ee) acc)
+           | _ -> VisitParts acc
+        )
+        (fun acc s -> assert false)
+        VarSet.empty cond
     in
-    let flow = man.exec (cond_to_stmt cond' range) flow |> post_to_flow man in
+    (* Function to remove unnecessary quantifiers not used in an expression *)
+    let remove_unnecessary_quantifiers quants e =
+      let vars = vars_of_condition e in
+      let rec iter = function
+        | [] -> []
+        | ((_,v,_) as q)::tl ->
+          if VarSet.mem v vars then q :: iter tl else iter tl
+      in
+      iter quants
+    in
+    (* Function to get a set of variables from a list of quantifiers *)
+    let rec vars_of_quantifiers = function
+      | []          -> VarSet.empty
+      | (_,v,_)::tl -> VarSet.add v (vars_of_quantifiers tl)
+    in
+    (* Loop to translate a prenex encoding into an expression *)
+    let rec doit quants cond range =
+      if quants = [] then cond
+      else
+        match ekind cond with
+        | E_binop(O_log_and, e1, e2) ->
+          let quants1 = remove_unnecessary_quantifiers quants e1 in
+          let quants2 = remove_unnecessary_quantifiers quants e2 in
+          let e1' = doit quants1 e1 e1.erange in
+          let e2' = doit quants2 e2 e2.erange in
+          mk_log_and e1' e2' range
+
+        | E_binop(O_log_or, e1, e2) ->
+          let quants1 = remove_unnecessary_quantifiers quants e1 in
+          let quants2 = remove_unnecessary_quantifiers quants e2 in
+          let vars1 = vars_of_quantifiers quants1 in
+          let vars2 = vars_of_quantifiers quants2 in
+          if VarSet.is_empty (VarSet.inter vars1 vars2) then
+            let e1' = doit quants1 e1 e1.erange in
+            let e2' = doit quants2 e2 e2.erange in
+            mk_log_or e1' e2' range
+          else
+            mk_stub_quantified_formula quants cond range
+
+        | E_stub_if(c,e1,e2) ->
+          let quants' = remove_unnecessary_quantifiers quants c in
+          let vars = vars_of_quantifiers quants' in
+          if VarSet.is_empty vars then
+            let e1' = doit quants e1 e1.erange in
+            let e2' = doit quants e2 e2.erange in
+            { cond with ekind = E_stub_if(c, e1', e2') }
+          else
+            mk_stub_quantified_formula quants cond range
+
+        | E_stub_otherwise(e,a) ->
+          mk_stub_otherwise (doit quants e e.erange) a range
+
+        | _ ->
+          let quants' = remove_unnecessary_quantifiers quants cond in
+          let vars = vars_of_quantifiers quants' in
+          if VarSet.is_empty vars then
+            cond
+          else
+            mk_stub_quantified_formula quants cond range
+    in
+    doit quants cond range
+
+
+  (** Evaluate a formula *)
+  let eval_formula
+      (cond_to_stmt: expr -> range -> stmt)
+      (f: formula with_range)
+      man flow =
+    debug "@[<hov>eval formula@ %a@]" pp_formula f;
+    (* Write formula in prenex normal form *)
+    let quants,cond = formula_to_prenex f in
+    (* Translate the prenex encoding into an expression *)
+    let cond' = prenex_to_expr quants cond f.range in
+    (* Constrain the environment with the obtained condition *)
+    let flow = man.exec (cond_to_stmt cond' f.range) flow |>
+               post_to_flow man in
+    (* Remove bound variables *)
     List.fold_left
       (fun acc (_,v,s) ->
          match s with
-         | S_interval _ -> man.exec (mk_remove_var v range) acc |> post_to_flow man
+         | S_interval _ -> man.exec (mk_remove_var v f.range) acc |>
+                           post_to_flow man
          | S_resource _ -> acc)
       flow quants
-
-
-  let eval_quantified_formula cond_to_stmt f man flow =
-    to_prenex_formula f man flow |>
-    Cases.reduce_result
-      (fun (quants,cond) flow -> eval_prenex_formula cond_to_stmt quants cond f.range man flow)
-      ~join:(Flow.join man.lattice)
-      ~meet:(Flow.meet man.lattice)
-      ~bottom:(Flow.remove T_cur flow)
-
-  let rec eval_formula
-      (cond_to_stmt: expr -> range -> stmt)
-      (f: formula with_range)
-      range
-      (man:('a, unit) man)
-      (flow:'a flow)
-    : 'a flow =
-    debug "@[<hov>eval formula@ %a@]" pp_formula f;
-    match f.content with
-    | F_expr e ->
-      man.exec (cond_to_stmt e range) flow |> post_to_flow man
-
-    | F_binop (AND, f1, f2) ->
-      (* FIXME: when evaluating `requires: e1 and e2;`, two alarms
-         maybe generated (at location of `e1` and `e2` resp.).
-         These alarms should be merged into a single one. *)
-      eval_formula cond_to_stmt f1 range man flow |>
-      eval_formula cond_to_stmt f2 range man
-
-    | F_binop (OR, f1, f2) ->
-      let flow1 = eval_formula cond_to_stmt f1 range man flow in
-      let flow2 = eval_formula cond_to_stmt f2 range man flow in
-      (* Since this is a disjunction, we can remove alarms raised by one flow
-         if the other one is safe *)
-      (* First, get the alarms raised by each flow *)
-      let new_errors1 =
-        fold2zo_report
-          (fun diag acc ->
-             match diag.diag_kind with
-             | Error | Warning ->  diag::acc
-             | _ -> acc)
-          (fun d acc -> acc)
-          (fun d1 d2 acc ->
-             match d1.diag_kind, d2.diag_kind with
-             | Error, Unreachable | Warning, Unreachable ->
-               d1 :: acc
-             | _ -> acc
-          ) (Flow.get_report flow1) (Flow.get_report flow) [] in
-      let new_errors2 =
-        fold2zo_report
-          (fun diag acc ->
-             match diag.diag_kind with
-             | Error | Warning -> diag::acc
-             | _ -> acc)
-          (fun d acc -> acc)
-          (fun d1 d2 acc ->
-             match d1.diag_kind, d2.diag_kind with
-             | Error, Unreachable | Warning, Unreachable ->
-               d1 :: acc
-             | _ -> acc
-          ) (Flow.get_report flow2) (Flow.get_report flow) [] in
-      let flow1,flow2 =
-        match new_errors1,new_errors2 with
-        | [],[] -> flow1,flow2
-        | l,[] ->
-          (* Here, flow1 raised alarms while flow2 is safe. So, mark the checks
-             as unreachable *)
-          let report =
-            List.fold_left
-              (fun acc diag ->
-                 let diag' = { diag with diag_kind = Unreachable;
-                                         diag_alarms = AlarmSet.empty } in
-                 set_diagnostic diag' acc)
-              (Flow.get_report flow1) l in
-          Flow.set_report report flow1, flow2
-        | [],l ->
-          let report =
-            List.fold_left
-              (fun acc diag ->
-                 let diag' = { diag with diag_kind = Unreachable;
-                                         diag_alarms = AlarmSet.empty } in
-                 set_diagnostic diag' acc)
-              (Flow.get_report flow2) l in
-          flow1, Flow.set_report report flow2
-        | _,_ -> flow1,flow2 in
-      Flow.join man.lattice flow1 flow2
-
-    | F_binop (IMPLIES, f1, f2) ->
-      let nf1 = eval_formula mk_assume (negate_formula f1) range man flow in
-      let f2 = eval_formula mk_assume f1 range man flow |>
-               eval_formula cond_to_stmt f2 range man
-      in
-      Flow.join man.lattice nf1 f2
-
-    | F_not ff ->
-      let ff' = negate_formula ff in
-      eval_formula cond_to_stmt ff' range man flow
-
-    | F_forall _
-    | F_exists _ ->
-      eval_quantified_formula cond_to_stmt f man flow
-
-    | F_in (e, S_interval (l, u)) ->
-      man.exec (cond_to_stmt (mk_in e l u f.range) range) flow |> post_to_flow man
-
-    | F_in (e, S_resource res ) ->
-      man.exec (cond_to_stmt (mk_stub_resource_mem e res f.range) range) flow |> post_to_flow man
 
 
   (** Initialize the parameters of the stubbed function *)
@@ -325,6 +288,7 @@ struct
         post_to_flow man post
       ) flow
 
+
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
     params |> List.fold_left (fun flow param ->
@@ -333,44 +297,44 @@ struct
 
 
   (** Evaluate the formula of the `assumes` section *)
-  let exec_assumes assumes range man flow =
-    eval_formula mk_assume assumes.content range man flow
+  let exec_assumes assumes man flow =
+    eval_formula mk_assume assumes.content man flow
 
 
   (** Evaluate the formula of the `requires` section *)
-  let exec_requires req range man flow =
-    eval_formula mk_stub_requires req.content range man flow
+  let exec_requires req man flow =
+    eval_formula mk_stub_requires req.content man flow
 
 
   (** Execute an allocation of a new resource *)
-  let exec_local_new v res alloc_range call_range man flow : 'a flow =
+  let exec_local_new v res range man flow : 'a flow =
     (* Evaluation the allocation request *)
     post_to_flow man (
-      man.eval (mk_stub_alloc_resource res alloc_range) flow >>$ fun addr flow ->
+      man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
       (* Assign the address to the variable *)
-      man.exec (mk_assign (mk_var v call_range) addr alloc_range) flow
+      man.exec (mk_assign (mk_var v range) addr range) flow
     )
 
 
   (** Execute a function call *)
   (* FIXME: check the purity of f *)
-  let exec_local_call v f args local_range call_range man flow =
+  let exec_local_call v f args range man flow =
     man.exec (mk_assign
-                (mk_var v local_range)
-                (mk_expr (E_call(f, args)) ~etyp:v.vtyp local_range)
-                local_range
+                (mk_var v range)
+                (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
+                range
              ) flow
     |> post_to_flow man
 
 
   (** Execute the `local` section *)
-  let exec_local l range man flow =
+  let exec_local l man flow =
     match l.content.lval with
-    | L_new  res -> exec_local_new l.content.lvar res l.range range man flow
-    | L_call (f, args) -> exec_local_call l.content.lvar f args l.range range man flow
+    | L_new  res -> exec_local_new l.content.lvar res l.range man flow
+    | L_call (f, args) -> exec_local_call l.content.lvar f args l.range man flow
 
 
-  let exec_ensures e return range man flow =
+  let exec_ensures e return man flow =
     (* Replace E_stub_return expression with the fresh return variable *)
     let f =
       match return with
@@ -385,11 +349,11 @@ struct
           e.content
     in
     (* Evaluate ensure body and return flows that verify it *)
-    eval_formula mk_assume f range man flow
+    eval_formula mk_assume f man flow
 
 
-  let exec_assigns assigns range man flow =
-    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset range in
+  let exec_assigns assigns man flow =
+    let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset assigns.range in
     match assigns.content.assign_offset with
     | [] ->
       man.exec stmt flow |> post_to_flow man
@@ -418,43 +382,39 @@ struct
     man.exec (mk_block block range) flow |> post_to_flow man
 
 
-  let exec_free free range man flow =
+  let exec_free free man flow =
     let e = free.content in
-    let stmt = mk_stub_free e range in
+    let stmt = mk_stub_free e free.range in
     man.exec stmt flow |> post_to_flow man
 
 
-  let exec_message msg range man flow =
+  let exec_message msg man flow =
     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
     then flow
     else match msg.content.message_kind with
       | WARN ->
-        Exceptions.warn_at range "%s" msg.content.message_body;
+        Exceptions.warn_at msg.range "%s" msg.content.message_body;
         flow
 
       | UNSOUND ->
-        Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) range flow
-
-      | ALARM ->
-        raise_stub_alarm msg.content.message_body range man flow
-
+        Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) msg.range flow
 
 
   (** Execute a leaf section *)
-  let exec_leaf leaf return range man flow =
+  let exec_leaf leaf return man flow =
     match leaf with
-    | S_local local -> exec_local local range man flow
-    | S_assumes assumes -> exec_assumes assumes range man flow
-    | S_requires requires -> exec_requires requires range man flow
-    | S_assigns assigns -> exec_assigns assigns range man flow
-    | S_ensures ensures -> exec_ensures ensures return range man flow
-    | S_free free -> exec_free free range man flow
-    | S_message msg -> exec_message msg range man flow
+    | S_local local -> exec_local local man flow
+    | S_assumes assumes -> exec_assumes assumes man flow
+    | S_requires requires -> exec_requires requires man flow
+    | S_assigns assigns -> exec_assigns assigns man flow
+    | S_ensures ensures -> exec_ensures ensures return man flow
+    | S_free free -> exec_free free man flow
+    | S_message msg -> exec_message msg man flow
 
   (** Execute the body of a case section *)
-  let exec_case case return range man flow =
+  let exec_case case return man flow =
     List.fold_left (fun acc leaf ->
-        exec_leaf leaf return range man acc
+        exec_leaf leaf return man acc
       ) flow case.case_body |>
 
     (* Clean case post state *)
@@ -466,24 +426,21 @@ struct
     (* Execute leaf sections *)
     let flow = List.fold_left (fun flow section ->
         match section with
-        | S_leaf leaf -> exec_leaf leaf return range man flow
+        | S_leaf leaf -> exec_leaf leaf return man flow
         | _ -> flow
       ) flow body
     in
-
     (* Execute case sections separately *)
     let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
         | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
-          let flow' = exec_case case return range man flow in
+          let flow' = exec_case case return man flow in
           flow':: acc, Flow.get_ctx flow'
         | _ -> acc, ctx
       ) ([], Flow.get_ctx flow) body
     in
-
     let flows = List.map (Flow.set_ctx ctx) flows in
-
     (* Join flows *)
     (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
@@ -502,89 +459,8 @@ struct
     then flow
     else man.exec (mk_stub_clean_all_assigns assigns range) flow |> post_to_flow man
 
-  (** The following patch_params_* functions are used to patch the body of a stub by
-      adding call arguments to the evaluation history of formal
-      parameters *)
-  let patch_params_history_visitor bindings exp =
-    match ekind exp with
-    | E_var(v,_) ->
-      begin
-        match List.find_opt
-                (fun (p,a) -> compare_var p v = 0) bindings with
-        | None -> Visitor.Keep exp
-        | Some (p,a) -> Keep { exp with ehistory = a :: exp.ehistory }
-      end
-    | _ -> VisitParts exp
-
-  let patch_params_history_in_expr bindings exp =
-    Visitor.map_expr
-      (patch_params_history_visitor bindings)
-      (fun s -> VisitParts s)
-      exp
-
-  let patch_params_history_in_local_value bindings = function
-    | L_new _ as x -> x
-    | L_call(f,cargs) -> L_call (patch_params_history_in_expr bindings f,
-                                 List.map (patch_params_history_in_expr bindings) cargs)
-
-  let patch_params_history_in_local bindings local =
-    bind_range local @@ fun l ->
-    { l with
-      lval = patch_params_history_in_local_value bindings l.lval }
-
-  let patch_params_history_in_formula bindings f =
-    visit_expr_in_formula (patch_params_history_visitor bindings) f
-
-  let patch_params_history_in_assumes bindings assumes =
-    bind_range assumes @@ (patch_params_history_in_formula bindings)
-
-  let patch_params_history_in_requires bindings requires =
-    bind_range requires @@ (patch_params_history_in_formula bindings)
-
-  let patch_params_history_in_ensures bindings ensures =
-    bind_range ensures @@ (patch_params_history_in_formula bindings)
-
-  let patch_params_history_in_interval bindings (lo,hi) =
-    ( patch_params_history_in_expr bindings lo,
-      patch_params_history_in_expr bindings hi )
-
-  let patch_params_history_in_assigns bindings assigns =
-    bind_range assigns @@ fun a ->
-    { assign_target = patch_params_history_in_expr bindings a.assign_target;
-      assign_offset = List.map (patch_params_history_in_interval bindings) a.assign_offset; }
-
-  let patch_params_history_in_free bindings free =
-    bind_range free @@ (patch_params_history_in_expr bindings)
-
-  let patch_params_history_in_leaf bindings = function
-    | S_local local -> S_local (patch_params_history_in_local bindings local)
-    | S_assumes assumes -> S_assumes (patch_params_history_in_assumes bindings assumes)
-    | S_requires requires -> S_requires (patch_params_history_in_requires bindings requires)
-    | S_assigns assigns -> S_assigns (patch_params_history_in_assigns bindings assigns)
-    | S_ensures ensures -> S_ensures (patch_params_history_in_ensures bindings ensures)
-    | S_free free -> S_free (patch_params_history_in_free bindings free)
-    | S_message _ as x -> x
-
-  let patch_params_history_in_case bindings case =
-    { case with
-      case_body = List.map (patch_params_history_in_leaf bindings) case.case_body;
-      case_locals = List.map (patch_params_history_in_local bindings) case.case_locals;
-      case_assigns = List.map (patch_params_history_in_assigns bindings) case.case_assigns; }
-
-  let patch_params_history_in_section bindings = function
-    | S_case case -> S_case (patch_params_history_in_case bindings case)
-    | S_leaf leaf -> S_leaf (patch_params_history_in_leaf bindings leaf)
-
-  let patch_params_history_in_stub bindings (stub:stub_func) : stub_func =
-    { stub with
-      stub_func_body = List.map (patch_params_history_in_section bindings) stub.stub_func_body;
-      stub_func_locals = List.map (patch_params_history_in_local bindings) stub.stub_func_locals;
-      stub_func_assigns = List.map (patch_params_history_in_assigns bindings) stub.stub_func_assigns; }
-
-  (** Entry point of expression evaluations *)
-  let eval exp man flow =
-    match ekind exp with
-    | E_stub_call (stub, args) ->
+  (** Evaluate a call to a stub *)
+  let eval_stub_call stub args return range man flow =
       debug "call to stub %s:@\n @[%a@]"
         stub.stub_func_name
         pp_stub_func stub
@@ -592,56 +468,210 @@ struct
 
       (* Update the callstack *)
       let cs = Flow.get_callstack flow in
-      let flow = Flow.push_callstack stub.stub_func_name exp.erange flow in
-
-      (* In order to get better alarm messages, we replace parameters
-         with the corresponding argument. This is done by putting the
-         argument in the evaluation history of the parameter. Function
-         `get_orig_expr` can be used in order to recover the original
-         form. *)
-      let bindings = List.combine stub.stub_func_params args in
-      let stub = patch_params_history_in_stub bindings stub in
-
+      let flow = Flow.push_callstack stub.stub_func_name range flow in
       (* Initialize parameters *)
-      let flow = init_params args stub.stub_func_params exp.erange man flow in
-
+      let flow = init_params args stub.stub_func_params range man flow in
       (* Prepare assignments *)
       let flow = prepare_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
-
       (* Create the return variable *)
-      let return, flow =
-        match stub.stub_func_return_type with
-        | None -> None, flow
-        | Some t ->
-          let return = Universal.Iterators.Interproc.Common.mk_return_var exp in
-          let flow = man.exec (mk_add_var return exp.erange) flow |> post_to_flow man in
-          Some return, flow
+      let flow =
+        match return with
+        | None -> flow
+        | Some v -> man.exec (mk_add_var v range) flow |> post_to_flow man
       in
-
       (* Evaluate the body of the stb *)
-      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return exp.erange man flow in
-
+      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return range man flow in
       (* Clean locals *)
       let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
-
       (* Clean assignments *)
       let flow = clean_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
-
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
+      let cleaners = List.map (fun param -> mk_remove_var param range) stub.stub_func_params in
 
-      let cleaners = List.map (fun param -> mk_remove_var param exp.erange) stub.stub_func_params in
+      match return with
+      | None ->
+        Eval.singleton (mk_unit range) flow ~cleaners
 
-      begin match return with
-        | None ->
-          Eval.singleton (mk_unit exp.erange) flow ~cleaners |>
-          OptionExt.return
+      | Some v ->
+        man.eval (mk_var v range) flow |>
+        Cases.add_cleaners (mk_remove_var v range :: cleaners)
 
-        | Some v ->
-          man.eval (mk_var v exp.erange) flow |>
-          Cases.add_cleaners (mk_remove_var v exp.erange :: cleaners) |>
-          OptionExt.return
-      end
+  (** Evaluate an otherwise expression *)
+  let eval_otherwise cond alarm range man flow =
+    assume cond man flow
+      ~fthen:(fun flow -> safe_stub_condition cond.erange man flow |>
+                          Eval.singleton (mk_true range))
+      ~felse:(fun flow ->
+          match alarm with
+          | Some e -> man.eval e flow
+          | None   -> raise_stub_invalid_requirement ~bottom:false cond range man flow |>
+                      Eval.singleton (mk_false range)
+        )
+
+  (* Remove flows where a quantification interval is empty *)
+  let discard_empty_quantification_intervals quants cond range man flow =
+    let rec iter l flow =
+      match l with
+      | [] ->
+        man.eval ~route:(Below name) (mk_stub_quantified_formula quants cond range) flow
+
+      | (_,_,S_resource _)::tl ->
+        iter tl flow
+
+      | (FORALL,v,S_interval(lo,hi))::tl ->
+        assume
+          (mk_le lo hi range) man flow
+          ~fthen:(fun flow ->
+              man.exec (mk_add_var v range) flow >>%
+              man.exec (mk_assume (mk_in (mk_var v range) lo hi range) range) >>%
+              iter tl
+            )
+          ~felse:(fun flow ->
+              Eval.singleton (mk_true range) flow
+            )
+
+      | (EXISTS,v,S_interval(lo,hi))::tl ->
+        assume
+          (mk_le lo hi range) man flow
+          ~fthen:(fun flow ->
+              man.exec (mk_add_var v range) flow >>%
+              man.exec (mk_assume (mk_in (mk_var v range) lo hi range) range) >>%
+              iter tl
+            )
+          ~felse:(fun flow ->
+              Eval.singleton (mk_false range) flow
+            )
+    in
+    iter quants flow
+      
+
+  (** Check if a condition contains an otherwise expression *)
+  let rec otherwise_in_condition cond =
+    match ekind cond with
+    | E_stub_otherwise _ -> true
+    | E_binop((O_log_and | O_log_or), cond1, cond2) ->
+      otherwise_in_condition cond1 || otherwise_in_condition cond2
+    | E_stub_quantified_formula(_, qcond) ->
+      otherwise_in_condition qcond
+    | E_stub_if(_,fthen,felse) ->
+      otherwise_in_condition fthen || otherwise_in_condition felse
+    | _ -> false
+
+  (** Remove newly introduced checks *)
+  let remove_new_checks old flow =
+    let report =
+      fold2zo_report
+        (fun diag1 acc -> acc)
+        (fun diag2 acc -> remove_diagnostic diag2 acc )
+        (fun diag1 diag2 acc -> acc)
+        (Flow.get_report old) (Flow.get_report flow)
+        (Flow.get_report flow)
+    in
+    Flow.set_report report flow
+
+  (** Move newly introduced checks to a new range *)
+  let move_new_checks range old flow =
+    let report =
+      fold2zo_report
+        (fun diag1 acc -> acc)
+        (fun diag2 acc -> remove_diagnostic diag2 acc |>
+                          add_diagnostic {diag2 with diag_range = range} )
+        (fun diag1 diag2 acc -> acc)
+        (Flow.get_report old) (Flow.get_report flow)
+        (Flow.get_report flow)
+    in
+    Flow.set_report report flow
+
+  (** Entry point of expression evaluations *)
+  let eval exp man flow =
+    match ekind exp with
+    | E_stub_call (stub, args) ->
+      (* Create the return variable *)
+      let return =
+        match stub.stub_func_return_type with
+        | None   -> None
+        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return_var exp)
+      in
+      eval_stub_call stub args return exp.erange man flow |>
+      OptionExt.return
+
+    | E_stub_otherwise(cond, alarm) ->
+      eval_otherwise cond alarm exp.erange man flow |>
+      OptionExt.return
+
+    | E_stub_raise msg ->
+      raise_stub_alarm ~bottom:false msg exp.erange man flow |>
+      Eval.singleton (mk_false exp.erange) |>
+      OptionExt.return
+
+    | E_binop(O_log_and, e1, e2) when otherwise_in_condition e1 && otherwise_in_condition e2 ->
+      (* To evaluate a requirement e1 ∧ e2, we evaluate e1 and e2 and then we
+         lift checks on e1 and e2 to e1 ∧ e2:
+         - If both e1 and e2 are valid, then we mark e1 ∧ e2 as safe.
+           We also remove checks on e1 and e2, since they are redundant with
+           the check on e1 ∧ e2.
+         - If e1 or e2 is invalid, we move the alarms to the range of e1 ∧ e2, but we keep the same alarm message.
+      *)
+      let flow0 = flow in
+      assume e1 man flow
+        ~fthen:(fun flow ->
+            assume e2 man flow
+              ~fthen:(fun flow ->
+                  remove_new_checks flow0 flow |>
+                  safe_stub_condition exp.erange man |>
+                  Eval.singleton (mk_true exp.erange)
+                )
+              ~felse:(fun flow ->
+                  move_new_checks exp.erange flow0 flow |>
+                  Eval.singleton (mk_false exp.erange)
+                )
+          )
+        ~felse:(fun flow ->
+            move_new_checks exp.erange flow0 flow |>
+            Eval.singleton (mk_false exp.erange)
+          ) |>
+      OptionExt.return
+
+    | E_binop(O_log_or, e1, e2) when otherwise_in_condition e1 && otherwise_in_condition e2 ->
+      (* To evaluate a requirement e1 ∨ e2, we evaluate e1 and e2 and then we
+         lift checks on e1 and e2 to e1 ∨ e2:
+         - If e1 or e2 is valid, then we mark e1 ∨ e2 as safe.
+           We also remove checks on e1 and e2, since they are redundant with
+           the check on e1 ∨ e2.
+         - If e1 and e2 are invalid, we move the alarms to the range of e1 ∨ e2, but we keep the same alarm message.
+      *)
+      let flow0 = flow in
+      assume e1 man flow
+        ~fthen:(fun flow  ->
+            remove_new_checks flow0 flow |>
+            safe_stub_condition exp.erange man |>
+            Eval.singleton (mk_true exp.erange)
+          )
+        ~felse:(fun flow ->
+            assume e2 man flow
+              ~fthen:(fun flow ->
+                  remove_new_checks flow0 flow |>
+                  safe_stub_condition exp.erange man |>
+                  Eval.singleton (mk_true exp.erange)
+                )
+              ~felse:(fun flow ->
+                  move_new_checks exp.erange flow0 flow |>
+                  Eval.singleton (mk_false exp.erange)
+                )
+          ) |>
+      OptionExt.return
+
+    | E_stub_quantified_formula(quants, cond)
+      when List.exists (function (_,_,S_interval _) -> true | _ -> false) quants ->
+      discard_empty_quantification_intervals quants cond exp.erange man flow |>
+      OptionExt.return
+
+    | E_stub_if(c,f1,f2) ->
+      assume c man flow
+        ~fthen:(man.eval f1)
+        ~felse:(man.eval f2) |>
+      OptionExt.return
 
     | _ -> None
 
@@ -649,24 +679,73 @@ struct
   (** Computation of post-conditions *)
   (** ============================== *)
 
+  (** Execute a global stub directive *)
+  let exec_directive stub range man flow =
+      (* Prepare assignments *)
+      let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
+      (* Evaluate the body of the stub *)
+      let flow = exec_body stub.stub_directive_body None range man flow in
+      (* Clean locals *)
+      let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
+      (* Clean assignments *)
+      let flow = clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
+      Post.return flow
+
+
+  (** Normalize a requirement condition by adding missing otherwise decorations *)
+  let rec normalize_requirement_condition cond =
+    match ekind cond with
+    | E_stub_otherwise _ ->
+      cond
+
+    | E_binop(O_log_and, e1, e2) ->
+      let e1' = normalize_requirement_condition e1 in
+      let e2' = normalize_requirement_condition e2 in
+      mk_log_and e1' e2' cond.erange
+
+    | E_binop(O_log_or, e1, e2) ->
+      let e1' = normalize_requirement_condition e1 in
+      let e2' = normalize_requirement_condition e2 in
+      mk_log_or e1' e2' cond.erange
+
+
+    | E_stub_quantified_formula(quants, {ekind = E_stub_otherwise(qcond, alarm)}) ->
+      mk_stub_otherwise (mk_stub_quantified_formula quants qcond cond.erange) alarm cond.erange
+
+    | E_stub_if(c,e1,e2) ->
+      let e1' = normalize_requirement_condition e1 in
+      let e2' = normalize_requirement_condition e2 in
+      { cond with ekind = E_stub_if(c,e1',e2') }
+
+    | _ ->
+      mk_stub_otherwise cond None cond.erange
+
+
+  (** Check a stub requirement *)
+  let exec_requires cond range man flow =
+    (* Normalize the condition so that all sub-conditions are decorated with an
+       adequate `otherwise` expression *)
+    let cond' = normalize_requirement_condition cond in
+    (* Evaluate the condition. Note that the evaluation of otherwise expression
+       is responsible for raising the alarm if a condition is not satisified. *)
+    man.eval cond' flow >>$ fun r flow ->
+    match ekind r with
+    | E_constant (C_bool true)  -> Post.return flow
+    | E_constant (C_bool false) -> Flow.remove T_cur flow |>
+                                   Post.return
+    | _ -> assert false
+
+
   let exec stmt man flow =
     match skind stmt with
     | S_stub_directive (stub) ->
-      (* Prepare assignments *)
-      let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
-
-      (* Evaluate the body of the stub *)
-      let flow = exec_body stub.stub_directive_body None stmt.srange man flow in
-
-      (* Clean locals *)
-      let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
-
-      (* Clean assignments *)
-      let flow = clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
-
-      Post.return flow |>
+      exec_directive stub stmt.srange man flow |>
       OptionExt.return
 
+    | S_stub_requires cond ->
+      exec_requires cond stmt.srange man flow |>
+      OptionExt.return
+  
     | _ -> None
 
 

@@ -26,7 +26,8 @@ TARGET_LIBS = MopsaCStubsParser
 # Packs
 MopsaCStubsParser = mopsa_c_stubs_parser
 mopsa_c_stubs_parser = cst parser lexer ast passes main
-mopsa_c_stubs_parser.passes = macro_expansion predicate_expansion scoping cst_to_ast
+mopsa_c_stubs_parser.passes = preprocessor scoping cst_to_ast
+
 
 # Packages
 PKGS = zarith
@@ -34,6 +35,9 @@ PKGS = zarith
 # MOPSA libraries
 MOPSALIBS := utils:MopsaUtils parsers/c:MopsaClangParser
 
+# Compilation flags
+# Preprocessor tokens, not present in the AST
+MENHIRFLAGS := --unused-token ALIAS --unused-token SHARP --unused-token PREDICATE
 
 # MOPSA make rules
 MOPSAROOT = @top_srcdir@

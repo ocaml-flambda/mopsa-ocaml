@@ -29,20 +29,18 @@
 #include <stdio.h> // for _alloc_FILE
 #include <string.h>
 #include <errno.h>
+#include <time.h> // for struct tm needed by wcsftime
 #include "mopsa_libc_utils.h"
 
 
 static wint_t _weof = WEOF;
 
 
-/*$$
- * predicate no_overlap_wide(s1, n1, s2, n2):
- *   n1 <=0 or n2 <= 0 or
- *   base(s1) != base(s2) or
- *   (unsigned char*)s1 >= (unsigned char*)s2 + n2 or
- *   (unsigned char*)s2 >= (unsigned char*)s1 + n1
- *  ;
- */
+#define no_overlap_wide(s1, n1, s2, n2)              \
+    n1 <=0 or n2 <= 0 or                             \
+    base(s1) != base(s2) or                          \
+    (unsigned char*)s1 >= (unsigned char*)s2 + n2 or \
+    (unsigned char*)s2 >= (unsigned char*)s1 + n1
 
 
 /*$
@@ -314,7 +312,7 @@ wchar_t *wcstok (wchar_t *__restrict __s,
 size_t wcslen (const wchar_t *__s);
 
 /*$
- * alias: wcsstr;
+ * #alias wcsstr;
  */
 wchar_t *wcswcs (const wchar_t *__haystack, const wchar_t *__needle);
 
@@ -518,7 +516,7 @@ size_t wcrtomb (char *__restrict __s, wchar_t __wc, mbstate_t *__restrict __ps);
 size_t mbrlen (const char *__restrict __s, size_t __n, mbstate_t *__restrict __ps);
 
 /*$
- * alias: mbrlen;
+ * #alias mbrlen;
  */
 size_t __mbrlen (const char *__restrict __s, size_t __n, mbstate_t *__restrict __ps);
 
@@ -826,13 +824,13 @@ unsigned long long int wcstoull (const wchar_t *__restrict __nptr,
                                  int __base);
 
 /*$
- * alias: wcstoll;
+ * #alias wcstoll;
  */
 long long int wcstoq (const wchar_t *__restrict __nptr,
                       wchar_t **__restrict __endptr, int __base);
 
 /*$
- * alias: wcstoull;
+ * #alias wcstoull;
  */
 unsigned long long int wcstouq (const wchar_t *__restrict __nptr,
                                 wchar_t **__restrict __endptr,
@@ -950,7 +948,7 @@ int swprintf (wchar_t *__restrict __s, size_t __n, const wchar_t *__restrict __f
 wint_t fgetwc (FILE *__stream);
 
 /*$
- * alias: fgetwc;
+ * #alias fgetwc;
  */
 wint_t getwc (FILE *__stream);
 
@@ -968,7 +966,7 @@ wint_t getwchar (void);
 wint_t fputwc (wchar_t __wc, FILE *__stream);
 
 /*$
- * alias: fputwc;
+ * #alias fputwc;
  */
 wint_t putwc (wchar_t __wc, FILE *__stream);
 
@@ -1005,43 +1003,43 @@ int fputws (const wchar_t *__restrict __ws, FILE *__restrict __stream);
 wint_t ungetwc (wint_t __wc, FILE *__stream);
 
 /*$
- * alias: getwc;
+ * #alias getwc;
  */
 wint_t getwc_unlocked (__FILE *__stream);
 
 /*$
- * alias: getwchar;
+ * #alias getwchar;
  */
 wint_t getwchar_unlocked (void);
 
 /*$
- * alias: fgetwc;
+ * #alias fgetwc;
  */
 wint_t fgetwc_unlocked (__FILE *__stream);
 
 /*$
- * alias: fputwc;
+ * #alias fputwc;
  */
 wint_t fputwc_unlocked (wchar_t __wc, __FILE *__stream);
 
 /*$
- * alias: putwc;
+ * #alias putwc;
  */
 wint_t putwc_unlocked (wchar_t __wc, __FILE *__stream);
 
 /*$
- * alias: putwchar;
+ * #alias putwchar;
  */
 wint_t putwchar_unlocked (wchar_t __wc);
 
 /*$
- * alias: fgetws;
+ * #alias fgetws;
  */
 wchar_t *fgetws_unlocked (wchar_t *__restrict __ws, int __n,
                           __FILE *__restrict __stream);
 
 /*$
- * alias: fputws;
+ * #alias fputws;
  */
 int fputws_unlocked (const wchar_t *__restrict __ws,
                      __FILE *__restrict __stream);

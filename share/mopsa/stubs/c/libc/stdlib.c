@@ -193,13 +193,13 @@ unsigned long int strtoul (const char *__restrict __nptr,
 //#ifdef __USE_MISC
 
 /*$
- * alias: strtoll;
+ * #alias strtoll;
  */
 long long int strtoq (const char *__restrict __nptr,
                       char **__restrict __endptr, int __base);
 
 /*$
- * alias: strtoull;
+ * #alias strtoull;
  */
 unsigned long long int strtouq (const char *__restrict __nptr,
                                 char **__restrict __endptr, int __base);
@@ -778,13 +778,13 @@ void *aligned_alloc (size_t __alignment, size_t __size);
 //#endif
 
 /*$
- * alarm: "abort called";
+ * ensures: raise("abort called");
  * ensures: 1 == 0;
  */
 void abort (void);
 
 /*$
- * alarm: "__builtin_abort called";
+ * ensures: raise("__builtin_abort called");
  * ensures: 1 == 0;
  */
 void __builtin_abort (void);
@@ -1019,7 +1019,7 @@ int mkstemps (char *__template, int __suffixlen);
 //#ifdef __USE_XOPEN2K8
   
 /*$
- * alias: mktemp;
+ * #alias mktemp;
  */
 char *mkdtemp (char *__template);
 

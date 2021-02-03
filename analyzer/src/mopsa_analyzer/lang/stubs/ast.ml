@@ -106,7 +106,6 @@ and message = {
 
 and message_kind =
   | WARN
-  | ALARM
   | UNSOUND
 
 and log_binop = Mopsa_c_stubs_parser.Cst.log_binop =
@@ -136,7 +135,8 @@ and formula =
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
   | F_in     of expr * set
-
+  | F_otherwise of formula with_range * expr
+  | F_if     of formula with_range * formula with_range * formula with_range
 
 let compare_assigns a1 a2 =
   Compare.pair compare_expr (Compare.list (Compare.pair compare_expr compare_expr))
@@ -204,7 +204,7 @@ type expr_kind +=
   | E_stub_return
   (** Returned value of a stub *)
 
-  | E_stub_builtin_call of builtin * expr
+  | E_stub_builtin_call of builtin * expr list
   (** Call to a built-in function *)
 
   | E_stub_attribute of expr * string
@@ -222,6 +222,16 @@ type expr_kind +=
   | E_stub_quantified_formula of (quant * var * set) list (** Prefix containing the list of quantified variables *) *
                                  expr (** Quantifier-free formula *)
   (** Quantified formula in prenex normal form *)
+
+  | E_stub_otherwise of expr (** condition *) * expr option (** alarm *)
+  (** Conditions decorated with failure alarms. If the alarm is not present, the
+      default alarm A_stub_invalid_requirement is raised. *)
+
+  | E_stub_raise of string (** message *)
+  (** Raise an alarm *)
+
+  | E_stub_if of expr (** condition *) * expr (** then *) * expr (** else *)
+  (** Conditional stub expression *)
 
 
 (** {2 Statements} *)
@@ -320,6 +330,12 @@ let mk_stub_requires cond range =
 let mk_stub_quantified_formula ?(etyp=T_bool) quants cond range =
   mk_expr (E_stub_quantified_formula (quants, cond)) ~etyp range
 
+let mk_stub_otherwise cond alarm ?(etyp=T_bool) range =
+  mk_expr (E_stub_otherwise (cond, alarm)) range ~etyp
+
+let mk_stub_if c f1 f2 range =
+  mk_expr (E_stub_if (c, f1, f2)) range ~etyp:f1.etyp
+
 let is_stub_primed e =
   fold_expr
     (fun acc ee ->
@@ -385,6 +401,8 @@ let rec visit_expr_in_formula visitor f =
   | F_forall (v, s, ff) -> F_forall (v, visit_set visitor s, visit_expr_in_formula visitor ff)
   | F_exists (v, s, ff) -> F_exists (v, visit_set visitor s, visit_expr_in_formula visitor ff)
   | F_in (e, s) -> F_in (visit_expr visitor e, visit_set visitor s)
+  | F_otherwise (f, e) -> F_otherwise(visit_expr_in_formula visitor f, visit_expr visitor e)
+  | F_if (c,f1,f2) -> F_if(visit_expr_in_formula visitor c, visit_expr_in_formula visitor f1, visit_expr_in_formula visitor f2)
 
 and visit_set visitor s =
   match s with
@@ -403,7 +421,6 @@ let negate_log_binop : log_binop -> log_binop = function
   | OR -> AND
   | IMPLIES -> assert false
 
-
 (** {2 Pretty printers} *)
 (** =-=-=-=-=-=-=-=-=-= *)
 
@@ -418,11 +435,13 @@ let pp_quantifier fmt = function
 let rec pp_formula fmt f =
   match f.content with
   | F_expr e -> pp_expr fmt e
-  | F_binop (op, f1, f2) -> fprintf fmt "(%a)@,%a (%a)" pp_formula f1 pp_log_binop op pp_formula f2
+  | F_binop (op, f1, f2) -> fprintf fmt "(%a %a %a)" pp_formula f1 pp_log_binop op pp_formula f2
   | F_not f -> fprintf fmt "not (%a)" pp_formula f
   | F_forall (x, set, f) -> fprintf fmt "@[<v 2>∀ %a %a ∈ %a:@,%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_exists (x, set, f) -> fprintf fmt "@[<v 2>∃ %a %a ∈ %a:@,%a@]" pp_typ x.vtyp pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
+  | F_otherwise (f, e) -> fprintf fmt "(%a otherwise %a)" pp_formula f pp_expr e
+  | F_if (c,f1,f2) -> fprintf fmt "if %a then %a else %a end" pp_formula c pp_formula f1 pp_formula f2
 
 and pp_set fmt =
   function
@@ -474,7 +493,6 @@ let pp_free fmt free =
 let pp_message fmt msg =
   match msg.content.message_kind with
   | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
-  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
   | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf_section fmt sec =
@@ -533,10 +551,10 @@ let () =
             (fun () -> Compare.list compare_expr args1 args2);
           ]
 
-        | E_stub_builtin_call(f1, arg1), E_stub_builtin_call(f2, arg2) ->
+        | E_stub_builtin_call(f1, args1), E_stub_builtin_call(f2, args2) ->
           Compare.compose [
             (fun () -> compare f1 f2);
-            (fun () -> compare_expr arg1 arg2)
+            (fun () -> Compare.list compare_expr args1 args2)
           ]
 
 
@@ -564,6 +582,19 @@ let () =
             compare_expr
             (quants1,cond1) (quants2,cond2)
 
+        | E_stub_otherwise (cond1, alarm1), E_stub_otherwise (cond2, alarm2) ->
+          Compare.pair compare_expr (Compare.option compare_expr)
+            (cond1, alarm1)
+            (cond2, alarm2)
+
+        | E_stub_if(c1,fthen1,felse1), E_stub_if(c2,fthen2,felse2) ->
+          Compare.triple compare_expr compare_expr compare_expr
+            (c1, fthen1, felse1)
+            (c2, fthen2, felse2)
+
+        | E_stub_raise msg1, E_stub_raise msg2 ->
+          String.compare msg1 msg2
+
         | _ -> next e1 e2
       );
 
@@ -576,9 +607,9 @@ let () =
 
         | E_stub_return -> leaf e
 
-        | E_stub_builtin_call(f, arg) ->
-          { exprs = [arg]; stmts = [] },
-          (function {exprs = [arg]} -> {e with ekind = E_stub_builtin_call(f, arg)} | _ -> assert false)
+        | E_stub_builtin_call(f, args) ->
+          { exprs = args; stmts = [] },
+          (function {exprs} -> {e with ekind = E_stub_builtin_call(f, exprs)})
 
         | E_stub_attribute(o, f) ->
           { exprs = [o]; stmts = [] },
@@ -614,6 +645,26 @@ let () =
              let cond = List.hd rexprs and quants = recompose_quants quants (List.rev @@ List.tl rexprs) in
              { e with ekind = E_stub_quantified_formula(quants,cond) })
 
+        | E_stub_otherwise (cond, None) ->
+          { exprs = [cond]; stmts = [] },
+          (function {exprs} ->
+             let cond = match exprs with [e] -> e | _ -> assert false in
+             { e with ekind = E_stub_otherwise (cond, None) })
+
+        | E_stub_otherwise (cond, Some alarm) ->
+          { exprs = [cond;alarm]; stmts = [] },
+          (function {exprs} ->
+             let cond,alarm = match exprs with [e1;e2] -> e1,e2 | _ -> assert false in
+             { e with ekind = E_stub_otherwise (cond, Some alarm) })
+
+        | E_stub_if (c, f1, f2) ->
+          { exprs = [c;f1;f2]; stmts = [] },
+          (function {exprs} ->
+             let c,f1,f2 = match exprs with [e0;e1;e2] -> e0,e1,e2 | _ -> assert false in
+             { e with ekind = E_stub_if (c,f1,f2) })
+
+        | E_stub_raise msg -> leaf e
+
         | _ -> next e
       );
 
@@ -621,7 +672,7 @@ let () =
         match ekind e with
         | E_stub_call (s, args) -> fprintf fmt "stub %s(%a)" s.stub_func_name (pp_list pp_expr ", ") args
         | E_stub_return -> pp_print_string fmt "return"
-        | E_stub_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+        | E_stub_builtin_call(f, args) -> fprintf fmt "%a(%a)" pp_builtin f (pp_list pp_expr ", ") args
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
         | E_stub_alloc r -> fprintf fmt "alloc res(%s)" r
         | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
@@ -632,6 +683,10 @@ let () =
                (fun fmt (q,v,s) -> fprintf fmt "%a%a ∈ %a" pp_quantifier q pp_var v pp_set s)
             ) quants
             pp_expr cond
+        | E_stub_otherwise(cond,None) -> pp_expr fmt cond
+        | E_stub_otherwise(cond,Some alarm) -> fprintf fmt "(%a otherwise %a)" pp_expr cond pp_expr alarm
+        | E_stub_if(c,f1,f2) -> fprintf fmt "(if %a then %a else %a end)" pp_expr c pp_expr f1 pp_expr f2
+        | E_stub_raise msg -> fprintf fmt "raise(\"%s\")" msg
         | _ -> next fmt e
       );
   }
@@ -696,7 +751,7 @@ let () =
     print = (fun next fmt s ->
         match skind s with
         | S_stub_directive (stub) ->
-          fprintf fmt "@[<v 2>/*$$$@,%a@]*/"
+          fprintf fmt "@[<v 2>/*$!@,%a@]*/"
             pp_sections stub.stub_directive_body
 
         | S_stub_free e -> fprintf fmt "stub-free(%a);" pp_expr e

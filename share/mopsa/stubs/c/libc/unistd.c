@@ -949,7 +949,7 @@ __pid_t fork (void);
 
 
 /*$
- * alias: fork;
+ * #alias fork;
  */
 __pid_t vfork (void);
 

@@ -35,14 +35,14 @@ int _errno;
 int *__errno_location (void);
 
 
-/*$$$
+/*$!
  * local: char* addr = _mopsa_new_readonly_string();
  * assigns: program_invocation_name;
  * ensures: program_invocation_name' == addr;
  */
 char *program_invocation_name;
 
-/*$$$
+/*$!
  * local: char* addr = _mopsa_new_readonly_string();
  * assigns: program_invocation_short_name;
  * ensures: program_invocation_short_name' == addr;

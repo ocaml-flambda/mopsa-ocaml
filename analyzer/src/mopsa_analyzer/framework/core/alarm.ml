@@ -609,13 +609,13 @@ let add_diagnostic diag report =
     { report with
       report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
 
-let remove_diagnostic range check report =
+let remove_diagnostic diag report =
   try
-    let checks = RangeMap.find range report.report_diagnostics in
-    let checks' = CheckMap.remove check checks in
+    let checks = RangeMap.find diag.diag_range report.report_diagnostics in
+    let checks' = CheckMap.remove diag.diag_check checks in
     if checks == checks' then report
     else { report with
-           report_diagnostics = RangeMap.add range checks' report.report_diagnostics }
+           report_diagnostics = RangeMap.add diag.diag_range checks' report.report_diagnostics }
   with Not_found ->
     report
 

@@ -84,7 +84,7 @@ int fstatat (int __fd, const char *__restrict __file,
              struct stat *__restrict __buf, int __flag);
 
 /*$
- * alias: stat;
+ * #alias stat;
  */
 int lstat (const char *__restrict __file,
            struct stat *__restrict __buf);
@@ -104,7 +104,7 @@ int lstat (const char *__restrict __file,
 int chmod (const char *__file, __mode_t __mode);
 
 /*$
- * alias: chmod;
+ * #alias chmod;
  */
 int lchmod (const char *__file, __mode_t __mode);
 

@@ -26,6 +26,7 @@
 
 #include <time.h>
 #include <errno.h>
+#include <signal.h> // for struct sigevent needed by time_create
 #include "mopsa_libc_utils.h"
 
 
@@ -45,7 +46,7 @@ long int timezone;
  */
 static int _mopsa_tzset();
 
-/*$$$
+/*$!
  * local: int dummy = _mopsa_tzset();
  */
 
@@ -78,17 +79,15 @@ time_t time (time_t *__timer);
  */
 double difftime (time_t __time1, time_t __time0);
 
-/*$$
- * predicate valid_primed_tm(tm):
- *    (tm.tm_sec)'  in [0,60] and
- *    (tm.tm_min)'  in [0,59] and
- *    (tm.tm_hour)' in [0,23] and
- *    (tm.tm_mday)' in [1,31] and
- *    (tm.tm_mon)'  in [0,11] and
- *    (tm.tm_wday)' in [0,6]  and
- *    (tm.tm_yday)' in [0,365] and
- *    (tm.tm_isdst)' >= 0;
- */
+#define valid_primed_tm(tm)                  \
+    primed(tm.tm_sec)  in [0,60] and         \
+    primed(tm.tm_min)  in [0,59] and         \
+    primed(tm.tm_hour) in [0,23] and         \
+    primed(tm.tm_mday) in [1,31] and         \
+    primed(tm.tm_mon)  in [0,11] and         \
+    primed(tm.tm_wday) in [0,6]  and         \
+    primed(tm.tm_yday) in [0,365] and        \
+    primed(tm.tm_isdst) >= 0
 
 /*$
  * requires: valid_ptr(__tp);
@@ -252,7 +251,7 @@ int stime (const time_t *__when);
 time_t timegm (struct tm *__tp);
 
 /*$
- * alias: timegm;
+ * #alias timegm;
  */
 time_t timelocal (struct tm *__tp);
 

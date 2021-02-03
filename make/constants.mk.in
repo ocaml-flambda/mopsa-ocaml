@@ -69,6 +69,7 @@ INCLUDES := \
     -I $(call lib_src_dir,$(lib)) \
     -I $(call lib_dir,$(lib)))
 
+MENHIRFLAGS := --explain $(MENHIRFLAGS)
 OCAMLFLAGS := -thread -bin-annot -safe-string -absname $(INCLUDES) $(OCAMLFLAGS) -g -w @8
 ifneq (@enable_byte@,true)
   DEPFLAGS := -native
