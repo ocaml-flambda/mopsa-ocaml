@@ -452,8 +452,6 @@ struct
 
   (** Filter equal pointers *)
   let assume_eq p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -480,8 +478,6 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -531,8 +527,6 @@ struct
 
   (** Filter ordered pointers *)
   let assume_order op p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -911,10 +905,13 @@ struct
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ ?(p != q) ⟧ *)
     | E_binop(O_ne, p, q)
@@ -922,32 +919,39 @@ struct
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
-
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
     | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ !(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
     | E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
-
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ (bool)ptr ⟧ *)
     | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
@@ -1017,7 +1021,7 @@ struct
 
   (** {2 Pretty printer} *)
   (** ****************** *)
-  
+
   let print_state printer a =
     pprint ~path:[Key "pointers"] printer (pbox Map.print a)
 
