@@ -541,6 +541,7 @@ struct
     (* Get the value of a variable *)
     | Q_debug_variable_value var ->
       let open Universal.Numeric.Common in
+      let module StringSet = SetExt.StringSet in
       let range = mk_fresh_range () in
 
       (* Get the direct value of an expression *)
@@ -587,26 +588,26 @@ struct
       (* Get the direct value a pointer expression *)
       and pointer_value e =
         let evl = resolve_pointer e man flow in
-        let l = Cases.fold_result
+        let s = Cases.fold_result
             (fun acc pt flow ->
                match pt with
-               | P_null -> "NULL" :: acc
-               | P_invalid -> "INVALID" :: acc
+               | P_null -> StringSet.add "NULL" acc
+               | P_invalid -> StringSet.add "INVALID" acc
                | P_block (base,offset,_) ->
                  begin match int_value offset with
                    | None -> acc
                    | Some o ->
                      let v = Format.asprintf "&%a + %s" pp_base base o in
-                     v :: acc
+                     StringSet.add v acc
                  end
-               | P_fun f -> f.c_func_org_name :: acc
-               | P_top -> "⊤" :: acc
-            ) [] evl
+               | P_fun f -> StringSet.add f.c_func_org_name acc
+               | P_top -> StringSet.add "⊤" acc
+            ) StringSet.empty evl
         in
-        match l with
-        | [x] -> Some x
+        match StringSet.elements s with
         | []  -> None
-        | _   -> Some Format.(asprintf "{%a}"
+        | [x] -> Some x
+        | l   -> Some Format.(asprintf "{%a}"
                                 (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
                                    pp_print_string
                                 ) l)
