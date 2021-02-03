@@ -79,9 +79,9 @@ struct
 
   (* Remove duplicate evaluations *)
   let eval exp man flow =
-    D.eval exp man flow |>
-    OptionExt.lift @@ Eval.remove_duplicates man.lattice
-
+    match D.eval exp man flow with
+    | Some x -> Some (Eval.remove_duplicates man.lattice x)
+    | None -> None
 end
 
 

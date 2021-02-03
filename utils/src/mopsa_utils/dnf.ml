@@ -77,7 +77,12 @@ let is_empty a = is_false a || is_true a
 let map
     (f: 'a -> 'b)
     (dnf: 'a t)
-  : 'b t =
+    : 'b t =
+  match dnf with
+  | [] -> []
+  | [[x]] -> [[f x]]
+  | [[x]; [y]] -> [[f x]; [f y]]
+  | _ ->
   List.map (List.map f) dnf
 
 let map_conjunction
@@ -141,23 +146,31 @@ let fold_reduce
     ~(meet:'c -> 'c -> 'c)
     (init:'a)
     (dnf:'b t) : 'a * 'c =
-  let rec apply_conj acc = function
-    | [e] -> f acc e
-    | e :: tl ->
-      let acc',x = f acc e in
-      let acc'',y = apply_conj acc' tl in
-      acc'',meet x y
-    | [] -> assert false
-  in
-  let rec apply_disj acc = function
-    | [conj] -> apply_conj acc conj
-    | conj :: tl ->
-      let acc',x = apply_conj acc conj in
-      let acc'',y = apply_disj acc' tl in
-      acc'',join x y
-    | _ -> assert false
-  in
-  apply_disj init dnf
+  match dnf with
+  | [] -> assert false
+  | [[x]] -> f init x
+  | [[x];[y]] ->
+     let acc', x = f init x in
+     let acc'', y = f acc' y in
+     acc'', join x y
+  | _ ->
+     let rec apply_conj acc = function
+       | [e] -> f acc e
+       | e :: tl ->
+          let acc',x = f acc e in
+          let acc'',y = apply_conj acc' tl in
+          acc'',meet x y
+       | [] -> assert false
+     in
+     let rec apply_disj acc = function
+       | [conj] -> apply_conj acc conj
+       | conj :: tl ->
+          let acc',x = apply_conj acc conj in
+          let acc'',y = apply_disj acc' tl in
+          acc'',join x y
+       | _ -> assert false
+     in
+     apply_disj init dnf
 
 let reduce_conjunction
     (f: 'a list -> 'b)
@@ -254,8 +267,13 @@ let fold
     (f: 'b -> 'a -> 'b)
     (init: 'b)
     (dnf: 'a t)
-  : 'b =
-  List.fold_left (List.fold_left f) init dnf
+    : 'b =
+  match dnf with
+  | [] -> init
+  | [[x]] -> f init x
+  | [[x]; [y]] -> f (f init x) y
+  | _ ->
+     List.fold_left (List.fold_left f) init dnf
 
 
 let partition (f:'a -> bool) (a:'a t) =
