@@ -52,7 +52,6 @@ void PyErr_SetString(PyObject* o, const char* msg){
     _mopsa_assume(exc != NULL);
     exc->exc_state = o;
     exc->exc_msg = msg;
-//    _mopsa_print();
 }
 
 PyObject*
@@ -223,7 +222,6 @@ int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
         return -1;
     if (PyModule_AddObject(m, name, o) == 0)
     {
-        _mopsa_print();
         return 0;
     }
     Py_DECREF(o);
@@ -377,7 +375,6 @@ _PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
 // in practice, only used to get the types PyObject and PyTypeObject...
 {
     *(PyTypeObject**) ((char*)obj + offsetof(PyObject, ob_type)) = type;
-    _mopsa_print();
 }
 
 void
