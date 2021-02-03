@@ -95,3 +95,10 @@ let () = register_query {
 
 
 let resolve_pointer p man flow = man.ask (Q_c_points_to p) flow
+
+
+(* Points-to containers *)
+(* ==================== *)
+
+module PointsToSet = SetExt.Make(struct type t = points_to let compare = compare_points_to end)
+module PointsToMap = MapExt.Make(struct type t = points_to let compare = compare_points_to end)

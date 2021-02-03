@@ -610,14 +610,15 @@ struct
                                 (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ")
                                    pp_print_string
                                 ) l)
+      in
 
       (* Get the sub-values of an expressions *)
-      and get_sub_value v e =
+      let rec get_sub_value past v e =
         if is_c_int_type e.etyp then int_sub_value v e else
         if is_c_float_type e.etyp then float_sub_value v e else
-        if is_c_array_type e.etyp then array_sub_value v e else
-        if is_c_record_type e.etyp then record_sub_value v e else
-        if is_c_pointer_type e.etyp then pointer_sub_value v e
+        if is_c_array_type e.etyp then array_sub_value past v e else
+        if is_c_record_type e.etyp then record_sub_value past v e else
+        if is_c_pointer_type e.etyp then pointer_sub_value past v e
         else panic "get_sub_value: unsupported expression %a of type %a" pp_expr e pp_typ e.etyp
 
       (* Integer expression have no sub-values *)
@@ -627,14 +628,14 @@ struct
       and float_sub_value v e = None
 
       (* Get the sub-values of an array *)
-      and array_sub_value v e =
+      and array_sub_value past v e =
         match e.etyp |> remove_typedef_qual with
         | T_c_array(t,C_array_length_cst n) ->
           let rec aux i =
             if Z.(i = n) then []
             else
               let vv = Format.asprintf "[%a]" Z.pp_print i in
-              get_var_value vv (mk_c_subscript_access e (mk_z i range) range) :: (aux Z.(succ i))
+              get_var_value past vv (mk_c_subscript_access e (mk_z i range) range) :: (aux Z.(succ i))
           in
           let l = aux Z.zero in
           Some (Indexed_sub_value l)
@@ -642,12 +643,12 @@ struct
         | _ -> None
 
       (* Get the sub-values of a record *)
-      and record_sub_value v e =
+      and record_sub_value past v e =
         match e.etyp |> remove_typedef_qual with
         | T_c_record r ->
           let l = List.fold_right
               (fun field acc ->
-                 (field.c_field_org_name, get_var_value field.c_field_org_name (mk_c_member_access e field range)) :: acc
+                 (field.c_field_org_name, get_var_value past field.c_field_org_name (mk_c_member_access e field range)) :: acc
               ) r.c_record_fields []
           in
           Some (Named_sub_value l)
@@ -655,36 +656,37 @@ struct
         | _ -> None
 
       (* Get the sub-values of a pointer *)
-      and pointer_sub_value v e =
+      and pointer_sub_value past v e =
         if is_c_pointer_type e.etyp && is_c_void_type (under_pointer_type e.etyp) then None else
         let evl = resolve_pointer e man flow in
-        let l = Cases.fold_result
+        (* Get sub-values of pointers only if they are valid + not already processed *)
+        let pts = Cases.fold_result
             (fun acc pt flow ->
                match pt with
-               | P_block (base,offset,_) ->
-                 let vv = "*" ^ v in
-                 begin match get_var_value vv (mk_c_deref e range) with
-                   | {var_value = None; var_sub_value = None} -> acc
-                   | x -> [Named_sub_value [vv,x]]
-                 end
+               | P_block _ when not (PointsToSet.mem pt past) ->
+                 PointsToSet.add pt acc
                | _ -> acc
-            ) [] evl
+            ) PointsToSet.empty evl
         in
-        match l with
-        | [] -> None
-        | [v] -> Some v
-        | _ -> assert false
+        if PointsToSet.is_empty pts then
+          None
+        else
+          let vv = "*" ^ v in
+          let past' = PointsToSet.union pts past in
+          match get_var_value past' vv (mk_c_deref e range) with
+          | {var_value = None; var_sub_value = None} -> None
+          | x -> Some (Named_sub_value [vv,x])
 
       (* Get the value of an expression *)
-      and get_var_value v e =
+      and get_var_value past v e =
         { var_value = get_value e;
           var_value_type = e.etyp;
-          var_sub_value = get_sub_value v e; }
+          var_sub_value = get_sub_value past v e; }
       in
 
       (* All together! *)
       let vname = Format.asprintf "%a" pp_var var in
-      Some (get_var_value vname (mk_var var range))
+      Some (get_var_value PointsToSet.empty vname (mk_var var range))
 
     | _ -> None
 
