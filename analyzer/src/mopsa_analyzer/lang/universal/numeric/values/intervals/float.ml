@@ -98,7 +98,7 @@ struct
       I.of_float_prec (prec p) (round ()) lo up
 
     | C_int_interval (lo,up) ->
-      I.of_z (prec p) (round ()) lo up
+      I.of_int_itv (prec p) (round ()) (II.of_bound lo up)
 
     | C_int i ->
       I.of_z (prec p) (round ()) i i
@@ -136,7 +136,7 @@ struct
     | O_mod   -> I.fmod (prec p) (round ()) a1 a2
     | _       -> top_of_prec p
 
-  let filter = default_filter 
+  let filter = default_filter
 
   let backward_unop op t a tr r =
     let p = prec_of_type tr in
@@ -178,7 +178,7 @@ struct
     | V_float_interval _ -> Some a
     | _ -> None
 
-  
+
 end
 
 

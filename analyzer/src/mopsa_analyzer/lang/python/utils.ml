@@ -67,14 +67,6 @@ let mk_try_stopiteration body except range =
     (Universal.Ast.mk_block [] range)
     range
 
-let mk_positive_integer man flow range next =
-  let open Universal.Ast in
-  let tmp = mktmp ~typ:(T_py None) () in
-  man.exec (mk_assign (mk_var tmp range) (mk_py_top T_int range) range) flow >>%
-  man.exec (mk_assume (mk_binop ~etyp:(T_py None) (mk_var tmp range) O_ge (mk_zero ~typ:(T_py (Some Int)) range) range) range) >>%
-  man.eval (mk_var tmp range) |>
-  Cases.add_cleaners [mk_remove_var tmp range] >>$
-  next
 
 let check_instances ?(arguments_after_check=0) funname man flow range exprs instances processing =
   let open Mopsa in
