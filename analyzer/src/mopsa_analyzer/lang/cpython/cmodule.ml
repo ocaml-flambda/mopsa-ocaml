@@ -774,6 +774,7 @@ module Domain =
                    ("PyUnicode_Type", "str");
                    ("PyList_Type", "list");
                    ("PyTuple_Type", "tuple");
+                   ("_PyNone_Type", "NoneType");
                    (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
                  ]
                  flow in
