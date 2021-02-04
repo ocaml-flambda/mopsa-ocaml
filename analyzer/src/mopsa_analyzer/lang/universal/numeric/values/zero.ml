@@ -97,14 +97,14 @@ struct
     | C_bool false -> ZERO
     | C_int i when Z.equal i Z.zero -> ZERO
     | C_int i -> NON_ZERO
-    | C_int_interval (i1,i2) when Z.equal i1 Z.zero &&
-                                  Z.equal i2 Z.zero ->
+    | C_int_interval (i1,i2) when ItvUtils.IntBound.is_zero i1 &&
+                                  ItvUtils.IntBound.is_zero i2 ->
       ZERO
-    | C_int_interval (i1,i2) when Z.gt i1 Z.zero ||
-                                  Z.lt i2 Z.zero ->
+    | C_int_interval (i1,i2) when ItvUtils.IntBound.is_positive_strict i1 ||
+                                  ItvUtils.IntBound.is_negative_strict i2 ->
       NON_ZERO
     | _ -> TOP
-      
+
   let unop op t a tr =
     match op with
     | O_log_not -> begin match a with

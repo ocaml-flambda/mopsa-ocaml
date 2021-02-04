@@ -124,7 +124,7 @@ struct
     | C_bool false -> singleton Z.zero |> bound
     | C_top T_bool -> of_bounds Z.zero Z.one |> bound
     | C_int n -> singleton n |> bound
-    | C_int_interval (i1,i2) -> of_bounds i1 i2
+    | C_int_interval (ItvUtils.IntBound.Finite i1, ItvUtils.IntBound.Finite i2) -> of_bounds i1 i2
     | _ -> TOP
 
   let unop op t a tr =

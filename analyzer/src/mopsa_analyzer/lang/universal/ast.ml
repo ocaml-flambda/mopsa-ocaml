@@ -88,7 +88,7 @@ type constant +=
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)
-  | C_int_interval of Z.t * Z.t (** Integer ranges. *)
+  | C_int_interval of ItvUtils.IntBound.t * ItvUtils.IntBound.t (** Integer ranges. *)
   | C_float_interval of float * float (** Float ranges. *)
 (** Constants. *)
 
@@ -101,8 +101,8 @@ let () =
         | C_string s1, C_string s2 -> Stdlib.compare s1 s2
         | C_int_interval(z1, z1'), C_int_interval(z2, z2') ->
           Compare.compose [
-            (fun () -> Z.compare z1 z2);
-            (fun () -> Z.compare z1' z2')
+            (fun () -> ItvUtils.IntBound.compare z1 z2);
+            (fun () -> ItvUtils.IntBound.compare z1' z2')
           ]
         | C_float_interval(f1, f1'), C_float_interval(f2, f2') ->
           Compare.compose [
@@ -118,7 +118,7 @@ let () =
         | C_string(s) -> fprintf fmt "\"%s\"" s
         | C_int(n) -> Z.pp_print fmt n
         | C_float(f) -> pp_print_float fmt f
-        | C_int_interval(a,b) -> fprintf fmt "[%a,%a]" Z.pp_print a Z.pp_print b
+        | C_int_interval(a,b) -> fprintf fmt "[%a,%a]" ItvUtils.IntBound.fprint a ItvUtils.IntBound.fprint b
         | C_float_interval(a,b) -> fprintf fmt "[%a,%a]" pp_print_float a pp_print_float b
         | c -> default fmt c
       );
@@ -738,10 +738,13 @@ let mk_float ?(prec=F_DOUBLE) f erange =
   mk_constant ~etyp:(T_float prec) (C_float f) erange
 
 let mk_int_interval a b ?(typ=T_int) range =
-  mk_constant ~etyp:typ (C_int_interval (Z.of_int a, Z.of_int b)) range
+  mk_constant ~etyp:typ (C_int_interval (ItvUtils.IntBound.of_int a, ItvUtils.IntBound.of_int b)) range
+
+let mk_int_general_interval a b ?(typ=T_int) range =
+  mk_constant ~etyp:typ (C_int_interval (a, b)) range
 
 let mk_z_interval a b ?(typ=T_int) range =
-  mk_constant ~etyp:typ (C_int_interval (a, b)) range
+  mk_constant ~etyp:typ (C_int_interval (ItvUtils.IntBound.Finite a, ItvUtils.IntBound.Finite b)) range
 
 let mk_float_interval ?(prec=F_DOUBLE) a b range =
   mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
@@ -965,7 +968,8 @@ let rec expr_to_const e : constant option =
 
       | O_eq, Some (C_int n), Some (C_int_interval (a,b))
       | O_eq, Some (C_int_interval (a,b)), Some (C_int n) ->
-        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool false in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.leq a n && ItvUtils.IntBound.leq n b then C_top T_bool else C_bool false in
         Some c
 
       | O_ne, Some (C_int n1), Some (C_int n2) ->
@@ -973,7 +977,8 @@ let rec expr_to_const e : constant option =
 
       | O_ne, Some (C_int n), Some (C_int_interval (a,b))
       | O_ne, Some (C_int_interval (a,b)), Some (C_int n) ->
-        let c = if Z.(a <= n && n <= b) then C_top T_bool else C_bool true in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.leq a n && ItvUtils.IntBound.leq n b then C_top T_bool else C_bool true in
         Some c
 
       | O_le, Some (C_int n1), Some (C_int n2)
@@ -982,12 +987,14 @@ let rec expr_to_const e : constant option =
 
       | O_le, Some (C_int n), Some (C_int_interval (a,b))
       | O_ge, Some (C_int_interval (a,b)), Some (C_int n) ->
-        let c = if Z.(n <= a) then C_bool true else if Z.(n > b) then C_bool false else C_top T_bool in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.leq n a then C_bool true else if ItvUtils.IntBound.gt n b then C_bool false else C_top T_bool in
         Some c
 
       | O_le, Some (C_int_interval (a,b)), Some (C_int n)
       | O_ge, Some (C_int n), Some (C_int_interval (a,b)) ->
-        let c = if Z.(b <= n) then C_bool true else if Z.(a > n) then C_bool false else C_top T_bool in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.leq b n then C_bool true else if ItvUtils.IntBound.gt a n then C_bool false else C_top T_bool in
         Some c
 
       | O_lt, Some (C_int n1), Some (C_int n2)
@@ -996,12 +1003,14 @@ let rec expr_to_const e : constant option =
 
       | O_lt, Some (C_int n), Some (C_int_interval (a,b))
       | O_gt, Some (C_int_interval (a,b)), Some (C_int n) ->
-        let c = if Z.(n < a) then C_bool true else if Z.(n >= b) then C_bool false else C_top T_bool in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.lt n a then C_bool true else if ItvUtils.IntBound.geq n b then C_bool false else C_top T_bool in
         Some c
 
       | O_lt, Some (C_int_interval (a,b)), Some (C_int n)
       | O_gt, Some (C_int n), Some (C_int_interval (a,b)) ->
-        let c = if Z.(b < n) then C_bool true else if Z.(a >= n) then C_bool false else C_top T_bool in
+        let n = ItvUtils.IntBound.Finite n in
+        let c = if ItvUtils.IntBound.lt b n then C_bool true else if ItvUtils.IntBound.geq a n then C_bool false else C_top T_bool in
         Some c
 
       | _ -> None
