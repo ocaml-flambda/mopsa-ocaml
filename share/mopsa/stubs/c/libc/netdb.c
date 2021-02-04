@@ -359,13 +359,13 @@ int getnetgrent (char **__restrict __hostp,
 /*$
  * requires: __netgroup != NULL implies valid_string(__netgroup);
  * requires: __host != NULL implies valid_string(__host);
- * requires: __user != NULL implies valid_string(__user);
+ * requires: __user_ != NULL implies valid_string(__user_);
  * requires: __domain != NULL implies valid_string(__domain);
  * assigns: _mopsa_herrno;
  * ensures: return in [0,1];
  */
 int innetgr (const char *__netgroup, const char *__host,
-             const char *__user, const char *__domain);
+             const char *__user_, const char *__domain);
 
 // unsupported GNU extension
 int getnetgrent_r (char **__restrict __hostp,
@@ -510,17 +510,3 @@ int getnameinfo (const struct sockaddr *__restrict __sa,
                  socklen_t __salen, char *__restrict __host,
                  socklen_t __hostlen, char *__restrict __serv,
                  socklen_t __servlen, int __flags);
-
-// unsupported GNU extension
-int getaddrinfo_a (int __mode, struct gaicb *__list[__restrict_arr],
-                   int __ent, struct sigevent *__restrict __sig);
-
-// unsupported GNU extension
-int gai_suspend (const struct gaicb *const __list[], int __ent,
-                 const struct timespec *__timeout);
-
-// unsupported GNU extension
-int gai_error (struct gaicb *__req);
-
-// unsupported GNU extension
-int gai_cancel (struct gaicb *__gaicbp);
