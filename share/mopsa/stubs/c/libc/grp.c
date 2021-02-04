@@ -38,7 +38,7 @@ void setgrent (void);
  */
 void endgrent (void);
 
-static struct group _mopsa_group_buf;
+struct group _mopsa_group_buf;
 
 /*$
  * assigns: _mopsa_group_buf;

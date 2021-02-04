@@ -98,6 +98,7 @@ type operator +=
   | O_log_not    (** logical negation *)
   | O_log_or     (** logical disjunction || *)
   | O_log_and    (** logical conjunction && *)
+  | O_log_xor    (** logical strict disjonction xor *)
   | O_cast       (** type cast *)
 
 val is_comparison_op : operator -> bool

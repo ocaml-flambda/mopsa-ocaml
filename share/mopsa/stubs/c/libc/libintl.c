@@ -36,7 +36,7 @@
 
 
 /*$
- * requires: null_or_valid_string(__domainname);
+ * requires: null_or_valid_string_or_fail(__domainname);
  * local: char* r = _mopsa_new_readonly_string();
  * assigns: _errno;
  * ensures: return == NULL or return == r;
@@ -44,8 +44,8 @@
 char *textdomain (const char *__domainname);
 
 /*$
- * requires: valid_string(__domainname);
- * requires: null_or_valid_string(__dirname);
+ * requires: valid_string_or_fail(__domainname);
+ * requires: null_or_valid_string_or_fail(__dirname);
  * local: char* r = _mopsa_new_readonly_string();
  * assigns: _errno;
  * ensures: return == NULL or return == r;
@@ -53,8 +53,8 @@ char *textdomain (const char *__domainname);
 char *bindtextdomain (const char *__domainname, const char *__dirname);
 
 /*$
- * requires: valid_string(__domainname);
- * requires: null_or_valid_string(__codeset);
+ * requires: valid_string_or_fail(__domainname);
+ * requires: null_or_valid_string_or_fail(__codeset);
  * local: char* r = _mopsa_new_readonly_string();
  * assigns: _errno;
  * ensures: return == NULL or return == r;
@@ -68,13 +68,13 @@ static char _gettext_buf[GETTEXT_BUF_SIZE];
 
 #if IDENTITY_GETTEXT
 /*$
- * requires: valid_string(__msgid);
+ * requires: valid_string_or_fail(__msgid);
  * ensures: return == __msgid;
  */
 char *gettext (const char *__msgid);
 #else
 /*$
- * requires: valid_string(__msgid);
+ * requires: valid_string_or_fail(__msgid);
  *
  * case "translation found" {
  *   assigns: _gettext_buf[0, GETTEXT_BUF_SIZE);
@@ -91,14 +91,14 @@ char *gettext (const char *__msgid);
 
 
 /*$
- * requires: valid_string(__domainname);
+ * requires: valid_string_or_fail(__domainname);
  * local: char* r = gettext(__msgid);
  * ensures: return == r;
  */
 char *dgettext (const char *__domainname, const char *__msgid);
 
 /*$
- * requires: valid_string(__domainname);
+ * requires: valid_string_or_fail(__domainname);
  * local: char* r = gettext(__msgid);
  * ensures: return == r;
  */
@@ -114,16 +114,16 @@ char *ngettext (const char *__msgid1, const char *__msgid2,
 		unsigned long int __n);
 
 /*$
- * requires: valid_string(__domainname);
- * local: char* r = ngettext(__msgid1, __msgid2);
+ * requires: valid_string_or_fail(__domainname);
+ * local: char* r = ngettext(__msgid1, __msgid2, __n);
  * ensures: return == r;
  */
 char *dngettext (const char *__domainname, const char *__msgid1,
 		 const char *__msgid2, unsigned long int __n);
 
 /*$
- * requires: valid_string(__domainname);
- * local: char* r = ngettext(__msgid1, __msgid2);
+ * requires: valid_string_or_fail(__domainname);
+ * local: char* r = ngettext(__msgid1, __msgid2, __n);
  * ensures: return == r;
  */
 char *dcngettext (const char *__domainname, const char *__msgid1,

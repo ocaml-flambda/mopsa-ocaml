@@ -1,7 +1,4 @@
-/*$$
- * predicate pos(x):
- *   x >= 0;
- */
+#define pos(x) x >= 0
 
 /*$
  * requires: pos(a);

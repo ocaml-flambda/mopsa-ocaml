@@ -114,6 +114,7 @@ struct
     | O_log_not -> bot_lift1 I.log_not a
     | O_minus  -> bot_lift1 I.neg a
     | O_plus  -> a
+    | O_abs -> bot_lift1 I.abs a
     | O_wrap(l, u) -> bot_lift1 (fun itv -> I.wrap itv l u) a
     | O_bit_invert -> bot_lift1 I.bit_not a
     | _ -> top_of_typ tr
@@ -124,6 +125,7 @@ struct
     | O_minus  -> bot_lift2 I.sub a1 a2
     | O_mult   -> bot_lift2 I.mul a1 a2
     | O_div    -> bot_absorb2 I.div a1 a2
+    | O_ediv   -> bot_absorb2 I.ediv a1 a2
     | O_pow    -> bot_lift2 I.pow a1 a2
     | O_eq     -> bot_lift2 I.log_eq a1 a2
     | O_ne     -> bot_lift2 I.log_neq a1 a2
@@ -133,7 +135,9 @@ struct
     | O_ge     -> bot_lift2 I.log_geq a1 a2
     | O_log_or   -> bot_lift2 I.log_or a1 a2
     | O_log_and  -> bot_lift2 I.log_and a1 a2
+    | O_log_xor -> bot_lift2 I.log_xor a1 a2
     | O_mod    -> bot_absorb2 I.rem a1 a2
+    | O_erem   -> bot_absorb2 I.erem a1 a2
     | O_bit_and -> bot_lift2 I.bit_and a1 a2
     | O_bit_or -> bot_lift2 I.bit_or a1 a2
     | O_bit_xor -> bot_lift2 I.bit_xor a1 a2
@@ -168,7 +172,9 @@ struct
         | O_minus  -> bot_to_exn (I.bwd_sub a1 a2 r)
         | O_mult   -> bot_to_exn (I.bwd_mul a1 a2 r)
         | O_div    -> bot_to_exn (I.bwd_div a1 a2 r)
+        | O_ediv   -> bot_to_exn (I.bwd_ediv a1 a2 r)
         | O_mod    -> bot_to_exn (I.bwd_rem a1 a2 r)
+        | O_erem   -> bot_to_exn (I.bwd_erem a1 a2 r)
         | O_pow    -> bot_to_exn (I.bwd_pow a1 a2 r)
         | O_eq     -> bot_to_exn (I.bwd_log_eq a1 a2 r)
         | O_ne     -> bot_to_exn (I.bwd_log_neq a1 a2 r)

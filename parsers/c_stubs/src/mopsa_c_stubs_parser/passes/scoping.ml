@@ -122,9 +122,15 @@ let rec visit_expr (e:expr with_range) scope =
     let p, scope = visit_expr p scope in
     E_arrow (p, f), scope
 
-  | E_builtin_call (f, arg) ->
-    let arg, scope = visit_expr arg scope in
-    E_builtin_call (f, arg), scope
+  | E_conditional (c, e1, e2) ->
+    let c, scope = visit_expr c scope in
+    let e1, scope = visit_expr e1 scope in
+    let e2, scope = visit_expr e2 scope in
+    E_conditional (c, e1, e2), scope
+
+  | E_builtin_call (f, args) ->
+    let args, scope = visit_list visit_expr args scope in
+    E_builtin_call (f, args), scope
 
   | E_sizeof_type t ->
     E_sizeof_type t, scope
@@ -132,6 +138,9 @@ let rec visit_expr (e:expr with_range) scope =
   | E_sizeof_expr e ->
     let e, scope = visit_expr e scope in
     E_sizeof_expr e, scope
+
+  | E_raise msg ->
+    E_raise msg, scope
 
 let visit_interval i scope =
   let lb, scope = visit_expr i.itv_lb scope in
@@ -179,17 +188,21 @@ let rec visit_formula (f:formula with_range) scope =
     let s, _ = visit_set s scope in
     F_exists (v, t, s, f), scope
 
-  | F_predicate(p, params) ->
-    let p = Scope.resolve p scope in
-    let params, scope = visit_list visit_expr params scope in
-    F_predicate(p, params), scope
-
   | F_in (e, s) ->
     let e, scope = visit_expr e scope in
     let s, scope = visit_set s scope in
     F_in (e, s), scope
 
-let visit_predicate pred scope = Exceptions.panic "scoping: predicate not expanded"
+  | F_otherwise (f, e) ->
+    let f, scope = visit_formula f scope in
+    let e, scope = visit_expr e scope in
+    F_otherwise (f, e), scope
+
+  | F_if (cond, fthen, felse) ->
+    let cond, scope = visit_formula cond scope in
+    let fthen, scope = visit_formula fthen scope in
+    let felse, scope = visit_formula felse scope in
+    F_if (cond, fthen, felse), scope
 
 let visit_requires requires scope =
   bind_pair_range requires @@ fun requires ->
@@ -275,12 +288,6 @@ let visit_section sect scope =
   | S_case case ->
     let case, scope = visit_case case scope in
     S_case case, scope
-
-  | S_predicate _ ->
-    sect, scope
-
-  | S_alias _ ->
-    sect, scope
 
 
 (** {2 Entry point} *)

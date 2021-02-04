@@ -34,7 +34,7 @@
 char * _local_buf;
 
 
-/*$$$
+/*$!
  * assigns: _local_buf;
  * local: char *addr = _mopsa_new_readonly_string_max(LOCAL_BUF_SIZE);
  * ensures: _local_buf' == addr;
@@ -43,7 +43,7 @@ char * _local_buf;
 
 
 /*$
- * requires: null_or_valid_string(__locale);
+ * requires: null_or_valid_string_or_fail(__locale);
  *
  * case "success" {
  *   local: char *addr = _mopsa_new_readonly_string_max(LOCAL_BUF_SIZE);
@@ -84,15 +84,15 @@ struct lconv *localeconv (void);
 
 static locale_t  _mopsa_last_locale;
 
-/*$$$
+/*$!
  * local: locale_t r = new Locale;
  * assigns: _mopsa_last_locale;
  * ensures: _mopsa_last_locale' == r;
  */
 
 /*$
- * requires: valid_string(__locale);
- * requires: __base == 0 or alive_resource(__base, Locale);
+ * requires: valid_string_or_fail(__locale);
+ * requires: if __base != 0 then alive_resource(__base, Locale) end;
  * local: locale_t r = new Locale;
  * assigns: _errno;
  * ensures: return == r;

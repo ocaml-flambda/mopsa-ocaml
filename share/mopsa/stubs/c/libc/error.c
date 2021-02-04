@@ -39,7 +39,9 @@ void error_at_line (int __status, int __errnum, const char *__fname,
 
 
 /*$
- * requires: null_or_valid_ptr(error_print_progname);
+ * requires: error_print_progname != NULL
+ *           implies ( error_print_progname != INVALID and
+ *                     alive(error_print_progname));
  * assigns: error_message_count;
  *
  * case "exit" {
@@ -55,7 +57,9 @@ void error_at_line (int __status, int __errnum, const char *__fname,
 void _mopsa_error(int __status);
 
 /*$
- * requires: null_or_valid_ptr(error_print_progname);
+ * requires: error_print_progname != NULL
+ *           implies ( error_print_progname != INVALID and
+ *                     alive(error_print_progname));
  * requires: valid_string(__filename);
  * assigns: error_message_count;
  *

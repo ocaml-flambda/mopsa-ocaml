@@ -116,7 +116,7 @@ struct
       (* add the address to memory state *)
       man.exec (mk_add e range) flow >>% fun flow ->
       (* set the size of the resource *)
-      let cond = mk_binop (mk_stub_builtin_call BYTES e ~etyp:ul range) O_eq size ~etyp:T_bool range in
+      let cond = mk_binop (mk_stub_builtin_call BYTES [e] ~etyp:ul range) O_eq size ~etyp:T_bool range in
       man.exec (mk_assume cond range) flow >>% fun flow ->
       Eval.singleton e flow
 

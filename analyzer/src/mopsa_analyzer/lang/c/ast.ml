@@ -431,7 +431,7 @@ let get_c_program flow =
 
 
 (*==========================================================================*)
-                  (** {2 Conversion to Clang parser types} *)
+                  (** {2 Conversion to/from Clang parser types} *)
 (*==========================================================================*)
 
 let to_clang_int_type : c_integer_type -> C_AST.integer_type = function
@@ -453,6 +453,26 @@ let to_clang_float_type : c_float_type -> C_AST.float_type = function
   | C_double -> C_AST.DOUBLE
   | C_long_double -> C_AST.LONG_DOUBLE
 
+let from_clang_int_type : C_AST.integer_type -> c_integer_type = function
+  | C_AST.(Char SIGNED) -> C_signed_char
+  | C_AST.(Char UNSIGNED) -> C_unsigned_char
+  | C_AST.SIGNED_CHAR -> C_signed_char
+  | C_AST.UNSIGNED_CHAR -> C_unsigned_char
+  | C_AST.SIGNED_SHORT -> C_signed_short
+  | C_AST.UNSIGNED_SHORT -> C_unsigned_short
+  | C_AST.SIGNED_INT -> C_signed_int
+  | C_AST.UNSIGNED_INT -> C_unsigned_int
+  | C_AST.SIGNED_LONG -> C_signed_long
+  | C_AST.UNSIGNED_LONG -> C_unsigned_long
+  | C_AST.SIGNED_LONG_LONG -> C_signed_long_long
+  | C_AST.UNSIGNED_LONG_LONG -> C_unsigned_long_long
+  | C_AST.SIGNED_INT128 -> C_signed_int128
+  | C_AST.UNSIGNED_INT128 -> C_unsigned_int128
+
+let from_clang_float_type : C_AST.float_type -> c_float_type = function
+  | C_AST.FLOAT -> C_float
+  | C_AST.DOUBLE -> C_double
+  | C_AST.LONG_DOUBLE -> C_long_double
 
     (* NOTE: this may cause issue with recutsive types
 
@@ -713,12 +733,22 @@ let is_c_char_type (t:typ) =
   | T_c_integer (C_signed_char | C_unsigned_char) -> true
   | _ -> false
 
+let is_c_string_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_array (t,_) -> is_c_char_type t
+  | _ -> false
+
 (** [is_c_int_type t] tests whether [t] is an integer type *)
 let is_c_int_type ( t : typ) =
   match remove_typedef_qual t with
   | T_c_bool -> true
   | T_c_enum _ -> true
   | T_c_integer _ -> true
+  | _ -> false
+
+let is_c_int_array_type (t:typ) =
+  match remove_typedef_qual t with
+  | T_c_array (t,_) -> is_c_int_type t
   | _ -> false
 
 let is_c_signed_int_type (t:typ) =
@@ -928,6 +958,11 @@ let sl = T_c_integer(C_signed_long)
 let ull = T_c_integer(C_unsigned_long_long)
 let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
+
+let size_type =
+  let t = C_utils.size_type target_info |>
+          from_clang_int_type in
+  T_c_integer t
 
 let type_of_string s = T_c_array(s8, C_array_length_cst (Z.of_int (1 + String.length s)))
 

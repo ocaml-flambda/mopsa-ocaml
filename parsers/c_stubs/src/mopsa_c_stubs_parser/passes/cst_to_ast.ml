@@ -196,16 +196,17 @@ let attribute_type obj f =
   Exceptions.warn "attribute_typ: supporting only int attributes";
   int_type
 
-let builtin_type f arg =
+let builtin_type f args =
   match f with
   | LENGTH   -> unsigned_long_type
   | BYTES    -> unsigned_long_type
   | OFFSET -> int_type
   | INDEX -> int_type
   | BASE   -> pointer_type C_AST.(T_void, no_qual)
-  | PRIMED -> arg.content.Ast.typ
-  | VALID_PTR | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> bool_type
-  | ALIVE    -> bool_type
+  | PRIMED -> let arg = List.hd args in arg.content.Ast.typ
+  | VALID_FLOAT | FLOAT_INF | FLOAT_NAN -> int_type
+  | ALIVE    -> int_type
+  | RESOURCE -> int_type
 
 
 (** {2 Records} *)
@@ -350,8 +351,8 @@ let binop_type range prj t1 t2 =
   | T_array _, T_integer _ -> t1
   | T_integer _, T_array _ -> t2
 
-  | T_pointer (T_void,_), T_pointer _ -> t2
-  | T_pointer _, T_pointer (T_void,_) -> t1
+  | T_pointer (T_void,_), (T_pointer _ | T_array _) -> t2
+  | (T_pointer _ | T_array _), T_pointer (T_void,_) -> t1
   | T_pointer (p1,_), T_pointer (p2,_) when type_equal prj.proj_target p1 p2 -> t1
 
   | T_pointer p, T_array (e,_) when type_qual_compatible prj.proj_target p e -> t1
@@ -360,7 +361,8 @@ let binop_type range prj t1 t2 =
   | _ -> Exceptions.panic_at range "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
            (C_print.string_of_type_qual t2)
-(* Integer promotions (C99 6.3.1.1) *)
+
+ (* Integer promotions (C99 6.3.1.1) *)
 let integer_promotion prj (e: Ast.expr with_range) =
   let open C_AST in
   let open C_utils in
@@ -432,7 +434,7 @@ let rec visit_expr e prj func : Ast.expr with_range =
 
     | E_char(c) -> Ast.E_char(c), char_type
 
-    | E_invalid -> Ast.E_invalid, pointed_type e.range void_type
+    | E_invalid -> Ast.E_invalid, pointer_type void_type
 
     | E_var(v) ->
       let v = visit_var v e.range prj func in
@@ -489,9 +491,17 @@ let rec visit_expr e prj func : Ast.expr with_range =
       let field = find_field_check (pointed_type e.range p.content.typ) f e.range in
       Ast.E_arrow(p, field.field_index, f), field.field_type
 
+    | E_conditional(c, e1, e2) ->
+      let c = visit_expr c prj func in
+      let e1 = visit_expr e1 prj func in
+      let e2 = visit_expr e2 prj func in
+      E_conditional(c, e1, e2), e1.content.typ (* FIXME: handle the case when e1 and e2 have different types *)
+
     | E_sizeof_expr(e) ->
       let e = visit_expr e prj func in
-      let typ, _ = e.content.typ in
+      let typ = match unroll_type e.content.typ |> fst with
+        | C_AST.T_void -> C_AST.(T_integer SIGNED_CHAR)
+        | t -> t in
       let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
       let size = C_utils.sizeof_type target typ in
       Ast.E_int(size), int_type
@@ -502,11 +512,13 @@ let rec visit_expr e prj func : Ast.expr with_range =
       let size = C_utils.sizeof_type target typ in
       Ast.E_int(size), int_type
 
-    | E_builtin_call(f,a) ->
-      let a = visit_expr a prj func in
-      Ast.E_builtin_call(f, a), builtin_type f a
+    | E_builtin_call(f,args) ->
+      let args = List.map (fun a -> visit_expr a prj func) args in
+      Ast.E_builtin_call(f, args), builtin_type f args
 
     | E_return -> Ast.E_return, func.func_return
+
+    | E_raise msg -> Ast.E_raise(msg), int_type
   in
   Ast.{ kind; typ }
 
@@ -540,7 +552,8 @@ let rec visit_formula f prj func =
     let v' = visit_var v f.range prj func in
     Ast.F_exists(v', visit_set s prj func, visit_formula f' prj func)
   | F_in(e, s) -> Ast.F_in(visit_expr e prj func, visit_set s prj func)
-  | F_predicate(p, args) -> Exceptions.panic "cst_to_ast: predicate %a not expanded" pp_var p
+  | F_otherwise(f, e) -> Ast.F_otherwise(visit_formula f prj func , visit_expr e prj func)
+  | F_if(c, f1, f2) -> Ast.F_if(visit_formula c prj func , visit_formula f1 prj func, visit_formula f2 prj func)
 
 
 (** {2 Stub sections} *)
@@ -577,6 +590,21 @@ let visit_local loc prj func =
     | L_new r -> Ast.L_new r.vname
     | L_call (f, args) ->
       let f = find_function f prj in
+      (* Check arguments number *)
+      let given = List.length args in
+      let accepted = Array.length f.content.func_parameters in
+      if not f.content.func_variadic then
+        ( if given <> accepted then
+            Exceptions.panic_at loc.range "function '%s' accepts %d argument%a, but %d given"
+              f.content.func_org_name
+              accepted Debug.plurial_int accepted
+              given )
+      else
+        ( if given < accepted then
+            Exceptions.panic_at loc.range "function '%s' accepts at least %d argument%a, but %d given"
+              f.content.func_org_name
+              accepted Debug.plurial_int accepted
+              given );
       Ast.L_call (f, visit_list visit_expr args prj func)
   in
   Ast.{ lvar; lval }
@@ -631,13 +659,6 @@ let visit_section sect prj func =
     let case, assigns = visit_case case prj func in
     S_case (case), [], assigns
 
-  | S_predicate pred -> assert false
-  | S_alias alias -> assert false
-
-let visit_alias sects =
-  match sects with
-  | [ Cst.S_alias alias ] -> alias.content
-  | _ -> assert false
 
 (** {2 Entry point} *)
 (** *************** *)
@@ -648,24 +669,12 @@ let doit
     (stub:Cst.stub)
   : Ast.stub
   =
-  if Cst.is_alias stub then
-    Ast.{
-      stub_name = func.C_AST.func_org_name;
-      stub_params = Array.to_list func.C_AST.func_parameters;
-      stub_body = [];
-      stub_locals = [];
-      stub_assigns = [];
-      stub_alias = Some (visit_alias stub.content);
-      stub_range = stub.range;
-    }
-  else
-    let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
-    Ast.{
-      stub_name = func.C_AST.func_org_name;
-      stub_params = Array.to_list func.C_AST.func_parameters;
-      stub_body = body;
-      stub_locals = locals;
-      stub_assigns = assigns;
-      stub_alias = None;
-      stub_range = stub.range;
-    }
+  let body, locals, assigns = visit_list_ext visit_section stub.content prj func in
+  Ast.{
+    stub_name = func.C_AST.func_org_name;
+    stub_params = Array.to_list func.C_AST.func_parameters;
+    stub_body = body;
+    stub_locals = locals;
+    stub_assigns = assigns;
+    stub_range = stub.range;
+  }

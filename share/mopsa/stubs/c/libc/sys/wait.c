@@ -69,20 +69,19 @@ __pid_t waitpid (__pid_t __pid, int *__stat_loc, int __options);
 int waitid (idtype_t __idtype, __id_t __id, siginfo_t *__infop,
             int __options);
 
-/*$$
- * predicate valid_primed_rusage(r):
- *         (r->ru_utime.tv_sec)'  in [0, 2000000000] // 30 years :)
- *     and (r->ru_utime.tv_usec)' in [0, 1000000]
- *     and (r->ru_stime.tv_sec)'  in [0, 2000000000]
- *     and (r->ru_stime.tv_usec)' in [0, 1000000]
- *     and (r->ru_maxrss)' >= 0
- *     and (r->ru_minflt)' >= 0
- *     and (r->ru_majflt)' >= 0
- *     and (r->ru_inblock)' >= 0
- *     and (r->ru_oublock)' >= 0
- *     and (r->ru_nvcsw)' >= 0
- *     and (r->ru_nivcsw)' >= 0;
- */
+#define valid_primed_rusage(r) \
+          primed(r->ru_utime.tv_sec)  in [0, 2000000000] \
+      and primed(r->ru_utime.tv_usec) in [0, 1000000] \
+      and primed(r->ru_stime.tv_sec)  in [0, 2000000000] \
+      and primed(r->ru_stime.tv_usec) in [0, 1000000] \
+      and primed(r->ru_maxrss) >= 0 \
+      and primed(r->ru_minflt) >= 0 \
+      and primed(r->ru_majflt) >= 0 \
+      and primed(r->ru_inblock) >= 0 \
+      and primed(r->ru_oublock) >= 0 \
+      and primed(r->ru_nvcsw) >= 0 \
+      and primed(r->ru_nivcsw) >= 0
+
 
 /*$
  * requires: __stat_loc != NULL implies valid_ptr(__stat_loc);

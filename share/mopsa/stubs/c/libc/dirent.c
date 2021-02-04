@@ -166,7 +166,7 @@ __ssize_t getdirentries (int __fd, char *__restrict __buf,
                          __off_t *__restrict __basep);
 
 /*$
- * alias: alphasort;
+ * #alias alphasort;
  */
 int versionsort (const struct dirent **__e1,
                  const struct dirent **__e2);

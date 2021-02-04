@@ -37,7 +37,6 @@ type stub = {
   stub_locals  : local with_range list;
   stub_assigns : assigns with_range list;
   stub_body    : section list;
-  stub_alias   : string option;
   stub_range   : range;
 }
 
@@ -98,7 +97,6 @@ and message = {
 and message_kind = Cst.message_kind =
   | WARN
   | UNSOUND
-  | ALARM
 
 (** {2 Expressions} *)
 (** *=*=*=*=*=*=*=* *)
@@ -124,7 +122,10 @@ and expr_kind =
   | E_member    of expr with_range * int * string
   | E_arrow     of expr with_range * int * string
 
-  | E_builtin_call  of builtin * expr with_range
+  | E_conditional of expr with_range * expr with_range * expr with_range
+
+  | E_builtin_call  of builtin * expr with_range list
+  | E_raise         of string
 
   | E_return
 
@@ -168,7 +169,8 @@ and formula =
   | F_forall of var * set * formula with_range
   | F_exists of var * set * formula with_range
   | F_in     of expr with_range * set
-
+  | F_otherwise of formula with_range * expr with_range
+  | F_if     of formula with_range * formula with_range * formula with_range
 
 (** {2 Utility functions} *)
 (** ********************* *)
@@ -193,6 +195,14 @@ let pp_resource = pp_print_string
 
 let pp_builtin = Cst.pp_builtin
 
+let pp_list pp sep fmt l =
+  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
+
+let pp_opt pp fmt o =
+  match o with
+  | None -> ()
+  | Some x -> pp fmt x
+
 let rec pp_expr fmt exp =
   match exp.content.kind with
   | E_top(t) -> fprintf fmt "⊤(%a)" pp_c_qual_typ t
@@ -215,8 +225,10 @@ let rec pp_expr fmt exp =
   | E_subscript(a, i) -> fprintf fmt "%a[%a]" pp_expr a pp_expr i
   | E_member(s, i, f) -> fprintf fmt "%a.%s" pp_expr s f
   | E_arrow(p, i, f) -> fprintf fmt "%a->%s" pp_expr p f
-  | E_builtin_call(f, arg) -> fprintf fmt "%a(%a)" pp_builtin f pp_expr arg
+  | E_conditional(c,e1,e2) -> fprintf fmt "%a?%a:%a" pp_expr c pp_expr e1 pp_expr e2
+  | E_builtin_call(f, args) -> fprintf fmt "%a(%a)" pp_builtin f (pp_list pp_expr ", ") args
   | E_return -> pp_print_string fmt "return"
+  | E_raise msg -> fprintf fmt "raise(\"%s\")" msg
 
 and pp_unop = Cst.pp_unop
 
@@ -234,6 +246,8 @@ let rec pp_formula fmt (f:formula with_range) =
   | F_forall (x, set, f) -> fprintf fmt "∀ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_exists (x, set, f) -> fprintf fmt "∃ %a %a ∈ %a: @[%a@]" pp_c_qual_typ x.C_AST.var_type pp_var x pp_set set pp_formula f
   | F_in (x, set) -> fprintf fmt "%a ∈ %a" pp_expr x pp_set set
+  | F_otherwise (f, e) -> fprintf fmt "%a otherwise %a" pp_formula f pp_expr e
+  | F_if (c,f1,f2) -> fprintf fmt "if %a then %a else %a end" pp_formula c pp_formula f1 pp_formula f2
 
 and pp_log_binop = Cst.pp_log_binop
 
@@ -249,15 +263,6 @@ and pp_interval fmt i =
     pp_expr i.itv_ub
     (if i.itv_open_ub then "[" else "]")
    
-
-let pp_list pp sep fmt l =
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt sep) pp fmt l
-
-let pp_opt pp fmt o =
-  match o with
-  | None -> ()
-  | Some x -> pp fmt x
-
 let rec pp_local fmt local =
   let local = get_content local in
   fprintf fmt "local    : %a %a = @[%a@];"
@@ -290,7 +295,6 @@ let pp_free fmt free =
 let pp_message fmt msg =
   match msg.content.message_kind with
   | WARN    -> fprintf fmt "warn: \"%s\";" msg.content.message_body
-  | ALARM   -> fprintf fmt "alarm: \"%s\";" msg.content.message_body
   | UNSOUND -> fprintf fmt "unsound: \"%s\";" msg.content.message_body
 
 let pp_leaf_section fmt sec =
@@ -324,8 +328,3 @@ let pp_sections fmt secs =
     ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
     pp_section
     fmt secs
-
-let pp_stub fmt stub =
-  match stub.stub_alias with
-  | None -> pp_sections fmt stub.stub_body
-  | Some alias -> fprintf fmt "alias: %s;" alias

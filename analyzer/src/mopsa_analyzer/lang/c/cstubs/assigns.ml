@@ -295,7 +295,7 @@ struct
       eval_stub_primed_address e exp.erange man flow |>
       OptionExt.return
 
-    | E_stub_builtin_call(BYTES, { ekind = E_var({ vkind = V_c_primed_base base },_) }) ->
+    | E_stub_builtin_call(BYTES, [{ ekind = E_var({ vkind = V_c_primed_base base },_) }]) ->
       eval_base_size base exp.erange man flow |>
       OptionExt.return
 

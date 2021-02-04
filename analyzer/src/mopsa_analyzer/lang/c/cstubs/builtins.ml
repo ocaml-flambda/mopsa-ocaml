@@ -84,16 +84,15 @@ struct
     then bytes
     else mk_binop bytes O_div (mk_z elm range) ~etyp:bytes.etyp range
 
-
   let eval exp man flow =
     match ekind exp with
 
-    | E_stub_builtin_call(BYTES, { ekind = E_addr (addr, _) }) ->
-      man.eval (mk_var (mk_bytes_var addr) exp.erange) flow |>
+    | E_stub_builtin_call(BYTES, [{ ekind = E_addr (addr, mode) }]) ->
+      man.eval (mk_var (mk_bytes_var addr) ~mode:mode exp.erange) flow |>
       OptionExt.return
 
 
-    | E_stub_builtin_call(BYTES, e) ->
+    | E_stub_builtin_call(BYTES, [e]) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
@@ -104,7 +103,7 @@ struct
           man.eval (mk_top ul exp.erange) flow
       )
 
-    | E_stub_builtin_call(LENGTH, e) ->
+    | E_stub_builtin_call(LENGTH, [e]) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
@@ -116,7 +115,7 @@ struct
           man.eval (mk_top ul exp.erange) flow
       )
 
-    | E_stub_builtin_call(BASE, e) ->
+    | E_stub_builtin_call(BASE, [e]) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
@@ -144,27 +143,7 @@ struct
         | _ -> panic_at exp.erange "base(%a) where %a %a not supported" pp_expr e pp_expr e pp_points_to pt
       )
 
-    | E_stub_builtin_call(VALID_PTR, p) ->
-      Some (
-        resolve_pointer p man flow >>$ fun pt flow ->
-        let range = exp.erange in
-        match pt with
-        | P_block(b, o, m) ->
-          eval_base_bytes b m range man flow >>$ fun size flow ->
-          let elm = under_type p.etyp |> void_to_char |> (fun t -> mk_z (sizeof_type t) range) in
-          (* Check validity of the offset *)
-          let cond = mk_in o (mk_zero range) (sub size elm range) range in
-          man.eval cond flow
-
-        | P_fun _ -> Eval.singleton (mk_one range) flow
-
-        | P_null | P_invalid -> Eval.singleton (mk_zero range) flow
-
-        | P_top -> Eval.singleton (mk_top T_bool range) flow
-      )
-
-
-    | E_stub_builtin_call(OFFSET, e) ->
+    | E_stub_builtin_call(OFFSET, [e]) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
@@ -172,7 +151,7 @@ struct
         | _ -> man.eval (mk_top ul exp.erange) flow
       )
 
-    | E_stub_builtin_call(INDEX, e) ->
+    | E_stub_builtin_call(INDEX, [e]) ->
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
@@ -180,7 +159,7 @@ struct
         | _ -> man.eval (mk_top ul exp.erange) flow
       )
 
-    | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, flt) ->
+    | E_stub_builtin_call((VALID_FLOAT | FLOAT_INF | FLOAT_NAN) as op, [flt]) ->
       let cls = match op with
         | VALID_FLOAT -> float_valid
         | FLOAT_INF -> float_inf
@@ -192,7 +171,7 @@ struct
         Eval.singleton (mk_float_class cls flt exp.erange) flow
       )
 
-    | E_stub_builtin_call(ALIVE, p) ->
+    | E_stub_builtin_call(ALIVE, [p]) ->
       Some (
         resolve_pointer p man flow >>$ fun pt flow ->
         let range = exp.erange in
@@ -207,6 +186,24 @@ struct
 
         | P_top -> Eval.singleton (mk_top T_bool range) flow
 
+      )
+
+    | E_stub_builtin_call(RESOURCE, [p]) ->
+      Some (
+        resolve_pointer p man flow >>$ fun pt flow ->
+        let range = exp.erange in
+        match pt with
+        | P_block ({ base_kind = Addr {addr_kind = A_stub_resource _} }, _, _) ->
+          Eval.singleton (mk_one range) flow
+
+        | P_block ({ base_kind = Addr _}, _, _)
+        | P_block ({ base_kind = Var _ }, _, _)
+        | P_block ({ base_kind = String _ }, _, _)
+        | P_null | P_invalid | P_fun _ ->
+          Eval.singleton (mk_zero range) flow
+
+        | P_top ->
+          Eval.singleton (mk_top T_bool range) flow
       )
 
     | _ -> None

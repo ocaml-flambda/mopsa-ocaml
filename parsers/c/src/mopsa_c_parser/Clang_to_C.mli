@@ -33,10 +33,12 @@ val create_context: string -> Clang_AST.target_info -> context
     Returns a context to manipulate the project.
  *)
                                                                           
-val add_translation_unit: context -> string -> Clang_AST.decl -> string list -> Clang_AST.comment list -> Clang_AST.macro list -> unit
-(** [add_translation_unit context name decl files coms macros] converts a
+val add_translation_unit: context -> string -> Clang_AST.decl -> string list -> Clang_AST.comment list -> Clang_AST.macro list -> bool -> unit
+(** [add_translation_unit context name decl files coms macros keep_static] converts a
    Clang definition of a translation unit with the given name (generally, the
    source C file) into a cAST and accumulates the definition to the projet.
+   Remove static functions unused in the translation unit, unless
+   [keep_static] is true (useful for sutb files).
    *)
 
 val link_project: context -> C_AST.project
@@ -53,6 +55,9 @@ val log_rename: bool ref
 
 val log_merge: bool ref
 (* log when merging declarations *)
+
+val log_remove: bool ref
+(* log when removed (unused) declarations *)
 
 val dump_dir: string ref
 (** Log destination directory. *)

@@ -94,13 +94,6 @@ struct
   (** {2 Abstract transformers} *)
   (** ========================= *)
 
-  let (>>|) x (l1,l2) = (x::l1,l2)
-
-  let (>>-) x (l1,l2) = (l1,x::l2)
-
-  let (>>+) (l1,l2) (l1',l2') = (l1@l1'),(l2@l2')
-
-
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
   let rec flatten_init init offset typ range =
@@ -115,6 +108,8 @@ struct
     match init with
     | None                 -> [],[(None,Z.one, offset, typ)]
     | Some (C_init_expr e) -> [(e,offset, typ)],[]
+    (* a scalar initializer can be optionnaly enclosed in braces *)
+    | Some (C_init_list ([C_init_expr e], _)) -> [(e,offset, typ)],[]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
   and flatten_array_init init offset typ range =
@@ -132,78 +127,90 @@ struct
         let nn = Z.mul n (sizeof_type under_typ) in
         [],[(None,nn,offset,u8)]
 
+    (* a string literal can be optionally enclosed in braces *)
+    | Some (C_init_list ([C_init_expr {ekind = E_constant(C_c_string _); } as i], _))
+         when is_c_int_array_type typ ->
+       flatten_array_init (Some i) offset typ range
+
     | Some (C_init_list (l, filler)) ->
-      let rec aux i =
+      let rec aux i l acc1 acc2 =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then [],[]
+        then acc1, acc2
         else
-        if i < List.length l
-        then flatten_init (Some (List.nth l i)) o under_typ range >>+ aux (i + 1)
-        else
-          let remain = Z.sub n (Z.of_int i) in
-          match filler with
-          | None ->
-            if is_c_scalar_type under_typ then
-              [],[(None,remain,o,under_typ)]
-            else
-              let nn = Z.mul remain (sizeof_type under_typ) in
-              [],[(None,nn,o,u8)]
+          match l with
+          | elem::rest ->
+            let l1,l2 = flatten_init (Some elem) o under_typ range in
+            aux (i+1) rest (List.rev_append l1 acc1) (List.rev_append l2 acc2)
+          | [] ->
+            let remain = Z.sub n (Z.of_int i) in
+            match filler with
+            | None ->
+              if is_c_scalar_type under_typ then
+                acc1, (None,remain,o,under_typ)::acc2
+              else
+                let nn = Z.mul remain (sizeof_type under_typ) in
+                acc1, (None,nn,o,u8)::acc2
 
-          | Some (C_init_list([], Some (C_init_expr e)))
-          | Some (C_init_expr e) ->
-            [],[(Some e, remain, o,under_typ)]
+            | Some (C_init_list([], Some (C_init_expr e)))
+            | Some (C_init_expr e) ->
+              acc1, (Some e, remain, o,under_typ)::acc2
 
-          | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
+            | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
-      aux 0
+      let l1,l2 = aux 0 l [] [] in
+      List.rev l1, List.rev l2
 
-    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t}) ->
-      let rec aux i =
+    | Some (C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t; erange}) ->
+      let rec aux i acc1 acc2 =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then [],[]
+        then acc1, acc2
 
         else if i < String.length s
-        then (mk_c_character (String.get s i) range, o, under_typ) >>| aux (i + 1)
+        then aux (i+1) ((mk_c_character (String.get s i) erange, o, under_typ)::acc1) acc2
 
         else if i = String.length s
-        then (mk_c_character (char_of_int 0) range, o, under_typ) >>| aux (i + 1)
+        then aux (i+1) ((mk_c_character (char_of_int 0) erange, o, under_typ)::acc1) acc2
 
-        else [],[(None,Z.sub n (Z.of_int i), o, s8)]
+        else acc1,(None,Z.sub n (Z.of_int i), o, s8)::acc2
       in
-      aux 0
+      let l1,l2 = aux 0 [] [] in
+      List.rev l1, List.rev l2
 
     (* wide strings *)
-    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _)); etyp = t}) ->
+    | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _)); etyp = t; erange}) ->
       let char_size = sizeof_type under_typ in
       let nchar_size = Z.to_int char_size in
       let len = String.length s / nchar_size in
-      let rec aux i =
+      let rec aux i acc1 acc2 =
         let o = Z.add offset (Z.mul (Z.of_int i) char_size) in
         if Z.equal (Z.of_int i) n
-        then [],[]
+        then acc1,acc2
 
         else if i < len
-        then (mk_c_multibyte_integer s (i * nchar_size) under_typ range, o, under_typ) >>| aux (i + 1)
+        then aux (i+1) ((mk_c_multibyte_integer s (i * nchar_size) under_typ erange, o, under_typ)::acc1) acc2
 
         else if i = len
-        then (mk_zero ~typ:under_typ range, o, under_typ) >>| aux (i + 1)
+        then aux (i+1) ((mk_zero ~typ:under_typ erange, o, under_typ)::acc1) acc2
 
-        else [],[(None,Z.sub n (Z.of_int i), o, s8)]
+        else acc1,(None,Z.sub n (Z.of_int i), o, s8)::acc2
       in
-      aux 0
+      let l1,l2 = aux 0 [] [] in
+      List.rev l1, List.rev l2
 
     | Some (Ast.C_init_expr e) ->
-      let rec aux i =
+      let rec aux i acc1 acc2 =
         let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
         if Z.equal (Z.of_int i) n
-        then [],[]
+        then acc1,acc2
         else
-          let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i range) under_typ range)) in
-          flatten_init init' o under_typ range >>+ aux (i + 1)
+          let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i e.erange) under_typ e.erange)) in
+          let l1,l2 = flatten_init init' o under_typ range in
+          aux (i+1) (List.rev_append l1 acc1) (List.rev_append l2 acc2)
       in
-      aux 0
+      let l1,l2 = aux 0 [] [] in
+      List.rev l1, List.rev l2
 
     | _ -> panic_at range ~loc:__LOC__
              "flatten_array_init: %a is not supported"
@@ -218,30 +225,32 @@ struct
     in
     match init with
     | None ->
-      let rec aux offset = function
-        | [] -> [],[]
+      let rec aux offset acc1 acc2 = function
+        | [] -> acc1,acc2
         | field :: tl ->
-          let init = flatten_init None offset field.c_field_type range in
+          let l1,l2 = flatten_init None offset field.c_field_type range in
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          init >>+ aux o tl
+          aux o (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
-      aux offset fields
+      let l1,l2 = aux offset [] [] fields in
+      List.rev l1, List.rev l2
 
     | Some (C_init_list(l, None)) ->
-      let rec aux l records =
+      let rec aux l acc1 acc2 records =
         match records with
-        | [] -> [],[]
+        | [] -> acc1,acc2
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
           match l with
           | [] ->
-            let init = flatten_init None o field.c_field_type range in
-            init >>+ aux l tl
+            let l1,l2 = flatten_init None o field.c_field_type range in
+            aux l (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
           | init :: tll ->
-            let init = flatten_init (Some init) o field.c_field_type range in
-            init >>+ aux tll tl
+            let l1,l2 = flatten_init (Some init) o field.c_field_type range in
+            aux tll (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
-      aux l fields
+      let l1,l2 = aux l [] [] fields in
+      List.rev l1, List.rev l2
 
     | Some (C_init_expr e) when is_c_record_type e.etyp ->
       [(e,offset,typ)],[]
@@ -265,7 +274,7 @@ struct
         man.exec stmt flow
 
       | [] when is_c_global_scope scope ->
-        let stmt = mk_assign (mk_var v range) (mk_zero range) range in
+        let stmt = mk_assign (mk_var v range) (mk_zero ~typ:v.vtyp range) range in
         man.exec stmt flow
 
       | _ ->
@@ -283,16 +292,18 @@ struct
       (* Create a block of low-level assignments *)
       | _ ->
         let stmt = mk_block (List.map (fun (e,o,t) ->
+            (* Execute the assignment on the range of the expression *)
+            let erange = e.erange in
             (* *(( t* )( char* )(&v) + o)) = e; *)
             mk_assign (mk_c_deref (mk_c_cast
                                      (mk_binop
-                                        (mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range)
+                                        (mk_c_cast (mk_c_address_of (mk_var v erange) erange) (pointer_type s8) erange)
                                         O_plus
-                                        (mk_z o range)
-                                        ~etyp:(pointer_type s8) range
+                                        (mk_z o erange)
+                                        ~etyp:(pointer_type s8) erange
                                      )
-                                     (pointer_type t) range
-                                  ) range) e range
+                                     (pointer_type t) erange
+                                  ) erange) e erange
           ) initl) range
         in
         man.exec stmt flow

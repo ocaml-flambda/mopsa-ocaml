@@ -23,71 +23,81 @@
 
 open Mopsa_utils
 open Mopsa_c_parser
+open Clang_AST
+open C_AST
 open Location
+
 
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
 
-(** Check whether a comment is a stub comment *)
-let find_stub_comment_opt com_list =
-  List.find_opt (fun com ->
-      let comment = com.Clang_AST.com_text |>
-                    String.trim
-      in
-      let lexeme = "/*$" in
-      let start = String.sub comment 0 (String.length lexeme) in
-      start = lexeme
-    ) com_list
+
+let is_stub_comment com =
+  let comment = com.Clang_AST.com_text |>
+                String.trim
+  in
+  let lexeme = "/*$" in
+  let start = String.sub comment 0 (String.length lexeme) in
+  start = lexeme
+
+let is_predicates_comment com =
+  let comment = com.Clang_AST.com_text |>
+                String.trim
+  in
+  let lexeme = "/*$=" in
+  let start = String.sub comment 0 (String.length lexeme) in
+  start = lexeme
+
+let is_directive_comment com =
+  let comment = com.Clang_AST.com_text |>
+                String.trim
+  in
+  let lexeme = "/*$!" in
+  let start = String.sub comment 0 (String.length lexeme) in
+  start = lexeme
 
 
-(** Parse the stub specification from comments of a function *)
-let parse_function_comment
-    (func:C_AST.func)
-    (prj:C_AST.project)
-    (macros:string MapExt.StringMap.t)
-    (enums:Z.t MapExt.StringMap.t)
-    (preds: Cst.predicate with_range list)
-    (stubs:(string,Cst.stub) Hashtbl.t)
-  : Ast.stub option
-  =
-  match find_stub_comment_opt func.func_com with
-  | None -> None
-  | Some com ->
-    let comment = com.com_text in
-    let file = com.com_range.range_begin.loc_file in
-    let line = com.com_range.range_begin.loc_line in
-    let col = com.com_range.range_begin.loc_column in
+exception StubNotFound
 
-    (* Create the lexing buffer *)
-    let buf = Lexing.from_string comment in
-    buf.lex_curr_p <- {
-      pos_fname = file;
-      pos_lnum = line;
-      pos_bol = 0;
-      pos_cnum = col;
-    };
 
-    try
+(* Parse function's comment into a stub CST *)
+let rec parse_cst func ?(selector=is_stub_comment) prj macros enums predicates cache =
+  match Hashtbl.find_opt cache func.func_org_name with
+  | Some cst -> cst
+  | None ->
+    (* Find the stub of the function *)
+    match List.find_opt selector func.func_com with
+    | None -> raise StubNotFound
+    | Some com ->
+      (* Create the lexing buffer *)
+      let comment = com.com_text in
+      let file = com.com_range.range_begin.loc_file in
+      let line = com.com_range.range_begin.loc_line in
+      let col = com.com_range.range_begin.loc_column in
+      let buf = Lexing.from_string comment in
+      buf.lex_curr_p <- {
+        pos_fname = file;
+        pos_lnum = line;
+        pos_bol = 0;
+        pos_cnum = col;
+      };
       (* Parse the comment *)
-      let cst = Parser.parse_stub Lexer.read buf in
-      match cst with
-      | None -> None
-
-      | Some cst ->
-        (* Remove predicates and macros *)
-        let cst1 = Passes.Predicate_expansion.doit cst preds in
-        let cst2 = Passes.Macro_expansion.doit cst1 macros enums in
-
-        (* Save the stub in the context, so it can be used later when
-           resolving aliases *)
-        Hashtbl.add stubs func.func_org_name cst2;
-
+      try
+        let cst = Parser.parse_stub (Passes.Preprocessor.read predicates macros enums Lexer.read) buf in
         (* Resolve scoping of variables *)
-        let cst3 = Passes.Scoping.doit cst2 in
+        let cst' = Passes.Scoping.doit cst in
+        (* Save the stub in the cache, so it can be used later when resolving
+           aliases *)
+        Hashtbl.add cache func.func_org_name cst';
+        cst'
+      with
+      | Passes.Preprocessor.AliasFound alias ->
+        (* Find the alias function *)
+        begin match StringMap.find_opt alias prj.proj_funcs with
+          | None -> raise StubNotFound
+          | Some f ->
+            parse_cst f prj macros enums predicates cache
+        end
 
-        (* Translate CST into AST *)
-        let ast = Passes.Cst_to_ast.doit prj func cst3 in
-        Some ast
-    with
     | Lexer.SyntaxError s ->
       let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
       Exceptions.syntax_error range "%s" s
@@ -98,37 +108,38 @@ let parse_function_comment
 
 
 
-(** Check whether a comment is a stub directive *)
-let is_directive com =
-  match com with
-  | [com] ->
-    let comment = com.Clang_AST.com_text |>
-                  String.trim
-    in
-    let lexeme = "/*$$$" in
-    String.length comment > String.length lexeme &&
-    lexeme = String.sub comment 0 (String.length lexeme)
-
-  | _ -> false
-
-
+(** Parse the stub specification from comments of a function *)
+let rec parse_function_comment
+    (func:C_AST.func)
+    ?(selector=is_stub_comment)
+    (prj:C_AST.project)
+    (macros:C_AST.macro C_AST.StringMap.t)
+    (enums:Z.t C_AST.StringMap.t)
+    (predicates:Passes.Preprocessor.predicate C_AST.StringMap.t)
+    (cache:(string,Cst.stub) Hashtbl.t)
+  : Ast.stub
+  =
+  let cst = parse_cst func ~selector prj macros enums predicates cache in
+  debug "stub of function %s:@\n  @[%a]" func.func_org_name Cst.pp_stub cst;
+  (* Translate CST into AST *)
+  Passes.Cst_to_ast.doit prj func cst
 
 (** Parse comment of a stub directive *)
 let parse_directive_comment
     (com:Clang_AST.comment list)
     (range:Clang_AST.range)
     (prj:C_AST.project)
-    (macros:string MapExt.StringMap.t)
-    (enums:Z.t MapExt.StringMap.t)
-    (preds:Cst.predicate with_range list)
+    (macros:C_AST.macro C_AST.StringMap.t)
+    (enums:Z.t C_AST.StringMap.t)
+    (predicates:Passes.Preprocessor.predicate C_AST.StringMap.t)
     (stubs:(string,Cst.stub) Hashtbl.t)
-  : Ast.stub option
+  : Ast.stub
   =
   (* Create a dummy init function *)
-  let func = C_AST.{
+  let func = {
       func_uid = 0;
-      func_org_name = "$directive";
-      func_unique_name = "$directive";
+      func_org_name = "$directive:" ^ (Clang_dump.string_of_range range);
+      func_unique_name = "$directive:" ^ (Clang_dump.string_of_range range);
       func_is_static = false;
       func_return = C_AST.T_void, C_AST.no_qual;
       func_parameters = [||];
@@ -141,75 +152,32 @@ let parse_directive_comment
       func_com = com;
     }
   in
-  parse_function_comment func prj macros enums preds stubs
+  parse_function_comment func ~selector:is_directive_comment prj macros enums predicates stubs
 
 
-(** Check whether a comment is a global predicate *)
-let is_global_predicate com =
-  match com with
-  | [com] ->
-    let comment = com.Clang_AST.com_text |>
-                  String.trim
-    in
-    let lexeme = "/*$$" in
-    String.length comment > String.length lexeme &&
-    lexeme = String.sub comment 0 (String.length lexeme)
-
-  | _ -> false
-
-(** Parse comment specifying a global predicate *)
-let parse_global_predicate_comment com =
-  match com with
-  | [] -> []
-  | _ :: _ :: _ -> []
-  | [com] ->
-    let comment = com.Clang_AST.com_text in
-    let file = com.com_range.range_begin.loc_file in
-    let line = com.com_range.range_begin.loc_line in
-    let col = com.com_range.range_begin.loc_column in
-
-    (* Create the lexing buffer *)
-    let buf = Lexing.from_string comment in
-    buf.lex_curr_p <- {
-      pos_fname = file;
-      pos_lnum = line;
-      pos_bol = 0;
-      pos_cnum = col;
-    };
-
-    (* Parse the comment *)
-    try
-      let cst = Parser.parse_stub Lexer.read buf in
-      OptionExt.apply (fun cst ->
-          List.fold_left (fun acc section ->
-              match section with
-              | Cst.S_predicate pred -> pred :: acc
-              | _ -> acc
-            ) [] cst.content
-        ) [] cst
-    with
-    | Lexer.SyntaxError s ->
-      let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
-      Exceptions.syntax_error range "%s" s
-
-    | Parser.Error ->
-      let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
-      Exceptions.unnamed_syntax_error range
-
-
-(** Resolve a stub alias *)
-let resolve_alias
-    (alias:string)
-    (func:C_AST.func)
-    (prj:C_AST.project)
-    (stubs:(string,Cst.stub) Hashtbl.t)
-  : Ast.stub
-  =
-  (* Find the alias *)
-  let cst = Hashtbl.find stubs alias in
-
-  (* Resolve scoping of variables *)
-  let cst2 = Passes.Scoping.doit cst in
-
-  (* Translate CST into AST *)
-  Passes.Cst_to_ast.doit prj func cst2
+(** Parse a comment of predicates declarations *)
+let parse_predicates_comment (coms:Clang_AST.comment list) : Passes.Preprocessor.predicate list =
+  coms |> List.fold_left (fun acc com ->
+      if is_predicates_comment com then
+        (* Create the lexing buffer *)
+        let comment = com.com_text in
+        let file = com.com_range.range_begin.loc_file in
+        let line = com.com_range.range_begin.loc_line in
+        let col = com.com_range.range_begin.loc_column in
+        let buf = Lexing.from_string comment in
+        buf.lex_curr_p <- {
+          pos_fname = file;
+          pos_lnum = line;
+          pos_bol = 0;
+          pos_cnum = col;
+        };
+        (* Parse the comment *)
+        try
+          Passes.Preprocessor.parse_predicates Lexer.read buf @ acc
+        with
+        | Lexer.SyntaxError s ->
+          let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
+          Exceptions.syntax_error range "%s" s
+      else
+        acc
+    ) []

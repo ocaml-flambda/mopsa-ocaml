@@ -59,7 +59,8 @@ struct
   let universal = Semantic "Universal"
 
   let checks = [ CHK_C_INVALID_POINTER_COMPARE;
-                 CHK_C_INVALID_POINTER_SUB ]
+                 CHK_C_INVALID_POINTER_SUB;
+                 CHK_C_INTEGER_OVERFLOW ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -451,8 +452,6 @@ struct
 
   (** Filter equal pointers *)
   let assume_eq p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -479,8 +478,6 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -530,8 +527,6 @@ struct
 
   (** Filter ordered pointers *)
   let assume_order op p q range man flow =
-    man.eval p flow >>$ fun p flow ->
-    man.eval q flow >>$ fun q flow ->
     let v1, o1, p1 = Static_points_to.eval p |>
                      eval_static_points_to man flow
     in
@@ -759,8 +754,9 @@ struct
       OptionExt.return
 
     | S_assume(p) when is_c_pointer_type p.etyp ->
-      assume_ne p (mk_c_null stmt.srange) stmt.srange man flow |>
-      OptionExt.return
+      man.eval p flow >>$ (fun p flow ->
+        assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
+      |> OptionExt.return
 
     | _ -> None
 
@@ -910,10 +906,13 @@ struct
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ ?(p != q) ⟧ *)
     | E_binop(O_ne, p, q)
@@ -921,35 +920,42 @@ struct
       when is_c_pointer_type p.etyp ||
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
-
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
     | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ !(p op q) | op ∈ {<, <=, >, >=} ⟧ *)
     | E_unop (O_log_not, { ekind = E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q) })
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp
       ->
-      let evl1 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-      let evl2 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-      Eval.join evl1 evl2 |>
-      OptionExt.return
-
+       OptionExt.return (
+           man.eval p flow >>$ fun p flow ->
+           man.eval q flow >>$ fun q flow ->
+           let evl1 = assume_order (negate_comparison_op op) p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+           let evl2 = assume_order op p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+           Eval.join evl1 evl2
+         )
 
     (* 𝔼⟦ (bool)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
+    | E_c_cast(p, _) when exp |> etyp |> is_c_bool_type &&
                           p   |> etyp |> is_c_pointer_type ->
       eval_points_to p man flow |> OptionExt.lift (fun evl ->
           evl >>$ fun pt flow ->
@@ -963,24 +969,27 @@ struct
         )
 
     (* 𝔼⟦ (int)ptr ⟧ *)
-    | E_c_cast(p, _) when exp |> etyp |> is_c_int_type &&
-                          p   |> etyp |> is_c_pointer_type ->
+    | E_c_cast(p, implicit) when exp |> etyp |> is_c_int_type &&
+                                 p   |> etyp |> is_c_pointer_type ->
       eval_points_to p man flow |> OptionExt.lift (fun evl ->
           evl >>$ fun pt flow ->
           match pt with
           | P_null ->
             Eval.singleton (mk_zero exp.erange) flow
-          | P_top | P_invalid ->
-            let l,u = rangeof exp.etyp in
-            Eval.singleton (mk_z_interval l u exp.erange) flow
-          | P_block _ | P_fun _ ->
-            let l,u = rangeof exp.etyp in
-            if is_c_signed_int_type exp.etyp then
-              Eval.join
-                (Eval.singleton (mk_z_interval l Z.(of_int (-1)) exp.erange) flow)
-                (Eval.singleton (mk_z_interval Z.one u exp.erange) flow)
-            else
-              Eval.singleton (mk_z_interval l u exp.erange) flow
+          | P_top | P_invalid | P_block _ | P_fun _ ->
+            (* Check if an overflow is possible by comparing the size of the
+               cast type and the size of `size_t` (which is the size of a pointer). *)
+            let s = sizeof_type exp.etyp in
+            let st = sizeof_type size_type in
+            let flow =
+              if Z.(s < st) then
+                raise_c_pointer_to_integer_overflow_alarm ~warning:true p exp.etyp exp.erange man flow
+              else
+                safe_c_integer_overflow_check exp.erange man flow
+            in
+            (* XXX Returning ⊤ is too coarse! Pointers casted to integers and
+               re-casted again to pointers should be handled more precisely. *)
+            man.eval (mk_top exp.etyp exp.erange) flow
         )
 
     (* 𝔼⟦ !ptr ⟧ *)

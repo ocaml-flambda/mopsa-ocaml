@@ -172,7 +172,7 @@ let ends_with suffix s =
    and is normalized (no . nor ..)
  *)
 let absolute_path name =
-  (* add currenct directory *)
+  (* add current directory *)
   let name =
     if Filename.is_relative name
     then Filename.concat (Sys.getcwd()) name
@@ -211,6 +211,7 @@ let get_files (db:db) (file:string) (recur:bool) : string list =
 
 (** delete a file or directory *)
 let db_remove (recur:bool) (db:db) (file:string) : db =
+  if !log then Printf.fprintf !logfile "DB: db_remove recur=%B file=%s\n%!" recur file;
   let files = get_files db file recur in
   List.fold_left
     (fun db k ->
@@ -221,15 +222,19 @@ let db_remove (recur:bool) (db:db) (file:string) : db =
                  
 (** copy or move a file or directory *)
 let db_copymove (move:bool) (recur:bool) (db:db) (org:string) (dest:string) : db =
+  if !log then Printf.fprintf !logfile "DB: db_copymove move=%B recur=%B org=%s dest=%s\n%!" move recur org dest;
   let files = get_files db org recur in
-  let org = absolute_path org
-  and dest = absolute_path dest in
-  let move = Sys.file_exists dest && Sys.is_directory dest in (* move instead of rename *)
-  let prefix = if move then Filename.dirname org else org in (* prefix to remove *)
+  let base = String.length (Filename.dirname (absolute_path org)) in
+  let dest = absolute_path dest in
+  let into = Sys.file_exists dest && Sys.is_directory dest in (* copy into dest instead of as dest *)
   List.fold_left
     (fun db korg ->
-      (* replace prefix with dest in filename to get copied filename *)
-      let kdest = dest^(String.sub korg 0 (String.length prefix)) in
+      (* get the copied filename inside or as dest *)
+      let kdest =
+        if into
+        then dest^(String.sub korg base (String.length korg - base))
+        else dest
+      in
       if !log then Printf.fprintf !logfile "DB: %s %s to %s\n%!" (if move then "move" else "copy") korg kdest;
       let _,f = StringMap.find korg db in
       let db = if move then StringMap.remove korg db else db in

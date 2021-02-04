@@ -83,7 +83,7 @@ $(MLY:$(SRC)/%.mly=$(BUILD)/%.mli): $(BUILD)/%.mli: $(BUILD)/%.ml
 $(MLY:$(SRC)/%.mly=$(BUILD)/%.ml): $(BUILD)/%.ml: $(SRC)/%.mly
 	@mkdir -p $(@D)
 	@echo -e "$(MLYMSG)	$^"
-	$(QUIET)$(MENHIR)  --explain  $< --base `dirname $@`/`basename $@ .ml`
+	$(QUIET)$(MENHIR) $(MENHIRFLAGS)  $< --base `dirname $@`/`basename $@ .ml`
 
 
 

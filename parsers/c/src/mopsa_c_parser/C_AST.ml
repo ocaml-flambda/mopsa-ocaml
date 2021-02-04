@@ -34,6 +34,7 @@ type uid = Clang_AST.uid
 (** Unique identifiers (for variables and functions). *)
 
 module UidMap = Map.Make(struct type t=uid let compare=compare end)
+module UidSet = Set.Make(struct type t=uid let compare=compare end)
 
 module StringMap = Map.Make(String)
 
@@ -160,10 +161,13 @@ type typ =
   (** struct and union *)
 
   | T_enum of enum_type
- (** enums *)
+  (** enums *)
+
+  | T_vector of vector_type
+  (** GCC vectors *)
 
 
- and type_qual = typ * qualifier
+and type_qual = typ * qualifier
  (** Type with qualifier. *)
 
  and typedef = {
@@ -239,6 +243,12 @@ type typ =
    }
  (** Type of functions and prototypes. *)
 
+ and vector_type = {
+     vector_type: type_qual;
+     vector_size: int;
+     vector_kind: int;
+   }
+ (** GCC vector types. *)
 
  (** {2 Variables and functions} *)
 
@@ -403,6 +413,13 @@ type typ =
 
    | E_atomic of int (** operation *) * expr * expr
 
+   (** vector instructions *)
+
+   | E_convert_vector of expr
+   | E_vector_element of expr (** base *) * string (** accessor *)
+   | E_shuffle_vector of expr array
+
+
  and init =
   | I_init_expr of expr
   | I_init_list of init list (** specified elements *) * init option (** filler *)
@@ -484,6 +501,7 @@ let rec type_is_scalar (t:typ) =
   | T_enum _ -> true
   | T_record _ -> false
   | T_complex _ -> false
+  | T_vector _ -> false
 (** Whether a type yields a scalar value. *)
 
 

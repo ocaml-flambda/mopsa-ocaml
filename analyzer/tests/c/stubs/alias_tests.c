@@ -12,7 +12,7 @@
 int zero();
 
 /*$
- * alias: zero;
+ * #alias zero;
  */
 int _zero();
 
@@ -31,7 +31,7 @@ void test_alias_without_parameters() {
 int incr(int x);
 
 /*$
- * alias: incr;
+ * #alias incr;
  */
 int _incr(int x);
 

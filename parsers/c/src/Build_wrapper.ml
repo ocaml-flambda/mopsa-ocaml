@@ -196,7 +196,7 @@ let mv db args =
   let files,_ = split_file_options args in
   let srcs,dst = cut_list files in
   if !log then Printf.fprintf !logfile "DB: mv srcs=%a dst=%s\n%!" (print_list "," output_string) srcs dst;
-  List.fold_left (fun src -> db_copymove true true src dst) db srcs
+  List.fold_left (fun db src -> db_copymove true true db src dst) db srcs
 
 
 let cp db args =
@@ -204,7 +204,7 @@ let cp db args =
   let recur = contains opts ["-r";"-R";"-a";"--archive"] in
   let srcs,dst = cut_list files in
   if !log then Printf.fprintf !logfile "DB: cp recur=%B srcs=%a dst=%s\n%!" recur (print_list "," output_string) srcs dst;
-  List.fold_left (fun src -> db_copymove false recur src dst) db srcs
+  List.fold_left (fun db src -> db_copymove false recur db src dst) db srcs
 
 
 let ln db args =
@@ -212,7 +212,7 @@ let ln db args =
   let files,_ = split_file_options args in
   let srcs,dst = cut_list files in
   if !log then Printf.fprintf !logfile "DB: ln srcs=%a dst=%s\n%!" (print_list "," output_string) srcs dst;
-  List.fold_left (fun src -> db_copymove false true src dst) db srcs
+  List.fold_left (fun db src -> db_copymove false true db src dst) db srcs
 
 
 

@@ -46,11 +46,10 @@ let _ =
      "assigns", ASSIGNS;
      "case", CASE;
      "ensures", ENSURES;
-     "predicate", PREDICATE;
      "warn", WARN;
      "unsound", UNSOUND;
-     "alarm", ALARM;
      "alias", ALIAS;
+     "predicate", PREDICATE;
 
      (* Operators *)
      "and",  AND;
@@ -60,7 +59,7 @@ let _ =
      "forall",  FORALL;
      "exists",  EXISTS;
      "in",    IN;
-
+     "otherwise", OTHERWISE;
      (* Types *)
      "void", VOID;
      "char", CHAR;
@@ -92,13 +91,17 @@ let _ =
      "new", NEW;
      "free", FREE;
      "return", RETURN;
-     "valid_ptr", VALID_PTR;
-     "valid", VALID_PTR; (* shortcut to valid_ptr *)
+     "raise", RAISE;
      "valid_float", VALID_FLOAT;
      "float_inf", FLOAT_INF;
      "float_nan", FLOAT_NAN;
      "cast", CAST;
      "alive", ALIVE;
+     "resource", RESOURCE;
+     "if", IF;
+     "then", THEN;
+     "else", ELSE;
+     "end", END;
    ]
 
    let char_for_backslash = function
@@ -128,6 +131,110 @@ let _ =
             pos_lnum = pos.pos_lnum + 1;
             pos_bol = pos.pos_cnum - (String.length s)
         }
+
+    let token_to_string = function
+        | ASSUMES -> "assumes"
+        | ASSIGNS -> "assigns"
+        | ASSIGN -> "="
+        | ARROW -> "->"
+        | AND -> "and"
+        | ALIVE -> "alive"
+        | ALIAS -> "alias"
+        | EOF   -> ""
+        | COMMA -> ","
+        | WARN -> "warn"
+        | VOLATILE -> "volatile"
+        | VOID -> "void"
+        | VALID_FLOAT -> "valid_float"
+        | UNSOUND -> "unsound"
+        | UNSIGNED -> "unsigned"
+        | UNION -> "union"
+        | TRUE -> "true"
+        | TOP -> "top"
+        | STRUCT -> "struct"
+        | STRING_CONST s -> "\"" ^ s ^ "\""
+        | STAR -> "*"
+        | SIZEOF_TYPE -> "sizeof_type"
+        | SIZEOF_EXPR -> "sizeof_expr"
+        | SIGNED -> "signed"
+        | SHORT -> "short"
+        | SEMICOL -> ";"
+        | SHARP -> "#"
+        | RSHIFT -> ">>"
+        | RPAR -> ")"
+        | RETURN -> "return"
+        | RESTRICT -> "restrict"
+        | RESOURCE -> "resource"
+        | REQUIRES -> "requires"
+        | RBRACK -> "]"
+        | RBRACE -> "}"
+        | RAISE -> "raise"
+        | OTHERWISE -> "otherwise"
+        | QUESTION -> "?"
+        | PRIMED -> "primed"
+        | PRIME -> "'"
+        | PLUS -> "+"
+        | OR -> "or"
+        | OFFSET -> "offset"
+        | NOT -> "not"
+        | NEW -> "new"
+        | NEQ -> "!="
+        | MOD -> "%"
+        | MINUS -> "-"
+        | LT -> "<"
+        | LSHIFT -> "<<"
+        | LPAR -> "("
+        | LOR -> "||"
+        | LONG -> "long"
+        | LOCAL -> "local"
+        | LNOT -> "!"
+        | LENGTH -> "length"
+        | LE -> "<="
+        | LBRACK -> "["
+        | LBRACE -> "{"
+        | LAND -> "&&"
+        | INVALID -> "INVALID"
+        | INT_CONST (i,_) -> Z.to_string i
+        | INT -> "int"
+        | INDEX -> "index"
+        | IN -> "in"
+        | IMPLIES -> "implies"
+        | IDENT id -> id
+        | GT -> ">"
+        | GE -> ">="
+        | FREE -> "free"
+        | FORALL -> "forall"
+        | FLOAT_NAN -> "float_nan"
+        | FLOAT_INF -> "float_inf"
+        | FLOAT_CONST f -> string_of_float f
+        | FLOAT -> "float"
+        | FALSE -> "false"
+        | EXISTS -> "exists"
+        | EQ -> "=="
+        | ENUM -> "enum"
+        | ENSURES -> "ensures"
+        | END_DELIM -> "*/"
+        | DOUBLE -> "double"
+        | DOT -> "."
+        | DIV -> "/"
+        | CONST -> "const"
+        | COLON -> ":"
+        | CHAR_CONST c -> Format.asprintf "'\\x%x'" c
+        | CHAR -> "char"
+        | CAST -> "cast"
+        | CASE -> "case"
+        | BYTES -> "bytes"
+        | BXOR -> "^"
+        | BOR -> "|"
+        | BNOT -> "~"
+        | BEGIN_DELIM -> "/*$"
+        | BASE -> "base"
+        | BAND -> "&"
+        | IF -> "if"
+        | THEN -> "then"
+        | ELSE -> "else"
+        | END -> "end"
+        | PREDICATE -> "predicate"
 }
 
 let digit = ['0' - '9']
@@ -158,19 +265,19 @@ let newline = '\r' | '\n' | "\r\n"
                  
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 
-let begin_delimiter = "/*$" | "/*$$" | "/*$$$"
+let begin_delimiter = "/*$" | "/*$=" | "/*$!"
 let end_delimiter = "*/"
 
 let line_comment = "//" [^ '\n' '\r']*
 
 rule read =
   parse
-  | begin_delimiter  { BEGIN }
-  | end_delimiter    { END }
+  | begin_delimiter  { BEGIN_DELIM }
+  | end_delimiter    { END_DELIM }
 
 
   | white              { read lexbuf }
-  | newline (white* end_delimiter as s)    { new_line lexbuf s; END } 
+  | newline (white* end_delimiter as s)    { new_line lexbuf s; END_DELIM }
   | newline (white* '*'? as s) { new_line lexbuf s; read lexbuf }
 
   | integer unsigned_long_suffix       { INT_CONST (z_of_int_literal (Lexing.lexeme lexbuf), UNSIGNED_LONG) }
@@ -233,10 +340,12 @@ rule read =
   | "<<"   { LSHIFT }
   | "!"    { LNOT }
   | "~"    { BNOT }
+  | "?"    { QUESTION }
+  | "#"    { SHARP }
 
   | "="    { ASSIGN }
 
-  | "//"   { try read_comment lexbuf; read lexbuf with EndDelimiterFound -> END }
+  | "//"   { try read_comment lexbuf; read lexbuf with EndDelimiterFound -> END_DELIM }
 
   | eof      { EOF }
 

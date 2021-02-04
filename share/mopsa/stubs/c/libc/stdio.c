@@ -67,7 +67,7 @@ _FILE_ *_alloc_std_stream();
 
 
 
-/*$$$
+/*$!
  * assigns: stdin;
  * assigns: stdout;
  * assigns: stderr;
@@ -107,7 +107,7 @@ FILE *_alloc_FILE_at(int fd);
 const char *const sys_errlist[128]; // TODO: actual size
 
 /*$
- * requires: valid_string(__filename);
+ * requires: valid_string_or_fail(__filename);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -121,8 +121,8 @@ const char *const sys_errlist[128]; // TODO: actual size
 int remove (const char *__filename);
 
 /*$
- * requires: valid_string(__old);
- * requires: valid_string(__new);
+ * requires: valid_string_or_fail(__old);
+ * requires: valid_string_or_fail(__new);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -137,8 +137,8 @@ int rename (const char *__old, const char *__new);
 
 
 /*$
- * requires: valid_string(__old);
- * requires: valid_string(__new);
+ * requires: valid_string_or_fail(__old);
+ * requires: valid_string_or_fail(__new);
  * local:    void* f1 = _mopsa_find_file_resource(__oldfd);
  * local:    void* f2 = _mopsa_find_file_resource(__newfd);
  * requires: __oldfd == AT_FDCWD or alive_resource(f1, FileRes);
@@ -180,7 +180,7 @@ static char _tmpnam_buf[L_tmpnam];
 /*$
  * warn: "avoid using function tmpnam";
  *
- * requires: null_or_valid_bytes(__s, L_tmpnam);
+ * requires: null_or_valid_bytes_or_fail(__s, L_tmpnam);
  *
  * case "use_s" {
  *   assumes: __s != NULL;
@@ -206,7 +206,7 @@ char *tmpnam (char *__s);
 /*$
  * warn: "avoid using function tmpnam_r";
  *
- * requires: valid_bytes(__s, L_tmpnam);
+ * requires: valid_bytes_or_fail(__s, L_tmpnam);
  *
  * case "success" {
  *   assigns: __s[0, L_tmpnam);
@@ -270,7 +270,7 @@ int fflush (FILE *__stream);
 
 
 /*$
- * alias: fflush;
+ * #alias fflush;
  */
 int fflush_unlocked (FILE *__stream);
 
@@ -280,8 +280,8 @@ int fflush_unlocked (FILE *__stream);
 int fcloseall(void);
 
 /*$
- * requires: valid_string(__filename);
- * requires: valid_string(__modes);
+ * requires: valid_string_or_fail(__filename);
+ * requires: valid_string_or_fail(__modes);
  *
  * case "success" {
  *   local:   FILE* r = _alloc_FILE();
@@ -297,8 +297,8 @@ FILE *fopen (const char *__restrict __filename,
              const char *__restrict __modes);
 
 /*$
- * requires: valid_string(__filename);
- * requires: valid_string(__modes);
+ * requires: valid_string_or_fail(__filename);
+ * requires: valid_string_or_fail(__modes);
  * requires: alive_resource(__stream, File);
  *
  * case "success" {
@@ -316,7 +316,7 @@ FILE *freopen (const char *__restrict __filename,
 
 
 /*$
- * requires: valid_string(__modes);
+ * requires: valid_string_or_fail(__modes);
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: alive_resource(f, FileRes);
  *
@@ -341,8 +341,8 @@ FILE *fdopen (int __fd, const char *__modes);
 /*$
  * // TODO: if __s != NULL, the buffer pointed to by __s becomes volatile
  *
- * requires: valid_string(__modes);
- * requires: null_or_valid_bytes(__s, __len);
+ * requires: valid_string_or_fail(__modes);
+ * requires: null_or_valid_bytes_or_fail(__s, __len);
  *
  * case "success" {
  *   local: FILE* r = _alloc_FILE();
@@ -376,7 +376,7 @@ FILE *open_memstream (char **__bufloc, size_t *__sizeloc);
  * // TODO: __buf becomes volatile
  *
  * requires: alive_resource(__stream, File);
- * requires: null_or_valid_bytes(__buf, BUFSIZ);
+ * requires: null_or_valid_bytes_or_fail(__buf, BUFSIZ);
  */
 void setbuf (FILE *__restrict __stream, char *__restrict __buf);
 
@@ -384,7 +384,7 @@ void setbuf (FILE *__restrict __stream, char *__restrict __buf);
  * // TODO: __buf becomes volatile
  *
  * requires: alive_resource(__stream, File);
- * requires: null_or_valid_bytes(__buf, __n);
+ * requires: null_or_valid_bytes_or_fail(__buf, __n);
  * requires: __modes in [0, 2];
  *
  * case "success" {
@@ -404,7 +404,7 @@ int setvbuf (FILE *__restrict __stream, char *__restrict __buf,
  * // TODO: __buf becomes volatile
  *
  * requires: alive_resource(__stream, File);
- * requires: null_or_valid_bytes(__buf, __size);
+ * requires: null_or_valid_bytes_or_fail(__buf, __size);
  */
 void setbuffer (FILE *__restrict __stream, char *__restrict __buf,
                 size_t __size);
@@ -477,7 +477,7 @@ int fgetc (FILE *__stream);
 #ifndef getc
 
 /*$
- * alias: fgetc;
+ * #alias fgetc;
  */
 int getc (FILE *__stream);
 
@@ -493,18 +493,18 @@ int getchar (void);
 
 
 /*$
- * alias: fgetc;
+ * #alias fgetc;
  */
 int getc_unlocked (FILE *__stream);
 
 /*$
- * alias: getchar;
+ * #alias getchar;
  */
 int getchar_unlocked (void);
 
 
 /*$
- * alias: fgetc;
+ * #alias fgetc;
  */
 int fgetc_unlocked (FILE *__stream);
 
@@ -522,14 +522,14 @@ int fputc (int __c, FILE *__stream);
 #if __GLIBC_MINOR__ <= 27
 
 /*$
- * alias: fputc;
+ * #alias fputc;
  */
 int _IO_putc (int __c, _IO_FILE *__stream);
 
 #else
 
 /*$
- * alias: fputc;
+ * #alias fputc;
  */
 int putc (int __c, FILE *__stream);
 
@@ -542,17 +542,17 @@ int putc (int __c, FILE *__stream);
 int putchar (int __c);
 
 /*$
- * alias: fputc;
+ * #alias fputc;
  */
 int fputc_unlocked (int __c, FILE *__stream);
 
 /*$
- * alias: fputc;
+ * #alias fputc;
  */
 int putc_unlocked (int __c, FILE *__stream);
 
 /*$
- * alias: putchar;
+ * #alias putchar;
  */
 int putchar_unlocked (int __c);
 
@@ -572,7 +572,7 @@ int putw (int __w, FILE *__stream);
 /*$
  * requires: alive_resource(__stream, File);
  * requires: __n >= 0;
- * requires: valid_bytes(__s, __n);
+ * requires: valid_bytes_or_fail(__s, __n);
  * assigns:  __s[0, __n);
  * ensures:  valid_primed_substring(__s, __n);
  * ensures:  (return == __s) or (return == NULL);
@@ -586,9 +586,8 @@ char *fgets (char *__restrict __s, int __n, FILE *__restrict __stream);
  */
 char *gets (char *__s);
 
-
 /*$
- * alias: fgets;
+ * #alias fgets;
  */
 char *fgets_unlocked (char *__restrict __s, int __n,
                       FILE *__restrict __stream);
@@ -596,7 +595,7 @@ char *fgets_unlocked (char *__restrict __s, int __n,
 
 /*$
  * requires: alive_resource(__stream, File);
- * requires: null_or_valid_bytes(*__lineptr, *__n);
+ * requires: null_or_valid_bytes_or_fail(*__lineptr, *__n);
  * 
  * case "realloc" {
  *   assumes:  *__lineptr != NULL;
@@ -643,7 +642,7 @@ ssize_t getline (char **__restrict __lineptr,
 
 /*$
  * requires: alive_resource(__stream, File);
- * requires: valid_string(__s);
+ * requires: valid_string_or_fail(__s);
  *
  * case "success" {
  *   ensures: return >= 0;
@@ -657,7 +656,7 @@ ssize_t getline (char **__restrict __lineptr,
 int fputs (const char *__restrict __s, FILE *__restrict __stream);
 
 /*$
- * requires: valid_string(__s);
+ * requires: valid_string_or_fail(__s);
  *
  * case "success" {
  *   ensures: return >= 0;
@@ -678,7 +677,7 @@ int ungetc (int __c, FILE *__stream);
 
 /*$
  * requires: alive_resource(__stream, File);
- * requires: valid_bytes(__ptr, __size * __n);
+ * requires: valid_bytes_or_fail(__ptr, __size * __n);
  * assigns:  ((char*)__ptr)[0, (__size * __n));
  * ensures:  return in [0, __n];
  */
@@ -687,7 +686,7 @@ size_t fread (void *__restrict __ptr, size_t __size,
 
 /*$
  * requires: alive_resource(__stream, File);
- * requires: valid_bytes(__ptr, __size * __n);
+ * requires: valid_bytes_or_fail(__ptr, __size * __n);
  * ensures:  return in [0, __n];
  */
 size_t fwrite (const void *__restrict __ptr, size_t __size,
@@ -695,19 +694,19 @@ size_t fwrite (const void *__restrict __ptr, size_t __size,
 
 
 /*$
- * alias: fputs;
+ * #alias fputs;
  */
 int fputs_unlocked (const char *__restrict __s,
                     FILE *__restrict __stream);
 
 /*$
- * alias: fread;
+ * #alias fread;
  */
 size_t fread_unlocked (void *__restrict __ptr, size_t __size,
                        size_t __n, FILE *__restrict __stream);
 
 /*$
- * alias: fwrite;
+ * #alias fwrite;
  */
 size_t fwrite_unlocked (const void *__restrict __ptr, size_t __size,
                         size_t __n, FILE *__restrict __stream);
@@ -793,7 +792,7 @@ int fgetpos (FILE *__restrict __stream, fpos_t *__restrict __pos);
 
 /*$
  * requires: alive_resource(__stream, File);
- * requires: valid_ptr(__pos);
+ * requires: valid_ptr_or_fail(__pos);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -824,23 +823,23 @@ int ferror (FILE *__stream);
 
 
 /*$
- * alias: clearerr;
+ * #alias clearerr;
  */
 void clearerr_unlocked (FILE *__stream);
 
 /*$
- * alias: feof;
+ * #alias feof;
  */
 int feof_unlocked (FILE *__stream);
 
 /*$
- * alias: ferror;
+ * #alias ferror;
  */
 int ferror_unlocked (FILE *__stream);
 
 
 /*$
- * requires: valid_string(__s);
+ * requires: valid_string_or_fail(__s);
  */
 void perror (const char *__s);
 
@@ -853,14 +852,14 @@ int fileno (FILE *__stream);
 
 
 /*$
- * alias: fileno;
+ * #alias fileno;
  */
 int fileno_unlocked (FILE *__stream);
 
 
 /*$
- * requires: valid_string(__command);
- * requires: valid_string(__modes);
+ * requires: valid_string_or_fail(__command);
+ * requires: valid_string_or_fail(__modes);
  *
  * case "success" {
  *   local:   FILE* f = _alloc_FILE();
@@ -885,7 +884,7 @@ int pclose (FILE *__stream);
 static char _ctermid_buf[L_ctermid];
 
 /*$
- * requires: null_or_valid_bytes(__s, L_ctermid);
+ * requires: null_or_valid_bytes_or_fail(__s, L_ctermid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
@@ -911,7 +910,7 @@ char *ctermid (char *__s);
 static char _cuserid_buf[L_cuserid];
 
 /*$
- * requires: null_or_valid_bytes(__s, L_cuserid);
+ * requires: null_or_valid_bytes_or_fail(__s, L_cuserid);
  *
  * case "buf" {
  *   assumes: __s != NULL;
@@ -954,8 +953,8 @@ void funlockfile (FILE *__stream);
 /*$
  * // MS-specific, not in libc, but used in Juliet
  *
- * requires: valid_wide_string(__filename);
- * requires: valid_wide_string(__modes);
+ * requires: valid_wide_string_or_fail(__filename);
+ * requires: valid_wide_string_or_fail(__modes);
  *
  * case "success" {
  *   local:   FILE* r = _alloc_FILE();
@@ -975,21 +974,21 @@ FILE *_wfopen (const wchar_t *__restrict __filename,
 
 /*$
  * requires: alive_resource(__s, File);
- * requires: valid_string(__format);
+ * requires: valid_string_or_fail(__format);
  * unsound: "vfprintf format is not checked";
  */
 int vfprintf (FILE *__restrict __s, const char *__restrict __format,
               __gnuc_va_list __arg);
 
 /*$
- * requires: valid_string(__format);
+ * requires: valid_string_or_fail(__format);
  * unsound: "vprintf format is not checked";
  */
 int vprintf (const char *__restrict __format, __gnuc_va_list __arg);
 
 /*$
- * requires: valid_ptr(__s);
- * requires: valid_string(__format);
+ * requires: valid_ptr_or_fail(__s);
+ * requires: valid_string_or_fail(__format);
  * warn: "vsprintf is not safe to use";
  * unsound: "vsprintf format is not checked";
  */
@@ -997,8 +996,8 @@ int vsprintf (char *__restrict __s, const char *__restrict __format,
               __gnuc_va_list __arg);
 
 /*$
- * requires: valid_bytes(__s, __maxlen);
- * requires: valid_string(__format);
+ * requires: valid_bytes_or_fail(__s, __maxlen);
+ * requires: valid_string_or_fail(__format);
  * assigns: __s[0,__maxlen);
  * ensures: valid_primed_substring(__s, __maxlen);
  * unsound: "vsnprintf format is not checked";
@@ -1007,8 +1006,8 @@ int vsnprintf (char *__restrict __s, size_t __maxlen,
                const char *__restrict __format, __gnuc_va_list __arg);
 
 /*$
- * requires: valid_ptr(__ptr);
- * requires: valid_string(__f);
+ * requires: valid_ptr_or_fail(__ptr);
+ * requires: valid_string_or_fail(__f);
  * unsound: "vasprintf format is not checked";
  *
  * case "success" {
@@ -1029,7 +1028,7 @@ int vasprintf (char **__restrict __ptr, const char *__restrict __f,
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: alive_resource(f, FileRes);
- * requires: valid_string(__fmt);
+ * requires: valid_string_or_fail(__fmt);
  * unsound: "vdprintf format is not checked";
  */
 int vdprintf (int __fd, const char *__restrict __fmt,
@@ -1037,21 +1036,21 @@ int vdprintf (int __fd, const char *__restrict __fmt,
 
 /*$
  * requires: alive_resource(__s, File);
- * requires: valid_string(__format);
+ * requires: valid_string_or_fail(__format);
  * unsound: "vfscanf format and arguments not handled";
  */
 int vfscanf (FILE *__restrict __s, const char *__restrict __format,
              __gnuc_va_list __arg);
 
 /*$
- * requires: valid_string(__format);
+ * requires: valid_string_or_fail(__format);
  * unsound: "vscanf format and arguments not handled";
  */
 int vscanf (const char *__restrict __format, __gnuc_va_list __arg);
 
 /*$
- * requires: valid_string(__s);
- * requires: valid_string(__format);
+ * requires: valid_string_or_fail(__s);
+ * requires: valid_string_or_fail(__format);
  * unsound: "vsscanf format and arguments not handled";
  */
 int vsscanf (const char *__restrict __s,

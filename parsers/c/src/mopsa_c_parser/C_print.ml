@@ -194,7 +194,9 @@ let rec prio_expr ((e,_,_):expr) =
   | E_character_literal _ | E_integer_literal _ | E_float_literal _
   | E_string_literal _ | E_compound_literal _
   | E_variable _ | E_function _ | E_predefined _ | E_statement _
-  | E_var_args _ | E_atomic _ -> 15
+  | E_var_args _ | E_atomic _
+  | E_convert_vector _ | E_vector_element _ | E_shuffle_vector _
+    -> 15
 (* get the natural priority of an experssion, to avoid spurious parentheses *)
 
 let force_paren prio =
@@ -226,6 +228,7 @@ and raw_buf_type buf = function
     | T_enum e -> bp buf "enum %s" e.enum_unique_name
     | T_record r -> bp buf "%s %s" (string_of_record_kind r.record_kind) r.record_unique_name
     | T_complex f -> bp buf "%s _Complex" (string_of_float_type f)
+    | T_vector v -> bp buf "vector(%a, %i, %i)" raw_buf_type_qual v.vector_type v.vector_size v.vector_kind
 (* raw (non-C) representation of a type, somewhat more clear than C sytnax *)
 
 
@@ -255,6 +258,8 @@ and c_buf_type_base buf (t,q) = match t with
      bp buf "%s%s %s"
         (string_of_qualifier q) (string_of_record_kind r.record_kind) r.record_unique_name
   | T_complex f -> bp buf "%s%s _Complex" (string_of_qualifier q) (string_of_float_type f)
+  | T_vector v -> bp buf "%a" c_buf_type_base v.vector_type
+
 
 (* prints the rest of the type; inner prints the innermost part of the type *)
 and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
@@ -283,6 +288,9 @@ and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
        
     | T_typedef _ | T_enum _ | T_record _ ->
        inner buf var
+
+    | T_vector v ->
+       bp buf "__attribute__((__vector_size__(%i)))" v.vector_size
 
 (* array length *)             
 and len indent buf = function
@@ -411,6 +419,21 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
          i
          (bp_paren (is_comma e1) (c_buf_expr indent)) e1
          (bp_paren (is_comma e2) (c_buf_expr indent)) e2
+
+   | E_convert_vector e ->
+      bp buf "__builtin_convertvector(%a,%a)"
+        (bp_paren (is_comma e) (c_buf_expr indent)) e
+        (c_buf_type indent "") (fst t)
+
+   | E_vector_element (e,s) ->
+      bp buf "%a.%s"
+        (bp_paren (is_comma e) (c_buf_expr indent)) e
+        s
+
+   | E_shuffle_vector ea ->
+      bp buf "__builtin_suffle(%a)"
+        (bp_array (fun buf ee -> bp_paren (is_comma ee) (c_buf_expr indent) buf ee) ", ") ea
+
 
 and c_buf_expr_bool indent buf e =
   bp buf "%a" (bp_paren (prio_expr e == 1) (c_buf_expr indent)) e
@@ -681,6 +704,7 @@ let print_types_ordered
       | T_builtin_fn -> ()
       | T_record r -> ()
       | T_enum _ -> ()
+      | T_vector v -> explore (fst v.vector_type)
     in
     if not (Hashtbl.mem black t.typedef_uid) then (
       if Hashtbl.mem gray t.typedef_uid then invalid_arg "cyclic type dependencies";
@@ -705,6 +729,7 @@ let print_types_ordered
       | T_builtin_fn -> ()
       | T_record r -> if mustdef then record true r
       | T_enum _ -> ()
+      | T_vector v -> explore mustdef (fst v.vector_type)
     in
     if not (Hashtbl.mem black r.record_uid) then (
       if Hashtbl.mem gray r.record_uid then invalid_arg "cyclic type dependencies";

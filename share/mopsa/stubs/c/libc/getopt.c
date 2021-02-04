@@ -54,18 +54,16 @@ int getopt (int ___argc, char *const *___argv, const char *__shortopts);
 
 
 
-/*$$
- * predicate valid_longopt(l):
- *   valid_ptr(l) and
- *   exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (
- *     l[i].name == NULL and
- *     forall size_t j in [0, i): (
- *       valid_ptr(l[j].name) and
- *       (exists size_t k in [0, (size(l[j].name) - offset(l[j].name))): l[j].name[k] == 0) and
- *       (l[j].flag != NULL implies valid_ptr(l[j].flag))
- *     )
- *   );
- */
+#define valid_longopt(l)                                                                 \
+    valid_ptr(l) and                                                                     \
+    exists size_t i in [0, ((bytes(l) - offset(l)) / sizeof_type(struct option))): (     \
+      l[i].name == NULL and                                                              \
+      forall size_t j in [0, i): (                                                       \
+        valid_ptr(l[j].name) and                                                         \
+        (exists size_t k in [0, (size(l[j].name) - offset(l[j].name))): l[j].name[k] == 0) and \
+        (l[j].flag != NULL implies valid_ptr(l[j].flag)) \
+      ) \
+    )
 
 /*$
  * ensures:
@@ -148,7 +146,7 @@ int getopt_long (int ___argc, char *const *___argv, const char *__shortopts,
                  const struct option *__longopts, int *__longind);
 
 /*$
- * alias: getopt_long;
+ * #alias getopt_long;
  */
 int getopt_long_only (int ___argc, char *const *___argv, const char *__shortopts,
                       const struct option *__longopts, int *__longind);

@@ -231,24 +231,21 @@ struct
 
         | Some post ->
           (* Check that all cases were handled *)
-          let handled, not_handled = Cases.partition (fun c flow -> match c with NotHandled -> false | _ -> true) post in
-          match not_handled with
-          | None -> post
-          | Some x ->
-            let post' =
-              x >>= fun _ flow ->
-              (* Not handled cases with empty flows are OK *)
-              if Flow.is_bottom man.lattice flow
-              then Post.return flow
-              else
-                Exceptions.panic_at stmt.srange
-                  "unable to analyze statement %a in %a"
-                  pp_stmt stmt
-                  pp_route route
-            in
-            match handled with
-            | None -> post'
-            | Some y -> Post.join x post'
+          let not_handled = Cases.exists (fun c flow ->
+              match c with
+              | NotHandled ->
+                (* Not handled cases with empty flows are OK *)
+                not (Flow.is_bottom man.lattice flow)
+              | _ -> false
+            ) post
+          in
+          if not_handled then
+            Exceptions.panic_at stmt.srange
+              "unable to analyze statement %a in %a"
+              pp_stmt stmt
+              pp_route route
+          ;
+            post
       in
       let clean_post = exec_cleaners man post in
       if inside_hook () then
@@ -516,6 +513,3 @@ struct
       Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route
 
 end
-
-
-

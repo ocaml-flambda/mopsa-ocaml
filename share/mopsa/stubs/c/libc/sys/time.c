@@ -37,11 +37,9 @@
 #define __timezone_ptr_t void*
 #endif
 
-/*$$
- * predicate valid_primed_tv(tv):
- *   (tv.tv_sec)' in [0, 2000000000] and // we are somewhere between 1970 and 2030
- *   (tv.tv_usec)' in [0, 1000000];
- */
+#define valid_primed_tv(tv)             \
+    primed(tv.tv_sec) in [0, 2000000000] and \
+    primed(tv.tv_usec) in [0, 1000000]
 
 
 /*$
@@ -179,7 +177,7 @@ int setitimer (__itimer_which_t __which,
 int utimes (const char *__file, const struct timeval __tvp[2]);
 
 /*$
- * alias: utimes;
+ * #alias utimes;
  */
 int lutimes (const char *__file, const struct timeval __tvp[2]);
 
