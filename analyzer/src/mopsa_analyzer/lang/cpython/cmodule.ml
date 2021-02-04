@@ -852,6 +852,7 @@ module Domain =
                fun int_addr flow ->
                debug "got int_addr %a, putting %a as value" pp_addr (Addr.from_expr int_addr) pp_expr earg;
                let c_addr, flow = python_to_c_boundary (Addr.from_expr int_addr) None (Some earg) range man flow in
+               debug "c_addr %a" pp_expr c_addr;
                  (* FIXME: addr vs py_object, we'll need to clean things somehow... *)
                Eval.singleton c_addr flow
            )
@@ -873,11 +874,15 @@ module Domain =
          resolve_c_pointer_into_addr (List.hd args) man flow >>$
            (fun oaddr flow ->
              let addr = OptionExt.none_to_exn oaddr in
-             debug "addr is %a" pp_addr addr;
-             (* FIXME: if not called on a string, this should fail *)
-             man.eval (mk_expr ~etyp:T_int (E_len (mk_avalue_from_pyaddr addr T_string range)) range) flow >>$
+             debug "addr is %a %b" pp_addr addr (compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0);
+             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
+               man.eval (mk_expr ~etyp:T_int (E_len (mk_avalue_from_pyaddr addr T_string range)) range) flow >>$
                fun str_length flow ->
                Eval.singleton str_length flow
+             else
+               let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+               man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+                 Eval.singleton (mk_int (-1) ~typ:T_int range)
            )
          |> OptionExt.return
 
@@ -1033,7 +1038,6 @@ module Domain =
                            [py_tuple; py_obj] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-                 let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
                  let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                  debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
                  man.eval c_addr flow

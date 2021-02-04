@@ -66,6 +66,14 @@ PyErr_Format(PyObject* o, const char* fmt, ...)
     return NULL;
 }
 
+int PyErr_BadArgument(void)
+{
+    PyErr_SetString(PyExc_TypeError,
+                    "bad argument type for built-in operation");
+    return 0;
+}
+
+
 int PyType_ReadyCheat(PyTypeObject *type)
 {
     Py_TYPE(type) = &PyType_Type;
