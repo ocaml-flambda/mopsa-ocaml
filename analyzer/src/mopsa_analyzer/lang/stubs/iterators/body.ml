@@ -591,7 +591,7 @@ struct
       let return =
         match stub.stub_func_return_type with
         | None   -> None
-        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return_var exp)
+        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return exp None)
       in
       eval_stub_call stub args return exp.erange man flow |>
       OptionExt.return
