@@ -184,6 +184,7 @@ module Domain =
 
     include EquivBaseAddrs
 
+    let widen ctx = join
     include Framework.Core.Id.GenDomainId(
                 struct
                   type nonrec t = t
