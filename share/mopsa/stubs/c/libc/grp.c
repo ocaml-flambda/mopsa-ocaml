@@ -136,10 +136,10 @@ int setgroups (size_t __n, const __gid_t *__groups);
  * ensures: (*__ngroups)' >= 0;
  * ensures: return >= -1;
  */
-int getgrouplist (const char *__user, __gid_t __group,
+int getgrouplist (const char *user, __gid_t __group,
 			 __gid_t *__groups, int *__ngroups);
 /*$
- * requires: valid_string(__user);
+ * requires: valid_string(user);
  *
  * case "success" {
  *   ensures: return == 0;
@@ -150,4 +150,4 @@ int getgrouplist (const char *__user, __gid_t __group,
  *   ensures: return == -1;
  * }
  */
-int initgroups (const char *__user, __gid_t __group);
+int initgroups (const char *user, __gid_t __group);
