@@ -1038,6 +1038,7 @@ module Domain =
                            [py_tuple; py_obj] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
+                 let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
                  let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                  debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
                  man.eval c_addr flow
