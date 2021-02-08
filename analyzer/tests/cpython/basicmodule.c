@@ -69,6 +69,22 @@ Cbox_getdata(Cbox *self, PyObject *args)
     return Py_BuildValue("Oi", self->contents, self->counter);
 }
 
+static PyObject*
+Cbox_brokengetdata(Cbox *self, PyObject *args)
+{
+    // FIXME: doesn't seem to break in CPython :O
+    return Py_BuildValue("ii", self->contents, self->counter);
+}
+
+static PyObject*
+Cbox_getdatadict(Cbox *self, PyObject *args)
+{
+    return Py_BuildValue("{s:O,s:i}",
+                         "contents", self->contents,
+                         "counter", self->counter);
+}
+
+
 static PyObject *
 Cbox_incr(Cbox *self, PyObject *args)
 {
@@ -100,6 +116,8 @@ static PyMethodDef Cbox_methods[] = {
     {"getcontents", (PyCFunction) Cbox_getcontents, METH_VARARGS, ""},
     {"getcounter", (PyCFunction) Cbox_getcounter, METH_VARARGS, ""},
     {"getdata", (PyCFunction) Cbox_getdata, METH_VARARGS, ""},
+    {"brokengetdata", (PyCFunction) Cbox_brokengetdata, METH_VARARGS, ""},
+    {"getdatadict", (PyCFunction) Cbox_getdatadict, METH_VARARGS, ""},
     {"incr", (PyCFunction) Cbox_incr, METH_VARARGS, ""},
     {"maybe_incr", (PyCFunction) Cbox_maybe_incr, METH_VARARGS, ""},
     {"maybe_incr2", (PyCFunction) Cbox_maybe_incr2, METH_VARARGS, ""},

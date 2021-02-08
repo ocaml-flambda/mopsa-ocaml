@@ -98,6 +98,15 @@ class Test(unittest.TestCase):
         self.assertEqual(tup[0], a)
         self.assertEqual(tup[1], 4)
 
+    def test_buildvalue3(self):
+        class A: pass
+        a = A()
+        c = basic.Cbox(a, 4)
+        tup = c.getdatadict()
+        self.assertEqual(tup['contents'], a)
+        self.assertEqual(tup['counter'], 4) # always false due to disjunctive evaluation
+        # FIXME: brokengetdata to try
+
     def test_member_type_restriction(self):
         c = basic.Cbox(1, 3)
         with self.assertRaises(TypeError):
