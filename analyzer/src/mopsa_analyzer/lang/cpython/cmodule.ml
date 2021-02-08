@@ -534,12 +534,17 @@ module Domain =
           (* fill dict with methods, members, getset
              ~> by delegation to the dictionnary/structural type abstraction *)
           bind_function_in "__new__"
-            (* (mk_c_arrow_access_by_name ecls "tp_new" range) *)
             (mk_c_address_of (mk_expr (E_c_function (C.Ast.find_c_fundec_by_name "tp_new_wrapper" flow)) range) range)
-            cls_addr Builtin_function_or_method man flow >>%
-            fun flow ->
-            bind_function_in "__init__" (mk_c_arrow_access_by_name ecls "tp_init" range) cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>%
-              fun flow ->
+            cls_addr Builtin_function_or_method man flow >>% fun flow ->
+          bind_function_in "__init__"
+            (mk_c_arrow_access_by_name ecls "tp_init" range)
+            cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>% fun flow ->
+          bind_function_in "__iter__"
+            (mk_c_arrow_access_by_name ecls "tp_iter" range)
+            cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man flow >>% fun flow ->
+          bind_function_in "__next__"
+            (mk_c_arrow_access_by_name ecls "tp_iternext" range)
+            cls_addr (Wrapper_descriptor (Some "wrap_next")) man flow >>% fun flow ->
               assume
                 (ne
                    (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
@@ -1176,6 +1181,7 @@ module Domain =
              (* NB: alternative to c_int_to_python would be to make a query directly? *)
              c_int_to_python pos man flow range >>$ fun py_obj flow ->
                debug "PyTuple_GetItem, py_pos = %a" pp_expr py_obj;
+               (* FIXME: if an IndexError is raised? *)
                man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
                            [py_tuple; py_obj] range) flow >>$
                  fun py_elem flow ->

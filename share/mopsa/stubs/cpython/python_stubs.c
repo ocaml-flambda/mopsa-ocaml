@@ -279,6 +279,30 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
         return PyBool_FromLong(res);
 }
 
+static PyObject *
+wrap_unaryfunc(PyObject *self, PyObject *args, void *wrapped)
+{
+    unaryfunc func = (unaryfunc)wrapped;
+
+    /* if (!check_num_args(args, 0)) */
+    /*     return NULL; */
+    return (*func)(self);
+}
+
+static PyObject *
+wrap_next(PyObject *self, PyObject *args, void *wrapped)
+{
+    unaryfunc func = (unaryfunc)wrapped;
+    PyObject *res;
+
+    /* if (!check_num_args(args, 0)) */
+    /*     return NULL; */
+    res = (*func)(self);
+    if (res == NULL && !PyErr_Occurred())
+        PyErr_SetNone(PyExc_StopIteration);
+    return res;
+}
+
 
 static PyObject *
 tp_new_wrapper(PyObject *self, PyObject *args, PyObject *kwds)
@@ -437,6 +461,8 @@ Py_UCS4* PyUnicode_AsUCS4Copy(PyObject *unicode)
 {
     // let's be imprecise: we malloc a buffer of the good size, but don't copy anything
     Py_ssize_t s = PyUnicode_GetLength(unicode);
+    if(s == -1 && PyErr_Occurred())
+        return NULL;
     Py_UCS4* ret = malloc(s * sizeof(Py_UCS4));
     if(ret)
     {

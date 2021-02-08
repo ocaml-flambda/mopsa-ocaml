@@ -96,7 +96,7 @@ Cbox_incr(Cbox *self, PyObject *args)
 static PyObject*
 Cbox_maybe_incr(Cbox *self, PyObject *args)
 {
-    if(_mopsa_rand_s8()) {
+    if(rand()) {
         return NULL;
     }
     self->counter++;
@@ -189,6 +189,50 @@ Counter_init(Counter *self, PyObject *args, PyObject *kwds)
     }
 }
 
+
+typedef struct {
+    PyObject_HEAD
+    int pos;
+    int upper_bound;
+} CounterIterator;
+
+
+static PyObject*
+CounterIterator_iter(PyObject* self) {
+    Py_INCREF(self);
+    return self;
+}
+
+
+static PyObject*
+CounterIterator_iternext(PyObject* self) {
+    CounterIterator* s = (CounterIterator*) self;
+    if (s->pos < s->upper_bound)
+        return PyLong_FromLong(s->pos++);
+    return NULL;
+}
+
+static PyTypeObject CounterIteratorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "basic.CounterIterator",
+    .tp_doc = "bla",
+    .tp_basicsize = sizeof(CounterIterator),
+    .tp_itemsize = 0,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_iter = CounterIterator_iter,
+    .tp_iternext = CounterIterator_iternext
+};
+
+static PyObject*
+Counter_iterate(PyObject* self) {
+    CounterIterator *it;
+    it = PyObject_New(CounterIterator, &CounterIteratorType);
+    if(it == NULL) return NULL;
+    it->pos = 0;
+    it->upper_bound = ((Counter*) self)->counter;
+    return (PyObject *) it;
+}
+
 static PySequenceMethods counter_as_sequence = {
     (lenfunc)Counter_len,                 /* sq_length */
     0,                                  /* sq_concat */
@@ -197,7 +241,7 @@ static PySequenceMethods counter_as_sequence = {
     0,                                  /* sq_slice */
     0,                                  /* sq_ass_item */
     0,                                  /* sq_ass_slice */
-    Counter_contains,                    /* sq_contains */
+    Counter_contains,                   /* sq_contains */
     0,                                  /* sq_inplace_concat */
     0,                                  /* sq_inplace_repeat */
 };
@@ -212,8 +256,10 @@ static PyTypeObject CounterType = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_new = PyType_GenericNew,
     .tp_init = Counter_init,
+    .tp_iter = Counter_iterate,
     .tp_as_sequence = &counter_as_sequence
 };
+
 
 static PyObject*
 basic_return_true(PyObject *self, PyObject *args)
@@ -230,8 +276,7 @@ basic_return_false(PyObject *self, PyObject *args)
 static PyObject*
 basic_return_bool(PyObject *self, PyObject *args)
 {
-    PyObject* r;
-    if(_mopsa_rand_s8()) { Py_RETURN_TRUE; }
+    if(rand()) { Py_RETURN_TRUE; }
     else { Py_RETURN_FALSE; }
 }
 
@@ -279,7 +324,7 @@ static PyObject*
 basic_random_fail(PyObject *self, PyObject *args)
 {
     PyObject* r;
-    if(_mopsa_rand_s8()) { r = basic_id_check(self, args); }
+    if(rand()) { r = basic_id_check(self, args); }
     else { r = basic_raise_exc(self, args); }
     return r;
 }
@@ -312,6 +357,7 @@ PyInit_basic(void) // need to define PyInit_c rather than _bla
 {
     PyObject *m;
     if (PyType_Ready(&CboxType)) return NULL;
+    if (PyType_Ready(&CounterIteratorType)) return NULL;
     if (PyType_Ready(&CounterType)) return NULL;
     m = PyModule_Create(&basicmodule);
     if (m == NULL) return NULL;

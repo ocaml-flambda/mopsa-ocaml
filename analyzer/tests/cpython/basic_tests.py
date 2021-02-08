@@ -158,5 +158,15 @@ class Test(unittest.TestCase):
         with self.assertRaises(SystemError):
             c = basic.Cbox('a', -1)
 
+    def test_iteration(self):
+        c = basic.Counter(4)
+        it = iter(c)
+        self.assertEqual(next(it), 0)
+        self.assertEqual(next(it), 1)
+        self.assertEqual(next(it), 2)
+        self.assertEqual(next(it), 3)
+        with self.assertRaises(StopIteration):
+            r = next(it)
+
 if __name__ == "__main__":
     unittest.main()
