@@ -430,6 +430,25 @@ module Domain =
             assert false
         )
 
+    let c_to_python_boundary  ?(on_null = fun flow -> assert false) expr man flow range =
+      resolve_c_pointer_into_addr expr man flow >>$
+        fun oaddr flow ->
+        match oaddr with
+        | Some addr ->
+           begin
+             match akind addr with
+             | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
+                  fun int_value flow ->
+                  Eval.singleton (mk_py_object (addr, Some int_value) range) flow
+             | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
+                  fun str_value flow ->
+                  Eval.singleton (mk_py_object (addr, Some str_value) range) flow
+             | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
+           end
+        | None -> on_null flow
+
     (* bind function pointed to by expr, as cls.name in python side *)
     let bind_function_in name expr cls_addr function_kind man flow =
       let range = erange expr in
@@ -1154,26 +1173,8 @@ module Domain =
              man.eval call flow >>$
                fun call_res flow ->
                debug "call result %s %a@.%a" name pp_expr call_res (format @@ Flow.print man.lattice.print) flow;
-               resolve_c_pointer_into_addr call_res man flow >>$
-                   fun oaddr flow ->
-                   match oaddr with
-                   | Some addr ->
-                      begin
-                        match akind addr with
-                        | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                           man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
-                             fun int_value flow ->
-                             Eval.singleton (mk_py_object (addr, Some int_value) range) flow
-                        | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                           man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
-                             fun str_value flow ->
-                             Eval.singleton (mk_py_object (addr, Some str_value) range) flow
-                        | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
-                      end
-                            (* FIXME: c_to_python boundary *)
-                        (* FIXME: also, we need to give the integer/string value if addr is of that type *)
-                   | None ->
-                      check_consistent_null cfunc.c_func_org_name man flow range
+               c_to_python_boundary call_res man flow range
+                 ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
            )
          |> OptionExt.return
 
@@ -1197,26 +1198,8 @@ module Domain =
          let call = mk_c_call cfunc cfunc_args range in
          debug "[%a] calling %a" pp_expr exp pp_expr call;
          (
-           resolve_c_pointer_into_addr call man flow >>$
-             (fun oaddr flow ->
-               match oaddr with
-               | Some addr ->
-                  begin
-                    match akind addr with
-                    | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                       man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
-                         fun int_value flow ->
-                         Eval.singleton (mk_py_object (addr, Some int_value) range) flow
-                    | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                       man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
-                         fun str_value flow ->
-                         Eval.singleton (mk_py_object (addr, Some str_value) range) flow
-                    | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
-             (* panic_at range "md.__get__ on C class results in %a" pp_addr addr *)
-                  end
-               | None ->
-                  check_consistent_null cfunc.c_func_org_name man flow range
-             )
+           c_to_python_boundary call man flow range
+             ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
          )
          |> OptionExt.return
 
