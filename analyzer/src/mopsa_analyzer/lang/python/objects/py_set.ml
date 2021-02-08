@@ -80,7 +80,7 @@ struct
   let init (prog:program) man flow = flow
 
   let var_of_addr a = match akind a with
-    | A_py_set -> mk_addr_attr a "set" (T_py None)
+    | A_py_set -> {(mk_addr_attr a "set" (T_py None)) with vmode = WEAK}
     | _ -> assert false
 
   let var_of_eobj e = match ekind e with

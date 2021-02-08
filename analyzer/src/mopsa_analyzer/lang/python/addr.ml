@@ -178,7 +178,9 @@ let find_builtin name =
   with Not_found ->
   try search functions
   with Not_found ->
-    search modules
+  try search modules
+  with Not_found ->
+  panic "find_builtin %s not found" name
 
 let find_builtin_function = Hashtbl.find functions
 

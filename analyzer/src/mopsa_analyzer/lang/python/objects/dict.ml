@@ -89,16 +89,16 @@ struct
   let init (prog:program) man flow = flow
 
   let kvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" (T_py None)
+    | A_py_dict -> {(mk_addr_attr a "dict_key" (T_py None)) with vmode = WEAK}
     | _ -> assert false
 
   let vvar_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_val" (T_py None)
+    | A_py_dict -> {(mk_addr_attr a "dict_val" (T_py None)) with vmode = WEAK}
     | _ -> assert false
 
   let var_of_addr a = match akind a with
-    | A_py_dict -> mk_addr_attr a "dict_key" (T_py None),
-                     mk_addr_attr a "dict_val" (T_py None)
+    | A_py_dict -> {(mk_addr_attr a "dict_key" (T_py None)) with vmode = WEAK},
+                     {(mk_addr_attr a "dict_val" (T_py None)) with vmode = WEAK}
     | _ -> assert false
 
   let viewseq_of_addr a = mk_addr_attr a "view_seq" (T_py None)
@@ -111,8 +111,7 @@ struct
   let extract_vars dictobj =
     match ekind dictobj with
     | E_py_object ({addr_kind = A_py_dict} as addr, _) ->
-      mk_addr_attr addr "dict_key" (T_py None),
-      mk_addr_attr addr "dict_val" (T_py None)
+       var_of_addr addr
     | _ -> assert false
 
 
@@ -120,7 +119,7 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_py_dict (ks, vs) ->
-      debug "Skipping dict.__new__, dict.__init__ for now@\n";
+      debug "Skipping dict.__new__, dict.__init__ for now@\nDict: %a" pp_expr exp;
 
       let addr_dict = mk_alloc_addr A_py_dict range in
       man.eval   addr_dict flow >>$
@@ -195,7 +194,8 @@ struct
            let keyerror = Eval.empty keyerror_f in
 
            let flow = Flow.copy_ctx keyerror_f flow in
-           let evals = man.eval   (mk_var var_v range) flow in
+           debug "evaluating %a" pp_var var_v;
+           let evals = man.eval (mk_var var_v range) flow in
 
            Eval.join_list ~empty:(fun () -> Eval.empty flow) (evals :: Cases.copy_ctx evals keyerror :: [])
         )
