@@ -54,7 +54,13 @@ let () =
         | A_py_uncaught_exception (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s@." s
         | _ -> default fmt a
         );
-      join = (fun next -> next);
+      join = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_py_uncaught_exception _, A_py_uncaught_exception _ ->
+           if compare_alarm_kind a1 a2 = 0 then Some a1
+           else None
+        | _ -> next a1 a2
+      );
     }
 
 (** Flow token for exceptions *)

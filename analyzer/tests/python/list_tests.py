@@ -19,7 +19,7 @@ def test_add():
 def test_list_slice():
     l1 = [1, 2, 3, 4]
     l2 = l1[1:3]
-    # FIXME mopsa.assert_equal(len(l2), 2)
+    mopsa.assert_equal(len(l2), 2)
 
 def test_in():
     l1 = [1, 1, 1]

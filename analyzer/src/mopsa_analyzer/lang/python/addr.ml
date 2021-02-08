@@ -178,7 +178,9 @@ let find_builtin name =
   with Not_found ->
   try search functions
   with Not_found ->
-    search modules
+  try search modules
+  with Not_found ->
+  panic "find_builtin %s not found" name
 
 let find_builtin_function = Hashtbl.find functions
 
@@ -544,4 +546,5 @@ let () = Universal.Heap.Policies.register_mk_addr
                               | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
                               (* FIXME: only if cpython analysis. A bit expensive too... *)
                               | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
                               | _ -> default ak)

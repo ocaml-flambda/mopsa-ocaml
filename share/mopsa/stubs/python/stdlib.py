@@ -752,6 +752,8 @@ class set(object):
     def add(self, c): pass
     @mopsa.type("method_descriptor")
     def clear(self): pass
+    @mopsa.type("method_descriptor")
+    def discard(self, o): pass
 
 class set_iterator(object):
     @mopsa.type("wrapper_descriptor")

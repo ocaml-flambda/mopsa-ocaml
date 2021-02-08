@@ -335,12 +335,18 @@ struct
              | E_constant (C_top (T_py (Some Bool)))
                | E_constant (C_bool true)
                -> Post.return flow
+
              | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_true) = 0 || compare_addr a (OptionExt.none_to_exn !addr_bool_top) = 0
-               -> Post.return flow
+               ->
+                Post.return flow
+
              | E_py_object (a, _) when compare_addr a (OptionExt.none_to_exn !addr_false) = 0
-               -> Post.return (set_env T_cur bottom man flow)
+               ->
+                Post.return (Flow.set T_cur man.lattice.bottom man.lattice flow)
+
              | E_constant (C_bool false) ->
-                Post.return (set_env T_cur bottom man flow)
+                Post.return (Flow.set T_cur man.lattice.bottom man.lattice flow)
+
              | _ ->
                 Exceptions.panic_at range "todo addr_env/assume on %a@\n" pp_expr e
            )
