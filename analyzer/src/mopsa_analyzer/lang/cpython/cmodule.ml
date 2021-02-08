@@ -231,6 +231,7 @@ module Domain =
           "PyLong_AsLong";
           "PyLong_AsSsize_t";
           "PyUnicode_GetLength";
+          "PyUnicode_FromString";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -909,6 +910,18 @@ module Domain =
                  Eval.singleton (mk_int (-1) ~typ:T_int range)
            )
          |> OptionExt.return
+
+      | E_c_builtin_call ("PyUnicode_FromString", args) ->
+         resolve_pointer (List.hd args) man flow >>$ (fun pt flow ->
+          match pt with
+          | P_block ({base_kind = String (s, char_kind, typ)}, _, _) ->
+             man.eval (mk_alloc_addr (A_py_instance (fst @@ find_builtin "str")) range) flow >>$
+               fun str_addr flow ->
+               let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_string s range)) range man flow in
+               Eval.singleton c_addr flow
+          | _ ->
+             assert false
+        ) |> OptionExt.return
 
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
