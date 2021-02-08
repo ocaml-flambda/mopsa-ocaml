@@ -109,13 +109,28 @@ struct
       Utils.new_wrapper man range flow "set" cls
         ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_set []) range))
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, [arg], []) ->
+      Utils.check_instances f man flow range [arg]
         ["set"]
         (fun eargs flow ->
            man.eval (mk_py_none range) flow
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__init__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["set"; "list"]
+        (fun eargs flow ->
+          let eaddr_set, eaddr_list = match eargs with
+            | [a; b] -> a, b
+            | _ -> assert false in
+          let els_var = var_of_eobj eaddr_set in
+          let list_els = Py_list.Domain.var_of_eobj eaddr_list in
+          man.exec (mk_assign (mk_var ~mode:(Some WEAK) els_var range) (mk_var ~mode:(Some WEAK) list_els range) range) flow >>%
+           man.eval (mk_py_none range)
+        )
+      |> OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.clear" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["set"]
@@ -147,6 +162,13 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.discard" as f, _))}, _)}, args, []) ->
+      Utils.check_instances ~arguments_after_check:1 f man flow range args
+        ["set"]
+        (fun args flow ->
+          man.eval (mk_py_none range) flow
+        )
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("set.__iter__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
