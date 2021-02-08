@@ -226,6 +226,7 @@ module Domain =
           "PyTuple_GetItem";
           "PyTuple_GetSlice";
           "PyLong_FromLong";
+          "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
           "PyLong_AsLong";
           "PyLong_AsSsize_t";
@@ -864,7 +865,8 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyLong_FromSsize_t", args)
-        | E_c_builtin_call ("PyLong_FromLong", args) ->
+      | E_c_builtin_call ("PyLong_FromLong", args)
+      | E_c_builtin_call ("PyLong_FromUnsignedLong", args) ->
          man.eval ~translate:"Universal" (List.hd args) flow >>$
            (fun earg flow ->
              debug "eval ~translate:Universal %a ~> %a" pp_expr (List.hd args) pp_expr earg;
