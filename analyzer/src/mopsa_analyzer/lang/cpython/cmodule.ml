@@ -1018,13 +1018,51 @@ module Domain =
          safe_get_name_of fmt man flow >>$
            (fun ofmt_str flow ->
              let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
-             match fmt_str with
-             | "i" ->
-                let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
-                (* FIXME: cast to long *)
-                (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
-                man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.hd refs) sl range] range) flow
-             | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
+             let fmt_length = String.length fmt_str in
+             let rec process pos acc flow =
+               if pos >= fmt_length then Cases.singleton (List.rev acc) flow
+               else
+                 begin match fmt_str.[pos] with
+                 | 'O' ->
+                    (* FIXME: if its NULL, an exception should have been set.
+                       Otherwise:                 PyErr_SetString(PyExc_SystemError,
+                    "NULL object passed to Py_BuildValue");
+                     *)
+                    man.eval (List.nth refs pos) flow
+                 | 'i' ->
+                    let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
+                    (* FIXME: cast to long *)
+                    (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
+                    man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.nth refs pos) sl range] range) flow
+                 | '{' ->
+                    assert false
+                 | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
+                 end
+                 >>$
+                   fun res_pos flow ->
+                   process (pos+1) (res_pos :: acc) flow
+             in
+             process 0 [] flow >>$
+               fun tuple flow ->
+               if List.length tuple = 1 then
+                 Eval.singleton (List.hd tuple) flow
+               else
+                 let rec aux c_obj py_acc flow =
+                   match c_obj with
+                   | [] -> Cases.singleton py_acc flow
+                   | c_hd :: tl ->
+                      c_to_python_boundary c_hd man flow range >>$
+                        fun py_object flow ->
+                        aux tl (py_object :: py_acc) flow
+                 in
+                 aux tuple [] flow >>$
+                   fun rev_py_tuple flow ->
+                   man.eval (mk_expr ~etyp:(T_py None) (Python.Ast.E_py_tuple (List.rev rev_py_tuple)) range) flow >>$
+                     fun py_tuple flow ->
+                     let addr_py_tuple, oe_py_tuple  = object_of_expr py_tuple in
+                     let c_addr, flow = python_to_c_boundary addr_py_tuple None oe_py_tuple range man flow in
+                     debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                     man.eval c_addr flow
            )
          |> OptionExt.return
 
