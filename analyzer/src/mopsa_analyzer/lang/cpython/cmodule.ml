@@ -560,14 +560,15 @@ module Domain =
       (* FIXME: other container addresses *)
       | Python.Objects.Py_list.A_py_list
       | Python.Objects.Tuple.A_py_tuple _
+      | Python.Objects.Dict.A_py_dict
       | A_py_instance _
-        | A_py_class _
-        | A_py_c_class _
-        | A_py_c_function _
-        | A_py_c_module _
-        | A_py_function _
-        | A_py_method _
-        | A_py_module _ -> true
+      | A_py_class _
+      | A_py_c_class _
+      | A_py_c_function _
+      | A_py_c_module _
+      | A_py_function _
+      | A_py_method _
+      | A_py_module _ -> true
       | _ -> false
 
     let points_to_to_c_expr pt typ range =
@@ -603,6 +604,7 @@ module Domain =
       let type_addr = match akind addr with
         | A_py_instance a -> a
         | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
+        | Python.Objects.Dict.A_py_dict -> fst @@ find_builtin "dict"
         | Python.Objects.Tuple.A_py_tuple _ -> fst @@ find_builtin "tuple"
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
         | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
@@ -798,6 +800,7 @@ module Domain =
                    ("PyBytes_Type", "bytes");
                    ("PyList_Type", "list");
                    ("PyTuple_Type", "tuple");
+                   ("PyDict_Type", "dict");
                    ("_PyNone_Type", "NoneType");
                    (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
                  ]
