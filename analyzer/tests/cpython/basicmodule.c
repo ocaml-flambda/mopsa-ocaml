@@ -135,6 +135,16 @@ Counter_len(PyObject* self)
 }
 
 static int
+Counter_contains(PyObject* self, PyObject* args)
+{
+    int c = PyLong_AsLong(args);
+    if(c == -1 && PyErr_Occurred())
+        return -1;
+
+    return c == ((Counter*) self)->counter;
+}
+
+static int
 Counter_init(Counter *self, PyObject *args, PyObject *kwds)
 {
     PyObject *c;
@@ -162,7 +172,7 @@ static PySequenceMethods counter_as_sequence = {
     0,                                  /* sq_slice */
     0,                                  /* sq_ass_item */
     0,                                  /* sq_ass_slice */
-    0,                                  /* sq_contains */
+    Counter_contains,                    /* sq_contains */
     0,                                  /* sq_inplace_concat */
     0,                                  /* sq_inplace_repeat */
 };

@@ -518,7 +518,9 @@ module Domain =
                    ~etyp:T_bool range)
                 man flow
                 ~fthen:(fun flow ->
-                  bind_function_in "__len__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_length" range) cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man flow)
+                  bind_function_in "__len__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_length" range) cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man flow >>%
+                    bind_function_in "__contains__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_contains" range) cls_addr (Wrapper_descriptor (Some "wrap_objobjproc")) man
+                )
                 ~felse:(fun flow ->
                   debug "tp_as_sequence is NULL, skipping";
                   Post.return flow)

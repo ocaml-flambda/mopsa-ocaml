@@ -26,6 +26,30 @@ build_job:
     expire_in: 2h
 
 
+
+#################
+# CPython tests #
+#################
+
+
+.test-cpython:
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $CPY_FILE
+    - echo $PWD
+    - cd analyzer/tests/cpython
+    - ../../../bin/mopsa-cpython $CPY_FILE > log || true
+    - grep "Assertion failure. $NB_CHECKS total, .*$NB_SAFE safe" log || (cat log && false)
+
+test-cpython 1/1:
+  variables:
+    CPY_FILE: 'basic_tests.py'
+    NB_CHECKS: '42'
+    NB_SAFE: '41'
+  extends: .test-cpython
+
 ###########
 # C tests #
 ###########
@@ -565,24 +589,3 @@ test-typpete 43/43:
   variables:
     PY_FILE: 'unary_test_not.py'
   extends: .test-typpete
-
-#################
-# CPython tests #
-#################
-
-
-.test-cpython:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $CPY_FILE
-    - echo $PWD
-    - cd analyzer/tests/cpython
-    - ../../../bin/mopsa-cpython $CPY_FILE > log || true
-    - grep 'Assertion failure. 40 total, .*39 safe' log || (cat log && false)
-
-test-cpython 1/1:
-  variables:
-    CPY_FILE: 'basic_tests.py'
-  extends: .test-cpython

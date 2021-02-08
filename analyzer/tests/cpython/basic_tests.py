@@ -124,6 +124,8 @@ class Test(unittest.TestCase):
         c3 = basic.Counter(-1)
         with self.assertRaises(TypeError):
             c3.__len__()
+        self.assertTrue((-1) in c3)
+        self.assertFalse(0 in c3)
 
     def test_bools(self):
         self.assertTrue(basic.return_true())

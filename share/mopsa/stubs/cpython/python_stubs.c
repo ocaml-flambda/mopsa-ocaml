@@ -262,6 +262,25 @@ wrap_lenfunc(PyObject *self, PyObject *args, void *wrapped)
 }
 
 static PyObject *
+wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
+{
+    objobjproc func = (objobjproc)wrapped;
+    int res;
+    PyObject *value;
+
+    // FIXME
+    /* if (!check_num_args(args, 1)) */
+    /*     return NULL; */
+    value = PyTuple_GetItem(args, 0);// was GET_ITEM
+    res = (*func)(self, value);
+    if (res == -1 && PyErr_Occurred())
+        return NULL;
+    else
+        return PyBool_FromLong(res);
+}
+
+
+static PyObject *
 tp_new_wrapper(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyTypeObject *type, *subtype, *staticbase;
@@ -448,4 +467,17 @@ int PyParseTuple_int_helper(PyObject *obj, int *result)
         *result = ival;
         return 1;
     }
+}
+
+
+PyObject *PyBool_FromLong(long ok)
+{
+    PyObject *result;
+
+    if (ok)
+        result = Py_True;
+    else
+        result = Py_False;
+    Py_INCREF(result);
+    return result;
 }
