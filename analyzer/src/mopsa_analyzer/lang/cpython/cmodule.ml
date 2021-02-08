@@ -793,6 +793,7 @@ module Domain =
                    ("PyBaseObject_Type", "object");
                    ("PyLong_Type", "int");
                    ("PyUnicode_Type", "str");
+                   ("PyBytes_Type", "bytes");
                    ("PyList_Type", "list");
                    ("PyTuple_Type", "tuple");
                    ("_PyNone_Type", "NoneType");
