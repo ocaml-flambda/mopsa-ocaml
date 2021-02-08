@@ -89,6 +89,15 @@ class Test(unittest.TestCase):
         d = c.getcounter()
         self.assertEqual(d, 4)
 
+    def test_buildvalue2(self):
+        class A: pass
+        a = A()
+        c = basic.Cbox(a, 4)
+        tup = c.getdata()
+        self.assertEqual(len(tup), 2)
+        self.assertEqual(tup[0], a)
+        self.assertEqual(tup[1], 4)
+
     def test_member_type_restriction(self):
         c = basic.Cbox(1, 3)
         with self.assertRaises(TypeError):
