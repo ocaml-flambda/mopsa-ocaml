@@ -232,6 +232,8 @@ module Domain =
           "PyLong_AsSsize_t";
           "PyUnicode_GetLength";
           "PyUnicode_FromString";
+          "PyUnicode_FromKindAndData";
+          "PyUnicode_FromWideChar";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -940,6 +942,15 @@ module Domain =
              assert false
         ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyUnicode_FromWideChar", args)
+      | E_c_builtin_call ("PyUnicode_FromKindAndData", args) ->
+         (* FIXME: we don't evaluate the buffer for now *)
+         (* FIXME: there is no way to give s=T:string && |s|<=k for now *)
+         man.eval (mk_py_top T_string range) flow >>$
+           (fun str_addr flow ->
+             let c_addr, flow = python_to_c_boundary (fst @@ object_of_expr str_addr) None (Some (mk_top T_string range)) range man flow in
+           Eval.singleton c_addr flow)
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          safe_get_name_of fmt man flow >>$
@@ -1093,6 +1104,23 @@ module Domain =
                  | 's' ->
                     let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
                     man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
+                      fun res_pos flow ->
+                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+                 | 'u' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
+                    let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
+                    man.eval (mk_c_call pyunicode_fromwidechar
+                                [
+                                  List.nth refs ref_pos;
+                                  List.nth refs (ref_pos+1);
+                                ] range) flow >>$
+                      fun res_pos flow ->
+                      process (pos+2) (ref_pos+2) until (res_pos :: acc) flow
+
+                 | 'u' ->
+                    let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
+                    let wcslen = C.Ast.find_c_fundec_by_name "wcslen" flow in
+                    man.eval (mk_c_call pyunicode_fromwidechar [List.nth refs ref_pos; mk_c_call wcslen [List.nth refs ref_pos] range] range) flow >>$
                       fun res_pos flow ->
                       process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
