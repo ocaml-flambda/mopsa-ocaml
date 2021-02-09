@@ -150,7 +150,7 @@ struct
               assume
                 (Utils.mk_object_hasattr cls "__next__" range)
                 ~fthen:(fun true_flow ->
-                    man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [obj] range) true_flow
+                    man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls) in
