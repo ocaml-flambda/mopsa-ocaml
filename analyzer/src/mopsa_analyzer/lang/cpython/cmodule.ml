@@ -222,6 +222,7 @@ module Domain =
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
           "Py_BuildValue";
+          "PyObject_CallFunction";
           "PyTuple_Size";
           "PyTuple_GetItem";
           "PyTuple_GetSlice";
@@ -291,6 +292,12 @@ module Domain =
       let elem_addr = add base_addr offset ~typ:(T_c_pointer s8) range in
       mk_c_cast elem_addr (T_c_pointer typ) range
 
+    let alloc_py_addr man addr ?(mode=STRONG) range flow =
+      man.eval (mk_alloc_addr ~mode:mode addr range) flow >>$
+        fun py_eaddr flow ->
+        man.exec ~route:(Semantic "Python") (mk_add py_eaddr range) flow >>%
+          Eval.singleton py_eaddr
+
     let new_method_from_def binder_addr methd_kind methd man flow =
       let range = erange methd in
       safe_get_name_of (mk_c_member_access_by_name methd "ml_name" range) man flow >>$
@@ -304,7 +311,7 @@ module Domain =
           let methd_fundec = match methd_function with
             | P_fun f -> f
             | _ -> assert false in
-          man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range) flow >>$
+          alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range flow >>$
             fun methd_eaddr flow ->
             let methd_addr = Addr.from_expr methd_eaddr in
             let flow = set_singleton methd_function methd_addr man flow in
@@ -362,7 +369,7 @@ module Domain =
                 resolve_pointer (mk_c_address_of member range) man flow >>$
                   fun member_points_to flow ->
                   debug "points_to %a" pp_points_to member_points_to;
-                  man.eval (mk_alloc_addr (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range) flow >>$
+                  alloc_py_addr man (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range flow >>$
                     fun member_descr flow ->
                     let member_descr = Addr.from_expr member_descr in
                     let flow = set_singleton member_points_to  member_descr man flow in
@@ -398,10 +405,9 @@ module Domain =
         | None -> assert false
         | Some module_name ->
            let module_name = Top.top_to_exn module_name in
-           man.eval (mk_alloc_addr (Python.Addr.A_py_c_module module_name) range) flow >>$
+           alloc_py_addr man (Python.Addr.A_py_c_module module_name) range flow >>$
              fun module_addr flow ->
              let m_addr = Addr.from_expr module_addr in
-             let flow = post_to_flow man @@ man.exec (mk_add module_addr range) flow  in
              let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
              add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
              >>% Eval.singleton module_addr
@@ -468,7 +474,7 @@ module Domain =
         Post.return
           (match func with
            | P_fun fundec ->
-              man.eval (mk_alloc_addr (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range) flow >>$
+              alloc_py_addr man (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range flow >>$
                 (fun fun_eaddr flow ->
                   let fun_addr = Addr.from_expr fun_eaddr in
                   let flow = set_singleton func fun_addr man flow in
@@ -538,7 +544,7 @@ module Domain =
         let cls_var = match cls with
           | P_block ({base_kind = Var v}, _, _) -> v
           | _ -> assert false in
-        man.eval (mk_alloc_addr (Python.Addr.A_py_c_class cls_var) range) flow >>$
+        alloc_py_addr man (Python.Addr.A_py_c_class cls_var) range flow >>$
           fun cls_eaddr flow ->
           let cls_addr = Addr.from_expr cls_eaddr in
           let flow = set_singleton cls cls_addr man flow in
@@ -663,8 +669,8 @@ module Domain =
           let flow = set_singleton pt addr man flow in
           final_obj,
           (
-            man.exec (mk_add obj range) flow >>%
-              man.exec (mk_add_var bytes range) >>%
+            man.exec ~route:(Semantic "C") (mk_add obj range) flow >>%
+              man.exec ~route:(Semantic "C") (mk_add_var bytes range) >>%
               man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
@@ -756,6 +762,111 @@ module Domain =
         fun py_pos flow ->
         Eval.singleton (mk_py_object (Addr.from_expr py_pos, Some (mk_avalue_from_pyaddr (Addr.from_expr py_pos) T_int range)) range) flow
 
+    let fold_c_to_python_boundary man range c_objs flow =
+      let rec aux c_objs py_acc flow =
+        match c_objs with
+        | [] -> Cases.singleton (List.rev py_acc) flow
+        | c_hd :: tl ->
+           c_to_python_boundary c_hd man flow range >>$
+             fun py_object flow ->
+             aux tl (py_object :: py_acc) flow
+      in aux c_objs [] flow
+
+    let build_value man flow range fmt_str refs =
+      let fmt_length = String.length fmt_str in
+      let rec process pos ref_pos until acc flow =
+        if pos >= until then Cases.singleton (List.rev acc) flow
+        else
+          let range = tag_range range "process[%d]" pos in
+          begin match fmt_str.[pos] with
+          | 'O' ->
+             (* FIXME: if its NULL, an exception should have been set.
+                       Otherwise:                 PyErr_SetString(PyExc_SystemError,
+                    "NULL object passed to Py_BuildValue");
+              *)
+             man.eval (List.nth refs ref_pos) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'i' ->
+             let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
+             (* FIXME: cast to long *)
+             (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
+             man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.nth refs ref_pos) sl range] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'k' ->
+             let pylong_fromunsignedlong = C.Ast.find_c_fundec_by_name "PyLong_FromUnsignedLong" flow in
+             (* FIXME: cast *)
+             man.eval (mk_c_call pylong_fromunsignedlong [mk_c_cast (List.nth refs ref_pos) ul range] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 's' ->
+             let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
+             man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'u' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
+             let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
+             man.eval (mk_c_call pyunicode_fromwidechar
+                         [
+                           List.nth refs ref_pos;
+                           List.nth refs (ref_pos+1);
+                         ] range) flow >>$
+               fun res_pos flow ->
+               process (pos+2) (ref_pos+2) until (res_pos :: acc) flow
+
+          | 'u' ->
+             let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
+             let wcslen = C.Ast.find_c_fundec_by_name "wcslen" flow in
+             man.eval (mk_c_call pyunicode_fromwidechar [List.nth refs ref_pos; mk_c_call wcslen [List.nth refs ref_pos] range] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | '{' ->
+             let closing_bracket_pos =
+               let rec search count pos =
+                 if fmt_str.[pos] = '}' then
+                   if count = 0 then pos
+                   else search (count-1) (pos+1)
+                 else if fmt_str.[pos] = '{' then
+                   search (count+1) (pos+1)
+                 else search count (pos+1) in
+               search 0 (pos+1) in
+             let dict_subfmt = String.sub fmt_str pos (closing_bracket_pos - pos - 1) in
+             debug "starting process_dict %s" dict_subfmt;
+             process_dict pos ref_pos closing_bracket_pos flow >>$
+               fun dict flow ->
+               process (closing_bracket_pos+1) (ref_pos + 2 * (List.length (String.split_on_char ',' dict_subfmt))) until (dict :: acc) flow
+
+          | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
+          end
+      and process_dict beg_pos ref_pos end_pos flow =
+        let rec aux cur_pos ref_pos dict_acc flow =
+          if cur_pos >= end_pos then Cases.singleton (List.rev dict_acc) flow else
+            let () = assert(fmt_str.[cur_pos+1] = ':') in
+            let () = assert(fmt_str.[cur_pos+3] = ',' || cur_pos + 3 >= end_pos) in
+            process cur_pos ref_pos (cur_pos+1) [] flow >>$ fun key flow ->
+                                                            process (cur_pos+2) (ref_pos+1) (cur_pos+3) [] flow >>$ fun value flow ->
+                                                                                                                    let key = match key with [k] -> k | _ -> assert false in
+                                                                                                                    let value = match value with [v] -> v | _ -> assert false in
+                                                                                                                    debug "key = %a, value = %a" pp_expr key pp_expr value;
+                                                                                                                    aux (cur_pos+4) (ref_pos+2) ((key,value) :: dict_acc) flow
+        in
+        aux (beg_pos+1) ref_pos [] flow >>$
+          fun dict flow ->
+          let dict_keys, dict_values = List.split dict in
+          fold_c_to_python_boundary man range dict_keys flow >>$ fun dict_keys flow ->
+          fold_c_to_python_boundary man range dict_values flow >>$ fun dict_values flow ->
+          man.eval (mk_expr (Python.Ast.E_py_dict (dict_keys, dict_values)) range) flow >>$
+            fun py_dict flow ->
+            let addr_py_dict, oe_py_dict = object_of_expr py_dict in
+            let c_addr, flow = python_to_c_boundary addr_py_dict None oe_py_dict range man flow in
+            man.eval c_addr flow in
+      process 0 0 fmt_length [] flow
 
 
     let eval exp man flow =
@@ -885,7 +996,7 @@ module Domain =
            (fun cls_oaddr flow ->
              let cls_addr = OptionExt.none_to_exn cls_oaddr in
              (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
-             man.eval (mk_alloc_addr (Python.Addr.A_py_instance cls_addr) range) flow >>$
+             alloc_py_addr man (Python.Addr.A_py_instance cls_addr) range flow >>$
                fun inst_eaddr flow ->
                let c_addr, flow = python_to_c_boundary (Addr.from_expr inst_eaddr) None None ~size:(Some (List.hd @@ List.tl args)) range man flow in
                Eval.singleton c_addr flow
@@ -900,7 +1011,7 @@ module Domain =
              debug "eval ~translate:Universal %a ~> %a" pp_expr (List.hd args) pp_expr earg;
              (* FIXME: forced to attach the value as an addr_attr in universal, and convert it afterwards when going back to python... *)
              debug "allocating int at range %a callstack %a" pp_range range Callstack.pp_callstack (Flow.get_callstack flow);
-             man.eval (mk_alloc_addr (*~mode:WEAK*) (A_py_instance (fst @@ find_builtin "int")) range) flow >>$
+             alloc_py_addr man (A_py_instance (fst @@ find_builtin "int")) range flow >>$
                fun int_addr flow ->
                debug "got int_addr %a, putting %a as value" pp_addr (Addr.from_expr int_addr) pp_expr earg;
                let c_addr, flow = python_to_c_boundary (Addr.from_expr int_addr) None (Some earg) range man flow in
@@ -942,7 +1053,7 @@ module Domain =
          resolve_pointer (List.hd args) man flow >>$ (fun pt flow ->
           match pt with
           | P_block ({base_kind = String (s, char_kind, typ)}, _, _) ->
-             man.eval (mk_alloc_addr (A_py_instance (fst @@ find_builtin "str")) range) flow >>$
+             alloc_py_addr man (A_py_instance (fst @@ find_builtin "str")) range flow >>$
                fun str_addr flow ->
                let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_string s range)) range man flow in
                Eval.singleton c_addr flow
@@ -1070,125 +1181,42 @@ module Domain =
          safe_get_name_of fmt man flow >>$
            (fun ofmt_str flow ->
              let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
-             let fmt_length = String.length fmt_str in
-             let fold_boundary c_objs flow =
-               let rec aux c_objs py_acc flow =
-                 match c_objs with
-                 | [] -> Cases.singleton (List.rev py_acc) flow
-                 | c_hd :: tl ->
-                    c_to_python_boundary c_hd man flow range >>$
-                      fun py_object flow ->
-                      aux tl (py_object :: py_acc) flow
-               in aux c_objs [] flow in
-             let rec process pos ref_pos until acc flow =
-               if pos >= until then Cases.singleton (List.rev acc) flow
-               else
-                 let range = tag_range range "process[%d]" pos in
-                 begin match fmt_str.[pos] with
-                 | 'O' ->
-                    (* FIXME: if its NULL, an exception should have been set.
-                       Otherwise:                 PyErr_SetString(PyExc_SystemError,
-                    "NULL object passed to Py_BuildValue");
-                     *)
-                    man.eval (List.nth refs ref_pos) flow >>$
-                      fun res_pos flow ->
-                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-                 | 'i' ->
-                    let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
-                    (* FIXME: cast to long *)
-                    (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
-                    man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.nth refs ref_pos) sl range] range) flow >>$
-                      fun res_pos flow ->
-                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-                 | 'k' ->
-                    let pylong_fromunsignedlong = C.Ast.find_c_fundec_by_name "PyLong_FromUnsignedLong" flow in
-                    (* FIXME: cast *)
-                    man.eval (mk_c_call pylong_fromunsignedlong [mk_c_cast (List.nth refs ref_pos) ul range] range) flow >>$
-                      fun res_pos flow ->
-                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-                 | 's' ->
-                    let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
-                    man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
-                      fun res_pos flow ->
-                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-                 | 'u' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
-                    let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
-                    man.eval (mk_c_call pyunicode_fromwidechar
-                                [
-                                  List.nth refs ref_pos;
-                                  List.nth refs (ref_pos+1);
-                                ] range) flow >>$
-                      fun res_pos flow ->
-                      process (pos+2) (ref_pos+2) until (res_pos :: acc) flow
-
-                 | 'u' ->
-                    let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
-                    let wcslen = C.Ast.find_c_fundec_by_name "wcslen" flow in
-                    man.eval (mk_c_call pyunicode_fromwidechar [List.nth refs ref_pos; mk_c_call wcslen [List.nth refs ref_pos] range] range) flow >>$
-                      fun res_pos flow ->
-                      process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-                 | '{' ->
-                    let closing_bracket_pos =
-                      let rec search count pos =
-                        if fmt_str.[pos] = '}' then
-                          if count = 0 then pos
-                          else search (count-1) (pos+1)
-                        else if fmt_str.[pos] = '{' then
-                          search (count+1) (pos+1)
-                        else search count (pos+1) in
-                      search 0 (pos+1) in
-                    let dict_subfmt = String.sub fmt_str pos (closing_bracket_pos - pos - 1) in
-                    debug "starting process_dict %s" dict_subfmt;
-                    process_dict pos ref_pos closing_bracket_pos flow >>$
-                      fun dict flow ->
-                      process (closing_bracket_pos+1) (ref_pos + 2 * (List.length (String.split_on_char ',' dict_subfmt))) until (dict :: acc) flow
-
-                 | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
-                 end
-             and process_dict beg_pos ref_pos end_pos flow =
-               let rec aux cur_pos ref_pos dict_acc flow =
-                 if cur_pos >= end_pos then Cases.singleton (List.rev dict_acc) flow else
-                 let () = assert(fmt_str.[cur_pos+1] = ':') in
-                 let () = assert(fmt_str.[cur_pos+3] = ',' || cur_pos + 3 >= end_pos) in
-                 process cur_pos ref_pos (cur_pos+1) [] flow >>$ fun key flow ->
-                 process (cur_pos+2) (ref_pos+1) (cur_pos+3) [] flow >>$ fun value flow ->
-                 let key = match key with [k] -> k | _ -> assert false in
-                 let value = match value with [v] -> v | _ -> assert false in
-                 debug "key = %a, value = %a" pp_expr key pp_expr value;
-                 aux (cur_pos+4) (ref_pos+2) ((key,value) :: dict_acc) flow
-               in
-               aux (beg_pos+1) ref_pos [] flow >>$
-                 fun dict flow ->
-                 let dict_keys, dict_values = List.split dict in
-                 fold_boundary dict_keys flow >>$ fun dict_keys flow ->
-                 fold_boundary dict_values flow >>$ fun dict_values flow ->
-                 man.eval (mk_expr (Python.Ast.E_py_dict (dict_keys, dict_values)) range) flow >>$
-                   fun py_dict flow ->
-                   let addr_py_dict, oe_py_dict = object_of_expr py_dict in
-                   let c_addr, flow = python_to_c_boundary addr_py_dict None oe_py_dict range man flow in
-                   man.eval c_addr flow
-             in
-             process 0 0 fmt_length [] flow >>$
+             build_value man flow range fmt_str refs >>$
                fun tuple flow ->
                if List.length tuple = 1 then
                  Eval.singleton (List.hd tuple) flow
                else
-                 fold_boundary tuple flow >>$
+                 fold_c_to_python_boundary man range tuple flow >>$
                    fun py_tuple flow ->
                    man.eval (mk_expr ~etyp:(T_py None) (Python.Ast.E_py_tuple py_tuple) range) flow >>$
                      fun py_tuple flow ->
                      let addr_py_tuple, oe_py_tuple  = object_of_expr py_tuple in
                      let c_addr, flow = python_to_c_boundary addr_py_tuple None oe_py_tuple range man flow in
-                     debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                     debug "Py_BuildValue: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
                      man.eval c_addr flow
            )
          |> OptionExt.return
 
+
+      | E_c_builtin_call ("PyObject_CallFunction", callable::fmt::refs) ->
+         c_to_python_boundary callable man flow range >>$
+           (fun py_callable flow ->
+             safe_get_name_of fmt man flow >>$
+               fun ofmt_str flow ->
+               let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
+               build_value man flow range fmt_str refs >>$
+                 fun tuple flow ->
+                 fold_c_to_python_boundary man range tuple flow >>$
+                   fun py_tuple flow ->
+                   (* FIXME: what happens if an exception is raised? *)
+                   man.eval (Python.Ast.mk_py_call py_callable py_tuple range) flow >>$
+                     fun py_call_res flow ->
+                     let addr_py_res, oe_py_res = object_of_expr py_call_res in
+                     let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
+                     debug "PyObject_CallFunction: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                     man.eval c_addr flow
+
+           ) |> OptionExt.return
 
       | E_c_builtin_call ("PyTuple_Size", [arg]) ->
          resolve_c_pointer_into_addr arg man flow >>$

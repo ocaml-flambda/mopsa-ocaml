@@ -1,7 +1,9 @@
 #include <Python.h>
 #include "structmember.h"
 
+#ifdef MOPSA
 #include "python_stubs.c"
+#endif
 
 // the Cbox objects has two C fields:
 // - contents, which can be any python object
@@ -53,6 +55,7 @@ static PyObject *
 Cbox_getcontents(Cbox *self, PyObject *args)
 {
     PyObject* res = self->contents;
+    Py_INCREF(res); // w/o this, there will be a runtime error
     return res;
 }
 
@@ -60,6 +63,7 @@ static PyObject*
 Cbox_getcounter(Cbox *self, PyObject *args)
 {
     PyObject* res = Py_BuildValue("i", self->counter); // self->contents
+    Py_INCREF(res); // w/o this, there will be a runtime error
     return res;
 }
 
@@ -82,6 +86,19 @@ Cbox_getdatadict(Cbox *self, PyObject *args)
     return Py_BuildValue("{s:O,s:i}",
                          "contents", self->contents,
                          "counter", self->counter);
+}
+
+static PyObject*
+Cbox_callback(Cbox *self, PyObject *args)
+{
+    PyObject* callback = PyTuple_GetItem(args, 0);
+    if(!PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "Argument must be a callable");
+        return NULL;
+    }
+    PyObject* res =  PyObject_CallFunction(callback, "Oi", self->contents, self->counter);
+    // probably need an incref here too
+    return res;
 }
 
 
@@ -121,6 +138,7 @@ static PyMethodDef Cbox_methods[] = {
     {"incr", (PyCFunction) Cbox_incr, METH_VARARGS, ""},
     {"maybe_incr", (PyCFunction) Cbox_maybe_incr, METH_VARARGS, ""},
     {"maybe_incr2", (PyCFunction) Cbox_maybe_incr2, METH_VARARGS, ""},
+    {"callback", (PyCFunction) Cbox_callback, METH_VARARGS, ""},
     {NULL}  /* Sentinel */
 };
 

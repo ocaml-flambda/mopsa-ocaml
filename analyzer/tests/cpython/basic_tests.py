@@ -1,4 +1,3 @@
-import mopsa
 import unittest
 import basic
 
@@ -167,6 +166,33 @@ class Test(unittest.TestCase):
         self.assertEqual(next(it), 3)
         with self.assertRaises(StopIteration):
             r = next(it)
+
+    def test_callback(self):
+        a = A(1)
+        z0 = a.x
+        c = basic.Cbox(a, 3)
+        a0 = c.getcontents()
+        z1 = a0.x
+        def callback1(contents, counter):
+            r = contents.x
+            return r + counter
+        def callback2(contents, counter):
+            contents.x = counter
+        def callback3(contents, counter):
+            return (contents, counter)
+        def callback4(contents, counter):
+            return contents + counter # will raise a TypeError
+        r1 = c.callback(callback1)
+        self.assertEqual(r1, 4)
+        r2 = c.callback(callback2)
+        self.assertEqual(r2, None)
+        self.assertEqual(c.contents.x, 3)
+        self.assertEqual(a.x, 3)
+        r3 = c.callback(callback3)
+        self.assertEqual(r3[0], a)
+        self.assertEqual(r3[1], 3)
+        with self.assertRaisesRegex(TypeError, "unsupported operanted type(s) for +.*"):
+            r4 = c.callback(callback4)
 
 if __name__ == "__main__":
     unittest.main()

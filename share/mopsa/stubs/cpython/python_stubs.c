@@ -2,11 +2,14 @@
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
 
+
 /* // stubs used by the analysis */
 typedef struct exc_data {
     PyObject* exc_state;
     char* exc_msg;
 } exc_data;
+
+int _mopsa_pyerr_bind_cs_to(exc_data*);
 
 exc_data *exc;
 
@@ -17,6 +20,7 @@ PyErr_NoMemory()
     _mopsa_assume(exc != NULL);
     exc->exc_state = PyExc_MemoryError;
     exc->exc_msg = NULL;
+    _mopsa_pyerr_bind_cs_to(exc);
     return NULL;
 }
 
@@ -34,6 +38,7 @@ char* PyErr_GetMsg() // not a real cpython function
 void
 PyErr_Clear()
 {
+    free(exc);
     exc = malloc(sizeof(exc_data));
     _mopsa_assume(exc != NULL);
     exc->exc_state = NULL;
@@ -45,6 +50,7 @@ void PyErr_SetNone(PyObject* o) {
     _mopsa_assume(exc != NULL);
     exc->exc_state = o;
     exc->exc_msg = NULL;
+    _mopsa_pyerr_bind_cs_to(exc);
 }
 
 void PyErr_SetString(PyObject* o, const char* msg){
@@ -52,6 +58,7 @@ void PyErr_SetString(PyObject* o, const char* msg){
     _mopsa_assume(exc != NULL);
     exc->exc_state = o;
     exc->exc_msg = msg;
+    _mopsa_pyerr_bind_cs_to(exc);
 }
 
 PyObject*
