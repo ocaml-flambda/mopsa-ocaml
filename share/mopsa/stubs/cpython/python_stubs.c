@@ -1,7 +1,23 @@
 #undef PyArg_ParseTuple
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
+#undef PyObject_CallFunction
 
+// FIXME: add other builtins like that
+#define PyUnicode_GET_LENGTH PyUnicode_GetLength
+#define PyTuple_GET_SIZE PyTuple_Size
+#undef PyUnicode_GET_SIZE
+#undef PyUnicode_AS_UNICODE
+#undef Py_UNICODE_IS_SURROGATE
+#undef Py_UNICODE_IS_LOW_SURROGATE
+#undef Py_UNICODE_IS_HIGH_SURROGATE
+#undef PyString_GET_SIZE
+
+#undef PyBytes_GET_SIZE
+#undef PyBytes_AS_STRING
+
+#undef PyList_GET_SIZE
+#undef PyList_GET_ITEM
 
 /* // stubs used by the analysis */
 typedef struct exc_data {
@@ -371,6 +387,15 @@ PyNumber_AsSsize_t(PyObject *item, PyObject *err)
     return result;
 }
 
+
+static PyObject *
+null_error(void)
+{
+    if (!PyErr_Occurred())
+        PyErr_SetString(PyExc_SystemError,
+                        "null argument to internal routine");
+    return NULL;
+}
 
 // FIXME: incomplete, defined in abstract.c
 PyObject*
