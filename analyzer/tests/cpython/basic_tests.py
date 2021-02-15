@@ -193,6 +193,18 @@ class Test(unittest.TestCase):
         self.assertEqual(r3[1], 3)
         with self.assertRaisesRegex(TypeError, "unsupported operanted type(s) for +.*"):
             r4 = c.callback(callback4)
+        # with self.assertRaisesRegex(TypeError, "Argument must be a callable"):
+        #     r5 = c.callback("notafunction")
+
+    def test_variable_args(self):
+        with self.assertRaisesRegex(TypeError, "function takes at least 1 argument (0 given)"):
+            basic.vsum()
+        with self.assertRaisesRegex(TypeError, "function takes at most 4 arguments (5 given)"):
+            basic.vsum(1,2,3,4,5)
+        self.assertEqual(basic.vsum(1), 1)
+        self.assertEqual(basic.vsum(1,2), 3)
+        self.assertEqual(basic.vsum(1,2,3), 6)
+        self.assertEqual(basic.vsum(1,2,3,4), 10)
 
 if __name__ == "__main__":
     unittest.main()

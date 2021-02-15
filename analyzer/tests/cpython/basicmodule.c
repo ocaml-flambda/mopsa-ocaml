@@ -278,7 +278,6 @@ static PyTypeObject CounterType = {
     .tp_as_sequence = &counter_as_sequence
 };
 
-
 static PyObject*
 basic_return_true(PyObject *self, PyObject *args)
 {
@@ -348,6 +347,19 @@ basic_random_fail(PyObject *self, PyObject *args)
 }
 
 
+static PyObject*
+basic_vsum(PyObject *self, PyObject *args)
+{
+    int a, b, c, d;
+    b = 0;
+    c = 0;
+    d = 0;
+    if(!PyArg_ParseTuple(args, "i|iii", &a, &b, &c, &d))
+        return NULL;
+
+    return Py_BuildValue("i", a+b+c+d);
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
@@ -358,6 +370,7 @@ static PyMethodDef module_methods[] = {
     {"return_false", (PyCFunction) basic_return_false, METH_VARARGS, ""},
     {"return_bool", (PyCFunction) basic_return_bool, METH_VARARGS, ""},
     {"return_none", (PyCFunction) basic_return_none, METH_VARARGS, ""},
+    {"vsum", (PyCFunction) basic_vsum, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

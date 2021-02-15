@@ -1094,10 +1094,39 @@ module Domain =
                      let size = match ekind @@ OptionExt.none_to_exn @@ snd @@ object_of_expr earg with
                        | E_constant (C_int z) -> Z.to_int z
                        | _ -> assert false in
-
-                     if String.length fmt_str <> size then
-                       let () = debug "wrong number of arguments" in
-                       c_set_exception "PyExc_TypeError" (Format.asprintf "function takes exactly %d arguments (%d given)" (String.length fmt_str) size) range man flow >>%
+                     let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi =
+                       let mandatory_fmt, optional_fmt = match String.split_on_char '|' fmt_str with
+                         | [s] -> s, ""
+                         | [s; s'] -> s, s'
+                         | _ -> assert false in
+                       let strip_error_message s = List.hd (String.split_on_char ';' s) in
+                       let strip_error_funcname s = List.hd (String.split_on_char ':' s) in
+                       let compute_length s =
+                         let s = strip_error_message s in
+                         let s = strip_error_funcname s in
+                         let rec aux pos acc =
+                           if pos >= String.length s then acc
+                           else
+                             match s.[pos] with
+                             | '(' | ')' -> aux (pos+1) acc
+                             | _ -> aux (pos+1) (acc+1)
+                         in aux 0 0 in
+                       let min_size = compute_length mandatory_fmt in
+                       let max_size = min_size + compute_length optional_fmt in
+                       mandatory_fmt ^ optional_fmt, min_size, max_size in
+                     debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi size;
+                     if size < fmt_str_itv_lo || size > fmt_str_itv_hi then
+                       let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
+                                   (if fmt_str_itv_hi = fmt_str_itv_lo then "exactly" else if size < fmt_str_itv_lo then "at least" else "at most")
+                            (if size < fmt_str_itv_lo then fmt_str_itv_lo else fmt_str_itv_hi)
+                            (let s =
+                               if size < fmt_str_itv_hi then fmt_str_itv_lo
+                               else fmt_str_itv_hi in
+                             if s = 1 then "" else "s")
+                            size in
+                       let () = debug "wrong number of arguments: %s" msg in
+                       c_set_exception "PyExc_TypeError"
+                         msg range man flow >>%
                          fun flow ->
                          Eval.singleton (mk_zero range) flow
                      else
@@ -1211,6 +1240,7 @@ module Domain =
                    (* FIXME: what happens if an exception is raised? *)
                    man.eval (Python.Ast.mk_py_call py_callable py_tuple range) flow >>$
                      fun py_call_res flow ->
+                     debug "py_call_res %a" pp_expr py_call_res;
                      let addr_py_res, oe_py_res = object_of_expr py_call_res in
                      let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
                      debug "PyObject_CallFunction: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
