@@ -1192,10 +1192,12 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
           (get_func_ref (Some id)) (UidSet.add id acc)
     in
     (* functions transitively referenced by toplevel or non-static *)
-    let func_refs = ref (get_func_ref None) in
+    let func_refs = ref  UidSet.empty in
+    let toplevel = get_func_ref None in
     Hashtbl.iter
       (fun _ f ->
-        if not f.func_is_static then func_refs := close_func_ref f.func_uid !func_refs
+        if (not f.func_is_static) || UidSet.mem f.func_uid toplevel
+        then func_refs := close_func_ref f.func_uid !func_refs
       )
       ctx.ctx_tu_funcs;
     (* only keep referenced static functions *)

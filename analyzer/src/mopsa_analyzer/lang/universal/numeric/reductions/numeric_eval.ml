@@ -81,15 +81,17 @@ struct
               if Z.(a = b) then iter acc flow tl else Eval.empty flow
 
             | E_constant (C_int_interval(a,b)), E_constant(C_int c) ->
-              if Z.(a <= c && c <= b) then iter hd flow tl else Eval.empty flow
+              let c = ItvUtils.IntBound.Finite c in
+              if ItvUtils.IntBound.leq a c && ItvUtils.IntBound.leq c b then iter hd flow tl else Eval.empty flow
 
             | E_constant(C_int c), E_constant (C_int_interval(a,b)) ->
-              if Z.(a <= c && c <= b) then iter acc flow tl else Eval.empty flow
+              let c = ItvUtils.IntBound.Finite c in
+              if ItvUtils.IntBound.leq a c && ItvUtils.IntBound.leq c b then iter acc flow tl else Eval.empty flow
 
             | E_constant(C_int_interval (a,b)), E_constant (C_int_interval(c,d)) ->
-              let lo = Z.max a c and hi = Z.min b d in
-              if Z.(lo <= hi) then
-                let acc = add_expr_translation "Universal" (mk_z_interval lo hi exp.erange) acc in
+              let lo = ItvUtils.IntBound.max a c and hi = ItvUtils.IntBound.min b d in
+              if ItvUtils.IntBound.leq lo hi then
+                let acc = add_expr_translation "Universal" (mk_int_general_interval lo hi exp.erange) acc in
                 iter acc flow tl
               else
                 Eval.empty flow

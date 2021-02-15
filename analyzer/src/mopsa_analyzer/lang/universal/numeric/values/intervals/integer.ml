@@ -102,7 +102,7 @@ struct
       Nb (I.of_z i i)
 
     | C_int_interval (i1,i2) ->
-      Nb (I.of_z i1 i2)
+      Nb (I.of_bound i1 i2)
 
     | C_avalue(V_int_interval, itv) -> itv
     | C_avalue(V_int_interval_fast, itv) -> itv
@@ -220,7 +220,7 @@ struct
     | Common.V_int_congr_interval -> Some (a, Bot.Nb Common.C.minf_inf)
     | _ -> None
 
-    
+
 end
 
 
@@ -260,7 +260,7 @@ struct
       match e.etyp with
       | T_bool -> meet r (top_of_typ T_bool)
       | _ -> r
-  
+
   (* Extended backward refinement of casts to integers. *)
   let backward_ext_cast man e ve r =
     match e.etyp with

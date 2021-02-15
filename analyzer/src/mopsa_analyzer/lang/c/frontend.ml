@@ -149,9 +149,9 @@ let input_files : string list ref = ref []
 (** List of input files *)
 
 
-let find_function_in_context ctx (f: C_AST.func) =
+let find_function_in_context ctx range (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
-  with Not_found -> Exceptions.panic "Could not find function %s in context" f.func_unique_name
+  with Not_found -> Exceptions.panic_at range "Could not find function %s in context" f.func_unique_name
 
 
 (* Get the list of system headers encountered during parsing *)
@@ -487,7 +487,7 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     | C_AST.E_character_literal (c, k)  -> E_constant(Ast.C_c_character (c, from_character_kind k))
     | C_AST.E_string_literal (s, k) -> Universal.Ast.(E_constant (C_c_string (s, from_character_kind k)))
     | C_AST.E_variable v -> E_var (from_var ctx v, None)
-    | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx f)
+    | C_AST.E_function f -> Ast.E_c_function (find_function_in_context ctx erange f)
     | C_AST.E_call (f, args) -> Universal.Ast.E_call(from_expr ctx f, Array.map (from_expr ctx) args |> Array.to_list)
     | C_AST.E_unary (op, e) -> E_unop (from_unary_operator op etyp, from_expr ctx e)
     | C_AST.E_binary (op, e1, e2) -> E_binop (from_binary_operator op etyp, from_expr ctx e1, from_expr ctx e2)
@@ -897,7 +897,7 @@ and from_stub_local_value ctx lval =
   match lval with
   | L_new res -> L_new res
   | L_call (f, args) ->
-    let ff = find_function_in_context ctx f.content in
+    let ff = find_function_in_context ctx f.range f.content in
     let t = T_c_function (Some {
           c_ftype_return = from_typ ctx f.content.func_return;
           c_ftype_params = Array.to_list f.content.func_parameters |>

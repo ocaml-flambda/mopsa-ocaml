@@ -107,15 +107,19 @@ struct
   let eval_rand typ range man flow = man.eval (mk_top typ range) flow
 
   let eval_range typ l u range man flow =
-    let tmp = mktmp ~typ () in
-    let v = mk_var tmp range in
-    man.exec (mk_block [
-        mk_add_var tmp range;
-        mk_assume (mk_in v l u range) range
-      ] range) flow
-    >>%
-    man.eval v |>
-    Cases.add_cleaners [mk_remove_var tmp range]
+    match ekind l, ekind u with
+    | E_c_cast ({ekind = E_constant (C_int l)}, _), E_c_cast({ekind = E_constant (C_int u)}, _) ->
+       man.eval (mk_int_interval (Z.to_int l) (Z.to_int u) ~typ:typ range) flow
+    | _ ->
+       let tmp = mktmp ~typ () in
+       let v = mk_var tmp range in
+       man.exec (mk_block [
+                     mk_add_var tmp range;
+                     mk_assume (mk_in v l u range) range
+                   ] range) flow
+       >>%
+         man.eval v |>
+         Cases.add_cleaners [mk_remove_var tmp range]
 
 
 

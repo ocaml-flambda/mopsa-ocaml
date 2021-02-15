@@ -201,7 +201,7 @@ struct
 
   let rec exp_to_apron exp (abs,bnd) l =
     match ekind exp with
-    | E_constant (C_int_interval (lo,hi)) when Z.(lo = hi) ->
+    | E_constant (C_int_interval (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi)) when Z.(lo = hi) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string lo)),
       abs, bnd, l
 

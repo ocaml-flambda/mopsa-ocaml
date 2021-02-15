@@ -469,7 +469,7 @@ struct
     if is_c_int_type t then
       let l,u = rangeof t in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
-      Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (l,u)) flow
+      Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (ItvUtils.IntBound.Finite l,ItvUtils.IntBound.Finite u)) flow
     else
       flow
 

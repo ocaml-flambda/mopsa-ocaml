@@ -756,8 +756,8 @@ struct
       Utils.check_instances f man flow range args
         ["list"]
         (fun args flow ->
-          man.eval   (mk_py_top T_int range) flow >>$
- (fun eint flow ->
+          man.eval (mk_py_top T_int range) flow >>$
+            (fun eint flow ->
                 match ekind eint with
                 | E_py_object (addr, _) ->
                    Eval.singleton {eint with ekind = E_py_object (addr, Some {(mk_var (length_var_of_eobj @@ List.hd args) range) with etyp=T_int})} flow
@@ -841,12 +841,9 @@ struct
           man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
             (fun list_eobj flow ->
               let var_els = var_of_eobj list_eobj in
-              (* FIXME: els is bounded by the size of the list *)
-              let els = Utils.mk_positive_integer man flow range
-                          (fun posint flow ->
-                            man.eval (mk_expr ~etyp:(T_py None)
-                                        (E_py_tuple [posint; mk_var var_els range])
-                                        range) flow ) in
+              let els = man.eval (mk_expr ~etyp:(T_py None)
+                                    (E_py_tuple [mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range; mk_var var_els range])
+                                    range) flow in
               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
               Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
             )
