@@ -100,3 +100,25 @@ int test_cases_with_macro() {
   }
   _mopsa_assert(x == 1);
 }
+
+int x;
+
+int sidef() { return ++x; }
+
+int test_sideeffect() {
+  x = 0;
+  int r = 0;
+  switch(sidef(x)) {
+  case 0:
+      r = 0;
+      break;
+  case 1:
+      r = 1;
+      break;
+  case 2:
+      r = 2;
+      break;
+  }
+  _mopsa_assert(r == 1);
+  _mopsa_assert(x == 1);
+}

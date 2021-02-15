@@ -71,7 +71,7 @@ struct
 
   (** Get the locations and expressions of cases in a switch
       statements. Cases are ordered similarly to their occurance
-      locations in the source code. 
+      locations in the source code.
   *)
   let get_cases body =
     (* The visitor preserves the order of occurance in source code *)
@@ -187,7 +187,11 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
-      exec_switch e body stmt.srange man flow |>
+       (
+         (* Evaluate e once in case of side-effects *)
+         man.eval e flow >>$ fun e flow ->
+         exec_switch e body stmt.srange man flow
+       ) |>
       OptionExt.return
 
     | S_c_switch_case(e,upd) ->
