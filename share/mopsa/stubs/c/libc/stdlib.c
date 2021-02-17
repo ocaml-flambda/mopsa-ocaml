@@ -650,6 +650,7 @@ void *calloc (size_t __nmemb, size_t __size);
  * case "nop" {
  *   assumes:  __ptr == NULL;
  *   assumes:  __size == 0;
+ *   ensures:  return == NULL;
  * }
  *
  * case "alloc" {
@@ -664,6 +665,7 @@ void *calloc (size_t __nmemb, size_t __size);
  *   assumes:  __size == 0;
  *   requires: __ptr in Memory;
  *   free:     __ptr;
+ *   ensures:  return == NULL;
  * }
  *
  * case "resize" {

@@ -34,3 +34,16 @@ void test_nondet_cond() {
   _mopsa_assert_exists(b == 100);
   _mopsa_assert_exists(b == -100);
 }
+
+int x;
+
+int f() {
+  x = 1;
+  return ((x++ == 1) && x == 2) ? 1 : 0;
+}
+
+void test_sideeffect() {
+  int r = f();
+  _mopsa_assert(x == 2);
+  _mopsa_assert(r == 1);
+}
