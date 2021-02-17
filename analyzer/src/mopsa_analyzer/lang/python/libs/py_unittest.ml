@@ -92,7 +92,7 @@ module Domain =
        let flow =
          List.fold_left (fun acc (cls_addr, cls_decl) ->
            (* create tmp, alloc class in tmp, run tests, delete tmp *)
-             debug "%a, cur is bottom?" pp_addr cls_addr;
+             debug "%a, cur is bottom?%b" pp_addr cls_addr (man.lattice.is_bottom (Flow.get T_cur man.lattice flow));
              let tmp = mktmp ~typ:(T_py None) () in
              let tmpvar = mk_var tmp range in
              let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
@@ -263,15 +263,21 @@ module Domain =
                                      man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
                        man.eval (mk_py_index_subscript (mk_py_attr exn "args" range) (mk_zero ~typ:(T_py None) range) range) flow >>$
                          fun exc_msg flow ->
-                         let exc_msg = Universal.Strings.Powerset.StringPower.choose @@ man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
-                         let re = Str.regexp regex in
-                         warn_at range "assertRaisesRegex hackish implementation";
-                         if Str.string_match re exc_msg 0 then
-                           Py_mopsa.check man (mk_py_true range) range flow >>$
-                             fun _ flow ->
-                             man.eval (mk_py_true range) flow
+                         let exc_powerset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
+                         if Universal.Strings.Powerset.StringPower.is_top exc_powerset then
+                             Py_mopsa.check man (mk_py_top T_bool range) range flow >>$
+                               fun _ flow ->
+                               man.eval (mk_py_true range) flow
                          else
-                           Py_mopsa.check man (mk_py_false range) range flow
+                           let exc_msg = Universal.Strings.Powerset.StringPower.choose exc_powerset in
+                           let re = Str.regexp regex in
+                           let () = warn_at range "assertRaisesRegex hackish implementation" in
+                           if Str.string_match re exc_msg 0 then
+                             Py_mopsa.check man (mk_py_true range) range flow >>$
+                               fun _ flow ->
+                               man.eval (mk_py_true range) flow
+                           else
+                             Py_mopsa.check man (mk_py_false range) range flow
 
                      )
                )
