@@ -197,44 +197,52 @@ let simplify_func ctx (f:func) =
     | E_binary (O_logical LOGICAL_OR, e1, e2) ->
        let before1, e1, after1 = simplify_expr call e1 in
        let before2, e2, after2 = simplify_expr call e2 in
-       if before2 = [] && after2 = [] then
-         before1, (E_binary (O_logical LOGICAL_OR, e1, e2), t, r), after1
+       if before2 = [] && after2 = [] && after1 = [] then
+         before1, (E_binary (O_logical LOGICAL_OR, e1, e2), t, r), []
        else
          let tmp = make_temp ctx r f bool_type in
          let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
-         (* Since [e2] will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
-         let e2' = match expr_type e2 |> resolve_typedef |> fst with
+         (* Since e1,e2 will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
+         let e1' = match expr_type e1 |> resolve_typedef |> fst with
+           | T_bool -> e1
+           | _ -> (E_cast(e1,IMPLICIT),bool_type,r)
+         and e2' = match expr_type e2 |> resolve_typedef |> fst with
            | T_bool -> e2
            | _ -> (E_cast(e2,IMPLICIT),bool_type,r)
          in
-         let cond =
-           S_if (e1,
-                 [S_expression (E_assign (tmp_var, expr_bool_true r), t, r), r] |> make_block,
+         let assign1 = S_expression (E_assign (tmp_var, e1'), t, r), r in
+         let assign2 =
+           S_if (tmp_var,
+                 [] |> make_block,
                  before2@[S_expression (E_assign (tmp_var, e2'), t, r), r]@after2 |> make_block), r
          in
-         before1@[create;cond], tmp_var, after1
+         before1@[create;assign1]@after1@[assign2], tmp_var, []
 
     | E_binary (O_logical LOGICAL_AND, e1, e2) ->
        let before1, e1, after1 = simplify_expr call e1 in
        let before2, e2, after2 = simplify_expr call e2 in
-       if before2 = [] && after2 = [] then
-         before1, (E_binary (O_logical LOGICAL_AND, e1, e2), t, r), after1
+       if before2 = [] && after2 = [] && after1 = [] then
+         before1, (E_binary (O_logical LOGICAL_AND, e1, e2), t, r), []
        else
          let tmp = make_temp ctx r f bool_type in
          let tmp_var = E_variable tmp, bool_type, r in
          let create = S_local_declaration tmp, r in
-         (* Since [e2] will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
-         let e2' = match expr_type e2 |> resolve_typedef |> fst with
+         (* Since e1,e2 will be assigned to [tmp], add an implicit cast to _Bool if necessary *)
+         let e1' = match expr_type e1 |> resolve_typedef |> fst with
+           | T_bool -> e1
+           | _ -> (E_cast(e1,IMPLICIT),bool_type,r)
+         and e2' = match expr_type e2 |> resolve_typedef |> fst with
            | T_bool -> e2
            | _ -> (E_cast(e2,IMPLICIT),bool_type,r)
          in
-         let cond =
-           S_if (e1,
+         let assign1 = S_expression (E_assign (tmp_var, e1'), t, r), r in
+         let assign2 =
+           S_if (tmp_var,
                  before2@[S_expression (E_assign (tmp_var, e2'), t, r), r]@after2 |> make_block,
-                 [S_expression (E_assign (tmp_var, expr_bool_false r), t, r), r] |> make_block), r
+                 [] |> make_block), r
          in
-         before1@[create;cond], tmp_var, after1
+         before1@[create;assign1]@after1@[assign2], tmp_var, []
 
     | E_binary (op,e1,e2) ->
        let before1, e1, after1 = simplify_expr call e1 in
