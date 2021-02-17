@@ -127,29 +127,37 @@ struct
     | _  ->
       panic "todo binop %a" pp_operator op
 
+  (* utility for compare *)
+  let filt a1 cmp minmax a2 =
+    match a2 with
+    | Top.TOP -> a1
+    | Top.Nt b2 ->
+      let s2 = minmax b2 in
+      StringPower.filter (fun s1 -> cmp s1 s2) a1
 
   let compare op b t1 a1 t2 a2 =
-    if is_top a1 || is_top a2 then a1, a2 else
-           (*
-             { v1 \in a1 | \exists v2 \in a2, v1 op v2 == r },
-             { v2 \in a2 | \exists v1 \in a1, v1 op v2 == r }
-            *)
-      let filter left right =
-        StringPower.fold (fun ell acc ->
-            if StringPower.exists (fun elr ->
-                begin match op with
-                  | O_eq -> ell =  elr
-                  | O_ne -> ell <> elr
-                  | O_lt -> ell <  elr
-                  | O_le -> ell <= elr
-                  | O_gt -> ell >  elr
-                  | O_ge -> ell >= elr
-                  | _ -> assert false
-                end = b)
-                right then StringPower.add ell acc
-            else acc
-          ) left StringPower.empty in
-      filter a1 a2, filter a2 a1
+    if is_top a1 || is_top a2 then a1, a2
+    else
+      let op = if b then op else negate_comparison_op op in
+      let b1,b2 =
+        match op with
+        | O_eq -> let a = meet a1 a2 in a,a
+        | O_ne ->
+          let a1 = if is_singleton a2 then diff a1 a2 else a1 in
+          let a2 = if is_singleton a1 then diff a2 a1 else a2 in
+          a1,a2
+        | O_le ->
+          filt a1 (<=) Set.max_elt a2, filt a2 (>=) Set.min_elt a1
+        | O_ge ->
+          filt a1 (>=) Set.min_elt a2, filt a2 (<=) Set.max_elt a1
+        | O_lt ->
+          filt a1 (<) Set.max_elt a2, filt a2 (>) Set.min_elt a1
+        | O_gt ->
+          filt a1 (>) Set.min_elt a2, filt a2 (<) Set.max_elt a1
+        | _ -> default_compare op b t1 a1 t2 a2
+      in
+      if is_empty b1 || is_empty b2 then bottom, bottom
+      else b1,b2
 
   let avalue : type r. r avalue_kind -> t -> r option =
     fun aval a ->
