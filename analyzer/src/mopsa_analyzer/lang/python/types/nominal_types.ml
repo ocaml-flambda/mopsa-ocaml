@@ -77,7 +77,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
-      bind_list [cls; cls'] (man.eval   ) flow |>
+      bind_list [cls; cls'] man.eval flow |>
       bind_result (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
@@ -85,6 +85,11 @@ struct
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
              man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
+          | A_py_c_class v, A_py_c_class v' ->
+             warn_at range "issubclass unsound on A_py_c_class for classes %a and %a" pp_var v pp_var v';
+             man.eval (mk_py_bool (compare_var v v' = 0) range) flow
+          | A_py_c_class v, A_py_class (C_builtin "object", _) ->
+             man.eval (mk_py_true range) flow
           | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
