@@ -134,12 +134,22 @@ type float_class =
     float_nan: bool;   (* not-a-number *)
   }
 
+let pp_float_class fmt c =
+  pp_print_list
+    ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+    pp_print_string
+    fmt
+    ((if c.float_valid then ["valid"] else [])@
+     (if c.float_inf then ["inf"] else [])@
+     (if c.float_nan then ["nan"] else []))
+
 type operator +=
   (* Unary operators *)
-  | O_sqrt              (** Square root *)
-  | O_abs               (** Absolute value *)
+  | O_sqrt              (** square root *)
+  | O_abs               (** absolute value *)
   | O_bit_invert        (** bitwise ~ *)
   | O_wrap of Z.t * Z.t (** wrap *)
+  | O_filter_float_class of float_class (** filter float by class *)
 
   (* Binary operators *)
   | O_plus       (** + *)
@@ -191,11 +201,8 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
-        | O_float_class c ->
-          Format.fprintf fmt "float_class[%s%s%s]"
-            (if c.float_valid then "valid," else "")
-            (if c.float_inf then "inf," else "")
-            (if c.float_nan then "nan," else "")
+        | O_float_class c -> Format.fprintf fmt "float_class[%a]" pp_float_class c
+        | O_filter_float_class c -> Format.fprintf fmt "filter_float_class[%a]" pp_float_class c
         | op           -> default fmt op
       );
   }
@@ -846,6 +853,8 @@ let float_nan   = float_class ~nan:true ()
 let mk_float_class (c:float_class) e range =
   mk_unop (O_float_class c) e ~etyp:T_bool range
 
+let mk_filter_float_class (c:float_class) e range =
+  mk_unop (O_filter_float_class c) e ~etyp:(etyp e) range
 
 let mk_unit range = mk_constant C_unit ~etyp:T_unit range
 

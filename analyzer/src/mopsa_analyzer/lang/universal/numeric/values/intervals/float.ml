@@ -37,6 +37,7 @@ let prec_of_type = function
   | T_float p -> p
   | _ -> assert false
 
+       
 (* We first use the simplified signature to handle float operations *)
 module SimplifiedValue =
 struct
@@ -85,6 +86,13 @@ struct
 
   let print printer (a:t) = unformat (I.fprint I.dfl_fmt) printer a
 
+  let filter_class itv c =
+    { I.itv = if c.float_valid then itv.I.itv else BOT;
+      I.pinf = c.float_inf && itv.I.pinf;
+      I.minf = c.float_inf && itv.I.minf;
+      I.nan = c.float_inf && itv.I.nan;
+    }
+
 
   (** Arithmetic operators *)
 
@@ -123,6 +131,7 @@ struct
     | O_minus -> I.neg a
     | O_plus  -> a
     | O_sqrt  -> I.sqrt (prec p) (round ()) a
+    | O_filter_float_class c -> filter_class a c
     | _ -> top_of_prec p
 
 
@@ -220,11 +229,7 @@ struct
       let a,_ = find_vexpr e ve in
       let c = if b then c else inv_float_class c in
       (* Refine [a] depending on the class *)
-      let a' = { I.itv  = if c.float_valid then a.I.itv  else BOT;
-                 I.pinf = if c.float_inf   then a.I.pinf else false;
-                 I.minf = if c.float_inf   then a.I.minf else false;
-                 I.nan  = if c.float_nan   then a.I.nan  else false;
-               } in
+      let a' = filter_class a c in
       (* Refine [e] with the new value *)
       refine_vexpr e (meet a a') ve
     | _ -> ve

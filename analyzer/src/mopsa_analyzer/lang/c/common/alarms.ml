@@ -759,3 +759,98 @@ let raise_c_invalid_float_class_alarm ?(bottom=true) float msg range man input_f
   let float_itv = man.ask (mk_float_interval_query float) input_flow in
   let alarm = mk_alarm (A_c_invalid_float_class (float_itv,msg)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
+
+
+(** There are five IEEE 754 exceptions.
+    We only singal include invalid operation, division by zero and 
+    overflow. We don't care about inderflow (rounding to 0) and
+    inexact (rounding).
+ *)
+type check +=
+     CHK_C_FLOAT_INVALID_OPERATION
+   | CHK_C_FLOAT_DIVISION_BY_ZERO
+   | CHK_C_FLOAT_OVERFLOW
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_C_FLOAT_INVALID_OPERATION -> fprintf fmt "Invalid floating-point operation"
+      | CHK_C_FLOAT_DIVISION_BY_ZERO -> fprintf fmt "Floating-point division by zero"
+      | CHK_C_FLOAT_OVERFLOW -> fprintf fmt "Floating-point overflow"
+      | a -> next fmt a
+    )
+
+
+type alarm_kind +=
+   | A_c_float_invalid_operation of expr (** expression *) * float_itv  (** result interval *) * typ (** destination type *)
+   | A_c_float_division_by_zero of expr (** denominator *) * float_itv (** denominator interval *)
+   | A_c_float_overflow of expr (** expression *) * float_itv  (** result interval *) * typ (** type *)
+
+let () =
+  register_alarm {
+    check = (fun next -> function
+        | A_c_float_invalid_operation _ -> CHK_C_FLOAT_INVALID_OPERATION
+        | A_c_float_division_by_zero _ -> CHK_C_FLOAT_DIVISION_BY_ZERO
+        | A_c_float_overflow _ -> CHK_C_FLOAT_OVERFLOW
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_float_invalid_operation (e1,i1,t1),
+          A_c_float_invalid_operation (e2,i2,t2) ->
+           Compare.triple compare_expr compare compare_typ (e1,i1,t1) (e2,i2,t2)
+        | A_c_float_division_by_zero (e1,i1),
+          A_c_float_division_by_zero (e2,i2) ->
+           Compare.pair compare_expr compare (e1,i1) (e2,i2)
+        | A_c_float_overflow (e1,i1,t1),
+          A_c_float_overflow (e2,i2,t2) ->
+           Compare.triple compare_expr compare compare_typ (e1,i1,t1) (e2,i2,t2)
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_float_invalid_operation (e,i,t) ->
+           fprintf fmt "invalid floating-point operations in expression '%a' with range '%a' and type '%a'"
+             (Debug.bold pp_expr) e
+             (Debug.bold (F.fprint F.dfl_fmt)) i
+             (Debug.bold pp_typ) t
+        | A_c_float_division_by_zero (e,i) ->
+           fprintf fmt "floating-point division by zero on denominator '%a' with range '%a'"
+             (Debug.bold pp_expr) e
+             (Debug.bold (F.fprint F.dfl_fmt)) i 
+        | A_c_float_overflow (e,i,t) ->
+           fprintf fmt "floating-point overflow in expression '%a' with range '%a' and type '%a'"
+             (Debug.bold pp_expr) e
+             (Debug.bold (F.fprint F.dfl_fmt)) i
+             (Debug.bold pp_typ) t
+        | a -> next fmt a
+      );
+    join = (fun next -> next);
+  }
+
+
+let raise_c_float_invalid_operation_alarm exp itv typ range man flow =
+  let cs = Flow.get_callstack flow in
+  let exp' = get_orig_expr exp in
+  let alarm = mk_alarm (A_c_float_invalid_operation(exp',itv,typ)) cs range in
+  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+
+let raise_c_float_division_by_zero_alarm denominator itv range man flow =
+  let cs = Flow.get_callstack flow in
+  let denominator' = get_orig_expr denominator in
+  let alarm = mk_alarm (A_c_float_division_by_zero(denominator',itv)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_c_float_overflow_alarm exp itv t range man flow =
+  let cs = Flow.get_callstack flow in
+  let exp' = get_orig_expr exp in
+  let alarm = mk_alarm (A_c_float_overflow(exp',itv,t)) cs range in
+  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+
+
+let safe_c_float_invalid_operation_check range man flow =
+  Flow.add_safe_check CHK_C_FLOAT_INVALID_OPERATION range flow
+
+let safe_c_float_division_by_zero_check range man flow =
+  Flow.add_safe_check CHK_C_FLOAT_DIVISION_BY_ZERO range flow
+
+let safe_c_float_overflow_check range man flow =
+  Flow.add_safe_check CHK_C_FLOAT_OVERFLOW range flow
