@@ -221,6 +221,7 @@ module Domain =
           "PyType_Ready";
           "PyType_GenericAlloc_Helper";
           "PyArg_ParseTuple";
+          "PyArg_UnpackTuple";
           "Py_BuildValue";
           "PyObject_CallFunction";
           "PyTuple_Size";
@@ -1203,6 +1204,22 @@ module Domain =
                        process 0 refs flow
                    )
                )
+           )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyArg_UnpackTuple", args::fname::minargs::maxargs::refs) ->
+         (* rewritten into a call to PyArg_ParseTuple *)
+         safe_get_name_of fname man flow >>$
+           (fun ofname_str flow ->
+             let fname_str = Top.top_to_exn (OptionExt.none_to_exn ofname_str) in
+             let min_args = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z minargs in
+             let additional_args  = (Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z maxargs) - min_args in
+             let fmt_str = mk_c_string (Format.asprintf "%s%s:%s"
+                                        (String.make min_args 'O')
+                                        (if additional_args > 0 then "|" ^ (String.make additional_args 'O') else "")
+                                        fname_str) range in
+             debug "fmt_str = %a@.~> %a" pp_expr fmt_str pp_expr {exp with ekind = E_c_builtin_call ("PyArg_ParseTuple", args::fmt_str::refs)};
+             man.eval {exp with ekind = E_c_builtin_call ("PyArg_ParseTuple", args::fmt_str::refs)} flow
            )
          |> OptionExt.return
 

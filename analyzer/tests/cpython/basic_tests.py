@@ -206,5 +206,14 @@ class Test(unittest.TestCase):
         self.assertEqual(basic.vsum(1,2,3), 6)
         self.assertEqual(basic.vsum(1,2,3,4), 10)
 
+    def test_variable_args2(self):
+        with self.assertRaisesRegex(TypeError, "function takes at least 1 argument (0 given)"):
+            basic.vsum2()
+        with self.assertRaisesRegex(TypeError, "function takes at most 3 arguments (5 given)"):
+            basic.vsum2(1,2,3,4,5)
+        self.assertEqual(basic.vsum2(1), 1)
+        self.assertEqual(basic.vsum2(1,2), 3)
+        self.assertEqual(basic.vsum2(1,2,3), 6)
+
 if __name__ == "__main__":
     unittest.main()

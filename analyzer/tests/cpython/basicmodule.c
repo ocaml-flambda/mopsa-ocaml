@@ -360,6 +360,23 @@ basic_vsum(PyObject *self, PyObject *args)
     return Py_BuildValue("i", a+b+c+d);
 }
 
+static PyObject*
+basic_vsum2(PyObjet* self, PyObject *args)
+{
+    PyObject *a = NULL;
+    PyObject *b = NULL;
+    PyObject *c = NULL;
+    if(!PyArg_UnpackTuple(args, "", 1, 3, &a, &b, &c))
+        return NULL;
+
+    int va = 0, vb = 0, vc = 0;
+    if(a) va = PyLong_AsLong(a);
+    if(b) vb = PyLong_AsLong(a);
+    if(c) vc = PyLong_AsLong(a);
+
+    return Py_BuildValue("i", va+vb+vc);
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
@@ -371,6 +388,7 @@ static PyMethodDef module_methods[] = {
     {"return_bool", (PyCFunction) basic_return_bool, METH_VARARGS, ""},
     {"return_none", (PyCFunction) basic_return_none, METH_VARARGS, ""},
     {"vsum", (PyCFunction) basic_vsum, METH_VARARGS, ""},
+    {"vsum2", (PyCFunction) basic_vsum2, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
