@@ -313,6 +313,23 @@ basic_typ(PyObject *self, PyObject *args)
 }
 
 static PyObject*
+basic_subtype(PyObject *self, PyObject *args)
+{
+    PyObject* a;
+    PyObject* b;
+    if(!PyArg_ParseTuple(args, "OO", &a, &b))
+        return NULL;
+
+    if(!PyType_Check(a) || !PyType_Check(b)) {
+        PyErr_SetString(PyExc_TypeError, "basic_subtype expects classes");
+        return NULL;
+    }
+
+    return PyBool_FromLong(PyType_IsSubtype((PyTypeObject*)a, (PyTypeObject*)b));
+}
+
+
+static PyObject*
 basic_raise_exc(PyObject *self, PyObject *args)
 {
     PyErr_SetString(PyExc_AttributeError, "blaaa");
@@ -379,6 +396,7 @@ basic_vsum2(PyObject* self, PyObject *args)
 
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
+    {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
     {"forget_raise", (PyCFunction) basic_forget_raise, METH_VARARGS, ""},
     {"id_check", (PyCFunction) basic_id_check, METH_VARARGS, ""},

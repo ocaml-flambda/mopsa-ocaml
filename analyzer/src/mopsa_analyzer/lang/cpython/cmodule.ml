@@ -221,6 +221,7 @@ module Domain =
           "PyModule_AddObject";
           "PyType_Ready";
           "PyType_GenericAlloc_Helper";
+          "PyType_IsSubtype";
           "PyArg_ParseTuple";
           "PyArg_UnpackTuple";
           "Py_BuildValue";
@@ -980,6 +981,16 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyType_IsSubtype", [tobj; tobj']) ->
+         (* pirouette: transform these PyTypeObjects into Python classes, and assume over the call to Python's issubclass *)
+         (* FIXME: the standard issubclass is suppose to call __subclasscheck__, but this function doesn't... *)
+         c_to_python_boundary tobj man flow range >>$ (fun py_cls flow ->
+         c_to_python_boundary tobj' man flow range >>$ fun py_cls' flow ->
+         assume (Python.Addr.mk_py_issubclass py_cls py_cls' range)
+           man flow
+           ~fthen:(Eval.singleton (mk_one range))
+           ~felse:(Eval.singleton (mk_zero range)))
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyType_Ready", [cls]) ->
          (* add base (FIXME: handle inheritance)

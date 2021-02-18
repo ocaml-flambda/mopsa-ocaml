@@ -218,5 +218,17 @@ class Test(unittest.TestCase):
         r3 = basic.vsum2(1, 2, 3)
         self.assertEqual(r3, 6)
 
+    def test_issubtype(self):
+        self.assertFalse(basic.subtype(basic.Cbox, basic.Counter))
+        self.assertTrue(basic.subtype(basic.Cbox, basic.Cbox))
+        self.assertTrue(basic.subtype(basic.Cbox, object))
+        self.assertTrue(basic.subtype(list, object))
+        self.assertTrue(basic.subtype(object, object))
+        self.assertTrue(basic.subtype(type(basic.Cbox([], 3)), basic.Cbox))
+        with self.assertRaisesRegex(TypeError, "basic_subtype expects classes"):
+            basic.subtype(1, [])
+            #FIXME: what happens if we forget the PyType_Check casts?
+            #       issue happens in Python side. Maybe we should check the types in the boundary?
+
 if __name__ == "__main__":
     unittest.main()

@@ -484,6 +484,16 @@ init_flags()
     _PyNone_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyBytes_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_BYTES_SUBCLASS | Py_TPFLAGS_READY;
     PyDict_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_READY;
+
+    Py_TYPE(&PyType_Type) = &PyType_Type;
+    Py_TYPE(&PyBaseObject_Type) = &PyType_Type;
+    Py_TYPE(&PyLong_Type) = &PyType_Type;
+    Py_TYPE(&PyUnicode_Type) = &PyType_Type;
+    Py_TYPE(&PyList_Type) = &PyType_Type;
+    Py_TYPE(&PyTuple_Type) = &PyType_Type;
+    Py_TYPE(&_PyNone_Type) = &PyType_Type;
+    Py_TYPE(&PyBytes_Type) = &PyType_Type;
+    Py_TYPE(&PyDict_Type) = &PyType_Type;
 }
 
 PyObject _Py_NoneStruct = {
