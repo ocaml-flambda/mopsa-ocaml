@@ -361,7 +361,7 @@ basic_vsum(PyObject *self, PyObject *args)
 }
 
 static PyObject*
-basic_vsum2(PyObjet* self, PyObject *args)
+basic_vsum2(PyObject* self, PyObject *args)
 {
     PyObject *a = NULL;
     PyObject *b = NULL;
@@ -371,8 +371,8 @@ basic_vsum2(PyObjet* self, PyObject *args)
 
     int va = 0, vb = 0, vc = 0;
     if(a) va = PyLong_AsLong(a);
-    if(b) vb = PyLong_AsLong(a);
-    if(c) vc = PyLong_AsLong(a);
+    if(b) vb = PyLong_AsLong(b);
+    if(c) vc = PyLong_AsLong(c);
 
     return Py_BuildValue("i", va+vb+vc);
 }

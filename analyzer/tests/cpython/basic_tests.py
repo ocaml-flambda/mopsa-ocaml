@@ -211,9 +211,12 @@ class Test(unittest.TestCase):
             basic.vsum2()
         with self.assertRaisesRegex(TypeError, "function takes at most 3 arguments (5 given)"):
             basic.vsum2(1,2,3,4,5)
-        self.assertEqual(basic.vsum2(1), 1)
-        self.assertEqual(basic.vsum2(1,2), 3)
-        self.assertEqual(basic.vsum2(1,2,3), 6)
+        r1 = basic.vsum2(1)
+        self.assertEqual(r1, 1)
+        r2 = basic.vsum2(1, 2)
+        self.assertEqual(r2, 3)
+        r3 = basic.vsum2(1, 2, 3)
+        self.assertEqual(r3, 6)
 
 if __name__ == "__main__":
     unittest.main()

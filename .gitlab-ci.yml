@@ -31,7 +31,6 @@ build_job:
 # CPython tests #
 #################
 
-
 .test-cpython:
   stage: test
   dependencies: [build_job]
@@ -46,8 +45,8 @@ build_job:
 test-cpython 1/1:
   variables:
     CPY_FILE: 'basic_tests.py'
-    NB_CHECKS: '59'
-    NB_SAFE: '55'
+    NB_CHECKS: '70'
+    NB_SAFE: '66'
   extends: .test-cpython
 
 ###########
