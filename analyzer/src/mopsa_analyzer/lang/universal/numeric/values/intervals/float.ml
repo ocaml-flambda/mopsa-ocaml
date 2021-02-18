@@ -131,6 +131,7 @@ struct
     | O_minus -> I.neg a
     | O_plus  -> a
     | O_sqrt  -> I.sqrt (prec p) (round ()) a
+    | O_cast  -> I.round (prec p) (round()) a
     | O_filter_float_class c -> filter_class a c
     | _ -> top_of_prec p
 
@@ -201,7 +202,7 @@ struct
   include V
 
   (** Casts of integers to floats *)
-  let cast man p e =
+  let cast_from_int man p e =
     match e.etyp with
     | T_int | T_bool ->
       (* Get the value of the intger *)
@@ -216,7 +217,8 @@ struct
   (** Evaluation of float expressions *)
   let eval man e =
     match ekind e with
-    | E_unop(O_cast,ee) -> cast man (prec_of_type e.etyp) ee
+    | E_unop(O_cast,ee) when is_int_type (etyp ee) ->
+       cast_from_int man (prec_of_type e.etyp) ee
     | _ -> V.eval man e
 
   (** Backward evaluation of class predicates *)

@@ -827,23 +827,23 @@ let () =
   }
 
 
-let raise_c_float_invalid_operation_alarm exp itv typ range man flow =
+let raise_c_float_invalid_operation_alarm ?(bottom=false) ?(warning=true) exp itv typ range man flow =
   let cs = Flow.get_callstack flow in
   let exp' = get_orig_expr exp in
   let alarm = mk_alarm (A_c_float_invalid_operation(exp',itv,typ)) cs range in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+  Flow.raise_alarm alarm ~bottom ~warning man.lattice flow
 
-let raise_c_float_division_by_zero_alarm denominator itv range man flow =
+let raise_c_float_division_by_zero_alarm ?(bottom=true) ?(warning=false) denominator itv range man flow =
   let cs = Flow.get_callstack flow in
   let denominator' = get_orig_expr denominator in
   let alarm = mk_alarm (A_c_float_division_by_zero(denominator',itv)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  Flow.raise_alarm alarm ~bottom ~warning man.lattice flow
 
-let raise_c_float_overflow_alarm exp itv t range man flow =
+let raise_c_float_overflow_alarm ?(bottom=false) ?(warning=true) exp itv t range man flow =
   let cs = Flow.get_callstack flow in
   let exp' = get_orig_expr exp in
   let alarm = mk_alarm (A_c_float_overflow(exp',itv,t)) cs range in
-  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+  Flow.raise_alarm alarm ~bottom ~warning man.lattice flow
 
 
 let safe_c_float_invalid_operation_check range man flow =
