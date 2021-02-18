@@ -226,9 +226,6 @@ module Domain =
           "PyArg_UnpackTuple";
           "Py_BuildValue";
           "PyObject_CallFunction";
-          "PyTuple_Size";
-          "PyTuple_GetItem";
-          "PyTuple_GetSlice";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
@@ -238,6 +235,11 @@ module Domain =
           "PyUnicode_FromString";
           "PyUnicode_FromKindAndData";
           "PyUnicode_FromWideChar";
+          "PyTuple_New";
+          "PyTuple_SetItem";
+          "PyTuple_Size";
+          "PyTuple_GetItem";
+          "PyTuple_GetSlice";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -1284,6 +1286,36 @@ module Domain =
                      man.eval c_addr flow
 
            ) |> OptionExt.return
+
+      (**
+          Humf, tuples are immutable Python side but mutable on the C side.
+          So we'll not reuse the python domain for PyTuple_New and PyTuple_SetItem.
+          Additionnally, you can make some pretty buggy things if you call PyTuple_New and return the result to Python, and try and access it in Python... woops
+          This applies to PyTuple_New and PyTuple_SetItem
+       *)
+      | E_c_builtin_call ("PyTuple_New", [size]) ->
+         let size = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z size in
+         (* FIXME: what happens in the abstract if you py-getitem over pytuple_new? *)
+         alloc_py_addr man (Python.Objects.Tuple.A_py_tuple size) range flow >>$ (fun tuple_eaddr flow ->
+          let c_addr, flow = python_to_c_boundary (Addr.from_expr tuple_eaddr) None None range man flow in
+          let els_var = Python.Objects.Tuple.Domain.var_of_addr (Addr.from_expr tuple_eaddr) in
+          let post = List.fold_left (fun post vari ->
+                         post >>% man.exec ~route:(Semantic "Python") (mk_add_var vari range)) (Post.return flow) els_var in
+          post >>% Eval.singleton c_addr
+        )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyTuple_SetItem", [tuple;pos;item]) ->
+         let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos in
+         c_to_python_boundary tuple man flow range >>$ (fun tuple_obj flow ->
+         let tuple_vars = Python.Objects.Tuple.Domain.var_of_eobj tuple_obj in
+         c_to_python_boundary item man flow range >>$ fun item_obj flow ->
+         if (pos >= 0 && pos < List.length tuple_vars) then
+           man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) item range) flow >>%
+             Eval.singleton (mk_zero range)
+         else
+           Eval.singleton (mk_int (-1) range) flow) |> OptionExt.return
+
 
       | E_c_builtin_call ("PyTuple_Size", [arg]) ->
          resolve_c_pointer_into_addr arg man flow >>$

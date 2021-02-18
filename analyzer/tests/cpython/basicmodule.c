@@ -394,6 +394,15 @@ basic_vsum2(PyObject* self, PyObject *args)
     return Py_BuildValue("i", va+vb+vc);
 }
 
+static PyObject*
+basic_weirdtuple(PyObject* self, PyObject* args)
+{
+    PyObject* a = PyTuple_New(10);
+    PyTuple_SetItem(a, 0, PyLong_FromLong(0));
+    PyTuple_SetItem(a, 9, PyLong_FromLong(9));
+    return a;
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
@@ -407,6 +416,7 @@ static PyMethodDef module_methods[] = {
     {"return_none", (PyCFunction) basic_return_none, METH_VARARGS, ""},
     {"vsum", (PyCFunction) basic_vsum, METH_VARARGS, ""},
     {"vsum2", (PyCFunction) basic_vsum2, METH_VARARGS, ""},
+    {"weirdtuple", (PyCFunction) basic_weirdtuple, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

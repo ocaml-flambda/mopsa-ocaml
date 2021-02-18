@@ -230,5 +230,13 @@ class Test(unittest.TestCase):
             #FIXME: what happens if we forget the PyType_Check casts?
             #       issue happens in Python side. Maybe we should check the types in the boundary?
 
+    def test_weirdtuple(self):
+        t = basic.weirdtuple()
+        self.assertEqual(t[0], 0)
+        self.assertEqual(t[9], 9)
+        # FIXME: this is a segfault, we should handle it better
+        with self.assertRaises(NameError):
+            r = t[3]
+
 if __name__ == "__main__":
     unittest.main()
