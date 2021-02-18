@@ -226,6 +226,7 @@ module Domain =
           "PyArg_UnpackTuple";
           "Py_BuildValue";
           "PyObject_CallFunction";
+          "PyObject_CallObject";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
@@ -1277,7 +1278,7 @@ module Domain =
                  fold_c_to_python_boundary man range tuple flow >>$
                    fun py_tuple flow ->
                    (* FIXME: what happens if an exception is raised? *)
-                   man.eval (Python.Ast.mk_py_call py_callable py_tuple range) flow >>$
+                   man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable py_tuple range) flow >>$
                      fun py_call_res flow ->
                      debug "py_call_res %a" pp_expr py_call_res;
                      let addr_py_res, oe_py_res = object_of_expr py_call_res in
@@ -1286,6 +1287,20 @@ module Domain =
                      man.eval c_addr flow
 
            ) |> OptionExt.return
+
+      | E_c_builtin_call ("PyObject_CallObject", [callable;arg]) ->
+         c_to_python_boundary callable man flow range >>$ (fun py_callable flow ->
+         c_to_python_boundary arg man flow range >>$ fun py_arg flow ->
+         (* FIXME: we're assuming py_arg is a tuple but we shoudl check *)
+         let py_arg_vars = Python.Objects.Tuple.Domain.var_of_eobj py_arg in
+         (* FIXME: also handle case where an exception is raised *)
+         man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow >>$
+           fun py_call_res flow ->
+           let addr_py_res, oe_py_res = object_of_expr py_call_res in
+           let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
+           man.eval c_addr flow
+        ) |> OptionExt.return
+
 
       (**
           Humf, tuples are immutable Python side but mutable on the C side.

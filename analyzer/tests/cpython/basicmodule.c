@@ -403,6 +403,12 @@ basic_weirdtuple(PyObject* self, PyObject* args)
     return a;
 }
 
+static PyObject*
+basic_twistedcbox(PyObject* self, PyObject* args)
+{
+    return PyObject_CallObject((PyObject*)&CboxType, args);
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
@@ -417,6 +423,7 @@ static PyMethodDef module_methods[] = {
     {"vsum", (PyCFunction) basic_vsum, METH_VARARGS, ""},
     {"vsum2", (PyCFunction) basic_vsum2, METH_VARARGS, ""},
     {"weirdtuple", (PyCFunction) basic_weirdtuple, METH_VARARGS, ""},
+    {"twistedcbox", (PyCFunction) basic_twistedcbox, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

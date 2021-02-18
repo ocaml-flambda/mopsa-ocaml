@@ -196,6 +196,14 @@ class Test(unittest.TestCase):
         # with self.assertRaisesRegex(TypeError, "Argument must be a callable"):
         #     r5 = c.callback("notafunction")
 
+    def test_callback_object(self):
+        class A: pass
+        a = A()
+        c = basic.twistedcbox(a, 3)
+        self.assertTrue(isinstance(c, basic.Cbox))
+        self.assertEqual(c.contents, a)
+        self.assertEqual(c.counter, 3)
+
     def test_variable_args(self):
         with self.assertRaisesRegex(TypeError, "function takes at least 1 argument (0 given)"):
             basic.vsum()
