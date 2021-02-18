@@ -458,7 +458,7 @@ struct
       OptionExt.return
 
     (* 𝔼⟦ ⋄ e' ⟧, type(exp) = float *)
-    | E_unop(op, e) when exp |> etyp |> is_c_int_type
+    | E_unop(op, e) when exp |> etyp |> is_c_float_type
       ->
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
