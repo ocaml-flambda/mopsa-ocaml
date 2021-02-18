@@ -497,6 +497,9 @@ let mk_py_kall func args kwargs range =
 let mk_py_attr obj attr ?(etyp=(T_py None)) range =
   mk_expr (E_py_attribute (obj, attr)) ~etyp range
 
+let mk_py_index_subscript obj index ?(etyp=(T_py None)) range =
+  mk_expr (E_py_index_subscript (obj, index)) ~etyp range
+
 let mk_py_object (addr, e) range =
   mk_expr ~etyp:(T_py None) (E_py_object (addr, e)) range
 

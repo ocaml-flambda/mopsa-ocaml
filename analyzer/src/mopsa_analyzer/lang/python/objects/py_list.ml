@@ -777,7 +777,11 @@ struct
           assume
             (mk_binop ~etyp:(T_py None) (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
-            ~fthen:(man.eval   (mk_py_top T_bool range))
+            ~fthen:(fun flow ->
+              let flow = Flow.add_local_assumption (Soundness.A_py_unsound_list_contains_after_remove (object_of_expr list)) range flow in
+              (* man.eval   (mk_py_top T_bool range) *)
+              man.eval (mk_py_true range) flow
+            )
             ~felse:(man.eval   (mk_py_false range))
         )
       |> OptionExt.return
