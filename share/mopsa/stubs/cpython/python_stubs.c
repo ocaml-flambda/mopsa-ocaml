@@ -1,11 +1,17 @@
+#ifndef CPYTHON_STUBS_SEEN
+#define CPYTHON_STUBS_SEEN
+
 #undef PyArg_ParseTuple
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
 #undef PyObject_CallFunction
 
 // FIXME: add other builtins like that
+#undef PyUnicode_GET_LENGTH
+#undef PyTuple_GET_SIZE
 #define PyUnicode_GET_LENGTH PyUnicode_GetLength
 #define PyTuple_GET_SIZE PyTuple_Size
+
 #undef PyUnicode_GET_SIZE
 #undef PyUnicode_AS_UNICODE
 #undef Py_UNICODE_IS_SURROGATE
@@ -99,6 +105,10 @@ int PyErr_BadArgument(void)
 
 int PyType_ReadyCheat(PyTypeObject *type)
 {
+    if(type->tp_flags & Py_TPFLAGS_READY) {
+        return 1;
+    }
+
     Py_TYPE(type) = &PyType_Type;
     type->tp_flags =
         (type->tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY;
@@ -495,9 +505,10 @@ Py_UCS4* PyUnicode_AsUCS4Copy(PyObject *unicode)
     Py_ssize_t s = PyUnicode_GetLength(unicode);
     if(s == -1 && PyErr_Occurred())
         return NULL;
-    Py_UCS4* ret = malloc(s * sizeof(Py_UCS4));
+    Py_UCS4* ret = (Py_UCS4*) malloc(s * sizeof(Py_UCS4));
     if(ret)
     {
+//        ret[s] = 0; or no delimiter?
         return ret;
     }
     else
@@ -541,3 +552,15 @@ PyObject *PyBool_FromLong(long ok)
     Py_INCREF(result);
     return result;
 }
+
+
+int
+PySequence_Check(PyObject *s)
+{
+    if (PyDict_Check(s))
+        return 0;
+    _mopsa_print(s->ob_type->tp_as_sequence);
+    return s->ob_type->tp_as_sequence &&
+        s->ob_type->tp_as_sequence->sq_item != NULL;
+}
+#endif

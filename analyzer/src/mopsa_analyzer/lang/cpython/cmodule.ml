@@ -1,3 +1,4 @@
+(* FIXME: alloc_py_addr of some addresses should be done only if the thing is not already converted. See fix for A_py_c_function in new_method_from_def already written *)
 (*
   FIXME:
   - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
@@ -312,13 +313,17 @@ module Domain =
           let methd_fundec = match methd_function with
             | P_fun f -> f
             | _ -> assert false in
-          alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range flow >>$
-            fun methd_eaddr flow ->
-            let methd_addr = Addr.from_expr methd_eaddr in
-            let flow = set_singleton methd_function methd_addr man flow in
-            (* bind method to binder *)
-            bind_in_python binder_addr methd_name methd_addr range man flow >>%
-              Cases.singleton true
+          let a_methd_function = Top.detop @@ EquivBaseAddrs.find methd_function (get_env T_cur man flow) in
+          (if ValueSet.cardinal a_methd_function > 0 then
+            Eval.singleton (mk_addr (ValueSet.choose a_methd_function) range) flow
+          else
+            alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range flow) >>$
+              fun methd_eaddr flow ->
+              let methd_addr = Addr.from_expr methd_eaddr in
+              let flow = set_singleton methd_function methd_addr man flow in
+              (* bind method to binder *)
+              bind_in_python binder_addr methd_name methd_addr range man flow >>%
+                Cases.singleton true
 
     let rec fold_until_null func c flow =
       func c flow >>$
@@ -870,7 +875,7 @@ module Domain =
       process 0 0 fmt_length [] flow
 
 
-    let eval exp man flow =
+    let rec eval exp man flow =
       let range = erange exp in
       match ekind exp with
       | E_var ({vkind = V_cvar v}, _) when List.mem v.cvar_uniq_name builtin_exceptions ->
@@ -982,12 +987,16 @@ module Domain =
          (* Py_TYPE(cls) = &PyType_Type *)
          (* FIXME: sometimes I'd like to write some parts of the transfer functions in the analyzed language... *)
          let cheat = C.Ast.find_c_fundec_by_name "PyType_ReadyCheat" flow in
-         man.eval (mk_c_call cheat [cls] range) flow >>$
-           (fun r flow ->
-             debug "after PyType_ReadyCheat:@.%a" (format @@ Flow.print man.lattice.print) flow;
+         assume (eq (mk_c_call cheat [cls] range) (mk_zero range) range) man flow
+           ~fthen:(fun flow ->
+             debug "after PyType_ReadyCheat"; (*(format @@ Flow.print man.lattice.print) flow; *)
              new_class_from_def cls man flow >>$
                fun cls_addr flow ->
                Eval.singleton (mk_int 0 range) flow
+           )
+           ~felse:(fun flow ->
+             debug "PyType_Ready already called according to the flag, nothing to do";
+             Eval.singleton (mk_int 0 range) flow
            )
          |> OptionExt.return
 
