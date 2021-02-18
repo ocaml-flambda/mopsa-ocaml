@@ -163,7 +163,7 @@ struct
            (fun fmt fcov ->
               let total = RangeSet.cardinal fcov.total in
               let reachable = RangeSet.cardinal fcov.reachable in
-              fprintf fmt "'%a' %d%% of %d statement%a analyzed" (Debug.bold pp_print_string) fcov.fundec.c_func_org_name (100*reachable/total) total Debug.plurial_int total;
+              fprintf fmt "'%a' %d%% of %d statement%a analyzed" (Debug.bold pp_print_string) fcov.fundec.c_func_org_name (if total=0 then 0 else 100*reachable/total) total Debug.plurial_int total;
               if !opt_per_line_coverage then
                 fprintf fmt "@,@[<v 2>  %a@]"
                   (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
@@ -181,7 +181,7 @@ struct
            )
         ) l in
     printf "%d function%a analyzed out of %d@\n" analyzed_funs Debug.plurial_int analyzed_funs total_funs;
-    printf "%d%% of %d statement%a analyzed@\n@\n" (100*reachable/total) total  Debug.plurial_int total;
+    printf "%d%% of %d statement%a analyzed@\n@\n" (if total=0 then 0 else 100*reachable/total) total  Debug.plurial_int total;
     (* Group by file if more than one file analyzed *)
     let () = match MapExt.StringMap.bindings map with
       | [] -> assert false
