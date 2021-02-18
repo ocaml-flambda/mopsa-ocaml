@@ -825,7 +825,7 @@ struct
            man.eval   a flow >>$
  (fun eaddr_it flow ->
                let addr_it = Addr.from_expr eaddr_it in
-               man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
+               man.exec (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -846,7 +846,7 @@ struct
             (fun list_eobj flow ->
               let var_els = var_of_eobj list_eobj in
               let els = man.eval (mk_expr ~etyp:(T_py None)
-                                    (E_py_tuple [mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range; mk_var var_els range])
+                                    (E_py_tuple [{(mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range) with etyp=(T_py None)}; mk_var var_els range])
                                     range) flow in
               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
               Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])

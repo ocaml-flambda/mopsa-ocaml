@@ -201,7 +201,7 @@ struct
     | S_add ({ekind = E_addr (a, _)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
-      if mem a cur then panic_at range "%a but the address exists" pp_stmt stmt;
+      if mem a cur && a.addr_mode = STRONG then panic_at range "%a but the address exists@.%a" pp_stmt stmt (format @@ Flow.print man.lattice.print) flow;
       let ncur = add a AttrSet.empty cur in
       debug "S_add ok?";
       set_env T_cur ncur man flow |>
