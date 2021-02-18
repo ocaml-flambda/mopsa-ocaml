@@ -140,6 +140,7 @@ module Domain =
                                        name ^ ".py";
                                        dir ^ "/typeshed/" ^ name ^ ".pyi";
                                        name ^ "module.c";
+                                       "mopsa.db"
                                        ]
                 in
                 match List.find_opt Sys.file_exists file_candidates with
@@ -153,10 +154,11 @@ module Domain =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
                   o, b, true, flow
-                else if filename = name ^ "module.c" then
+                else if List.mem filename [name ^ "module.c"; "mopsa.db"] then
                   let prog = C.Frontend.parse_program [filename] in
                   let () = debug "Parsed C program %a" pp_program prog in
                   let () = C.Iterators.Program.Domain.opt_entry_function := "PyInit_" ^ name in
+                  let () = debug "Searching for entry function %s" !C.Iterators.Program.Domain.opt_entry_function in
                   let flow = C.Iterators.Program.Domain.init prog man flow in
                   let body = mk_stmt (S_program(prog, None)) range in
                   let addr =

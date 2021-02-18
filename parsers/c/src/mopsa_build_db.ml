@@ -25,11 +25,11 @@
 
 let log = ref false
 let logfile = ref (open_out "/dev/null")
-                        
+
 
 (** {1 DB representation} *)
 
-(** Version number. 
+(** Version number.
     This should be changed when the db type changes to avoid loading
     old DB files.
 *)
@@ -65,21 +65,21 @@ let source_unknown (path:string) = {
 
 module SourceSet = Set.Make(struct type t=source let compare=compare end)
 (* sets of sources with physical equality, to easily remove dupplicates *)
-                           
-                
+
+
 type library_kind = LIBRARY_STATIC | LIBRARY_DYNAMIC
 
 let library_kind_name = function
   | LIBRARY_STATIC -> "static"
   | LIBRARY_DYNAMIC -> "dynamic"
 
-                         
+
 type file_kind =
   | Object of source
   | Library of library_kind * file StringMap.t (** contents, indexed by file name *)
   | Executable of file list
   | Unknown of string (** absolute path *)
-                       
+
 and file = string (** absolute path *) * file_kind
 
 type db = file StringMap.t (** indexed by absolute path *)
@@ -89,7 +89,7 @@ let empty_db = StringMap.empty
 
 (** {1 Printing} *)
 
-               
+
 let rec print_file indent (name,kind) =
   match kind with
   | Object s ->
@@ -113,7 +113,7 @@ let rec print_file indent (name,kind) =
   | Unknown _ ->
      Printf.printf "%sUNKNOWN %s\n" indent name
 
-    
+
 let print_db (db:db) =
   StringMap.iter (fun _ -> print_file "") db
 
@@ -123,8 +123,8 @@ let print_list_json sep f ch = function
   | (a::rest) ->
      f ch a;
      List.iter (Printf.fprintf ch "%s%a" sep f) rest
-  
-  
+
+
 let print_file_json (name,kind) =
   Printf.printf "  {\n    \"filename\": \"%s\",\n" name;
   (match kind with
@@ -153,11 +153,11 @@ let print_db_json (db:db) =
   print_list_json ",\n" (fun _ f -> print_file_json f) stdout (List.rev cnt);
   Printf.printf "]"
 
-                 
-               
+
+
 (** {1 Utilities} *)
 
-               
+
 (* whether string s starts with pref *)
 let starts_with pref s =
   let pl,sl = String.length pref, String.length s in
@@ -190,7 +190,7 @@ let absolute_path name =
   normalize name
 
 
-         
+
 (** {1 Apply file operations to DB} *)
 
 
@@ -199,7 +199,7 @@ let get_files (db:db) (file:string) (recur:bool) : string list =
   let file = absolute_path file in
   if recur && Sys.file_exists file && Sys.is_directory file then
     (* ensures file ends with a directory separator *)
-    let file = Filename.concat file "" in 
+    let file = Filename.concat file "" in
     StringMap.fold
       (fun k _ acc -> if starts_with file k then k::acc else acc)
       db []
@@ -207,7 +207,7 @@ let get_files (db:db) (file:string) (recur:bool) : string list =
     (* non-directory *)
     if StringMap.mem file db then [file]
     else []
-  
+
 
 (** delete a file or directory *)
 let db_remove (recur:bool) (db:db) (file:string) : db =
@@ -219,7 +219,7 @@ let db_remove (recur:bool) (db:db) (file:string) : db =
       StringMap.remove k db
     ) db files
 
-                 
+
 (** copy or move a file or directory *)
 let db_copymove (move:bool) (recur:bool) (db:db) (org:string) (dest:string) : db =
   if !log then Printf.fprintf !logfile "DB: db_copymove move=%B recur=%B org=%s dest=%s\n%!" move recur org dest;
@@ -242,7 +242,7 @@ let db_copymove (move:bool) (recur:bool) (db:db) (org:string) (dest:string) : db
     ) db files
 
 
-(** create or add files to an archive *)    
+(** create or add files to an archive *)
 let db_add_archive (db:db) (archive:string) (kind:library_kind) (files: string list) : db =
   let archive = absolute_path archive in
   let contents =
@@ -267,7 +267,7 @@ let db_add_archive (db:db) (archive:string) (kind:library_kind) (files: string l
   in
   StringMap.add archive (archive, Library (kind,contents)) db
 
-                
+
 (** remove files from an archive *)
 let db_remove_archive (db:db) (archive:string) (files: string list) : db =
   let archive = absolute_path archive in
@@ -286,8 +286,8 @@ let db_remove_archive (db:db) (archive:string) (files: string list) : db =
     | _ -> db (* not an archive: do nothing *)
   else db (* unknow archive: do nothing *)
 
-         
-(** extract some files from an archive *)         
+
+(** extract some files from an archive *)
 let db_extract_archive (db:db) (archive:string) (files: string list) : db =
   let archive = absolute_path archive in
   if StringMap.mem archive db then
@@ -306,9 +306,9 @@ let db_extract_archive (db:db) (archive:string) (files: string list) : db =
          db files
     | _ -> db (* not an archive: do nothing *)
   else db (* unknow archive: do nothing *)
-                
 
-(** extract all files from an archive *)         
+
+(** extract all files from an archive *)
 let db_extract_archive_all (db:db) (archive:string) : db =
   let archive = absolute_path archive in
   if StringMap.mem archive db then
@@ -318,14 +318,14 @@ let db_extract_archive_all (db:db) (archive:string) : db =
          (fun tag (_,v) db ->
            let dest = absolute_path tag in
            if !log then Printf.fprintf !logfile "DB: extract %s from archive %s as %s\n%!" tag archive dest;
-           StringMap.add dest (dest,v) db         
+           StringMap.add dest (dest,v) db
          )
          contents db
     | _ -> db (* not an archive: do nothing *)
   else db (* unknow archive: do nothing *)
-                
 
-(** compile to object *)         
+
+(** compile to object *)
 let db_compile (db:db) (kind:source_kind) (src:string) (obj:string) (args: string list) =
   let src = absolute_path src
   and obj = absolute_path obj in
@@ -360,8 +360,8 @@ let db_link (db:db) (out:string) (files: string list) =
     );
     StringMap.add out (out, Executable contents) db
 
-      
-               
+
+
 (** {1 DB loading, saving, locking} *)
 
 let open_db ?(create=false) (dbfile:string) : Unix.file_descr =
@@ -376,8 +376,8 @@ let close_db (d:Unix.file_descr) =
   let open Unix in
   ignore (lseek d 0 SEEK_SET);
   lockf d F_ULOCK 0
-(** Unlock and close DB file. *)        
-    
+(** Unlock and close DB file. *)
+
 let read_db (d:Unix.file_descr) : db =
   let open Unix in
   ignore (lseek d 0 SEEK_SET);
@@ -389,7 +389,7 @@ let read_db (d:Unix.file_descr) : db =
     Marshal.from_channel f
   )
 (** Read from open DB file. *)
-                            
+
 let write_db (d:Unix.file_descr) (db:db) =
   let open Unix in
   ignore (lseek d 0 SEEK_SET);
@@ -399,21 +399,21 @@ let write_db (d:Unix.file_descr) (db:db) =
   Marshal.to_channel f db [];
   flush f
 (** Write to open DB file. *)
-        
+
 let load_db (dbfile:string) : db =
   let d = open_db dbfile in
   let db = read_db d in
   close_db d;
   db
 (** Load DB from file. *)
-        
+
 
 (** {1 DB extraction for analysis driver} *)
 
-                                         
+
 (** extract executables from DB *)
 let get_executables (db:db) : string list =
-  let r = 
+  let r =
     StringMap.fold
       (fun n (_,k) acc ->
         match k with
@@ -422,10 +422,22 @@ let get_executables (db:db) : string list =
       ) db []
   in
   List.rev r
-           
-           
+
+let get_libraries (db:db) : string list =
+  let r =
+    StringMap.fold
+      (fun n (_,k) acc ->
+        match k with
+        | Library _ -> n::acc
+        | _ -> acc
+      ) db []
+  in
+  List.rev r
+
+
+
 (** get all the sources making an executable (including library contents) *)
-let get_executable_file_sources (db:db) (exe:string) : source list =
+let get_file_sources ?(expected_kind = Executable []) (db:db) (exe:string) : source list =
   let rec doit acc = function
     | (_,Object src)::rest ->
        doit (SourceSet.add src acc) rest
@@ -437,14 +449,21 @@ let get_executable_file_sources (db:db) (exe:string) : source list =
        doit acc rest
     | [] -> acc
   in
-  match StringMap.find exe db with
-  | _, Executable l -> SourceSet.elements (doit SourceSet.empty l)
+  match StringMap.find exe db, expected_kind with
+  | (_, Executable l), Executable _ -> SourceSet.elements (doit SourceSet.empty l)
+  | (_, Library (lk, contents)), Library _ -> SourceSet.elements (doit SourceSet.empty (List.map snd (StringMap.bindings contents)))
   | _ -> raise Not_found
 
-               
+
 (** as get_executable_file_sources, but use the executable name instead of absolute file path *)
 let get_executable_sources (db:db) (exe:string) : source list =
   let exe = Filename.basename exe in
   let m = StringMap.filter (fun k _ -> Filename.basename k = exe) db in
   if StringMap.is_empty m then raise Not_found
-  else get_executable_file_sources db (fst (StringMap.min_binding m))
+  else get_file_sources db (fst (StringMap.min_binding m))
+
+let get_library_sources (db:db) (lib:string) : source list =
+  let lib = Filename.basename lib in
+  let m = StringMap.filter (fun k _ -> Filename.basename k = lib) db in
+  if StringMap.is_empty m then raise Not_found
+  else get_file_sources ~expected_kind:(Library (LIBRARY_DYNAMIC, StringMap.empty)) db (fst (StringMap.min_binding m))

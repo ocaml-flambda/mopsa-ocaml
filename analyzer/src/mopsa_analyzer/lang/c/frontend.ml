@@ -57,6 +57,8 @@ let opt_warn_all = ref false
 let opt_use_stub = ref []
 (** Lists of functions that the body will be replaced by a stub *)
 
+let opt_library_only = ref false
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -106,6 +108,13 @@ let () =
     doc = " list of functions for which the stub is used instead of the declaration.";
     spec = ArgExt.Set_string_list opt_use_stub;
     default = "";
+  };
+  register_language_option "c" {
+    key = "-library-only";
+    category = "C";
+    doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
+    spec = ArgExt.Set opt_library_only;
+    default = "false";
   };
   ()
 
@@ -228,23 +237,41 @@ and parse_db (dbfile: string) ctx : unit =
   let open Mopsa_build_db in
 
   let db = load_db dbfile in
-  let execs = get_executables db in
-  let exec =
-    (* No need for target selection if there is only one binary *)
-    if List.length execs = 1
-    then List.hd execs
-    else if execs = []
-    then panic "no binary in database"
-    else if !opt_make_target = ""
-    then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
-        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
-        execs
+  let srcs =
+    if !opt_library_only then
+      let libs = get_libraries db in
+      let lib =
+        if List.length libs = 1 then List.hd libs
+        else if libs = [] then panic "no library in database"
+        else if !opt_make_target = "" then
+          panic "a target is required in a multi-library Makefile@.Possible targets:@\n@[%a@]"
+            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+               Format.pp_print_string)
+            libs
+        else
+          try find_target !opt_make_target libs
+          with Not_found ->
+            panic "library target %s not found" !opt_make_target
+      in
+      get_library_sources db lib
     else
-      try find_target !opt_make_target execs
-      with Not_found ->
-        panic "binary target %s not found" !opt_make_target
-  in
-  let srcs = get_executable_sources db exec in
+      let execs = get_executables db in
+      let exec =
+        (* No need for target selection if there is only one binary *)
+        if List.length execs = 1
+        then List.hd execs
+        else if execs = []
+        then panic "no binary in database"
+        else if !opt_make_target = ""
+        then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
+               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
+               execs
+        else
+          try find_target !opt_make_target execs
+          with Not_found ->
+            panic "binary target %s not found" !opt_make_target
+      in
+      get_executable_sources db exec in
   let nb = List.length srcs in
   input_files := [];
   let cwd = Sys.getcwd() in

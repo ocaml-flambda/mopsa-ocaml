@@ -439,7 +439,7 @@ let ar db args =
 
 (** {1 Printing} *)
 
-                  
+
 let print dbfile args =
   (* db loading *)
   let db = try load_db dbfile with Unix.Unix_error _ -> empty_db in
@@ -527,7 +527,7 @@ let main () =
     write_db d db;
     close_db d;
   in
-  
+
   (* action to database *)
   (match tool_normalized with
     | "cc" | "clang" | "gcc" -> apply (compile C)
@@ -539,7 +539,9 @@ let main () =
     | "cp" -> apply cp
     | "ln" -> apply ln
     | "mopsa" -> print dbfile args; exit 0
-    | _ -> () (* unknown -> nothing to do! *)
+    | _ ->
+       if tool = "x86_64-linux-gnu-gcc" then apply (compile C) else
+       () (* unknown -> nothing to do! *)
   );
 
   (* now execute the original command *)
