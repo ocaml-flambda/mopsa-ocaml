@@ -246,5 +246,26 @@ class Test(unittest.TestCase):
         with self.assertRaises(NameError):
             r = t[3]
 
+    def test_sequence(self):
+        class A: pass
+        with self.assertRaises(TypeError):
+            basic.sequence_tail(1)
+        with self.assertRaises(TypeError):
+            basic.sequence_tail({1:2})
+        with self.assertRaises(TypeError):
+            basic.sequence_tail(A)
+
+        with self.assertRaises(ValueError):
+            basic.sequence_tail([])
+        with self.assertRaises(ValueError):
+            basic.sequence_tail(())
+        with self.assertRaises(ValueError):
+            basic.sequence_tail(basic.Counter(0))
+
+        self.assertEqual(basic.sequence_tail([1,2,3]), 4) # safety check
+        self.assertEqual(basic.sequence_tail((1,2,3)), 3)
+        self.assertEqual(basic.sequence_tail(basic.Counter(10)), 9)
+
+
 if __name__ == "__main__":
     unittest.main()

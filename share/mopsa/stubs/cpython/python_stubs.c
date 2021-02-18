@@ -294,6 +294,48 @@ wrap_lenfunc(PyObject *self, PyObject *args, void *wrapped)
     return PyLong_FromSsize_t(res);
 }
 
+static Py_ssize_t
+getindex(PyObject *self, PyObject *arg)
+{
+    Py_ssize_t i;
+
+    i = PyNumber_AsSsize_t(arg, PyExc_OverflowError);
+    if (i == -1 && PyErr_Occurred())
+        return -1;
+    if (i < 0) {
+        PySequenceMethods *sq = Py_TYPE(self)->tp_as_sequence;
+        if (sq && sq->sq_length) {
+            Py_ssize_t n = (*sq->sq_length)(self);
+            if (n < 0) {
+                assert(PyErr_Occurred());
+                return -1;
+            }
+            i += n;
+        }
+    }
+    return i;
+}
+
+static PyObject *
+wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
+{
+    ssizeargfunc func = (ssizeargfunc)wrapped;
+    PyObject *arg;
+    Py_ssize_t i;
+
+    if (PyTuple_GET_SIZE(args) == 1) {
+        arg = PyTuple_GET_ITEM(args, 0);
+        i = getindex(self, arg);
+        if (i == -1 && PyErr_Occurred())
+            return NULL;
+        return (*func)(self, i);
+    }
+    check_num_args(args, 1);
+    assert(PyErr_Occurred());
+    return NULL;
+}
+
+
 static PyObject *
 wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
 {
@@ -473,6 +515,29 @@ _PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
 void
 init_flags()
 {
+    Py_TYPE(&PyType_Type) = &PyType_Type;
+    Py_TYPE(&PyBaseObject_Type) = &PyType_Type;
+    Py_TYPE(&PyLong_Type) = &PyType_Type;
+    Py_TYPE(&PyUnicode_Type) = &PyType_Type;
+    Py_TYPE(&PyList_Type) = &PyType_Type;
+    Py_TYPE(&PyTuple_Type) = &PyType_Type;
+    Py_TYPE(&_PyNone_Type) = &PyType_Type;
+    Py_TYPE(&PyBytes_Type) = &PyType_Type;
+    Py_TYPE(&PyDict_Type) = &PyType_Type;
+
+    PySequenceMethods tuple_as_sequence =
+        {
+            .sq_length=(lenfunc)PyTuple_Size,
+            .sq_item=(ssizeargfunc)PyTuple_GetItem,
+        };
+    PyTuple_Type.tp_as_sequence = &tuple_as_sequence;
+    PySequenceMethods list_as_sequence =
+        {
+            .sq_length=(lenfunc)PyList_Size,
+            .sq_item=(ssizeargfunc)PyList_GetItem,
+        };
+    PyList_Type.tp_as_sequence = &list_as_sequence;
+
     // all flags are in the object declaration except Ready, which is
     // added upon completion of PyType_Ready
     PyType_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TYPE_SUBCLASS | Py_TPFLAGS_READY;
@@ -484,16 +549,6 @@ init_flags()
     _PyNone_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyBytes_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_BYTES_SUBCLASS | Py_TPFLAGS_READY;
     PyDict_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_READY;
-
-    Py_TYPE(&PyType_Type) = &PyType_Type;
-    Py_TYPE(&PyBaseObject_Type) = &PyType_Type;
-    Py_TYPE(&PyLong_Type) = &PyType_Type;
-    Py_TYPE(&PyUnicode_Type) = &PyType_Type;
-    Py_TYPE(&PyList_Type) = &PyType_Type;
-    Py_TYPE(&PyTuple_Type) = &PyType_Type;
-    Py_TYPE(&_PyNone_Type) = &PyType_Type;
-    Py_TYPE(&PyBytes_Type) = &PyType_Type;
-    Py_TYPE(&PyDict_Type) = &PyType_Type;
 }
 
 PyObject _Py_NoneStruct = {
@@ -569,8 +624,69 @@ PySequence_Check(PyObject *s)
 {
     if (PyDict_Check(s))
         return 0;
-    _mopsa_print(s->ob_type->tp_as_sequence);
     return s->ob_type->tp_as_sequence &&
         s->ob_type->tp_as_sequence->sq_item != NULL;
+}
+
+static PyObject *
+type_error(const char *msg, PyObject *obj)
+{
+    PyErr_Format(PyExc_TypeError, msg, obj->ob_type->tp_name);
+    return NULL;
+}
+
+Py_ssize_t
+PySequence_Size(PyObject *s)
+{
+    PySequenceMethods *m;
+
+    if (s == NULL) {
+        null_error();
+        return -1;
+    }
+
+    m = s->ob_type->tp_as_sequence;
+    if (m && m->sq_length) {
+        Py_ssize_t len = m->sq_length(s);
+        assert(len >= 0 || PyErr_Occurred());
+        return len;
+    }
+
+    if (s->ob_type->tp_as_mapping && s->ob_type->tp_as_mapping->mp_length) {
+        type_error("%.200s is not a sequence", s);
+        return -1;
+    }
+    type_error("object of type '%.200s' has no len()", s);
+    return -1;
+}
+
+PyObject *
+PySequence_GetItem(PyObject *s, Py_ssize_t i)
+{
+    PySequenceMethods *m;
+
+    if (s == NULL) {
+        return null_error();
+    }
+
+    m = s->ob_type->tp_as_sequence;
+    if (m && m->sq_item) {
+        if (i < 0) {
+            if (m->sq_length) {
+                Py_ssize_t l = (*m->sq_length)(s);
+                if (l < 0) {
+                    assert(PyErr_Occurred());
+                    return NULL;
+                }
+                i += l;
+            }
+        }
+        return m->sq_item(s, i);
+    }
+
+    if (s->ob_type->tp_as_mapping && s->ob_type->tp_as_mapping->mp_subscript) {
+        return type_error("%.200s is not a sequence", s);
+    }
+    return type_error("'%.200s' object does not support indexing", s);
 }
 #endif

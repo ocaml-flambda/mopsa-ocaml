@@ -177,6 +177,17 @@ Counter_len(PyObject* self)
     return ret;
 }
 
+static PyObject*
+Counter_item(Counter* a, Py_ssize_t i)
+{
+    Py_ssize_t ub = a->counter;
+    if(i < ub)
+        return PyLong_FromSsize_t(i);
+
+    PyErr_SetNone(PyExc_IndexError);
+    return NULL;
+}
+
 static int
 Counter_contains(PyObject* self, PyObject* args)
 {
@@ -255,7 +266,7 @@ static PySequenceMethods counter_as_sequence = {
     (lenfunc)Counter_len,                 /* sq_length */
     0,                                  /* sq_concat */
     0,                                  /* sq_repeat */
-    0,                                  /* sq_item */
+    (ssizeargfunc)Counter_item,         /* sq_item */
     0,                                  /* sq_slice */
     0,                                  /* sq_ass_item */
     0,                                  /* sq_ass_slice */
@@ -409,6 +420,24 @@ basic_twistedcbox(PyObject* self, PyObject* args)
     return PyObject_CallObject((PyObject*)&CboxType, args);
 }
 
+static PyObject*
+basic_sequence_tail(PyObject* self, PyObject* args)
+{
+    PyObject* s = PyTuple_GetItem(args, 0);
+
+    if(!PySequence_Check(s)) {
+        PyErr_SetString(PyExc_TypeError, "sequence_tail requires argument supporting sequence protocol");
+        return NULL;
+    }
+
+    if(PySequence_Size(s) <= 0) {
+        PyErr_SetString(PyExc_ValueError, "sequence_tail requires non-empty sequence");
+        return NULL;
+    }
+
+    return PySequence_GetItem(s, -1);
+}
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
@@ -424,6 +453,7 @@ static PyMethodDef module_methods[] = {
     {"vsum2", (PyCFunction) basic_vsum2, METH_VARARGS, ""},
     {"weirdtuple", (PyCFunction) basic_weirdtuple, METH_VARARGS, ""},
     {"twistedcbox", (PyCFunction) basic_twistedcbox, METH_VARARGS, ""},
+    {"sequence_tail", (PyCFunction) basic_sequence_tail, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
