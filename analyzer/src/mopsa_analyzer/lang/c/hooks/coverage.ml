@@ -184,7 +184,7 @@ struct
     printf "%d%% of %d statement%a analyzed@\n@\n" (if total=0 then 0 else 100*reachable/total) total  Debug.plurial_int total;
     (* Group by file if more than one file analyzed *)
     let () = match MapExt.StringMap.bindings map with
-      | [] -> assert false
+      | [] -> ()
       | [_,fcovs] -> printf "%a" pp_fcovs fcovs
       | l ->
         printf "@[<v>%a@]"
