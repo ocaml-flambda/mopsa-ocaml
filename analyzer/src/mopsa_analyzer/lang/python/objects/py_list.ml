@@ -766,14 +766,22 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__contains__" as f, _))}, _)}, args, []) ->
+       (* /!\ if remove is called, contains should be unprecise
+          l = ['a', 'b', 'c']
+          l.remove('a')
+          assert(not l.contains('a'))
+        *)
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["list"]
         (fun args flow ->
           let list, el = match args with a::b::[] -> a, b | _ -> assert false in
           assume
             (mk_binop ~etyp:(T_py None) (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
-
-            ~fthen:(man.eval   (mk_py_true range))
+            ~fthen:(fun flow ->
+              let flow = Flow.add_local_assumption (Soundness.A_py_unsound_list_contains_after_remove (object_of_expr list)) range flow in
+              (* man.eval   (mk_py_top T_bool range) *)
+              man.eval (mk_py_true range) flow
+            )
             ~felse:(man.eval   (mk_py_false range))
         )
       |> OptionExt.return
@@ -817,7 +825,7 @@ struct
            man.eval   a flow >>$
  (fun eaddr_it flow ->
                let addr_it = Addr.from_expr eaddr_it in
-               man.exec   (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
+               man.exec (mk_assign (mk_var (itseq_of_addr addr_it) range) list range) flow >>%
                Eval.singleton (mk_py_object (addr_it, None) range)
              )
         )
@@ -838,7 +846,7 @@ struct
             (fun list_eobj flow ->
               let var_els = var_of_eobj list_eobj in
               let els = man.eval (mk_expr ~etyp:(T_py None)
-                                    (E_py_tuple [mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range; mk_var var_els range])
+                                    (E_py_tuple [{(mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range) with etyp=(T_py None)}; mk_var var_els range])
                                     range) flow in
               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
               Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
@@ -907,8 +915,63 @@ struct
       Utils.check_instances f man flow range args
         ["str"; "str"; "int"]
         (fun eargs flow ->
-           (* FIXME: notok, as one strong element. Fixed by adding to tops, but terrible *)
-           man.eval (mk_expr ~etyp:(T_py None) (E_py_list [mk_py_top T_string range; mk_py_top T_string range]) range) flow
+          let module Powerset = Universal.Strings.Powerset in
+          let self, sep, maxsplit = match eargs with
+            | a :: b :: c :: [] -> a, b, c
+            | _ -> assert false in
+          let u_self = man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject self)) flow in
+          let u_sep = man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject sep)) flow in
+          let u_maxsplit = Utils.get_eobj_itv man flow maxsplit in
+            let maxsplit = match (Bot.bot_to_exn u_maxsplit) with
+              | ItvUtils.IntBound.Finite l, _ ->
+                 let l = Z.to_int l in
+                 if l < 0 then None else Some l
+              | _ -> assert false in
+          let module StringPower = Powerset.StringPower in
+          debug "self = %a, sep = %a, maxsplit = %a"
+            (format StringPower.print) u_self
+            (format StringPower.print) u_sep
+            ItvUtils.IntItv.fprint_bot u_maxsplit;
+          (* if the separator is a char and maxsplit is a constant, let's work on u_self *)
+          (* additional assumptions on u_self and u_sep could be lifted if needed *)
+          if not (StringPower.is_top u_self) && not (StringPower.is_top u_sep) && StringPower.for_all (fun s -> String.length s = 1) u_sep && ItvUtils.IntItv.is_singleton (Bot.bot_to_exn u_maxsplit) && StringPower.cardinal u_self = 1 && StringPower.cardinal u_sep = 1 then
+            let splits =
+              let sep = String.get (StringPower.choose u_sep) 0 in
+              let splitted = String.split_on_char sep (StringPower.choose u_self) in
+              let rec adjust_size count l acc =
+                if count = 0 then
+                  List.rev ((String.concat (String.make 1 sep) l) :: acc)
+                else
+                  match l with
+                  | [] -> List.rev acc
+                  | hd :: tl -> adjust_size (count-1) tl (hd::acc)
+              in
+              adjust_size (match maxsplit with None -> String.length (StringPower.choose u_self) | Some l -> l) splitted [] in
+            let () = debug "splits: %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) splits in
+            man.eval (mk_expr ~etyp:(T_py None) (E_py_list (List.map (fun s -> mk_string ~etyp:(T_py None) s range) splits)) range) flow
+          else
+            (* otherwise, let's return a list of T strings, of size <= maxsplit or length u_self *)
+            let addr_list = mk_alloc_addr A_py_list range in
+            man.eval addr_list flow >>$
+              (fun eaddr_list flow ->
+                let addr_list = Addr.from_expr eaddr_list in
+                let els_var = var_of_addr addr_list in
+                let length_var = length_var_of_addr addr_list in
+                let length_itv  = match maxsplit with
+                  | None ->
+                     if StringPower.is_top u_self then
+                       (* FIXME: positive range *)
+                       mk_top T_int range
+                     else
+                       mk_int_interval 0 (StringPower.fold (fun string upper ->
+                                 max (String.length string) upper) u_self 0) ~typ:T_int range
+                  | Some l ->
+                     mk_int_interval 0 l ~typ:T_int range in
+                Post.return flow >>%
+                  man.exec (mk_assign (mk_var els_var range) (mk_py_top T_string range) range) >>%
+                  man.exec (mk_assign (mk_var length_var range) length_itv range) >>%
+                  Eval.singleton (mk_py_object (addr_list, None) range)
+              )
         )
       |> OptionExt.return
 

@@ -24,7 +24,7 @@
 # Python
 mopsa_analyzer.lang += python
 mopsa_analyzer.lang.python = ast pp addr utils visitor operators  ast_compare hooks frontend   \
-              alarms libs desugar objects data_model types flows program
+              alarms soundness libs desugar objects data_model types flows program
 mopsa_analyzer.lang.python.libs = math py_mopsa py_std py_unittest py_typing
 mopsa_analyzer.lang.python.objects = lambda class data_container_utils function py_list range tuple dict py_set py_object iterable
 mopsa_analyzer.lang.python.data_model = callable arith_ops compare_ops aug_assign	\

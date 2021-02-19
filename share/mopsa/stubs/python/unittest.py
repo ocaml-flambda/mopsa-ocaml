@@ -35,6 +35,15 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertGreater")
     def assertGreater(self, x, y): pass
 
+    @mopsa.builtin("unittest.TestCase.assertGreaterEqual")
+    def assertGreaterEqual(self, x, y): pass
+
+    @mopsa.builtin("unittest.TestCase.assertLess")
+    def assertLess(self, x, y): pass
+
+    @mopsa.builtin("unittest.TestCase.assertLessEqual")
+    def assertLessEqual(self, x, y): pass
+
     @mopsa.builtin("unittest.TestCase.assertIs")
     def assertIs(self, x, y): pass
 
@@ -56,13 +65,18 @@ class TestCase:
     def assertRaises(self, exn):
         return ExceptionContext(exn)
 
+    def assertRaisesRegex(self, exn, regex):
+        # FIXME: and the message?
+        return ExceptionContext(exn, regex)
+
     @mopsa.builtin("unittest.TestCase.fail")
     def fail(self, msg): pass
 
 #  ExceptionContext is NOT a mopsa.builtin, since __init__ and __enter__ are defined here
 class ExceptionContext(object):
-    def __init__(self, exn):
+    def __init__(self, exn, regex=None):
         self.expected = exn
+        self.regex = regex
 
     def __enter__(self):
         return self

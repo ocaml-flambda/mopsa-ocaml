@@ -185,17 +185,21 @@ struct
        let dead = Pool.diff all alive in
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) (format Pool.print) dead;
        let trange = tag_range range "agc" in
-       let flow = set_env T_cur alive man flow in
+       (* let's free weak addresses first, and then the strong ones *)
+       let dead_strong, dead_weak = Pool.partition (fun addr -> is_recent addr) dead in
        let post = Pool.fold (fun addr acc ->
                       debug "free %a" pp_addr addr;
-                      (* FIXME: free of a strong address will re-create the strong address, I'm not really happy with that *)
-                      acc >>% man.exec (mk_stmt (S_free addr) trange)) dead (Post.return flow) in
+                      acc >>% man.exec (mk_stmt (S_free addr) trange)) dead_weak (Post.return flow) in
+       post >>% (fun flow ->
+       let post = Pool.fold (fun addr acc ->
+                      debug "free %a" pp_addr addr;
+                      acc >>% man.exec (mk_stmt (S_free addr) trange)) dead_strong (Post.return flow) in
        let delta = Sys.time () -. startt in
        gc_time := !gc_time +. delta;
        incr gc_nb_collections;
        gc_nb_addr_collected := !gc_nb_addr_collected + (Pool.cardinal dead);
        gc_max_heap_size := max !gc_max_heap_size (Pool.cardinal all);
-       post |> OptionExt.return
+       post) |> OptionExt.return
 
     | _ -> None
 
