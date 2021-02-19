@@ -241,6 +241,8 @@ module Domain =
           "PyTuple_Size";
           "PyTuple_GetItem";
           "PyTuple_GetSlice";
+          "PyList_Size";
+          "PyList_GetItem";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -657,14 +659,17 @@ module Domain =
            let () = debug "%a already converted according to equiv: %a" pp_addr addr pp_points_to inverse in
            points_to_to_c_expr inverse addr_ctyp range, Post.return flow
         | None ->
-          let type_c_addr, flow, is_cls =
-            match akind addr with
-            | A_py_class _ ->
-               mk_addr type_addr ~etyp:(T_c_pointer pytypeobject_typ) range, flow, true
-            | _ ->
+          (* let type_c_addr, flow = , is_cls =
+           *   match akind addr with
+           *   (\* | A_py_class _ ->
+           *    *    mk_addr type_addr ~etyp:(T_c_pointer pytypeobject_typ) range, flow, true *\)
+           *   | _ -> *)
                (* let's check our parent is correct first *)
-               let type_c_addr, flow = python_to_c_boundary type_addr (Some (T_c_pointer pytypeobject_typ)) None range man flow in
-               type_c_addr, flow, false
+           let type_c_addr, flow = python_to_c_boundary type_addr (Some (T_c_pointer pytypeobject_typ)) None range man flow in
+           let is_cls = match akind addr with
+             | A_py_class _ | A_py_c_class _ -> true
+             | _ -> false
+               (* type_c_addr, flow, false *)
           in
           (* let type_obj = py_addr_to_c_expr type_addr pytypeobject_typ range man flow in *)
           let obj = mk_addr ~mode:(Some STRONG) ~etyp:(T_c_pointer pyobject_typ) addr range in
@@ -679,8 +684,9 @@ module Domain =
           let flow = set_singleton pt addr man flow in
           final_obj,
           (
-            man.exec ~route:(Semantic "C") (mk_add obj range) flow >>%
-              man.exec ~route:(Semantic "C") (mk_add_var bytes range) >>%
+            man.exec ~route:(Semantic "C") (mk_add obj range) flow >>% fun flow ->
+              let () = debug "adding bytes var %a" pp_var bytes in
+              man.exec ~route:(Semantic "C") (mk_add_var bytes range) flow >>%
               man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
@@ -701,7 +707,7 @@ module Domain =
                         Post.return flow
                     )
                 else flow in
-              (* debug "obj = %a, type_obj = %a" pp_expr obj pp_expr type_obj; *)
+              debug "ob_type assignment: obj = %a, type_obj = %a" pp_expr obj pp_expr type_c_addr;
               (* this is obj->ob_type = type *)
               man.exec (mk_assign
                           (mk_c_deref (mk_c_cast
@@ -1326,12 +1332,13 @@ module Domain =
          let tuple_vars = Python.Objects.Tuple.Domain.var_of_eobj tuple_obj in
          c_to_python_boundary item man flow range >>$ fun item_obj flow ->
          if (pos >= 0 && pos < List.length tuple_vars) then
-           man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) item range) flow >>%
+           man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) item_obj range) flow >>%
              Eval.singleton (mk_zero range)
          else
            Eval.singleton (mk_int (-1) range) flow) |> OptionExt.return
 
 
+      | E_c_builtin_call ("PyList_Size", [arg])
       | E_c_builtin_call ("PyTuple_Size", [arg]) ->
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
@@ -1395,6 +1402,26 @@ module Domain =
                    let c_addr, flow = python_to_c_boundary addr_py_slice None oe_py_slice range man flow in
                    Eval.singleton c_addr flow
          )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyList_GetItem", [tuple; pos]) ->
+         resolve_c_pointer_into_addr tuple man flow >>$
+           (fun oaddr flow ->
+             let addr = OptionExt.none_to_exn oaddr in
+             let py_list = Python.Ast.mk_py_object (addr, None) (tag_range range "list") in
+             (* NB: alternative to c_int_to_python would be to make a query directly? *)
+             c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
+               debug "PyList_GetItem, py_pos = %a" pp_expr py_obj;
+               (* FIXME: if an IndexError is raised? *)
+               man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "list.__getitem__") range)
+                           [py_list; py_obj] range) flow >>$
+                 fun py_elem flow ->
+                 let addr_py_elem, oe_py_elem = object_of_expr py_elem in
+                 let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
+                 let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
+                 debug "PyList_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                 man.eval c_addr flow
+           )
          |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->

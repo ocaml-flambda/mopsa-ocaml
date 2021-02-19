@@ -425,12 +425,14 @@ basic_sequence_tail(PyObject* self, PyObject* args)
 {
     PyObject* s = PyTuple_GetItem(args, 0);
 
-    if(!PySequence_Check(s)) {
+    int b = PySequence_Check(s);
+    if(!b) {
         PyErr_SetString(PyExc_TypeError, "sequence_tail requires argument supporting sequence protocol");
-        return NULL;
+    return NULL;
     }
 
-    if(PySequence_Size(s) <= 0) {
+    int ls = PySequence_Size(s);
+    if(ls <= 0) {
         PyErr_SetString(PyExc_ValueError, "sequence_tail requires non-empty sequence");
         return NULL;
     }

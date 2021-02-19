@@ -247,11 +247,14 @@ class Test(unittest.TestCase):
             r = t[3]
 
     def test_sequence(self):
+        # FIXME: now define B with __getitem__ and __length__ and check that it works...
         class A: pass
         with self.assertRaises(TypeError):
             basic.sequence_tail(1)
         with self.assertRaises(TypeError):
             basic.sequence_tail({1:2})
+        with self.assertRaises(TypeError):
+            basic.sequence_tail(A())
         with self.assertRaises(TypeError):
             basic.sequence_tail(A)
 
@@ -262,7 +265,7 @@ class Test(unittest.TestCase):
         with self.assertRaises(ValueError):
             basic.sequence_tail(basic.Counter(0))
 
-        self.assertEqual(basic.sequence_tail([1,2,3]), 4) # safety check
+        self.assertEqual(basic.sequence_tail([1,2,3]), 3)
         self.assertEqual(basic.sequence_tail((1,2,3)), 3)
         self.assertEqual(basic.sequence_tail(basic.Counter(10)), 9)
 

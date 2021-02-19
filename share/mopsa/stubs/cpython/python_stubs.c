@@ -512,6 +512,19 @@ _PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
     *(PyTypeObject**) ((char*)obj + offsetof(PyObject, ob_type)) = type;
 }
 
+static PySequenceMethods list_as_sequence =
+{
+    .sq_length=(lenfunc)PyList_Size,
+    .sq_item=(ssizeargfunc)PyList_GetItem,
+};
+
+
+static PySequenceMethods tuple_as_sequence =
+{
+    .sq_length=(lenfunc)PyTuple_Size,
+    .sq_item=(ssizeargfunc)PyTuple_GetItem,
+};
+
 void
 init_flags()
 {
@@ -525,18 +538,15 @@ init_flags()
     Py_TYPE(&PyBytes_Type) = &PyType_Type;
     Py_TYPE(&PyDict_Type) = &PyType_Type;
 
-    PySequenceMethods tuple_as_sequence =
-        {
-            .sq_length=(lenfunc)PyTuple_Size,
-            .sq_item=(ssizeargfunc)PyTuple_GetItem,
-        };
+    PyType_Type.tp_as_sequence = 0;
+    PyBaseObject_Type.tp_as_sequence = 0;
+    PyLong_Type.tp_as_sequence = 0;
+    // FIXME: unicode_as_sequence
     PyTuple_Type.tp_as_sequence = &tuple_as_sequence;
-    PySequenceMethods list_as_sequence =
-        {
-            .sq_length=(lenfunc)PyList_Size,
-            .sq_item=(ssizeargfunc)PyList_GetItem,
-        };
     PyList_Type.tp_as_sequence = &list_as_sequence;
+    _PyNone_Type.tp_as_sequence = 0;
+    // FIXME: bytes_as_sequence
+    // FIXME: dict_as_sequence
 
     // all flags are in the object declaration except Ready, which is
     // added upon completion of PyType_Ready
@@ -561,6 +571,7 @@ void set_default_flags(PyTypeObject *t)
     // should be 284160
     // 9, 10, 12, 14, 18
     t->tp_flags = Py_TPFLAGS_HEAPTYPE | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_VERSION_TAG;
+    t->tp_as_sequence = 0; // FIXME: more complicated, if a class has a __getitem__
 }
 
 
