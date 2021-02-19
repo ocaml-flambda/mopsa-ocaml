@@ -756,8 +756,8 @@ let mk_z_interval a b ?(typ=T_int) range =
 let mk_float_interval ?(prec=F_DOUBLE) a b range =
   mk_constant ~etyp:(T_float prec) (C_float_interval (a, b)) range
 
-let mk_string s =
-  mk_constant ~etyp:T_string (C_string s)
+let mk_string ?(etyp=T_string) s =
+  mk_constant ~etyp:etyp (C_string s)
 
 let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(etyp=T_bool) v e1 e2 erange =
   match strict, left_strict, right_strict with

@@ -30,6 +30,7 @@ open Ast
 open Common.Points_to
 open Common.Base
 open Universal.Numeric.Common
+module StringMap = MapExt.StringMap
 
 
 (** Iterator domain *)
@@ -533,9 +534,25 @@ struct
       let locals = List.fold_right (fun call acc ->
           let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
           f.c_func_local_vars @ f.c_func_parameters @ acc
-        ) cs []
+                     ) cs []
       in
-      Some (globals @ locals)
+      let all_vars = globals @ locals in
+      let records = List.fold_left (fun recmap var ->
+                        match vtyp var with
+                        | T_c_record r ->
+                           StringMap.add r.c_record_unique_name r recmap
+                        | _ -> recmap) StringMap.empty all_vars in
+      debug "records cheatsheet:@.%a"
+        (StringMap.fprint {print_begin="";print_arrow=": "; print_sep="\n"; print_end=""; print_empty=""} Format.pp_print_string
+           (fun fmt r ->
+             Format.fprintf fmt "%a"
+               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                  (fun fmt rf ->
+                    Format.fprintf fmt "%d: %s" rf.c_field_offset rf.c_field_name))
+                    r.c_record_fields
+             ))
+        records;
+      Some all_vars
 
 
     (* Get the value of a variable *)

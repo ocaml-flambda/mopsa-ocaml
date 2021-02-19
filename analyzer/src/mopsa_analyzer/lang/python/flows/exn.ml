@@ -74,6 +74,7 @@ module Domain =
                                   (* Execute handlers *)
                                   let flow_caught, flow_uncaught =
                                     List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
+                                        (* FIXME: I don't get why exec_except and escape_except are separated, and it seems to create more issues than anything. To merge *)
                                         let caught = exec_except man excpt range acc_uncaught in
                                         let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
                                         let uncaught = escape_except man excpt range acc_uncaught in
@@ -181,7 +182,7 @@ module Domain =
 
 
     and exec_except man excpt range flow =
-      debug "exec except on@ @[%a@]" (format (Flow.print man.lattice.print)) flow;
+      debug "exec except %a on@ @[%a@]" (OptionExt.print pp_expr) excpt.py_excpt_type (format (Flow.print man.lattice.print)) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (format (Flow.print man.lattice.print)) flow;
       let flow0 = Flow.filter (function
@@ -220,18 +221,18 @@ module Domain =
                         assume
                           (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
                           man flow
-                          ~fthen:(fun true_flow ->
+                          ~fthen:(fun flow ->
                               assume
                                 (mk_py_isinstance exn e range)
                                 man
-                                ~fthen:(fun true_flow ->
-                                      man.exec (mk_assign (mk_var except_var range) exn range) true_flow)
-                                ~felse:(fun false_flow ->
-                                    Flow.set T_cur man.lattice.bottom man.lattice false_flow |> Post.return
+                                ~fthen:(fun flow ->
+                                  man.exec (mk_assign (mk_var except_var range) exn range) flow)
+                                ~felse:(fun flow ->
+                                    Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
                                   )
-                                true_flow
+                                flow
                             )
-                          ~felse:(fun false_flow ->
+                          ~felse:(fun flow ->
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow)
                       | _ -> assert false
                     )
@@ -261,50 +262,58 @@ module Domain =
 
 
     and escape_except man excpt range flow =
-      debug "escape except";
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                   Flow.filter (function
                       | T_py_exception _ -> fun _ -> false
                       | _ -> fun _ -> true) in
+      debug "escape except %a@.flow = %a" (OptionExt.print pp_expr) excpt.py_excpt_type (format @@ Flow.print man.lattice.print) flow;
       match excpt.py_excpt_type with
       | None -> flow0
 
       | Some e ->
-        Flow.fold (fun acc tk env ->
-            match tk with
-            | T_py_exception (exn, s, k) ->
-              (* Evaluate e in env to check if it corresponds to exn *)
-              let flow = Flow.set T_cur env man.lattice flow0 in
-              let flow' =
-                man.eval   e flow |>
-                bind_result (fun e flow ->
-                    match ekind e with
-                    | E_py_object obj ->
-                      assume
-                        (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
-                        man
-                        ~fthen:(fun true_flow ->
-                            assume
-                              (mk_py_isinstance exn e range)
-                              man
-                              ~fthen:(fun true_flow -> Post.return true_flow)
-                              ~felse:(fun false_flow ->
-                                  Flow.add tk env man.lattice false_flow |> Post.return
-                                )
-                              true_flow)
-                        ~felse:(fun false_flow -> Post.return false_flow)
-                        flow
-                    | _ -> Post.return flow
-                  )
-              in
-              let flow' = post_to_flow man flow' in
-              Flow.fold (fun acc tk env ->
-                  match tk with
-                  | T_py_exception _ -> Flow.add tk env man.lattice acc
-                  | _ -> acc
-                ) flow0 flow'
-            | _ -> acc
-          ) flow0 flow
+         let flow =
+           Flow.fold (fun acc tk env ->
+               match tk with
+               | T_py_exception (exn, s, k) ->
+                  debug "tk is %a" pp_expr exn;
+                  (* Evaluate e in env to check if it corresponds to exn *)
+                  let flow = Flow.set T_cur env man.lattice flow0 in
+                  let flow' =
+                    man.eval   e flow |>
+                      bind_result (fun e flow ->
+                          match ekind e with
+                          | E_py_object obj ->
+                             assume
+                               (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
+                               man
+                               ~fthen:(fun flow ->
+                                 assume
+                                   (mk_py_isinstance exn e range)
+                                   man
+                                   ~fthen:(fun flow ->
+                                     Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
+                                   )
+                                   ~felse:(fun flow ->
+                                     Flow.add tk env man.lattice flow |> Post.return
+                                   )
+                                   flow)
+                               ~felse:(fun flow -> Post.return flow)
+                               flow
+                          | _ -> Post.return flow
+                        )
+                  in
+                  let flow' = post_to_flow man flow' in
+                  let acc = Flow.fold (fun acc tk env ->
+                      match tk with
+                      | T_py_exception _ ->
+                         Flow.add tk env man.lattice acc
+                      | _ -> acc
+                              ) acc flow' in
+                  acc
+               | _ -> acc
+             ) flow0 flow in
+         debug "resulting flow is %a" (format @@ Flow.print man.lattice.print) flow;
+         flow
 
 
     let ask _ _ _ = None

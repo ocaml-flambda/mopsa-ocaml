@@ -177,7 +177,7 @@ struct
         ) [] prog
     with
     | hd :: tl -> hd
-    | [] -> panic "find_function %s failed" orig_name
+    | [] -> raise Not_found
 
   let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
     fun query man flow ->
@@ -186,19 +186,23 @@ struct
     | Q_debug_variables ->
        let (_, globals, body) = get_py_program flow in
        let cs = Flow.get_callstack flow in
-       let allvars =
-         List.fold_left (fun acc call ->
-             let fd = find_function call.Callstack.call_fun_orig_name body in
-             fd.py_func_parameters
-             @ fd.py_func_kwonly_args
-             @ (OptionExt.apply (fun x -> [x]) [] fd.py_func_kwarg)
-             @ fd.py_func_locals
-             @ [fd.py_func_ret_var]
-             @ acc
+       (try
+         let allvars =
+           List.fold_left (fun acc call ->
+               let fd = find_function call.Callstack.call_fun_orig_name body in
+               fd.py_func_parameters
+               @ fd.py_func_kwonly_args
+               @ (OptionExt.apply (fun x -> [x]) [] fd.py_func_kwarg)
+               @ fd.py_func_locals
+               @ [fd.py_func_ret_var]
+               @ acc
 
-           ) globals cs
-       in
-       Some allvars
+             ) globals cs
+         in
+         Some allvars
+       with Not_found ->
+         None)
+
     | _ -> None
 
   let print_expr _ _ _ _ = ()

@@ -201,6 +201,7 @@ struct
     | S_add ({ekind = E_addr (a, _)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
+      if mem a cur && a.addr_mode = STRONG then panic_at range "%a but the address exists@.%a" pp_stmt stmt (format @@ Flow.print man.lattice.print) flow;
       let ncur = add a AttrSet.empty cur in
       debug "S_add ok?";
       set_env T_cur ncur man flow |>
@@ -216,7 +217,13 @@ struct
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
-        | _ -> assert false in
+        | E_py_object (_, Some e) ->
+           let open Universal.Strings.Powerset in
+           let r = man.ask (mk_strings_powerset_query e) flow in
+           assert(StringPower.cardinal r = 1);
+           StringPower.choose r
+        | _ ->
+           assert false in
       begin match akind addr with
         | A_py_module (M_user(name, globals)) ->
           man.eval   (mk_py_bool (List.exists (fun v -> get_orig_vname v = attr) globals) range) flow
@@ -287,6 +294,11 @@ struct
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
+        | E_py_object (_, Some e) ->
+           let open Universal.Strings.Powerset in
+           let r = man.ask (mk_strings_powerset_query e) flow in
+           assert(StringPower.cardinal r = 1);
+           StringPower.choose r
         | _ -> assert false in
       begin match akind addr with
         | A_py_module (M_builtin m) ->
@@ -362,6 +374,11 @@ struct
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
+        | E_py_object (_, Some e) ->
+           let open Universal.Strings.Powerset in
+           let r = man.ask (mk_strings_powerset_query e) flow in
+           assert(StringPower.cardinal r = 1);
+           StringPower.choose r
         | _ -> assert false in
       debug "lval=%a, rval=%a" pp_expr lval pp_expr rval;
       begin match ekind lval, ekind rval with
@@ -396,6 +413,11 @@ struct
       let attr = match ekind attr with
         | E_constant (C_string s) -> s
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
+        | E_py_object (_, Some e) ->
+           let open Universal.Strings.Powerset in
+           let r = man.ask (mk_strings_powerset_query e) flow in
+           assert(StringPower.cardinal r = 1);
+           StringPower.choose r
         | _ -> assert false in
       begin match akind alval with
         | A_py_class _ ->

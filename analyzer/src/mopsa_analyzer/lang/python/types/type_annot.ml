@@ -47,7 +47,13 @@ struct
   end)
 
 
-  module TVMap = Framework.Lattices.Partial_map.Make(Keys)(ESet)
+  module TVMap = Framework.Lattices.Partial_map.Make(Keys)(
+                     struct
+                       include ESet
+                       let widen ctx e1 e2 =
+                         if ESet.cardinal e1 > 5 && ESet.cardinal e2 > 5 then ESet.widen ctx e1 e2 else join e1 e2
+                     end
+                   )
 
   include TVMap
 

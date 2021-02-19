@@ -159,7 +159,7 @@ type typ +=
   (** Qualified type. *)
 
   | T_c_block_object of typ
-  (** Type of block objects.  *)  
+  (** Type of block objects.  *)
 
 
 (** {2 Function descriptor} *)
@@ -337,7 +337,7 @@ type expr_kind +=
       the block itself and its content.  For, expanding the contents of
       a block will duplicate every cell in the block, while expanding
       the block object will update the pointers that point to the
-      block.  *)  
+      block.  *)
 
 
 
@@ -897,6 +897,24 @@ let mk_c_deref e range =
 
 let mk_c_member_access r f range =
   mk_expr (E_c_member_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
+
+let mk_c_arrow_access r f range =
+  mk_expr (E_c_arrow_access (r, f.c_field_index, f.c_field_org_name)) ~etyp:f.c_field_type range
+
+let mk_c_member_access_by_name r fname range =
+  let fields = match remove_typedef_qual r.etyp with
+    | T_c_record r -> r.c_record_fields
+    | _ -> assert false in
+  let field = List.find (fun f -> f.c_field_org_name = fname) fields in
+  mk_c_member_access r field range
+
+let mk_c_arrow_access_by_name r fname range =
+  let t = under_type r.etyp in
+  let fields = match remove_typedef_qual t with
+    | T_c_record r -> r.c_record_fields
+    | _ -> assert false in
+  let field = List.find (fun f -> f.c_field_org_name = fname) fields in
+  mk_c_arrow_access r field range
 
 let mk_c_subscript_access a i range =
   mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_type a.etyp) range

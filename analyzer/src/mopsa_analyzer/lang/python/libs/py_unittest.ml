@@ -42,57 +42,102 @@ module Domain =
 
     let exec _ _ _ = None
 
-    let test_functions_from_cls (cls: Ast.py_clsdec) : Ast.py_fundec list =
+    let test_functions_and_setup_from_cls (cls: Ast.py_clsdec) (osetup, test_functions) : (Ast.py_fundec option * Ast.py_fundec list) =
       match skind cls.py_cls_body with
       | S_block (stmts, _) ->
-        List.fold_left (fun tests stmt ->
+        List.fold_left (fun (osetup, tests) stmt ->
             match skind stmt with
-            | S_py_function f when String.sub f.py_func_var.vname 0 4 = "test" ->
-              f :: tests
-            | _ -> tests) [] stmts
+            | S_py_function f ->
+               if String.sub f.py_func_var.vname 0 4 = "test" && not (List.exists (fun f' -> get_orig_vname f.py_func_var = get_orig_vname f'.py_func_var) test_functions) then
+                 (osetup, f :: tests)
+               else if get_orig_vname f.py_func_var = "setUp" && osetup = None then
+                 (Some f, tests)
+               else
+                 (osetup, tests)
+            | _ -> (osetup, tests)) (osetup, test_functions) stmts
       | _ -> assert false
 
     let eval exp man flow =
       let range = exp.erange in
       match ekind exp with
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
+       (* FIXME: tearDown *)
        debug "Search for all classes that inherit from TestCase";
        let test_cases = man.ask Universal.Heap.Recency.Q_allocated_addresses flow |>
                           List.filter (fun addr ->
                             match addr.addr_kind with
-                            | A_py_class(cls, _ :: ({addr_kind = A_py_class (C_user u, _)}, _) :: _) ->
-                               get_orig_vname u.py_cls_var = "TestCase"
+                            | A_py_class(cls, _ :: mro) ->
+                               List.exists (fun (addr, _) ->
+                                   match akind addr with
+                                   | A_py_class (C_user u, _) ->
+                                      get_orig_vname u.py_cls_var = "TestCase"
+                                   | _ -> false
+                                 ) mro
                             | _ -> false
                           ) |>
                         List.map (fun addr ->
                             match addr.addr_kind with
                             | A_py_class(C_user cls, _) -> addr, cls
                             | _ -> assert false
-                          )
+                          ) |>
+                          List.sort (fun (a1, _) (a2, _) ->
+                              match akind a1, akind a2 with
+                              | A_py_class(C_user cls1, _),
+                                A_py_class(C_user cls2, _) ->
+                                 compare_var cls1.py_cls_var cls2.py_cls_var
+                              | _ -> assert false)
        in
-
-       let tests = List.rev @@ List.fold_left (fun other_tests (cls_addr, cls_decl) ->
+       debug "|tests classes| = %d" (List.length test_cases);
+       let init_flow = flow in
+       let flow =
+         List.fold_left (fun acc (cls_addr, cls_decl) ->
            (* create tmp, alloc class in tmp, run tests, delete tmp *)
-           let tmp = mktmp ~typ:(T_py None) () in
-           let tmpvar = mk_var tmp range in
-           let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
-           let test_calls =
-             List.rev @@
-             List.map
-               (fun func ->
-                  mk_stmt (S_expression (mk_py_call
-                                           (mk_var func.py_func_var range)
-                                           [tmpvar] range)) range )
-               (test_functions_from_cls cls_decl)
-           in
-           let stmt = mk_block
-               (assign_alloc :: test_calls @ [mk_remove_var tmp range])
-               range in
-           debug "stmts for %s =@[@\n%a@]" cls_decl.py_cls_var.vname pp_stmt stmt;
-           (cls_decl.py_cls_var.vname ^ "'s tests", stmt) :: other_tests
-         ) [] test_cases in
-       debug "|tests| = %d" (List.length tests);
-       man.exec (mk_stmt (Universal.Ast.S_unit_tests tests) range) flow >>%
+             debug "%a, cur is bottom?%b" pp_addr cls_addr (man.lattice.is_bottom (Flow.get T_cur man.lattice flow));
+             let tmp = mktmp ~typ:(T_py None) () in
+             let tmpvar = mk_var tmp range in
+             let assign_alloc = mk_assign tmpvar (mk_py_call (mk_var cls_decl.py_cls_var range) [] range) range in
+             let osetup, test_functions =
+               let mro = match akind cls_addr with
+                 | A_py_class(C_user cls, mro) -> mro
+                 | _ -> assert false in
+               List.fold_left (fun (osetup, test_functions) cls ->
+                   match akind @@ fst cls with
+                   | A_py_class (C_user cls, _) ->
+                      debug "cls %a" pp_var cls.py_cls_var;
+                      test_functions_and_setup_from_cls cls (osetup, test_functions)
+                   | _ -> (osetup, test_functions)) (None, []) mro
+             in
+             if List.length test_functions > 0 then
+               let () = debug "osetup = %a, |test_functions|=%d" (OptionExt.print pp_var) (OptionExt.lift (fun fdec -> fdec.py_func_var) osetup) (List.length test_functions) in
+               let test_calls =
+                 List.rev @@
+                   List.map
+                     (fun func ->
+                       get_orig_vname func.py_func_var,
+                       mk_stmt (S_expression (mk_py_call
+                                                (mk_var func.py_func_var range)
+                                                [tmpvar] range)) range )
+                     test_functions
+               in
+               let flow = Flow.copy_ctx acc init_flow in
+               Flow.join man.lattice acc
+               (post_to_flow man
+                 (
+                     man.exec assign_alloc flow >>%
+                     fun flow ->
+                     (
+                       match osetup with
+                       | None -> Post.return flow
+                       | Some setup ->
+                          man.exec (mk_stmt (S_expression (mk_py_call (mk_var setup.py_func_var range) [tmpvar] range)) range) flow
+                     ) >>%
+                       man.exec (mk_stmt (Universal.Ast.S_unit_tests test_calls) cls_decl.py_cls_range) >>%
+                       man.exec (mk_remove_var tmp range)
+                 )
+               )
+             else acc
+           ) flow test_cases in
+       Post.return flow >>%
        man.eval (mk_py_none range)
        |> OptionExt.return
 
@@ -101,9 +146,20 @@ module Domain =
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2; _], [])
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, [test; arg1; arg2], []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_gt arg2 range) range flow
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreaterEqual", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ge arg2 range) range flow
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertLess", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_lt arg2 range) range flow
+         |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertLessEqual", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_le arg2 range) range flow
          |> OptionExt.return
 
 
@@ -183,24 +239,52 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
-           ~fthen:(fun true_flow ->
-             debug "Assertion failed!";
+           ~fthen:(fun flow ->
              (* No exception raised => assertion failed *)
              Py_mopsa.check man (mk_py_false range) range flow
            )
-           ~felse:(fun false_flow ->
+           ~felse:(fun flow ->
              (* Check that the caught exception is an instance of the expected exception *)
              assume
                (Utils.mk_builtin_call "isinstance" [exn; (mk_py_attr self "expected" range)] range)
                ~fthen:(fun true_flow ->
-                 debug "Good exception!";
-                 man.eval (mk_py_true range) flow
+                 man.eval (mk_py_attr self "regex" range) flow >>$
+                   fun reg flow ->
+                   debug "now!";
+                   assume (eq ~etyp:(T_py None) reg (mk_py_none range) range)
+                     man flow
+                     ~fthen:(fun flow ->
+                       Py_mopsa.check man (mk_py_true range) range flow >>$
+                         fun _ flow ->
+                         man.eval (mk_py_true range) flow
+                     )
+                     ~felse:(fun flow ->
+                       let regex = Universal.Strings.Powerset.StringPower.choose @@
+                                     man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
+                       man.eval (mk_py_index_subscript (mk_py_attr exn "args" range) (mk_zero ~typ:(T_py None) range) range) flow >>$
+                         fun exc_msg flow ->
+                         let exc_powerset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
+                         if Universal.Strings.Powerset.StringPower.is_top exc_powerset then
+                             Py_mopsa.check man (mk_py_top T_bool range) range flow >>$
+                               fun _ flow ->
+                               man.eval (mk_py_true range) flow
+                         else
+                           let exc_msg = Universal.Strings.Powerset.StringPower.choose exc_powerset in
+                           let re = Str.regexp regex in
+                           let () = warn_at range "assertRaisesRegex hackish implementation" in
+                           if Str.string_match re exc_msg 0 then
+                             Py_mopsa.check man (mk_py_true range) range flow >>$
+                               fun _ flow ->
+                               man.eval (mk_py_true range) flow
+                           else
+                             Py_mopsa.check man (mk_py_false range) range flow
+
+                     )
                )
-               ~felse:(fun false_flow ->
-                 debug "Bad exception!";
+               ~felse:(fun flow ->
                  Py_mopsa.check man (mk_py_false range) range flow
                )
-               man false_flow
+               man flow
            )
            man flow
          |> OptionExt.return
