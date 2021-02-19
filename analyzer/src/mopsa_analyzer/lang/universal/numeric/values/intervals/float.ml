@@ -90,7 +90,7 @@ struct
     { I.itv = if c.float_valid then itv.I.itv else BOT;
       I.pinf = c.float_inf && itv.I.pinf;
       I.minf = c.float_inf && itv.I.minf;
-      I.nan = c.float_inf && itv.I.nan;
+      I.nan = c.float_nan && itv.I.nan;
     }
 
 
