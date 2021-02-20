@@ -457,21 +457,21 @@ struct
       Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
+    (* 𝔼⟦ ⋄ e ⟧, type(exp) = int *)
+    | E_unop(op, e) when exp |> etyp |> is_c_int_type ->
+      man.eval e flow >>$? fun e flow ->
+      let cexp = rebuild_c_expr exp [e] in
+      let nexp = c2num cexp in
+      Eval.singleton cexp flow |>
+      Eval.add_translation "Universal" nexp |>
+      OptionExt.return
+
     (* 𝔼⟦ ⋄ e' ⟧, type(exp) = float *)
     | E_unop(op, e) when exp |> etyp |> is_c_float_type
       ->
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
       check_float_valid cexp exp.erange man flow |>
-      OptionExt.return
-
-    (* 𝔼⟦ ⋄ e ⟧ *)
-    | E_unop(op, e) when exp |> etyp |> is_c_num_type ->
-      man.eval e flow >>$? fun e flow ->
-      let cexp = rebuild_c_expr exp [e] in
-      let nexp = c2num cexp in
-      Eval.singleton cexp flow |>
-      Eval.add_translation "Universal" nexp |>
       OptionExt.return
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {/, %} and type(exp) = int *)
@@ -588,6 +588,14 @@ struct
           ~etyp:(to_num_type exp.etyp) exp.erange
       in
       check_float_valid cexp ~nexp exp.erange man flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ (int)num ⟧ *)
+    | E_c_cast(e, _) when exp |> etyp |> is_c_int_type &&
+                          is_numeric_type e.etyp ->
+      man.eval e flow >>$? fun e flow ->
+      Eval.singleton exp flow |>
+      Eval.add_translation "Universal" e |>
       OptionExt.return
 
     | _ ->

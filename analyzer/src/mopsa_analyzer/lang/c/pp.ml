@@ -23,7 +23,7 @@ open Format
 open Mopsa
 open Ast
 
-let print_implicit_cast = true
+let print_implicit_cast = false
  
 let rec pp_c_type_short fmt =
   function
