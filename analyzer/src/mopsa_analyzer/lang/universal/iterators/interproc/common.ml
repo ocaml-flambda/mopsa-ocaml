@@ -121,10 +121,10 @@ let get_last_call_site flow =
 (** ==================== *)
 
 (** Check that no recursion is happening *)
-let check_recursion f range cs =
+let check_recursion f_orig f_uniq range cs =
   if cs = [] then false
   else
-    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_range=range} = 0) (List.tl cs)
+    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} = 0) (List.tl cs)
 
 let check_nested_calls f cs =
   if cs = [] then false
@@ -267,7 +267,7 @@ let exec_fun_body f body ret range man flow =
 (** Inline a function call *)
 let inline f params locals body ret range man flow =
   let post =
-    match check_recursion f range (Flow.get_callstack flow) with
+    match check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow) with
     | true ->
       begin
         let flow =

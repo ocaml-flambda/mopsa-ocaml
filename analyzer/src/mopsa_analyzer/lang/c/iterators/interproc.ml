@@ -99,10 +99,11 @@ struct
   (** ============================= *)
 
   (** Check if there is a recursive call to a function *)
-  let is_recursive_call f flow =
-    let open Callstack in
-    let cs = Flow.get_callstack flow in
-    List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs
+  let is_recursive_call f range flow =
+    let f_orig = f.c_func_org_name in
+    let f_uniq = f.c_func_unique_name in
+    Universal.Iterators.Interproc.Common.check_recursion f_orig f_uniq range
+    (Callstack.push_callstack f_orig ~uniq:f_uniq range (Flow.get_callstack flow))
 
 
   (** 𝔼⟦ alloca(size) ⟧ *)
@@ -164,7 +165,7 @@ struct
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
-        if is_recursive_call fundec flow then (
+        if is_recursive_call fundec range flow then (
           let flow =
             Flow.add_local_assumption
               (Universal.Soundness.A_ignore_recursion_side_effect fundec.c_func_org_name)
