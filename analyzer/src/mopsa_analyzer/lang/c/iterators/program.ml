@@ -565,7 +565,7 @@ struct
 
 
     (* Get the value of a variable *)
-    | Q_debug_variable_value var ->
+    | Q_debug_variable_value var when is_c_type (vtyp var) ->
       let open Universal.Numeric.Common in
       let module StringSet = SetExt.StringSet in
       let range = mk_fresh_range () in
