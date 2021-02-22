@@ -181,7 +181,8 @@ struct
           | None -> old_a
           | Some va -> AttrSet.join old_a va in
         remove a cur |>
-        add a' new_va' in
+          add a' new_va' in
+      debug "ncur = %a" (format print) ncur;
       let flow = set_env T_cur ncur man flow in
       man.exec to_rename_stmt flow |>
         OptionExt.return
@@ -198,13 +199,14 @@ struct
        let flow = set_env T_cur ncur man flow in
        man.exec   to_remove_stmt flow |> OptionExt.return
 
-    | S_add ({ekind = E_addr (a, _)}) ->
+    | S_add ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, om)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
-      if mem a cur && a.addr_mode = STRONG then panic_at range "%a but the address exists" pp_stmt stmt;
+      if mem a cur && addr_mode a om = STRONG then panic_at range "%a but the address exists" pp_stmt stmt;
+      (* FIXME: if addr is weak, we shouldn't add *)
       let ncur = add a AttrSet.empty cur in
       debug "S_add ok?";
-      set_env T_cur ncur man flow |>
+      set_env T_cur (if addr_mode a om = STRONG then ncur else join cur ncur) man flow |>
       Post.return |>
       OptionExt.return
 
@@ -449,7 +451,7 @@ struct
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr (a, _)} as e) ->
-       if List.exists (fun a' -> compare_addr a (OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
+       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
        else
        let range = erange e in
        let cur = get_env T_cur man flow in
