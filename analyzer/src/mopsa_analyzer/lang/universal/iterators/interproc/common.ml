@@ -313,7 +313,7 @@ let exec_fun_body f params locals body call_oexp range man flow =
 
 (** Inline a function call *)
 let inline f params locals body call_oexp range man flow =
-  match check_recursion f range (Flow.get_callstack flow) with
+  match check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow) with
   | true ->
      begin
        let flow =
@@ -352,27 +352,3 @@ let inline f params locals body call_oexp range man flow =
 
   | false ->
      exec_fun_body f params locals body call_oexp range man flow
-      (* Remove local variables from the environment. Remove of parameters is
-         postponed after finishing the statement, to keep relations between
-         the passed arguments and the return value. *)
-      man.exec (mk_block (List.map (fun v ->
-          mk_remove_var v range
-        ) locals) range)
-  in
-  post >>% fun flow ->
-  match ret with
-  | None ->
-    Eval.singleton (mk_unit range) flow ~cleaners:(
-      List.map (fun v ->
-          mk_remove_var v range
-        ) params
-    )
-
-  | Some v ->
-    man.eval (mk_var v range) flow
-    |> Cases.add_cleaners (
-      mk_remove_var v range ::
-      List.map (fun v ->
-          mk_remove_var v range
-        ) params
-    )
