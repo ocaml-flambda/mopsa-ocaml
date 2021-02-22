@@ -218,8 +218,8 @@ module Domain =
                   bind_result (fun e flow ->
                       match ekind e with
                       | E_py_object obj ->
-                        assume
-                          (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
+                         assume
+                          (mk_py_issubclass_builtin_r e "BaseException" range)
                           man flow
                           ~fthen:(fun flow ->
                               assume
@@ -284,7 +284,7 @@ module Domain =
                           match ekind e with
                           | E_py_object obj ->
                              assume
-                               (mk_py_call (mk_py_object (find_builtin "issubclass") range) [e; mk_py_object (find_builtin "BaseException") range] range)
+                               (mk_py_issubclass_builtin_r e "BaseException" range)
                                man
                                ~fthen:(fun flow ->
                                  assume
