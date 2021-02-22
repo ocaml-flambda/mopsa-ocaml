@@ -138,10 +138,10 @@ let get_last_call_site flow =
 (** ==================== *)
 
 (** Check that no recursion is happening *)
-let check_recursion f range cs =
+let check_recursion f_orig f_uniq range cs =
   if cs = [] then false
   else
-    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f.fun_orig_name; call_fun_uniq_name=f.fun_uniq_name; call_range=range} = 0) (List.tl cs)
+    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} = 0) (List.tl cs)
 
 let check_nested_calls f cs =
   if cs = [] then false
@@ -352,3 +352,27 @@ let inline f params locals body call_oexp range man flow =
 
   | false ->
      exec_fun_body f params locals body call_oexp range man flow
+      (* Remove local variables from the environment. Remove of parameters is
+         postponed after finishing the statement, to keep relations between
+         the passed arguments and the return value. *)
+      man.exec (mk_block (List.map (fun v ->
+          mk_remove_var v range
+        ) locals) range)
+  in
+  post >>% fun flow ->
+  match ret with
+  | None ->
+    Eval.singleton (mk_unit range) flow ~cleaners:(
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )
+
+  | Some v ->
+    man.eval (mk_var v range) flow
+    |> Cases.add_cleaners (
+      mk_remove_var v range ::
+      List.map (fun v ->
+          mk_remove_var v range
+        ) params
+    )
