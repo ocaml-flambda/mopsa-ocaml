@@ -590,7 +590,7 @@ module Domain =
               >>%
                 fun flow ->
                 (* FIXME: *)
-                debug "add_pymethoddef@.%a" (format @@ Flow.print man.lattice.print) flow;
+                debug "add_pymethoddef";
                 add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow >>%
                   add_pymemberdef cls_addr ecls man >>%
                   fun flow ->
@@ -702,9 +702,7 @@ module Domain =
                               [obj]
                               range)
                            range) flow >>%
-                        fun flow ->
-                        debug "cls flags result is:@.%a" (format @@ Flow.print man.lattice.print) flow;
-                        Post.return flow
+                        Post.return
                     )
                 else flow in
               debug "ob_type assignment: obj = %a, type_obj = %a" pp_expr obj pp_expr type_c_addr;
@@ -1063,7 +1061,7 @@ module Domain =
       | E_c_builtin_call ("PyUnicode_GetLength", args) ->
          (* FIXME: cheating on py_ssize_t *)
          (* let py_ssize_t = C.Ast.ul in *)
-         debug "GetLength %a@.%a" pp_expr (List.hd args) (format @@ Flow.print man.lattice.print) flow;
+         debug "GetLength %a" pp_expr (List.hd args);
          resolve_c_pointer_into_addr (List.hd args) man flow >>$
            (fun oaddr flow ->
              let addr = OptionExt.none_to_exn oaddr in
@@ -1189,7 +1187,7 @@ module Domain =
                                      let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
                                      let c_addr, flow = python_to_c_boundary addr None oe range man flow in
                                      (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
-                                     debug "value should be stored %a@.%a" pp_expr (mk_avalue_from_pyaddr addr T_int range) (format @@ Flow.print man.lattice.print) flow;
+                                     debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
                                      assume (mk_c_call
                                                (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
                                                [c_addr; mk_c_address_of c range]
@@ -1219,16 +1217,16 @@ module Domain =
                        in
 
                        let rec process pos refs flow =
-                         convert_single pos (List.hd refs) flow >>$
-                           fun ret flow ->
-                           if ret = 1 then
-                             if pos+1 < size then
+                         if pos < size then
+                           convert_single pos (List.hd refs) flow >>$
+                             fun ret flow ->
+                             if ret = 1 then
                                process (pos+1) (List.tl refs) flow
                              else
-                               Eval.singleton (mk_one range) flow
-                           else
-                             (* error *)
-                             Eval.singleton (mk_zero range) flow
+                               (* error *)
+                               Eval.singleton (mk_zero range) flow
+                         else
+                           Eval.singleton (mk_one range) flow
                        in
                        process 0 refs flow
                    )
@@ -1278,6 +1276,7 @@ module Domain =
            (fun py_callable flow ->
              safe_get_name_of fmt man flow >>$
                fun ofmt_str flow ->
+               (* FIXME: fmt can be null, meaning no arguments *)
                let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
                build_value man flow range fmt_str refs >>$
                  fun tuple flow ->
@@ -1296,16 +1295,19 @@ module Domain =
 
       | E_c_builtin_call ("PyObject_CallObject", [callable;arg]) ->
          c_to_python_boundary callable man flow range >>$ (fun py_callable flow ->
-         c_to_python_boundary arg man flow range >>$ fun py_arg flow ->
+         c_to_python_boundary ~on_null:(fun flow -> man.eval ~route:(Semantic "Python") (mk_expr ~etyp:(T_py None) (E_py_tuple []) range) flow) arg man flow range >>$ fun py_arg flow ->
          (* FIXME: we're assuming py_arg is a tuple but we shoudl check *)
          let py_arg_vars = Python.Objects.Tuple.Domain.var_of_eobj py_arg in
          (* FIXME: also handle case where an exception is raised *)
+         debug "calling object";
          man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow >>$
            fun py_call_res flow ->
+           debug "calling object done, got %a" pp_expr py_call_res;
            let addr_py_res, oe_py_res = object_of_expr py_call_res in
            let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
            man.eval c_addr flow
         ) |> OptionExt.return
+
 
 
       (**
@@ -1315,6 +1317,7 @@ module Domain =
           This applies to PyTuple_New and PyTuple_SetItem
        *)
       | E_c_builtin_call ("PyTuple_New", [size]) ->
+         (* FIXME: the allocation can also fail *)
          let size = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z size in
          (* FIXME: what happens in the abstract if you py-getitem over pytuple_new? *)
          alloc_py_addr man (Python.Objects.Tuple.A_py_tuple size) range flow >>$ (fun tuple_eaddr flow ->
@@ -1447,7 +1450,7 @@ module Domain =
               Universal.Ast.mk_addr fst_arg range, List.tl args
          in
          let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
-         debug "%s, self is %a, args: %a@.%a" name pp_expr self pp_expr py_args (format @@ Flow.print man.lattice.print) flow;
+         debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
          let py_kwds =
            (* FIXME: okay, lets cheat here *)
            mk_c_null range
@@ -1501,9 +1504,10 @@ module Domain =
                  flow
                  (match ekind call with | E_call (_, args) -> args | _ -> assert false) in
              let open C.Common.Points_to in
-             man.eval call flow >>$
+             debug "call = %a" pp_expr call;
+             man.eval ~route:(Semantic "C") call flow >>$
                fun call_res flow ->
-               debug "call result %s %a@.%a" name pp_expr call_res (format @@ Flow.print man.lattice.print) flow;
+               debug "call result %s %a" name pp_expr call_res;
                c_to_python_boundary call_res man flow range
                  ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
            )
@@ -1516,7 +1520,7 @@ module Domain =
                        ({ekind = E_py_object ({addr_kind = A_py_c_class c}, _)} as cls_inst) :: [],
                    kwargs) ->
          (* FIXME: reuse the Py/C call machinery+checks above *)
-         debug "member_get@.%a" (format @@ Flow.print man.lattice.print) flow;
+         debug "member_get";
          let cfunc = find_c_fundec_by_name "member_get" flow in
          let addr_of_object ?(etyp=T_addr) x = mk_addr ~etyp:etyp (addr_of_object @@ object_of_expr x) range in
          let descr_typ, inst_typ, cls_typ = match cfunc.c_func_parameters with
