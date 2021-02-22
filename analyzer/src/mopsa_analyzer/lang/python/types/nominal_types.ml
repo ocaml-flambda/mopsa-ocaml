@@ -86,11 +86,15 @@ struct
           | A_py_class (c, mro), A_py_class (c', mro') ->
              man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | A_py_c_class v, A_py_c_class v' ->
-             warn_at range "issubclass unsound on A_py_c_class for classes %a and %a" pp_var v pp_var v';
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
              man.eval (mk_py_bool (compare_var v v' = 0) range) flow
-          | A_py_c_class v, A_py_class (C_builtin "object", _) ->
-             man.eval (mk_py_true range) flow
-          | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
+          | A_py_c_class v, A_py_class (C_builtin s, _) ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_bool (s = "object") range) flow
+          | A_py_class (C_builtin s, _), A_py_c_class _ ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_false range) flow
+          | _ -> panic_at range "%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->

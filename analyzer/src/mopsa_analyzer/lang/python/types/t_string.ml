@@ -124,10 +124,10 @@ module Domain =
       (* allocate addr, and map this addr to inst bltin *)
       let range = tag_range range "alloc_%s" bltin in
       let cls = fst @@ find_builtin bltin in
-      man.eval   (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
+      man.eval (mk_alloc_addr ~mode:mode (A_py_instance cls) range) flow >>$
         (fun eaddr flow ->
           let addr = Addr.from_expr eaddr in
-          man.exec   (mk_add eaddr range) flow >>%
+          (if mode = WEAK then Post.return flow else man.exec   (mk_add eaddr range) flow) >>%
           Eval.singleton (mk_py_object (addr, oe) range)
         )
 
