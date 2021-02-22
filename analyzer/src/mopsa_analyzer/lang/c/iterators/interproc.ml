@@ -251,7 +251,7 @@ struct
       eval_call f args exp.erange man flow |>
       OptionExt.return
 
-    | E_call(f, args) ->
+    | E_call(f, args) when is_c_type (etyp f) ->
       resolve_pointer f man flow >>$? fun ff flow ->
 
       begin match ff with
