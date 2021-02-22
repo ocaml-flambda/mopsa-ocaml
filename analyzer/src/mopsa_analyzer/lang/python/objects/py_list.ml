@@ -1087,6 +1087,10 @@ struct
          )
        |> OptionExt.return
 
+    | S_add {ekind = E_addr ({addr_kind = A_py_iterator _}, _)} ->
+       Post.return flow |> OptionExt.return
+
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)}, {ekind = E_addr (a', _)}) ->
        let va = itseq_of_addr a in
        let va' = itseq_of_addr a' in
@@ -1161,6 +1165,9 @@ struct
          man.exec   (mk_stmt va vas range) >>%
          man.exec  (mk_stmt la las range) |>
          OptionExt.return
+
+    | S_add {ekind = E_addr ({addr_kind = A_py_list}, _)} ->
+       Post.return flow |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a, _)}, {ekind = E_addr (a', _)}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
