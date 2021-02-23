@@ -510,16 +510,14 @@ struct
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
-                     (* FIXME: length precision *)
-                     (* TODO: more precision on top (for range) *)
                      let ra a = mk_py_attr other a range in
                      let flow =
                        flow |>
                          man.exec   (mk_assign (mk_var var_els range) (mk_py_top T_int range) range) >>%
                          man.exec   (mk_assume (mk_binop ~etyp:(T_py None)
-                                                (mk_binop ~etyp:(T_py None) (ra "start") O_le (mk_var var_els range) range)
+                                                (mk_binop ~etyp:(T_py None) (ra "start") O_le (mk_var ~mode:(Some STRONG) var_els range) range)
                                                 O_py_and
-                                                (mk_binop ~etyp:(T_py None) (mk_var var_els range) O_lt (ra "stop") range) range) range) in
+                                                (mk_binop ~etyp:(T_py None) (mk_var ~mode:(Some STRONG) var_els range) O_lt (ra "stop") range) range) range) in
                      flow >>%
                      man.eval
                        (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) >>$
@@ -564,9 +562,24 @@ struct
                                      )
                                  )
                                ~felse:(fun flow ->
-                                 let msg = Format.asprintf "%a is not iterable" pp_expr list in
-                                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
-                                 )
+                                 (* last chance:
+                                    for item in other:
+                                      list.append(item)
+                                    if the loop fails, it'll create the good exception, which is TypeError: 'other' is not iterable
+                                  *)
+                                 let item = mktmp ~typ:(T_py None) () in
+                                 let loop =
+                                   mk_stmt
+                                     (
+                                       S_py_for (mk_var item range, other,
+                                                 mk_expr_stmt (mk_py_call (mk_py_object (find_builtin_function "list.append") range) [list; mk_var item range] range) range
+                                                 , mk_block [] range)
+                                     ) range in
+                                 man.exec loop flow >>%
+                                   man.exec (mk_remove_var item range) >>%
+                                   man.eval (mk_py_none range)
+                               )
+                         )
                      )
                )
         )
