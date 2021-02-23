@@ -519,11 +519,20 @@ static PySequenceMethods list_as_sequence =
     .sq_item=(ssizeargfunc)PyList_GetItem,
 };
 
+PyObject* _PyRange_GetItem(PyObject*, Py_ssize_t);
+Py_ssize_t _PyRange_Size(PyObject*);
 
 static PySequenceMethods tuple_as_sequence =
 {
     .sq_length=(lenfunc)PyTuple_Size,
     .sq_item=(ssizeargfunc)PyTuple_GetItem,
+};
+
+static PySequenceMethods range_as_sequence =
+{
+    .sq_length=(lenfunc)_PyRange_Size,
+    .sq_item=(ssizeargfunc)_PyRange_GetItem,
+// these two functions are not defined in the C api
 };
 
 void
@@ -534,6 +543,7 @@ init_flags()
     Py_TYPE(&PyLong_Type) = &PyType_Type;
     Py_TYPE(&PyUnicode_Type) = &PyType_Type;
     Py_TYPE(&PyList_Type) = &PyType_Type;
+    Py_TYPE(&PyRange_Type) = &PyType_Type;
     Py_TYPE(&PyTuple_Type) = &PyType_Type;
     Py_TYPE(&_PyNone_Type) = &PyType_Type;
     Py_TYPE(&PyBytes_Type) = &PyType_Type;
@@ -545,6 +555,7 @@ init_flags()
     // FIXME: unicode_as_sequence
     PyTuple_Type.tp_as_sequence = &tuple_as_sequence;
     PyList_Type.tp_as_sequence = &list_as_sequence;
+    PyRange_Type.tp_as_sequence = &range_as_sequence;
     _PyNone_Type.tp_as_sequence = 0;
     // FIXME: bytes_as_sequence
     // FIXME: dict_as_sequence
@@ -556,6 +567,7 @@ init_flags()
     PyLong_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LONG_SUBCLASS | Py_TPFLAGS_READY;
     PyUnicode_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_UNICODE_SUBCLASS | Py_TPFLAGS_READY;
     PyList_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LIST_SUBCLASS | Py_TPFLAGS_READY;
+    PyRange_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyTuple_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TUPLE_SUBCLASS | Py_TPFLAGS_READY;
     _PyNone_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyBytes_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_BYTES_SUBCLASS | Py_TPFLAGS_READY;

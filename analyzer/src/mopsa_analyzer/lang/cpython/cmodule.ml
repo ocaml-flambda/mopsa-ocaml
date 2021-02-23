@@ -243,6 +243,8 @@ module Domain =
           "PyTuple_GetSlice";
           "PyList_Size";
           "PyList_GetItem";
+          "_PyRange_Size";
+          "_PyRange_GetItem";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -948,6 +950,7 @@ module Domain =
                    ("PyUnicode_Type", "str");
                    ("PyBytes_Type", "bytes");
                    ("PyList_Type", "list");
+                   ("PyRange_Type", "range");
                    ("PyTuple_Type", "tuple");
                    ("PyDict_Type", "dict");
                    ("_PyNone_Type", "NoneType");
@@ -1341,8 +1344,10 @@ module Domain =
            Eval.singleton (mk_int (-1) range) flow) |> OptionExt.return
 
 
+      | E_c_builtin_call ("_PyRange_Size", [arg])
       | E_c_builtin_call ("PyList_Size", [arg])
       | E_c_builtin_call ("PyTuple_Size", [arg]) ->
+         (* FIXME: check the type *)
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
              let addr = OptionExt.none_to_exn oaddr in
@@ -1427,7 +1432,24 @@ module Domain =
            )
          |> OptionExt.return
 
-      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
+      | E_c_builtin_call ("_PyRange_GetItem", [rrange; pos]) ->
+         resolve_c_pointer_into_addr rrange man flow >>$
+           (fun oaddr flow ->
+             let addr = OptionExt.none_to_exn oaddr in
+             let py_range = Python.Ast.mk_py_object (addr, None) (tag_range range "range") in
+             c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
+             (* FIXME: ootb error handling *)
+             man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "range.__getitem__") range) [py_range; py_obj] range) flow >>$
+               fun py_elem flow ->
+               let addr_py_elem, oe_py_elem = object_of_expr py_elem in
+               let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
+               let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
+               man.eval c_addr flow
+           )
+      |> OptionExt.return
+
+
+        | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
          (* FIXME: use the equiv map *)
          let cfunc = find_c_fundec_by_uid uid flow in
          let args_types =
