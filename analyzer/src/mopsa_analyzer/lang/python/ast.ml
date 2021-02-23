@@ -594,3 +594,6 @@ let builtin_type_name default fundec =
   | None -> default
   | Some {ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "type")}, [{ekind = E_constant (C_string name)}], [])} -> name
   | _ -> assert false
+
+
+let py_or e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_le e2 ~etyp range
