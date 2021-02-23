@@ -279,20 +279,29 @@ struct
              if(i < 0 || i >= l) IndexError "range object index out of range"
              return r.start + i * r.step
            *)
-          man.eval (mk_py_call (mk_py_object (find_builtin "len") range) [r] range) flow >>$ fun l flow ->
-          assume (lt pos (mk_zero ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
-          ~fthen:(fun flow -> man.eval (add ~typ:(T_py None) l pos range) flow)
-          ~felse:(fun flow -> Eval.singleton pos flow) >>$ fun i flow ->
-          assume (py_or ~etyp:(T_py None) (lt ~etyp:(T_py None) i (mk_zero range ~typ:(T_py None)) range) (ge ~etyp:(T_py None) i l range) range) man flow
+          let l = mktmp ~typ:(T_py None) () in
+          let i = mktmp ~typ:(T_py None) () in
+          let stmts =
+            [
+              mk_assign (mk_var l range) (mk_py_call (mk_py_object (find_builtin "len") range) [r] range) range;
+              mk_assign (mk_var i range) (mk_expr (
+                  E_py_if (lt pos (mk_zero ~typ:(T_py None) range) ~etyp:(T_py None) range,
+                           add ~typ:(T_py None) (mk_var l range) pos range,
+                           pos)) ~etyp:(T_py None) range) range
+            ] in
+          man.exec (mk_block stmts range) flow >>% fun flow ->
+          assume (py_or ~etyp:(T_py None) (lt ~etyp:(T_py None) (mk_var i range) (mk_zero range ~typ:(T_py None)) range) (ge ~etyp:(T_py None) (mk_var i range) (mk_var l range) range) range) man flow
             ~fthen:(fun flow ->
+              man.exec (mk_block [mk_remove_var i range; mk_remove_var l range] range) flow >>% fun flow ->
               man.exec (Utils.mk_builtin_raise_msg "IndexError" "range object index out of range" range) flow >>% Eval.empty
             )
             ~felse:(fun flow ->
               man.eval (add
                           (mk_py_attr r "start" range)
-                          (mul i (mk_py_attr r "step" range) ~typ:(T_py None) range)
+                          (mul (mk_var i range) (mk_py_attr r "step" range) ~typ:(T_py None) range)
                           ~typ:(T_py None) range) flow
             )
+        |> Cases.add_cleaners [mk_remove_var i range; mk_remove_var l range]
         )
       |> OptionExt.return
 
