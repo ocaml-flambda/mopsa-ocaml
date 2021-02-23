@@ -109,9 +109,8 @@
                 "semantic": "Universal",
                 "switch": [
                     "universal.iterators.intraproc",
-                    "universal.iterators.interproc.sequential_cache",
-                    "universal.iterators.interproc.inlining",
                     "universal.iterators.loops",
+                    "universal.iterators.interproc.inlining",
                     "universal.iterators.unittest",
 
                     "universal.heap.recency",
