@@ -268,6 +268,33 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__getitem__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["range"; "int"]
+        (fun r flow ->
+          let r, pos = match r with [a;b] -> a, b | _ -> assert false in
+          (*
+             l = len(r)
+             i = l+pos if(pos < 0) else pos
+             if(i < 0 || i >= l) IndexError "range object index out of range"
+             return r.start + i * r.step
+           *)
+          man.eval (mk_py_call (mk_py_object (find_builtin "len") range) [r] range) flow >>$ fun l flow ->
+          assume (lt pos (mk_zero ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
+          ~fthen:(fun flow -> man.eval (add ~typ:(T_py None) l pos range) flow)
+          ~felse:(fun flow -> Eval.singleton pos flow) >>$ fun i flow ->
+          assume (py_or ~etyp:(T_py None) (lt ~etyp:(T_py None) i (mk_zero range ~typ:(T_py None)) range) (ge ~etyp:(T_py None) i l range) range) man flow
+            ~fthen:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "IndexError" "range object index out of range" range) flow >>% Eval.empty
+            )
+            ~felse:(fun flow ->
+              man.eval (add
+                          (mk_py_attr r "start" range)
+                          (mul i (mk_py_attr r "step" range) ~typ:(T_py None) range)
+                          ~typ:(T_py None) range) flow
+            )
+        )
+      |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
