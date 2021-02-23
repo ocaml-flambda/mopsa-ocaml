@@ -46,16 +46,18 @@ PyErr_NoMemory()
     return NULL;
 }
 
-PyObject*
-PyErr_Occurred()
-{
-    return exc->exc_state;
-}
+/* PyObject* */
+/* PyErr_Occurred() */
+/* { */
+/*     return exc->exc_state; */
+/* } */
+#define PyErr_Occurred() exc->exc_state // a bit better due to the absence of partitioning
 
-char* PyErr_GetMsg() // not a real cpython function
-{
-    return exc->exc_msg;
-}
+/* char* PyErr_GetMsg() // not a real cpython function */
+/* { */
+/*     return exc->exc_msg; */
+/* } */
+#define PyErr_GetMsg() exc->exc_msg
 
 void
 PyErr_Clear()
@@ -123,15 +125,15 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
     const size_t size = _PyObject_VAR_SIZE(type, nitems+1);
 
     obj = PyType_GenericAlloc_Helper(type, size);
+    /* FIXME */
+    if (obj == NULL)
+        return PyErr_NoMemory();
+    // FIXME: the helper should do the memset I think
     memset(obj, '\0', size);
 
     /* somehow PyObject_INIT? */
     Py_TYPE(obj) = type; // FIXME now done by the boundary. Maybe the refcnt should be too?
     obj->ob_refcnt = 1;
-
-    /* FIXME */
-    if (obj == NULL)
-        return PyErr_NoMemory();
 
     return obj;
 }
@@ -396,7 +398,6 @@ tp_new_wrapper(PyObject *self, PyObject *args, PyObject *kwds)
     /*     return NULL; */
     /* } */
     arg0 = PyTuple_GetItem(args, 0);
-    type1 = &PyLong_Type;
     /* if (!PyType_Check(arg0)) { */
     /*     PyErr_Format(PyExc_TypeError, */
     /*                  "%s.__new__(X): X is not a type object (%s)", */
@@ -700,4 +701,6 @@ PySequence_GetItem(PyObject *s, Py_ssize_t i)
     }
     return type_error("'%.200s' object does not support indexing", s);
 }
+
+
 #endif
