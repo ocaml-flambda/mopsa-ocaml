@@ -208,7 +208,7 @@ module Domain =
             ) cls.py_cls_bases
           in
           let kind =
-            if Libs.Py_mopsa.is_unsupported_clsdec cls then C_unsupported name
+            if is_unsupported_clsdec cls then C_unsupported name
             else C_builtin name
           in
           create_builtin_class kind name cls bases (srange stmt);
@@ -218,9 +218,9 @@ module Domain =
           let fun_name = mk_dot_name base (get_orig_vname fundec.py_func_var) in
           let fundec = {fundec with py_func_var = set_orig_vname fun_name fundec.py_func_var} in
           let kind =
-            if Libs.Py_mopsa.is_stub_fundec fundec then F_user fundec else
-            if Libs.Py_mopsa.is_unsupported_fundec fundec then F_unsupported fun_name
-            else F_builtin (fun_name, Libs.Py_mopsa.builtin_type_name
+            if is_stub_fundec fundec then F_user fundec else
+            if is_unsupported_fundec fundec then F_unsupported fun_name
+            else F_builtin (fun_name, builtin_type_name
                               (if name = "stdlib" then "builtin_function_or_method" else "function")
                               fundec)
           in
