@@ -596,4 +596,4 @@ let builtin_type_name default fundec =
   | _ -> assert false
 
 
-let py_or e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_le e2 ~etyp range
+let py_or e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_py_or e2 ~etyp range
