@@ -67,7 +67,7 @@ struct
            | E_py_object ({addr_kind = A_py_function (F_annot _)}, _) ->
              proceed "function"
            | E_py_object ({addr_kind = A_py_function (F_user f)}, _) ->
-             proceed (Libs.Py_mopsa.builtin_type_name "function" f)
+             proceed (builtin_type_name "function" f)
            | E_py_object ({addr_kind = A_py_class _}, _) ->
               proceed "type"
            | E_py_object ({addr_kind}, _) ->
@@ -118,7 +118,7 @@ struct
             man.eval (mk_py_bool (c = ftype) range) flow
 
           | A_py_function (F_user f), A_py_class (C_builtin c, _) ->
-            man.eval (mk_py_bool (c = Libs.Py_mopsa.builtin_type_name "function" f) range) flow
+            man.eval (mk_py_bool (c = builtin_type_name "function" f) range) flow
 
           | A_py_function (F_annot _), A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "function") range) flow

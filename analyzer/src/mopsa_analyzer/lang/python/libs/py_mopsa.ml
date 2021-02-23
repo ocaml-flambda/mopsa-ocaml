@@ -277,68 +277,6 @@ module Domain =
 
 
 
-(*==========================================================================*)
-(**                          {2 Decorators}                                 *)
-(*==========================================================================*)
-
-
-let is_stub_fundec fundec =
-  List.exists (fun exp -> match ekind exp with
-      | E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "stub") -> true
-      | _ -> false
-    ) fundec.py_func_decors
-
-let is_builtin_fundec fundec =
-  List.exists (fun exp -> match ekind exp with
-      | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, _, []) -> true
-      | _ -> false
-    )
-    fundec.py_func_decors
-
-let is_builtin_clsdec clsdec =
-  List.exists (fun exp -> match ekind exp with
-      | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, _, []) -> true
-      | _ -> false
-    )
-    clsdec.py_cls_decors
-
-let is_unsupported_fundec fundec =
-  List.exists (fun exp -> match ekind exp with
-      | E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "unsupported") -> true
-      | _ -> false)
-    fundec.py_func_decors
-
-let is_unsupported_clsdec clsdec =
-  List.exists (fun exp -> match ekind exp with
-      | E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "unsupported") -> true
-      | _ -> false)
-    clsdec.py_cls_decors
-
-let builtin_fundec_name fundec =
-  let decor = List.find (fun exp -> match ekind exp with
-      | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], []) -> true
-      | _ -> false) fundec.py_func_decors  in
-  match ekind decor with
-  | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], []) -> name
-  | _ -> assert false
-
-let builtin_clsdec_name clsdec =
-  let decor = List.find (fun exp -> match ekind exp with
-      | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], []) -> true
-      | _ -> false) clsdec.py_cls_decors in
-  match ekind decor with
-  | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "builtin")}, [{ekind = E_constant (C_string name)}], []) -> name
-  | _ -> assert false
-
-
-let builtin_type_name default fundec =
-  let decor = List.find_opt (fun exp -> match ekind exp with
-      | E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "type")}, [{ekind = E_constant (C_string name)}], []) -> true
-      | _ -> false) fundec.py_func_decors  in
-  match decor with
-  | None -> default
-  | Some {ekind = E_py_call({ekind = E_py_attribute({ekind = E_var( {vkind = V_uniq ("mopsa",_)}, _)}, "type")}, [{ekind = E_constant (C_string name)}], [])} -> name
-  | _ -> assert false
 
 
 (*==========================================================================*)

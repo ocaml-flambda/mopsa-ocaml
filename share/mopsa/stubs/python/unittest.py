@@ -62,8 +62,8 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertNotIsInstance")
     def assertNotIsInstance(self, x, y): pass
 
-    def assertRaises(self, exn):
-        return ExceptionContext(exn)
+    @mopsa.builtin("unittest.TestCase.assertRaises")
+    def assertRaises(self, exn): pass
 
     def assertRaisesRegex(self, exn, regex):
         # FIXME: and the message?
