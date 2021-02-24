@@ -273,6 +273,21 @@ int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
     return -1;
 }
 
+static int
+check_num_args(PyObject *ob, int n)
+{
+    if (!PyTuple_CheckExact(ob)) {
+        PyErr_SetString(PyExc_SystemError,
+            "PyArg_UnpackTuple() argument list is not a tuple");
+        return 0;
+    }
+    if (n == PyTuple_GET_SIZE(ob))
+        return 1;
+    PyErr_Format(
+        PyExc_TypeError,
+        "expected %d argument%s, got %zd", n, n == 1 ? "" : "s", PyTuple_GET_SIZE(ob));
+    return 0;
+}
 
 static PyObject *
 wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
@@ -367,6 +382,37 @@ wrap_unaryfunc(PyObject *self, PyObject *args, void *wrapped)
     /*     return NULL; */
     return (*func)(self);
 }
+
+
+static PyObject *
+wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
+{
+    richcmpfunc func = (richcmpfunc)wrapped;
+    PyObject *other;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    other = PyTuple_GET_ITEM(args, 0);
+    PyObject *result = (*func)(self, other, op);
+    return result;
+}
+
+#undef RICHCMP_WRAPPER
+#define RICHCMP_WRAPPER(NAME, OP) \
+static PyObject * \
+richcmp_##NAME(PyObject *self, PyObject *args, void *wrapped) \
+{ \
+    PyObject *result = wrap_richcmpfunc(self, args, wrapped, OP); \
+    return result; \
+}
+
+RICHCMP_WRAPPER(lt, Py_LT)
+RICHCMP_WRAPPER(le, Py_LE)
+RICHCMP_WRAPPER(eq, Py_EQ)
+RICHCMP_WRAPPER(ne, Py_NE)
+RICHCMP_WRAPPER(gt, Py_GT)
+RICHCMP_WRAPPER(ge, Py_GE)
+
 
 static PyObject *
 wrap_next(PyObject *self, PyObject *args, void *wrapped)
@@ -575,6 +621,7 @@ init_flags()
     Py_TYPE(&PyRange_Type) = &PyType_Type;
     Py_TYPE(&PyTuple_Type) = &PyType_Type;
     Py_TYPE(&_PyNone_Type) = &PyType_Type;
+    Py_TYPE(&_PyNotImplemented_Type) = &PyType_Type;
     Py_TYPE(&PyBytes_Type) = &PyType_Type;
     Py_TYPE(&PyDict_Type) = &PyType_Type;
 
@@ -586,6 +633,7 @@ init_flags()
     PyList_Type.tp_as_sequence = &list_as_sequence;
     PyRange_Type.tp_as_sequence = &range_as_sequence;
     _PyNone_Type.tp_as_sequence = 0;
+    _PyNotImplemented_Type.tp_as_sequence = 0;
     // FIXME: bytes_as_sequence
     // FIXME: dict_as_sequence
 
@@ -599,6 +647,7 @@ init_flags()
     PyRange_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyTuple_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TUPLE_SUBCLASS | Py_TPFLAGS_READY;
     _PyNone_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
+    _PyNotImplemented_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyBytes_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_BYTES_SUBCLASS | Py_TPFLAGS_READY;
     PyDict_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_READY;
 }
@@ -607,6 +656,12 @@ PyObject _Py_NoneStruct = {
   _PyObject_EXTRA_INIT
   1, &_PyNone_Type
 };
+
+PyObject _Py_NotImplementedStruct = {
+    _PyObject_EXTRA_INIT
+    1, &_PyNotImplemented_Type
+};
+
 
 void set_default_flags(PyTypeObject *t)
 {

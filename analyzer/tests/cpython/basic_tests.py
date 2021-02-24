@@ -270,5 +270,25 @@ class Test(unittest.TestCase):
         self.assertEqual(basic.sequence_tail(basic.Counter(10)), 9)
 
 
+    def test_richcompare(self):
+        c1 = basic.Counter(1)
+        c2 = basic.Counter(2)
+        self.assertTrue(c1 < c2)
+        self.assertTrue(c1 <= c2)
+        self.assertFalse(c1 == c2)
+        self.assertTrue(c1 != c2)
+        self.assertFalse(c1 > c2)
+        self.assertFalse(c1 >= c2)
+
+        self.assertFalse(c1 < c1)
+        self.assertTrue(c1 <= c1)
+        self.assertTrue(c1 == c1)
+        self.assertFalse(c1 != c1)
+        self.assertFalse(c1 > c1)
+        self.assertTrue(c1 >= c1)
+
+        with self.assertRaises(TypeError):
+            c1 < 1
+
 if __name__ == "__main__":
     unittest.main()

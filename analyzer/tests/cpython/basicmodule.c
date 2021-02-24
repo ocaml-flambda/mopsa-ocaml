@@ -167,6 +167,36 @@ typedef struct {
     int counter;
 } Counter;
 
+static PyTypeObject CounterType;
+
+static PyObject*
+Counter_richcompare(PyObject* self, PyObject* other, int op)
+{
+    // FIXME: implictly, we know that self has the good type, but we
+    // need to explicitly check it for other. What happens if we
+    // forget the check? *)
+    if(!PyObject_TypeCheck(other, &CounterType))
+    {
+        Py_INCREF(Py_NotImplemented);
+        return Py_NotImplemented;
+    }
+
+    int cs = ((Counter*) self)->counter;
+    int co = ((Counter*) other)->counter;
+
+    int r = 0;
+    switch(op)
+    {
+        case Py_EQ: r = cs == co; break;
+        case Py_NE: r = cs != co; break;
+        case Py_LE: r = cs <= co; break;
+        case Py_LT: r = cs <  co; break;
+        case Py_GE: r = cs >= co; break;
+        case Py_GT: r = cs >  co; break;
+    }
+    return PyBool_FromLong(r);
+}
+
 static Py_ssize_t
 Counter_len(PyObject* self)
 {
@@ -249,7 +279,7 @@ static PyTypeObject CounterIteratorType = {
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_iter = CounterIterator_iter,
-    .tp_iternext = CounterIterator_iternext
+    .tp_iternext = CounterIterator_iternext,
 };
 
 static PyObject*
@@ -286,7 +316,8 @@ static PyTypeObject CounterType = {
     .tp_new = PyType_GenericNew,
     .tp_init = Counter_init,
     .tp_iter = Counter_iterate,
-    .tp_as_sequence = &counter_as_sequence
+    .tp_as_sequence = &counter_as_sequence,
+    .tp_richcompare = Counter_richcompare
 };
 
 static PyObject*

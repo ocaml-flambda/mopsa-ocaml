@@ -585,16 +585,36 @@ module Domain =
              ~> by delegation to the dictionnary/structural type abstraction *)
           bind_function_in "__new__"
             (mk_c_address_of (mk_expr (E_c_function (C.Ast.find_c_fundec_by_name "tp_new_wrapper" flow)) range) range)
-            cls_addr Builtin_function_or_method man flow >>% fun flow ->
+            cls_addr Builtin_function_or_method man flow >>%
           bind_function_in "__init__"
             (mk_c_arrow_access_by_name ecls "tp_init" range)
-            cls_addr (Wrapper_descriptor (Some "wrap_init")) man flow >>% fun flow ->
+            cls_addr (Wrapper_descriptor (Some "wrap_init")) man >>%
           bind_function_in "__iter__"
             (mk_c_arrow_access_by_name ecls "tp_iter" range)
-            cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man flow >>% fun flow ->
+            cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man >>%
           bind_function_in "__next__"
             (mk_c_arrow_access_by_name ecls "tp_iternext" range)
-            cls_addr (Wrapper_descriptor (Some "wrap_next")) man flow >>% fun flow ->
+            cls_addr (Wrapper_descriptor (Some "wrap_next")) man >>%
+          bind_function_in "__lt__"
+            (* FIXME: multiple fields Python side corresponding to one field on the C side is probably an issue *)
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_lt")) man >>%
+          bind_function_in "__le__"
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_le")) man >>%
+          bind_function_in "__eq__"
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_eq")) man >>%
+          bind_function_in "__ne__"
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_ne")) man >>%
+          bind_function_in "__gt__"
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_gt")) man >>%
+          bind_function_in "__ge__"
+            (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
+            cls_addr (Wrapper_descriptor (Some "richcmp_ge")) man >>%
+            fun flow ->
               assume
                 (ne
                    (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
@@ -956,12 +976,18 @@ module Domain =
                let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
                let true_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_true in
                let false_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_false in
-               let c_var = search_c_globals_for flow "_Py_NoneStruct" in
+               let ni_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_notimplemented in
+               let none_var = search_c_globals_for flow "_Py_NoneStruct" in
+               let ni_var = search_c_globals_for flow "_Py_NotImplementedStruct" in
                let true_var = search_c_globals_for flow "_Py_TrueStruct" in
                let false_var = search_c_globals_for flow "_Py_FalseStruct" in
                let flow = set_singleton
-                            (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
+                            (mk_c_points_to_bloc (C.Common.Base.mk_var_base none_var) (mk_zero (Location.mk_program_range [])) None)
                             none_addr
+                            man flow in
+               let flow = set_singleton
+                            (mk_c_points_to_bloc (C.Common.Base.mk_var_base ni_var) (mk_zero (Location.mk_program_range [])) None)
+                            ni_addr
                             man flow in
                let flow = set_singleton
                             (mk_c_points_to_bloc (C.Common.Base.mk_var_base true_var) (mk_zero (Location.mk_program_range [])) None)
@@ -985,6 +1011,7 @@ module Domain =
                    ("PyTuple_Type", "tuple");
                    ("PyDict_Type", "dict");
                    ("_PyNone_Type", "NoneType");
+                   ("_PyNotImplemented_Type", "NotImplementedType");
                    (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
                  ]
                  flow in
@@ -1483,10 +1510,7 @@ module Domain =
         | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
          (* FIXME: use the equiv map *)
          let cfunc = find_c_fundec_by_uid uid flow in
-         let args_types =
-           if List.length cfunc.c_func_parameters > 2 then
-             warn "ignoring keywords";
-           List.map vtyp cfunc.c_func_parameters in
+         let args_types = List.map vtyp cfunc.c_func_parameters in
          (* Call it with self, E_py_tuple(args) *)
          let self =
            match (fst self).addr_kind with
@@ -1525,13 +1549,14 @@ module Domain =
              let call = match kind with
                | Wrapper_descriptor (Some wrapper_name) ->
                   let wrapper = C.Ast.find_c_fundec_by_name wrapper_name flow in
+                  debug "wrapper %s has %d args@.cfunc_args = %a" wrapper_name (List.length wrapper.c_func_parameters) (Format.pp_print_list pp_expr) cfunc_args;
                   let wrapper_args =
                     match List.length wrapper.c_func_parameters with
                     | 2 ->
                        let self = List.hd cfunc_args in
                        self ::
                          (mk_c_address_of (mk_expr (E_c_function cfunc) range ~etyp:(mk_c_fun_typ cfunc)) range) :: []
-                    | 3 | 4 ->
+                    | (3 | 4) as count ->
                        let self, args, kwds_or_nothing = match cfunc_args with
                          | [a] -> a, mk_c_null range, []
                          | [a;b] -> a,b,[]
@@ -1539,7 +1564,7 @@ module Domain =
                          | _ -> assert false in
                        self :: args ::
                          (mk_c_address_of (mk_expr (E_c_function cfunc) range ~etyp:(mk_c_fun_typ cfunc)) range) ::
-                           kwds_or_nothing
+                           (if count = 3 then [] else kwds_or_nothing)
                     | _ -> assert false
                   in
                   mk_c_call wrapper wrapper_args range
