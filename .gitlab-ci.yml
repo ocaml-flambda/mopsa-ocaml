@@ -248,6 +248,14 @@ test-u 3/3:
     - echo $PY_FILE
     - ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
 
+.test-py-no-unittest:
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PY_FILE
+    - ./bin/mopsa-python analyzer/tests/python/$PY_FILE
+
 .test-typpete:
   stage: test
   dependencies: [build_job]
@@ -324,7 +332,7 @@ test-py 10/16:
 test-py 11/16:
   variables:
     PY_FILE: 'list_tests.py'
-  extends: .test-py
+  extends: .test-py-no-unittest
 
 test-py 12/16:
   variables:
