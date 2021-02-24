@@ -343,8 +343,13 @@ module Domain =
           let a_methd_function = Top.detop @@ EquivBaseAddrs.find methd_function (get_env T_cur man flow) in
           (if ValueSet.cardinal a_methd_function > 0 then
             Eval.singleton (mk_addr (ValueSet.choose a_methd_function) range) flow
-          else
-            alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, (binder_addr, None))) range flow) >>$
+           else
+            man.eval ~translate:"Universal" (mk_c_member_access_by_name methd "ml_flags" range) flow >>$ fun methd_flags flow ->
+           let oflags =
+             match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query methd_flags) flow with
+             | Finite l, Finite r when Z.compare l r = 0 -> Some (Z.to_int l)
+             | _ -> assert false in
+            alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, oflags, (binder_addr, None))) range flow) >>$
               fun methd_eaddr flow ->
               let methd_addr = Addr.from_expr methd_eaddr in
               let flow = set_singleton methd_function methd_addr man flow in
@@ -507,7 +512,7 @@ module Domain =
         Post.return
           (match func with
            | P_fun fundec ->
-              alloc_py_addr man (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, (cls_addr, None))) range flow >>$
+              alloc_py_addr man (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, None, (cls_addr, None))) range flow >>$
                 (fun fun_eaddr flow ->
                   let fun_addr = Addr.from_expr fun_eaddr in
                   let flow = set_singleton func fun_addr man flow in
@@ -1507,7 +1512,11 @@ module Domain =
       |> OptionExt.return
 
 
-        | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, self)}, _)}, args, kwargs) ->
+      | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, oflags, self)}, _)}, args, kwargs) ->
+         debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
+         let ometh_varargs = Some 1 in
+         let ometh_o = Some 8 in
+         (* FIXME: if oflag = Some METH_O, we can forget the tuple *)
          (* FIXME: use the equiv map *)
          let cfunc = find_c_fundec_by_uid uid flow in
          let args_types = List.map vtyp cfunc.c_func_parameters in
@@ -1526,7 +1535,14 @@ module Domain =
               let fst_arg = strongify_int_addr_hack (tag_range range "_descr") (Flow.get_callstack flow) (fst @@ object_of_expr @@ List.hd args) in
               Universal.Ast.mk_addr fst_arg range, List.tl args
          in
-         let py_args = mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" ) in
+         let py_args =
+           if oflags = None || Stdlib.compare ometh_varargs oflags = 0 then
+             mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" )
+           else if Stdlib.compare ometh_o oflags = 0 then
+             let () = debug "METH_O, keeping only first argument" in
+             List.hd args
+           else assert false
+         in
          debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
          let py_kwds =
            (* FIXME: okay, lets cheat here *)
