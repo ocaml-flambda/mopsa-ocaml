@@ -9,8 +9,10 @@
 // FIXME: add other builtins like that
 #undef PyUnicode_GET_LENGTH
 #undef PyTuple_GET_SIZE
+#undef PyTuple_GET_ITEM
 #define PyUnicode_GET_LENGTH PyUnicode_GetLength
 #define PyTuple_GET_SIZE PyTuple_Size
+#define PyTuple_GET_ITEM PyTuple_GetItem
 
 #undef PyUnicode_GET_SIZE
 #undef PyUnicode_AS_UNICODE
@@ -380,6 +382,33 @@ wrap_next(PyObject *self, PyObject *args, void *wrapped)
     return res;
 }
 
+
+static PyObject *
+wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
+{
+    binaryfunc func = (binaryfunc)wrapped;
+    PyObject *other;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    other = PyTuple_GET_ITEM(args, 0);
+    return (*func)(self, other);
+}
+
+static PyObject *
+wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
+{
+    ssizeargfunc func = (ssizeargfunc)wrapped;
+    PyObject* o;
+    Py_ssize_t i;
+
+    if (!PyArg_UnpackTuple(args, "", 1, 1, &o))
+        return NULL;
+    i = PyNumber_AsSsize_t(o, PyExc_OverflowError);
+    if (i == -1 && PyErr_Occurred())
+        return NULL;
+    return (*func)(self, i);
+}
 
 static PyObject *
 tp_new_wrapper(PyObject *self, PyObject *args, PyObject *kwds)
