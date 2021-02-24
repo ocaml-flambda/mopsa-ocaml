@@ -146,6 +146,24 @@ let builtin_exceptions =
     "PyExc_ResourceWarning";
   ]
 
+let () =
+  C.Cstubs.Resources.register_is_resource_addr_chain (fun next ak ->
+      match ak with
+      (* FIXME: other container addresses *)
+      | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Tuple.A_py_tuple _
+      | Python.Objects.Dict.A_py_dict
+      | A_py_instance _
+      | A_py_class _
+      | A_py_c_class _
+      | A_py_c_function _
+      | A_py_c_module _
+      | A_py_function _
+      | A_py_method _
+      | A_py_module _ -> true
+      | _ -> next ak);
+
+
 module Domain =
   struct
 
@@ -1605,6 +1623,7 @@ module Domain =
       let range = srange stmt in
       match skind stmt with
       (* FIXME: propagate it to the value attribute *)
+      | S_fold ({ekind = E_addr (dst, _)}, [{ekind = E_addr (src, _)}])
       | S_rename ({ekind = E_addr (src, _)}, {ekind = E_addr (dst, _)}) when is_py_addr src && is_py_addr dst ->
          let cur = get_env T_cur man flow in
          (* change cur on both sides *)
@@ -1629,11 +1648,16 @@ module Domain =
          (* delegate to C if needed *)
          (if c_rename_needed then
             let post = man.exec ~route:(Semantic "C") stmt flow in
+            let exec_value src dst =
+              match skind stmt with
+              | S_rename _ -> mk_rename src dst
+              | S_fold _ -> mk_fold dst [src]
+              | _ -> assert false in
             match akind src with
             | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-               post >>% man.exec (mk_rename (mk_avalue_from_pyaddr src T_int range) (mk_avalue_from_pyaddr dst T_int range) range)
+               post >>% man.exec (exec_value (mk_avalue_from_pyaddr src T_int range) (mk_avalue_from_pyaddr dst T_int range) range)
             | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-               post >>% man.exec (mk_rename (mk_avalue_from_pyaddr src T_string range) (mk_avalue_from_pyaddr dst T_string range) range)
+               post >>% man.exec (exec_value (mk_avalue_from_pyaddr src T_string range) (mk_avalue_from_pyaddr dst T_string range) range)
             | _ -> post
           else
             Post.return flow) >>%

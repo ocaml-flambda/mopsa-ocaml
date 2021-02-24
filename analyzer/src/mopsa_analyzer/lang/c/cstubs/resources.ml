@@ -31,6 +31,21 @@ open Common.Alarms
 open Aux_vars
 
 
+let is_resource_addr_chain : (addr_kind -> bool) ref =
+  ref
+    (function
+     | A_stub_resource _ -> true
+     | _ -> false
+    )
+
+let register_is_resource_addr_chain (info: (addr_kind -> bool) -> addr_kind -> bool) =
+  is_resource_addr_chain := info !is_resource_addr_chain;
+  ()
+
+let is_resouce_addr addr = !is_resource_addr_chain (akind addr)
+
+
+
 module Domain =
 struct
 
@@ -106,19 +121,15 @@ struct
     man.exec (mk_fold_var bytes bytesl stmt.srange) flow>>%
     man.exec ~route:(Below name) stmt
 
-  let is_resouce_addr addr =
-    match addr.addr_kind with
-    | A_stub_resource _ -> true
-    | _ -> false
-
   let is_resource_addr_expr e =
     match ekind e with
     | E_addr (a, _) -> is_resouce_addr a
     | _ -> false
 
   let extract_resource_addr e =
+    assert(is_resource_addr_expr e);
     match ekind e with
-    | E_addr ({ addr_kind = A_stub_resource _ } as a, _) -> a
+    | E_addr (a, _) -> a
     | _ -> assert false
 
   let exec stmt man flow  =
@@ -164,7 +175,7 @@ struct
       let bytes = mk_bytes_var addr in
       man.exec (mk_add_var bytes eaddr.erange) flow >>%
       (* Add the address dimension to memory abstraction *)
-      man.exec (mk_add eaddr range) >>%
+      man.exec ~route:(Semantic "C") (mk_add eaddr range) >>%
       Eval.singleton eaddr
 
     | _ -> assert false
