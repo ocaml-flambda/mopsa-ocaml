@@ -164,6 +164,7 @@ let () =
       | _ -> next ak);
 
 
+
 module Domain =
   struct
 
@@ -601,8 +602,20 @@ module Domain =
                    ~etyp:T_bool range)
                 man flow
                 ~fthen:(fun flow ->
-                  bind_function_in "__len__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_length" range) cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man flow >>%
-                    bind_function_in "__contains__" (mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) "sq_contains" range) cls_addr (Wrapper_descriptor (Some "wrap_objobjproc")) man
+                  let as_sequence s =  mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) s range in
+                  Post.return flow >>%
+                  bind_function_in "__len__" (as_sequence "sq_length")
+                    cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man >>%
+                  bind_function_in "__contains__" (as_sequence "sq_contains")
+                    cls_addr (Wrapper_descriptor (Some "wrap_objobjproc")) man >>%
+                  bind_function_in "__add__" (as_sequence "sq_concat")
+                    cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+                  bind_function_in "__mul__" (as_sequence "sq_repeat")
+                    cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
+                  bind_function_in "__rmul__" (as_sequence "sq_repeat")
+                    cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
+                  bind_function_in "__getitem__" (as_sequence "sq_item")
+                    cls_addr (Wrapper_descriptor (Some "wrap_sq_item")) man
                 )
                 ~felse:(fun flow ->
                   debug "tp_as_sequence is NULL, skipping";
