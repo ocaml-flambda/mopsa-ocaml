@@ -1521,6 +1521,9 @@ module Domain =
          let cfunc = find_c_fundec_by_uid uid flow in
          let args_types = List.map vtyp cfunc.c_func_parameters in
          (* Call it with self, E_py_tuple(args) *)
+         let subst_addr_eobj a' e = match ekind e with
+           | E_py_object(a, oe) -> {e with ekind = E_py_object(a', oe)}
+           | _ -> assert false in
          let self =
            match (fst self).addr_kind with
            | A_py_c_class v -> C.Ast.mk_c_address_of (mk_var v range) range
@@ -1533,7 +1536,7 @@ module Domain =
              -> self, args
            | Wrapper_descriptor _ | Method_descriptor ->
               let fst_arg = strongify_int_addr_hack (tag_range range "_descr") (Flow.get_callstack flow) (fst @@ object_of_expr @@ List.hd args) in
-              Universal.Ast.mk_addr fst_arg range, List.tl args
+              subst_addr_eobj fst_arg (List.hd args), List.tl args
          in
          let py_args =
            if oflags = None || Stdlib.compare ometh_varargs oflags = 0 then
@@ -1551,15 +1554,14 @@ module Domain =
          (* FIXME: if |args| = 1, no need to eval py args *)
          man.eval py_args flow >>$
            (fun py_args flow ->
-             let addr_py_args = addr_of_object @@ object_of_expr py_args in
              let cfunc_args =
                match List.length cfunc.c_func_parameters with
                | 1 -> [self]
                | 2 ->
                   self ::
-                        (Universal.Ast.mk_addr addr_py_args ~etyp:(List.nth args_types 1) range) :: []
+                        {py_args with etyp = (List.nth args_types 1)} :: []
                | 3 -> self ::
-                        (Universal.Ast.mk_addr addr_py_args ~etyp:(List.nth args_types 1) range)
+                        {py_args with etyp = (List.nth args_types 1)}
                         :: py_kwds :: []
                | _ -> assert false in
              let call = match kind with
@@ -1587,16 +1589,27 @@ module Domain =
                | _ ->
                   mk_c_call cfunc cfunc_args range
              in
-             let flow =
-               List.fold_left (fun flow arg ->
+             let caller, args = match ekind call with
+               | E_call (caller, args) -> caller, args
+               | _ -> assert false in
+             let revargs, flow =
+               List.fold_left (fun (args, flow) arg ->
                    match ekind arg with
                    | E_addr (a, _) ->
                       debug "[%s] applying boundary on %a" name pp_addr a;
-                      let _, flow = python_to_c_boundary a None None arg.erange man flow in flow (* FIXME: arguments need to be changed *)
-                   | _ -> flow
+                      let addr_typ = match etyp arg with | T_addr -> None | t -> Some t in
+                      let c_arg, flow = python_to_c_boundary a addr_typ None arg.erange man flow in
+                      {c_arg with etyp = etyp arg}::args, flow
+                   | E_py_object (a, oe) ->
+                      debug "[%s] applying boundary on (%a, %a)" name pp_addr a (OptionExt.print pp_expr) oe;
+                      let addr_typ = match etyp arg with | T_py _ -> None | t -> Some t in
+                      let c_arg, flow = python_to_c_boundary a addr_typ oe arg.erange man flow in
+                      c_arg::args, flow
+                   | _ -> arg::args, flow
                  )
-                 flow
-                 (match ekind call with | E_call (_, args) -> args | _ -> assert false) in
+                 ([], flow)
+               args in
+             let call = {call with ekind = E_call(caller, List.rev revargs)} in
              let open C.Common.Points_to in
              debug "call = %a" pp_expr call;
              man.eval ~route:(Semantic "C") call flow >>$
