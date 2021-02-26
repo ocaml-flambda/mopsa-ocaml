@@ -306,12 +306,6 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "reversed", _)}, _)}, args, [])  ->
-      (* FIXME: reversed_new_impl *)
-      man.eval   (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range) flow
-      (* man.eval (Utils.mk_builtin_call "list.__reversed__" args range) flow *)
-      |> OptionExt.return
-
     (* FIXME: in libs.py_std or flows.exn? *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("BaseException.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["BaseException"]
