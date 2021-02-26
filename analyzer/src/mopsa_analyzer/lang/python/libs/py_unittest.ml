@@ -146,6 +146,12 @@ module Domain =
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2; _], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2], []) ->
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ne arg2 range) range flow
+         |> OptionExt.return
+
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_gt arg2 range) range flow
          |> OptionExt.return
