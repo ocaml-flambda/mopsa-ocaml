@@ -22,20 +22,80 @@
 (** Inliner of imported packages. *)
 
 open Mopsa
-open Sig.Abstraction.Stateless
+open Sig.Abstraction.Domain
 open Ast
 open Addr
 open Universal.Ast
 
+type ('a, _) query += Q_python_addr_of_module : string -> ('a, addr option) query
+
+let () = register_query {
+             join = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
+                       fun next query a b ->
+                       match query with
+                       | Q_python_addr_of_module _ -> assert false
+                       | _ -> next.pool_join query a b in
+                     f);
+             meet = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
+                       fun next query a b ->
+                       match query with
+                       | Q_python_addr_of_module _ -> assert false
+                       | _ -> next.pool_meet query a b in
+                     f)
+           }
 
 module Domain =
   struct
 
-    include GenStatelessDomainId(struct
-        let name = "python.desugar.import"
-      end)
+    module Modules  = struct
+      module ModuleSet
+        = Framework.Lattices.Powerset.Make
+            (struct
+              type t = (addr * expr option) * bool
+              let compare ((a1, oe1), b1) ((a2, oe2), b2) =
+                compare_addr a1 a2
+              let print printer ((a, oe), b) = (unformat pp_addr) printer a
+            end)
 
-    let imported_modules = Hashtbl.create 100
+      include ModuleSet
+
+      let max_size = 1
+      let bound (x:t) : t =
+        match x with
+        | Nt s ->
+           if Set.cardinal s <= max_size then x
+           else
+             panic "bound %a" (format print) x
+        | _ -> TOP
+
+      let join a1 a2 = ModuleSet.join a1 a2 |> bound
+
+      let add v t =
+        add v t |> bound
+
+      let find_singleton (x:t) =
+        match x with
+        | Nt s ->
+           if ModuleSet.cardinal x = 1 then ModuleSet.choose x
+           else assert false
+        | _ -> raise Not_found
+    end
+
+    module Str = struct
+      type t = string
+      let compare = compare
+      let print = unformat Format.pp_print_string
+    end
+
+    module ModulesMap = Framework.Lattices.Partial_map.Make(Str)(Modules)
+
+    include ModulesMap
+
+    include Framework.Core.Id.GenDomainId(
+                struct
+                  type nonrec t = t
+                  let name = "python.desugar.import"
+                end)
 
     exception Module_not_found of string
 
@@ -127,7 +187,7 @@ module Domain =
       else
         let (addr, expr), flow, is_stub =
           try
-            let (a, e), is_stub = Hashtbl.find imported_modules name in
+            let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_env T_cur man flow) in
             debug "module %s already imported, cache hit!" name;
             (a, e), flow, is_stub
           with Not_found ->
@@ -175,9 +235,12 @@ module Domain =
                   }
                   in
                   (addr, None), body, false, flow in
-              let flow' = man.exec body flow in
-              Hashtbl.add imported_modules name ((a, e), is_stub);
-              (a, e), post_to_flow man flow', is_stub
+              let () = debug "pre body" in
+              let flow' = post_to_flow man @@ man.exec body flow in
+              let () = debug "post body" in
+              let cur = get_env T_cur man flow in
+              let flow' = set_env T_cur (ModulesMap.add name (Modules.singleton ((a, e), is_stub)) cur) man flow' in
+              (a, e), flow', is_stub
             end
         in
         (addr, expr), flow, is_stub
@@ -418,11 +481,30 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
-      flow
+      set_env T_cur empty man flow
 
     let eval _ _ _ = None
-    let ask _ _ _ = None
+
+    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+      fun query man flow ->
+      match query with
+      | Q_python_addr_of_module s ->
+         let cur = get_env T_cur man flow in
+         Some (OptionExt.lift (fun cs ->
+             assert(Modules.cardinal cs = 1);
+             let (a, _), _ = Modules.choose cs in
+             a)
+           (find_opt s cur))
+
+      | _ -> None
+
     let print_expr _ _ _ _ = ()
+
+    let print_state printer a =
+      (* () *)
+    pprint ~path:[Key "Imported Python Modules"] printer (pbox ModulesMap.print a)
+
+    let merge _ _ _ = assert false
   end
 
-let () = register_stateless_domain (module Domain)
+let () = register_standard_domain (module Domain)
