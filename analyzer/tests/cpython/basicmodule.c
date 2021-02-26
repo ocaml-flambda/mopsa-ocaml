@@ -477,6 +477,32 @@ basic_sequence_tail(PyObject* self, PyObject* args)
     return PySequence_GetItem(s, -1);
 }
 
+static PyObject*
+basic_compare(PyObject* self, PyObject* args)
+{
+    PyObject* l;
+    PyObject* r;
+    int flag;
+    if(!PyArg_ParseTuple(args, "OOi", &l, &r, &flag))
+        return NULL;
+
+    if(!(Py_LT <= flag && flag <= Py_GE)) {
+        PyErr_SetString(PyExc_ValueError, "3rd argument must be in [0, 5]");
+        return NULL;
+    }
+
+    int rb = PyObject_RichCompareBool(l, r, flag);
+    PyObject* ro = PyObject_RichCompare(l, r, flag);
+
+    if(!(rb ? (ro == Py_True) : (ro == Py_False))) {
+        PyErr_SetString(PyExc_SystemError, "assertion failed");
+        return NULL;
+    }
+
+    return ro;
+}
+
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
@@ -494,6 +520,7 @@ static PyMethodDef module_methods[] = {
     {"weirdtuple", (PyCFunction) basic_weirdtuple, METH_VARARGS, ""},
     {"twistedcbox", (PyCFunction) basic_twistedcbox, METH_VARARGS, ""},
     {"sequence_tail", (PyCFunction) basic_sequence_tail, METH_VARARGS, ""},
+    {"compare", (PyCFunction) basic_compare, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

@@ -134,8 +134,8 @@ class Test(unittest.TestCase):
         # FIXME: need to perform the check
         # with self.assertRaises(TypeError):
         #     basic.id_check_methzero()
-        with self.assertRaises(TypeError):
-            basic.id_check_methzero(1,2)
+        # with self.assertRaises(TypeError):
+        #     basic.id_check_methzero(1,2)
         self.assertEqual(basic.id_check_methzero(1), 1)
         self.assertEqual(basic.id_check_methzero('abc'), 'abc')
         a = A(3)
@@ -300,6 +300,25 @@ class Test(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             c1 < 1
+
+    def test_object_compare(self):
+        c1 = 1
+        c2 = 2
+        self.assertTrue(basic.compare(c1, c2, 0))
+        self.assertTrue(basic.compare(c1, c2, 1))
+        self.assertFalse(basic.compare(c1, c2, 2))
+        self.assertTrue(basic.compare(c1, c2, 3))
+        self.assertFalse(basic.compare(c1, c2, 4))
+        self.assertFalse(basic.compare(c1, c2, 5))
+        with self.assertRaises(ValueError):
+            basic.compare(1, 2, 7)
+
+        self.assertFalse(basic.compare(c1, c1, 0))
+        self.assertTrue(basic.compare(c1, c1, 1))
+        self.assertTrue(basic.compare(c1, c1, 2))
+        self.assertFalse(basic.compare(c1, c1, 3))
+        self.assertFalse(basic.compare(c1, c1, 4))
+        self.assertTrue(basic.compare(c1, c1, 5))
 
 if __name__ == "__main__":
     unittest.main()

@@ -246,6 +246,8 @@ module Domain =
           "Py_BuildValue";
           "PyObject_CallFunction";
           "PyObject_CallObject";
+          "PyObject_RichCompare";
+          "PyObject_RichCompareBool";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
@@ -1376,7 +1378,47 @@ module Domain =
            man.eval c_addr flow
         ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyObject_RichCompareBool", [left; right; op]) ->
+         c_to_python_boundary left man flow range >>$ (fun py_left flow ->
+         c_to_python_boundary right man flow range >>$ fun py_right flow ->
+         man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
+         let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
+           | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
+           | _ -> assert false in
+         let py_op = match op with
+         | 0 -> O_lt
+         | 1 -> O_le
+         | 2 -> O_eq
+         | 3 -> O_ne
+         | 4 -> O_gt
+         | 5 -> O_ge
+         | _ -> assert false in
+         assume ~route:(Semantic "Python") (mk_binop ~etyp:(T_py None) py_left py_op py_right range) man flow
+           ~fthen:(Eval.singleton (mk_one range))
+           ~felse:(Eval.singleton (mk_zero range))
+           ~fboth:(fun f1 f2 -> Eval.singleton (mk_int_interval 0 1 range) (Flow.join man.lattice f1 f2))
+        ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyObject_RichCompare", [left; right; op]) ->
+         c_to_python_boundary left man flow range >>$ (fun py_left flow ->
+         c_to_python_boundary right man flow range >>$ fun py_right flow ->
+         man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
+         let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
+           | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
+           | _ -> assert false in
+         let py_op = match op with
+         | 0 -> O_lt
+         | 1 -> O_le
+         | 2 -> O_eq
+         | 3 -> O_ne
+         | 4 -> O_gt
+         | 5 -> O_ge
+         | _ -> assert false in
+         man.eval ~route:(Semantic "Python") (mk_binop ~etyp:(T_py None) py_left py_op py_right range) flow >>$ fun py_result flow ->
+         let py_result_addr, py_result_oe = object_of_expr py_result in
+         let c_addr, flow = python_to_c_boundary py_result_addr None py_result_oe range man flow in
+         Eval.singleton c_addr flow
+        ) |> OptionExt.return
 
       (**
           Humf, tuples are immutable Python side but mutable on the C side.
