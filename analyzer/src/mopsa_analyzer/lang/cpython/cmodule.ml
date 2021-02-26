@@ -1585,7 +1585,7 @@ module Domain =
 
       | E_c_builtin_call ("PyWeakref_GetObject", [wkref]) ->
          c_to_python_boundary wkref man flow range >>$ (fun py_wkref flow ->
-         man.eval ~route:(Semantic "Python") (mk_py_call py_wkref [] range) flow >>$ fun py_ref flow ->
+         man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr py_wkref "__call__" range) [] range) flow >>$ fun py_ref flow ->
          let addr_py_ref, oe_py_ref = object_of_expr py_ref in
          let c_ref, flow = python_to_c_boundary addr_py_ref None oe_py_ref range man flow in
          Eval.singleton c_ref flow)
