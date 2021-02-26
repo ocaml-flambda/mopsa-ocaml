@@ -130,6 +130,17 @@ class Test(unittest.TestCase):
         a = A(3)
         self.assertEqual(basic.id_check(a), a)
 
+    def test_meth_zero(self):
+        # FIXME: need to perform the check
+        # with self.assertRaises(TypeError):
+        #     basic.id_check_methzero()
+        with self.assertRaises(TypeError):
+            basic.id_check_methzero(1,2)
+        self.assertEqual(basic.id_check_methzero(1), 1)
+        self.assertEqual(basic.id_check_methzero('abc'), 'abc')
+        a = A(3)
+        self.assertEqual(basic.id_check_methzero(a), a)
+
     # counter tests: PyType_GenericNew, sq_len+wrapper, PyLong_Check, PyLong_AsSsize_t
     def test_counter(self):
         with self.assertRaises(TypeError):

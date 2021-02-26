@@ -321,26 +321,26 @@ static PyTypeObject CounterType = {
 };
 
 static PyObject*
-basic_return_true(PyObject *self, PyObject *args)
+basic_return_true(PyObject *self)
 {
     Py_RETURN_TRUE;
 }
 
 static PyObject*
-basic_return_false(PyObject *self, PyObject *args)
+basic_return_false(PyObject *self)
 {
     Py_RETURN_FALSE;
 }
 
 static PyObject*
-basic_return_bool(PyObject *self, PyObject *args)
+basic_return_bool(PyObject *self)
 {
     if(rand()) { Py_RETURN_TRUE; }
     else { Py_RETURN_FALSE; }
 }
 
 static PyObject*
-basic_return_none(PyObject *self, PyObject *args)
+basic_return_none(PyObject *self)
 {
     Py_RETURN_NONE;
 }
@@ -394,6 +394,12 @@ basic_id_check(PyObject *self, PyObject *args)
         return NULL;
     }
     return PyTuple_GetItem(args, 0);
+}
+
+static PyObject*
+basic_id_check_methzero(PyObject *self, PyObject *args)
+{
+    return args;
 }
 
 static PyObject*
@@ -477,11 +483,12 @@ static PyMethodDef module_methods[] = {
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
     {"forget_raise", (PyCFunction) basic_forget_raise, METH_VARARGS, ""},
     {"id_check", (PyCFunction) basic_id_check, METH_VARARGS, ""},
+    {"id_check_methzero", (PyCFunction) basic_id_check_methzero, METH_O, ""},
     {"random_fail", (PyCFunction) basic_random_fail, METH_VARARGS, ""},
-    {"return_true", (PyCFunction) basic_return_true, METH_VARARGS, ""},
-    {"return_false", (PyCFunction) basic_return_false, METH_VARARGS, ""},
-    {"return_bool", (PyCFunction) basic_return_bool, METH_VARARGS, ""},
-    {"return_none", (PyCFunction) basic_return_none, METH_VARARGS, ""},
+    {"return_true", (PyCFunction) basic_return_true, METH_NOARGS, ""},
+    {"return_false", (PyCFunction) basic_return_false, METH_NOARGS, ""},
+    {"return_bool", (PyCFunction) basic_return_bool, METH_NOARGS, ""},
+    {"return_none", (PyCFunction) basic_return_none, METH_NOARGS, ""},
     {"vsum", (PyCFunction) basic_vsum, METH_VARARGS, ""},
     {"vsum2", (PyCFunction) basic_vsum2, METH_VARARGS, ""},
     {"weirdtuple", (PyCFunction) basic_weirdtuple, METH_VARARGS, ""},
