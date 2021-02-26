@@ -48,7 +48,7 @@ struct
     let range = erange exp in
     match ekind exp, etyp exp with
     | E_constant (C_top (T_py (Some Bool))), T_py _ ->
-      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, Some (mk_top T_int range)) range) flow |> OptionExt.return
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bool_top, Some (mk_int_interval 0 1 ~typ:T_int range)) range) flow |> OptionExt.return
 
     | E_constant (C_bool true), T_py _ ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_true, Some (mk_int 1 ~typ:T_int range)) range) flow |> OptionExt.return

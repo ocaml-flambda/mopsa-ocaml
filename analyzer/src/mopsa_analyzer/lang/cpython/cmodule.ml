@@ -1560,20 +1560,22 @@ module Domain =
            man flow
            ~fthen:(fun flow ->
              let post =
-               if Hashtbl.mem Python.Desugar.Import.Domain.imported_modules "weakref" then
-                 Post.return flow
-               else
-                 let open Filename in
-                 let weakrefimport, weakrefimport_channel = Filename.open_temp_file "weakrefimport" ".py" in
-                 let weakref_fmt = Format.formatter_of_out_channel weakrefimport_channel in
-                 Format.fprintf weakref_fmt "import weakref@.";
-                 close_out weakrefimport_channel;
-                 let weakref_import = mk_stmt (S_program (Python.Frontend.parse_program [weakrefimport], None)) range in
-                 man.exec ~route:(Semantic "Python") weakref_import flow in
-             let weakref, _ = Hashtbl.find Python.Desugar.Import.Domain.imported_modules "weakref" in
+               match man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
+               | Some _ -> Post.return flow
+               | None ->
+                  let open Filename in
+                  let weakrefimport, weakrefimport_channel = Filename.open_temp_file "weakrefimport" ".py" in
+                  let weakref_fmt = Format.formatter_of_out_channel weakrefimport_channel in
+                  Format.fprintf weakref_fmt "import weakref@.";
+                  close_out weakrefimport_channel;
+                  let weakref_import = mk_stmt (S_program (Python.Frontend.parse_program [weakrefimport], None)) range in
+                  man.exec ~route:(Semantic "Python") weakref_import flow
+             in
              post >>% fun flow ->
+             let weakref = OptionExt.none_to_exn @@  man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
              c_to_python_boundary refto man flow range >>$ fun py_refto flow ->
-             man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object weakref range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
+             let () = Debug.debug ~channel:"bug" "%a" (format @@ Flow.print man.lattice.print) flow in
+             man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object (weakref, None) range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
              let addr_py_weakref, _ = object_of_expr py_weakref in
              let c_weakref, flow = python_to_c_boundary addr_py_weakref None None range man flow in
              Eval.singleton c_weakref flow

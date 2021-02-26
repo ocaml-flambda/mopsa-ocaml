@@ -214,8 +214,8 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
          (* Instantiate ExceptionContext with the given exception exn *)
-         let unittest, _ = Hashtbl.find Desugar.Import.Domain.imported_modules "unittest" in
-         let exp' = mk_py_call (mk_py_attr (mk_py_object unittest range) "ExceptionContext" range) [exn] range in
+         let unittest = OptionExt.none_to_exn @@ man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow in
+         let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
          man.eval exp' flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
