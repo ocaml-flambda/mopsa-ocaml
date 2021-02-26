@@ -264,6 +264,8 @@ module Domain =
           "PyList_GetItem";
           "_PyRange_Size";
           "_PyRange_GetItem";
+          "PyWeakref_NewRef";
+          "PyWeakref_GetObject";
         ];
 
       set_env T_cur EquivBaseAddrs.empty man flow
@@ -1509,8 +1511,41 @@ module Domain =
                let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                man.eval c_addr flow
            )
-      |> OptionExt.return
+         |> OptionExt.return
 
+      | E_c_builtin_call ("PyWeakref_NewRef", [refto; callback]) ->
+         assume (eq callback (mk_c_null range) range)
+           man flow
+           ~fthen:(fun flow ->
+             let post =
+               if Hashtbl.mem Python.Desugar.Import.Domain.imported_modules "weakref" then
+                 Post.return flow
+               else
+                 let open Filename in
+                 let weakrefimport, weakrefimport_channel = Filename.open_temp_file "weakrefimport" ".py" in
+                 let weakref_fmt = Format.formatter_of_out_channel weakrefimport_channel in
+                 Format.fprintf weakref_fmt "import weakref@.";
+                 close_out weakrefimport_channel;
+                 let weakref_import = mk_stmt (S_program (Python.Frontend.parse_program [weakrefimport], None)) range in
+                 man.exec ~route:(Semantic "Python") weakref_import flow in
+             let weakref, _ = Hashtbl.find Python.Desugar.Import.Domain.imported_modules "weakref" in
+             post >>% fun flow ->
+             c_to_python_boundary refto man flow range >>$ fun py_refto flow ->
+             man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object weakref range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
+             let addr_py_weakref, _ = object_of_expr py_weakref in
+             let c_weakref, flow = python_to_c_boundary addr_py_weakref None None range man flow in
+             Eval.singleton c_weakref flow
+           )
+           ~felse:(fun flow -> assert false)
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyWeakref_GetObject", [wkref]) ->
+         c_to_python_boundary wkref man flow range >>$ (fun py_wkref flow ->
+         man.eval ~route:(Semantic "Python") (mk_py_call py_wkref [] range) flow >>$ fun py_ref flow ->
+         let addr_py_ref, oe_py_ref = object_of_expr py_ref in
+         let c_ref, flow = python_to_c_boundary addr_py_ref None oe_py_ref range man flow in
+         Eval.singleton c_ref flow)
+         |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, oflags, self)}, _)}, args, kwargs) ->
          debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
