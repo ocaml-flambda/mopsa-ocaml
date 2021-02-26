@@ -201,6 +201,12 @@ PyMember_GetOne(const char *addr, PyMemberDef *l)
             v = Py_None;
        /* Py_INCREF(v); */
         break;
+    case T_OBJECT_EX:
+        v = *(PyObject **)addr;
+        if (v == NULL)
+            PyErr_SetString(PyExc_AttributeError, l->name);
+        Py_XINCREF(v);
+        break;
     default:
         PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
         v = NULL;
