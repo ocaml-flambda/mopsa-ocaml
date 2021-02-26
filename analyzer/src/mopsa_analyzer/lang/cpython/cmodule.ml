@@ -1516,6 +1516,7 @@ module Domain =
          debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
          let ometh_varargs = Some 1 in
          let ometh_o = Some 8 in
+         let ometh_noargs = Some 4 in
          (* FIXME: if oflag = Some METH_O, we can forget the tuple *)
          (* FIXME: use the equiv map *)
          let cfunc = find_c_fundec_by_uid uid flow in
@@ -1544,6 +1545,9 @@ module Domain =
            else if Stdlib.compare ometh_o oflags = 0 then
              let () = debug "METH_O, keeping only first argument" in
              List.hd args
+           else if Stdlib.compare ometh_noargs oflags = 0 then
+             let () = debug "METH_NOARGS, hopefully caught later on?" in
+             mk_c_null range
            else assert false
          in
          debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
