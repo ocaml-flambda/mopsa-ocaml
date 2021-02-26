@@ -239,7 +239,7 @@ struct
                flow |>
                  man.exec    (mk_add eaddr range) >>%
                  man.exec   (mk_assign (mk_py_attr obj "start" range) (mk_py_attr range_obj "start" range) range) >>%
-                 man.exec   (mk_assign (mk_py_attr obj "stop" range) (mk_py_attr range_obj "stop" range) range) >>%
+                 man.exec   (mk_assign (mk_py_attr obj "length" range) (mk_py_call (mk_py_attr range_obj "__len__" range) [] range) range) >>%
                  man.exec   (mk_assign (mk_py_attr obj "step" range) (mk_py_attr range_obj "step" range) range) >>%
                  man.exec   (mk_assign (mk_py_attr obj "index" range) (mk_int 0 ~typ:(T_py None) range) range) >>%
                  (* FIXME: rangeobject:874: no stop but a len field. These are CPython fields and not attributes too *)
@@ -256,11 +256,15 @@ struct
           let start = mk_py_attr r "start" range in
           let step = mk_py_attr r "step" range in
           let len = mk_py_call (mk_py_object (find_builtin_function "range.__len__") range) [r] range in
+          let range = tag_range range "reversed" in
+          let py_add s1 s2 = add s1 s2 ~typ:(T_py None) range in
+          let py_sub s1 s2 = sub s1 s2 ~typ:(T_py None) range in
+          let py_mul s1 s2 = mul s1 s2 ~typ:(T_py None) range in
           man.eval
             (mk_py_call (mk_py_object (find_builtin_function "range.__iter__") range)
                [mk_py_call (mk_py_object (find_builtin "range") range)
-                  [ mk_binop ~etyp:(T_py None) (mk_binop ~etyp:(T_py None) start O_minus step range) O_plus (mk_binop ~etyp:(T_py None) len O_mult step range) range;
-                    mk_binop ~etyp:(T_py None) start O_minus step range;
+                  [ py_add start (py_mul (py_sub len (mk_one ~typ:(T_py None) range)) step);
+                    py_sub start step;
                     mk_unop ~etyp:(T_py None) O_minus step range
                   ]
                   range]
@@ -313,14 +317,9 @@ struct
            let start = mk_py_attr rangeit "start" range in
            let step = mk_py_attr rangeit "step" range in
            let index = mk_py_attr rangeit "index" range in
-           let stop = mk_py_attr rangeit "stop" range in
+           let length = mk_py_attr rangeit "length" range in
            assume
-             (mk_binop ~etyp:(T_py None)
-               (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range)
-               O_lt
-               stop
-               range
-             )
+             (lt index length ~etyp:(T_py None) range)
                man flow
              ~fthen:(fun flow ->
                man.eval   (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range) flow |>
@@ -341,6 +340,54 @@ struct
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range_iterator.__iter__", _))}, _)}, [self], []) ->
       man.eval self flow |> OptionExt.return
+
+
+    (* FIXME: that's __new__ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("reversed.__new__", _))}, _)}, cls :: args, []) ->
+       Utils.new_wrapper man range flow "reversed" cls
+         ~fthennew:(fun flow ->
+           let to_rev = List.hd args in
+           assume (mk_py_hasattr to_rev "__reversed__" range) man flow
+             ~fthen:(man.eval (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range))
+             ~felse:(fun flow ->
+               assume (py_and (mk_py_hasattr to_rev "__len__" range) (mk_py_hasattr to_rev "__getitem__" range) range) man flow
+                 ~fthen:(fun flow ->
+                   (* - allocate reversed object,
+                      - put _index to be len(to_rev)-1,
+                      - _seq to be to_rev *)
+                   allocate_builtin man range flow "reversed" None >>$ fun reversed_obj flow ->
+                   man.exec (mk_assign (mk_py_attr reversed_obj "_index" range) (sub (mk_py_call (mk_py_attr to_rev "__len__" range) [] range) (mk_one ~typ:(T_py None) range) ~typ:(T_py None) range) range) flow >>%
+                   man.exec (mk_assign (mk_py_attr reversed_obj "_seq" range) to_rev range) >>%
+                   Eval.singleton reversed_obj
+                 )
+                 ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "'%a' object is not reversible" pp_expr to_rev) range) flow >>% Eval.empty)
+             )
+         )
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("reversed.__iter__", _))}, _)}, [self], []) ->
+       (* FIXME: check type *)
+       man.eval self flow |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("reversed.__next__" as f, _))}, _)}, args, []) ->
+       Utils.check_instances f man flow range args
+         ["reversed"]
+         (fun eargs flow ->
+           let rev = List.hd eargs in
+           let index = mk_py_attr rev "_index" range in
+           let seq = mk_py_attr rev "_seq" range in
+           assume (ge index (mk_zero ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
+             ~fthen:(fun flow ->
+               man.eval (mk_py_call (mk_py_attr seq "__getitem__" range) [index] range) flow |>
+                 (* add_cleaners is ugly but necessary, see comment for range_iterator.__next__ *)
+                 Cases.add_cleaners [mk_assign index (sub index (mk_int 1 ~typ:(T_py None) range) ~typ:(T_py None) range) range]
+             )
+             ~felse:(fun flow ->
+               man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>%
+                 Eval.empty
+             )
+         )
+       |> OptionExt.return
+
 
     | _ -> None
 
