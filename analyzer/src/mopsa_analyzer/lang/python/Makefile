@@ -23,8 +23,8 @@
 
 # Python
 mopsa_analyzer.lang += python
-mopsa_analyzer.lang.python = ast pp addr utils visitor operators  ast_compare hooks frontend   \
-              alarms soundness desugar libs objects data_model types flows program
+mopsa_analyzer.lang.python = ast pp addr alarms utils visitor operators  ast_compare hooks frontend   \
+              soundness desugar libs objects data_model types flows program
 mopsa_analyzer.lang.python.desugar = assert bool comprehensions if import iterable_assign loops with
 mopsa_analyzer.lang.python.libs = math py_mopsa py_std py_unittest py_typing
 mopsa_analyzer.lang.python.objects = lambda class data_container_utils function py_list range tuple dict py_set py_object iterable
