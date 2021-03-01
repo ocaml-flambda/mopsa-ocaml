@@ -510,6 +510,16 @@ struct
     let different_base_case =
       let vv1 = PointerSet.singleton_diff v1 v2 in
       let vv2 = PointerSet.singleton_diff v2 v1 in
+      (* Weak bases may represent different concrete bases, while set difference
+         will remove them. So we need to add them. *)
+      let common_weak = PointerSet.meet v1 v2 |>
+                        PointerSet.filter
+                          (function
+                            | Base b -> base_mode b = WEAK
+                            | _ -> false)
+      in
+      let vv1 = PointerSet.union common_weak vv1 in
+      let vv2 = PointerSet.union common_weak vv2 in
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
         []
       else
@@ -564,6 +574,16 @@ struct
     let different_base_case =
       let vv1 = PointerSet.singleton_diff v1_valid v2_valid in
       let vv2 = PointerSet.singleton_diff v2_valid v1_valid in
+      (* Weak bases may represent different concrete bases, while set difference
+         will remove them. So we need to add them. *)
+      let common_weak = PointerSet.meet v1_valid v2_valid |>
+                        PointerSet.filter
+                          (function
+                            | Base b -> base_mode b = WEAK
+                            | _ -> false)
+      in
+      let vv1 = PointerSet.union common_weak vv1 in
+      let vv2 = PointerSet.union common_weak vv2 in
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2
       then []
       else
