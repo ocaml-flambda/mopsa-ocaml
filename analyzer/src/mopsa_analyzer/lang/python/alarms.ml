@@ -46,7 +46,11 @@ let () =
       compare = (fun default a a' ->
         match a, a' with
         | A_py_uncaught_exception (e, s), A_py_uncaught_exception (e', s') ->
-           compare_expr e e'
+           Compare.compose
+             [
+               (fun () -> compare_expr e e');
+               (fun () -> Stdlib.compare s s');
+             ]
         | _ -> default a a'
       );
       print = (fun default fmt a ->
