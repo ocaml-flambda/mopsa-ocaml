@@ -379,6 +379,46 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
         return PyBool_FromLong(res);
 }
 
+
+static PyObject *
+wrap_sq_setitem(PyObject *self, PyObject *args, void *wrapped)
+{
+    ssizeobjargproc func = (ssizeobjargproc)wrapped;
+    Py_ssize_t i;
+    int res;
+    PyObject *arg, *value;
+
+    if (!PyArg_UnpackTuple(args, "", 2, 2, &arg, &value))
+        return NULL;
+    i = getindex(self, arg);
+    if (i == -1 && PyErr_Occurred())
+        return NULL;
+    res = (*func)(self, i, value);
+    if (res == -1 && PyErr_Occurred())
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
+{
+    ssizeobjargproc func = (ssizeobjargproc)wrapped;
+    Py_ssize_t i;
+    int res;
+    PyObject *arg;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    arg = PyTuple_GET_ITEM(args, 0);
+    i = getindex(self, arg);
+    if (i == -1 && PyErr_Occurred())
+        return NULL;
+    res = (*func)(self, i, NULL);
+    if (res == -1 && PyErr_Occurred())
+        return NULL;
+    Py_RETURN_NONE;
+}
+
 static PyObject *
 wrap_unaryfunc(PyObject *self, PyObject *args, void *wrapped)
 {

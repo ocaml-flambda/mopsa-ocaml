@@ -644,7 +644,11 @@ module Domain =
                   bind_function_in "__rmul__" (as_sequence "sq_repeat")
                     cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
                   bind_function_in "__getitem__" (as_sequence "sq_item")
-                    cls_addr (Wrapper_descriptor (Some "wrap_sq_item")) man
+                    cls_addr (Wrapper_descriptor (Some "wrap_sq_item")) man >>%
+                  bind_function_in "__setitem__" (as_sequence "sq_ass_item")
+                    cls_addr (Wrapper_descriptor (Some "wrap_sq_setitem")) man >>%
+                  bind_function_in "__delitem__" (as_sequence "sq_ass_item")
+                    cls_addr (Wrapper_descriptor (Some "wrap_sq_delitem")) man
                 )
                 ~felse:(fun flow ->
                   debug "tp_as_sequence is NULL, skipping";
