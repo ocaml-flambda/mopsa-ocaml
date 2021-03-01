@@ -189,3 +189,28 @@ let get_eobj_itv man flow e =
      let e_num = extract_oobject e in
      debug "need to ask the numerical domain for the value of %a" pp_expr e_num;
      man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
+
+(* tries to evaluate python expr.
+   If the evaluation fails and raises an exception, the exception flow is caught, put back to cur and `on_empty` is then run *)
+let try_eval_expr ?(on_empty=fun exc_exp exc_msg flow -> assert false) ~(on_result:expr -> 'a flow -> ('a, expr) cases) (man: ('a, 'b) man) ?(route=Core.Route.toplevel) expr (flow: 'a flow) range : ('a, expr) cases option =
+  man.eval ~route:route expr flow >>=?
+    fun case flow' ->
+    Some (
+      match case with
+      | Result (expr', _, _) ->
+         on_result expr' flow'
+      | Empty ->
+         (* find the T_py_exception tokens in flow' and not in flow *)
+         let caught_flow, flow_ok = Flow.fold (fun (caught, acc_ok) tk env ->
+                                        match tk with
+                                        | Alarms.T_py_exception (expr, msg, exc_kind) when not @@ Flow.mem tk flow ->
+                                           (expr, msg, env)::caught, acc_ok
+                                        | _ -> caught, Flow.add tk env man.lattice acc_ok
+                                      ) ([], Flow.bottom_from flow') flow' in
+         Eval.join_list ~empty:(fun () -> Eval.empty flow_ok)
+           (List.map (fun (expr, msg, env) ->
+                on_empty expr msg (Flow.add T_cur env man.lattice flow_ok)
+              )
+              caught_flow)
+      | NotHandled -> assert false
+    )
