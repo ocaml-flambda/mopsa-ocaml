@@ -495,20 +495,11 @@ struct
        end |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_unsupported_stmt stmt)
-           range flow
-       in
-       man.exec   (mk_remove_var v range) flow |> OptionExt.return
+       man.exec (mk_remove_var v range) flow |> OptionExt.return
 
-    | S_py_delete _ ->
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_unsupported_stmt stmt)
-           range flow
-       in
-       flow |> Post.return |> OptionExt.return
+    | S_py_delete {ekind = E_py_index_subscript(v, index)} ->
+       man.exec (mk_expr_stmt (mk_py_call (mk_py_attr v "__delitem__" range) [index] range) range) flow
+       |> OptionExt.return
 
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->

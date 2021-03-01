@@ -655,6 +655,30 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__delitem__" as f, _))}, _)}, args, []) ->
+       Utils.check_instances f man flow range args
+         ["list"; "int"]
+         (fun args flow ->
+           (* FIXME: the list abstraction should keep what might have been deleted too? *)
+           let list, index = match args with [a;b] -> a, b | _ -> assert false in
+           let len_list = mk_var (length_var_of_eobj list) range in
+           man.eval index flow >>$ fun index flow ->
+           let index_u = OptionExt.none_to_exn @@ snd @@ object_of_expr index in
+           assume
+             (log_and
+                (le (mk_zero ~typ:T_int range) index_u ~etyp:T_bool range)
+                (lt index_u len_list ~etyp:T_bool range)
+                ~etyp:T_bool
+                range
+             )
+             man flow
+             ~fthen:(fun flow ->
+               man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) flow >>%
+             man.eval (mk_py_none range)
+             )
+             ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow >>% Eval.empty)
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.remove" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args
@@ -783,6 +807,8 @@ struct
           l = ['a', 'b', 'c']
           l.remove('a')
           assert(not l.contains('a'))
+
+          FIXME: unsure because var_of_eobj list should be weak and thus everything ok
         *)
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["list"]
         (fun args flow ->
