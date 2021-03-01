@@ -567,7 +567,7 @@ struct
                                       list.append(item)
                                     if the loop fails, it'll create the good exception, which is TypeError: 'other' is not iterable
                                   *)
-                                 let item = mktmp ~typ:(T_py None) () in
+                                 let item = mk_range_attr_var range "tmp_item" (T_py None) in
                                  let loop =
                                    mk_stmt
                                      (

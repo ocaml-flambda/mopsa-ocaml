@@ -283,8 +283,8 @@ struct
              if(i < 0 || i >= l) IndexError "range object index out of range"
              return r.start + i * r.step
            *)
-          let l = mktmp ~typ:(T_py None) () in
-          let i = mktmp ~typ:(T_py None) () in
+          let l = mk_range_attr_var range "l" (T_py None) in
+          let i = mk_range_attr_var range "i" (T_py None) in
           let stmts =
             [
               mk_assign (mk_var l range) (mk_py_call (mk_py_object (find_builtin "len") range) [r] range) range;

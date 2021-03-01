@@ -63,8 +63,8 @@ module Domain =
          in
 
          (* Execute body *)
-         let tmpexn = mktmp ~typ:(T_py None) () in
-         let tmpret = mktmp ~typ:(T_py None) () in
+         let tmpexn = mk_range_attr_var srange "exn" (T_py None) in
+         let tmpret = mk_range_attr_var srange "ret" (T_py None) in
          let eexit e1 e2 e3 = mk_py_call exit [econtext; e1; e2; e3] erange in
          let stmt =
            mk_try
