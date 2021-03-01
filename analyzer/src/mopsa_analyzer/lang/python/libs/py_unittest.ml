@@ -29,6 +29,13 @@ open Addr
 open Ast
 open Universal.Ast
 
+let () = Universal.Heap.Policies.register_mk_addr
+           (fun default ak -> match ak with
+                              | A_py_instance {addr_kind = A_py_class (C_user c, _)} when get_orig_vname c.py_cls_var = "ExceptionContext" && Filename.basename (Location.get_range_file c.py_cls_range) = "unittest.py" ->
+                                 Universal.Heap.Policies.mk_addr_range ak
+                              | _ -> default ak)
+
+
 module Domain =
   struct
 
@@ -225,11 +232,14 @@ module Domain =
          man.eval exp' flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
+         let r = man.eval exn flow >>$ (fun exn flow ->
+          debug "ExceptionContext: self = %a, exn = %a" pp_expr self pp_expr exn;
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
            ~fthen:(fun flow ->
              (* No exception raised => assertion failed *)
-             Py_mopsa.check man (mk_py_false range) range flow
+             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+             man.eval (mk_py_false range) flow
            )
            ~felse:(fun flow ->
              (* Check that the caught exception is an instance of the expected exception *)
@@ -258,24 +268,36 @@ module Domain =
                                man.eval (mk_py_true range) flow
                          else
                            let exc_msg = Universal.Strings.Powerset.StringPower.choose exc_powerset in
-                           let re = Str.regexp regex in
-                           let () = warn_at range "assertRaisesRegex hackish implementation" in
+                           let quoted_regex =
+                             if String.length regex >= 2 && String.sub regex (String.length regex - 2) 2 = ".*" then
+                               Str.quote (String.sub regex 0 (String.length regex - 2)) ^ ".*"
+                             else
+                               Str.quote regex in
+                           let re = Str.regexp quoted_regex in
+                           let () = warn_at range "assertRaisesRegex hackish implementation, only .* at the end is supported" in
+                           let () = debug "assertRaisesRegex regex=%s exc_msg=%s" quoted_regex exc_msg in
                            if Str.string_match re exc_msg 0 then
                              Py_mopsa.check man (mk_py_true range) range flow >>$
                                fun _ flow ->
                                man.eval (mk_py_true range) flow
                            else
-                             Py_mopsa.check man (mk_py_false range) range flow
+                             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+                             man.eval (mk_py_false range) flow
 
                      )
                )
                ~felse:(fun flow ->
-                 Py_mopsa.check man (mk_py_false range) range flow
+                 debug "not the good type of exn";
+                 man.eval (mk_py_false range) flow
                )
                man flow
            )
            man flow
-         |> OptionExt.return
+           ) in
+         (* let _ = r >>$ fun r flow ->
+          *                debug "r = %a@.flow=%a" pp_expr r (format man.lattice.print) (Flow.get T_cur man.lattice flow);
+          *                Cases.empty flow in *)
+         r |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, _)
            when is_builtin_class_function "unittest.TestCase" f ->
