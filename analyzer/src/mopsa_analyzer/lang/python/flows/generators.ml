@@ -311,10 +311,10 @@ module Domain = struct
                   let r = Eval.empty (Flow.add tk cur' man.lattice flow) in
                   r :: acc
 
-               | Alarms.T_py_exception (obj, name, kind) ->
+               | Alarms.T_py_exception (obj, str, name, kind) ->
                   (* Save env in the token T_py_gen_stop and re-raise the exception *)
                   let r = Flow.add (T_py_gen_stop(self)) env man.lattice flow4 |>
-                    Flow.set (Alarms.T_py_exception (obj, name, kind)) env man.lattice |>
+                    Flow.set (Alarms.T_py_exception (obj, str, name, kind)) env man.lattice |>
                             Eval.empty in
                   r :: acc
 

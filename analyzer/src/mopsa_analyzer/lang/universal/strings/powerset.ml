@@ -27,12 +27,25 @@ open Bot
 open Sig.Abstraction.Simplified_value
 open Sig.Abstraction.Simplified
 
-module StringPower = Framework.Lattices.Powerset.Make
+module StringPower =
+  struct
+    include Framework.Lattices.Powerset.Make
                        (struct
                          type t = string
                          let compare = Stdlib.compare
                          let print = unformat Format.pp_print_string
                        end)
+
+    let print printer (abs:t) =
+      match abs with
+      | Top.TOP -> pp_string printer "⊤"
+      | Top.Nt s ->
+         let els = Set.elements s in
+         match els with
+         | [] -> pp_string printer "∅"
+         | [x] -> pp_string printer x
+         | _ -> pp_list pp_string printer (Set.elements s) ~lopen:"{" ~lsep:"," ~lclose:"}"
+  end
 
 type _ avalue_kind += V_strings_powerset : StringPower.t avalue_kind
 

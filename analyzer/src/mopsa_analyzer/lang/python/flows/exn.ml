@@ -70,59 +70,59 @@ module Domain =
         (* Execute try body *)
         begin
           man.exec body flow0 >>% fun try_flow ->
-                                  debug "post try flow:@\n  @[%a@]" (format (Flow.print man.lattice.print)) try_flow;
-                                  (* Execute handlers *)
-                                  let flow_caught, flow_uncaught =
-                                    List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
-                                        (* FIXME: I don't get why exec_except and escape_except are separated, and it seems to create more issues than anything. To merge *)
-                                        let caught = exec_except man excpt range acc_uncaught in
-                                        let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
-                                        let uncaught = escape_except man excpt range acc_uncaught in
-                                        let caught = Flow.copy_ctx uncaught caught in
-                                        Flow.join man.lattice acc_caught caught, uncaught)
-                                      (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_report try_flow), try_flow)  excepts in
+          debug "post try flow:@\n  @[%a@]" (format (Flow.print man.lattice.print)) try_flow;
+          (* Execute handlers *)
+          let flow_caught, flow_uncaught =
+            List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
+                (* FIXME: I don't get why exec_except and escape_except are separated, and it seems to create more issues than anything. To merge *)
+                let caught = exec_except man excpt range acc_uncaught in
+                let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
+                let uncaught = escape_except man excpt range acc_uncaught in
+                let caught = Flow.copy_ctx uncaught caught in
+                Flow.join man.lattice acc_caught caught, uncaught)
+              (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_report try_flow), try_flow)  excepts in
 
-                                  (* Execute else body after removing all exceptions *)
-                                  Flow.filter (function
-                                      | T_py_exception _ -> fun _ -> false
-                                      | _ -> fun _ -> true) try_flow |>
-                                    man.exec orelse >>% fun orelse_flow ->
+          (* Execute else body after removing all exceptions *)
+          Flow.filter (function
+              | T_py_exception _ -> fun _ -> false
+              | _ -> fun _ -> true) try_flow |>
+          man.exec orelse >>% fun orelse_flow ->
 
-                                                        let apply_finally finally flow =
-                                                          let open Universal.Iterators.Loops in
-                                                          let open Universal.Iterators.Interproc.Common in
-                                                          Flow.fold (fun acc tk env ->
-                                                              match tk with
-                                                              | T_cur | T_break | T_continue | T_return _ | T_py_exception _ ->
-                                                                 Flow.singleton (Flow.get_ctx acc) T_cur env |>
-                                                                   man.exec finally |> post_to_flow man |>
-                                                                   Flow.rename T_cur tk man.lattice |>
-                                                                   Flow.join man.lattice acc
-                                                              | _ ->
-                                                                 Flow.add tk env man.lattice acc
-                                                            ) (Flow.bottom_from flow) flow in
+          let apply_finally finally flow =
+            let open Universal.Iterators.Loops in
+            let open Universal.Iterators.Interproc.Common in
+            Flow.fold (fun acc tk env ->
+                match tk with
+                | T_cur | T_break | T_continue | T_return _ | T_py_exception _ ->
+                   Flow.singleton (Flow.get_ctx acc) T_cur env |>
+                     man.exec finally |> post_to_flow man |>
+                     Flow.rename T_cur tk man.lattice |>
+                     Flow.join man.lattice acc
+                | _ ->
+                   Flow.add tk env man.lattice acc
+              ) (Flow.bottom_from flow) flow in
 
-                                                        (* Execute finally body *)
-                                                        let flow_caught_finally =
-                                                          Flow.join man.lattice orelse_flow flow_caught |>
-                                                            apply_finally finally in
+          (* Execute finally body *)
+          let flow_caught_finally =
+            Flow.join man.lattice orelse_flow flow_caught |>
+              apply_finally finally in
 
-                                                        let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
-                                                        let flow_uncaught_finally =
-                                                          apply_finally finally flow_uncaught in
+          let flow_uncaught = Flow.copy_ctx flow_caught_finally flow_uncaught in
+          let flow_uncaught_finally =
+            apply_finally finally flow_uncaught in
 
-                                                        let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
+          let flow = Flow.join man.lattice flow_caught_finally flow_uncaught_finally in
 
-                                                        (* Restore old exceptions *)
-                                                        Post.return @@ Flow.fold (fun acc tk env ->
-                                                            match tk with
-                                                            | T_py_exception _ -> Flow.add tk env man.lattice acc
-                                                            | _ -> acc
-                                                          ) flow old_flow
+          (* Restore old exceptions *)
+          Post.return @@ Flow.fold (fun acc tk env ->
+                             match tk with
+                             | T_py_exception _ -> Flow.add tk env man.lattice acc
+                             | _ -> acc
+                           ) flow old_flow
         end |> OptionExt.return
 
       | S_py_raise(Some exp) ->
-        debug "Raising %a@\n" pp_expr exp;
+        Debug.debug ~channel:"bla" "Raising %a@\n" pp_expr exp;
         (man.eval   exp flow |>
          bind (fun case flow ->
              match case with
@@ -148,8 +148,7 @@ module Domain =
                        mk_py_unprecise_exception exp exc_str
                      else
                        let cs = Flow.get_callstack true_flow in
-                       mk_py_exception exp
-                         (if exc_message = "" then exc_str else (exc_str ^ ": " ^ exc_message))
+                       mk_py_exception exp exc_str exc_message
                          cs range
                    in
                    let flow' = Flow.add tk cur man.lattice true_flow |>
@@ -209,34 +208,29 @@ module Domain =
           (* Add exception that match expression e *)
           Flow.fold (fun acc tk env ->
               match tk with
-              | T_py_exception (exn, _, _) ->
+              | T_py_exception (exn, _, _, _) ->
                 (* Evaluate e in env to check if it corresponds to eaddr *)
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
                 let flow' =
-                  man.eval   e flow |>
-                  bind_result (fun e flow ->
-                      match ekind e with
-                      | E_py_object obj ->
-                         assume
-                          (mk_py_issubclass_builtin_r e "BaseException" range)
-                          man flow
-                          ~fthen:(fun flow ->
-                              assume
-                                (mk_py_isinstance exn e range)
-                                man
-                                ~fthen:(fun flow ->
-                                  man.exec (mk_assign (mk_var except_var range) exn range) flow)
-                                ~felse:(fun flow ->
-                                    Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
-                                  )
-                                flow
-                            )
-                          ~felse:(fun flow ->
-                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow)
-                      | _ -> assert false
+                  man.eval e flow >>$ fun e flow ->
+                  let _ = object_of_expr e in
+                  assume
+                    (mk_py_issubclass_builtin_r e "BaseException" range)
+                    man flow
+                    ~fthen:(fun flow ->
+                      assume
+                        (mk_py_isinstance exn e range)
+                        man
+                        ~fthen:(fun flow ->
+                          man.exec (mk_assign (mk_var except_var range) exn range) flow)
+                        ~felse:(fun flow ->
+                          Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
+                        )
+                        flow
                     )
-                in
+                    ~felse:(fun flow ->
+                      man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow) in
                 let flow' = post_to_flow man flow' in
                 Flow.fold (fun acc tk env ->
                     match tk with
@@ -274,7 +268,7 @@ module Domain =
          let flow =
            Flow.fold (fun acc tk env ->
                match tk with
-               | T_py_exception (exn, s, k) ->
+               | T_py_exception (exn, exn_str, exn_messages, k) ->
                   debug "tk is %a" pp_expr exn;
                   (* Evaluate e in env to check if it corresponds to exn *)
                   let flow = Flow.set T_cur env man.lattice flow0 in

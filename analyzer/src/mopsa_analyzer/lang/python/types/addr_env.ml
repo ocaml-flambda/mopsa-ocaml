@@ -424,11 +424,11 @@ struct
        let flow = set_env T_cur ncur man flow in
        let flow = Flow.fold (fun acc tk d ->
               match tk with
-              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
+              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, m, k) when compare_addr a oa = 0 ->
                  List.fold_left (fun acc ea' ->
                      match ekind ea' with
                      | E_addr (a', _) ->
-                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice (Flow.add tk d man.lattice acc)
+                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, m, k)) d man.lattice (Flow.add tk d man.lattice acc)
                      | _ -> assert false) acc addrs
               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow in
        begin match akind a with
@@ -453,14 +453,14 @@ struct
        let flow = set_env T_cur ncur man flow in
        let to_rename = Flow.fold (fun acc tk d ->
                            match tk with
-                           | T_py_exception ({ekind = E_py_object _}, _, _) -> true
+                           | T_py_exception ({ekind = E_py_object _}, _, _, _) -> true
                            | _ -> acc) false flow in
        let flow =
          if to_rename then
            Flow.fold (fun acc tk d ->
                match tk with
-               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
-                  Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, m, k) when compare_addr a oa = 0 ->
+                  Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, m, k)) d man.lattice acc
                | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow
          else
            flow in

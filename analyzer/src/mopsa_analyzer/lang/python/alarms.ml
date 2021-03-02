@@ -23,12 +23,12 @@ open Mopsa
 
 
 type check      += CHK_PY_UNCAUGHT_EXCEPTION
-type alarm_kind += A_py_uncaught_exception of expr * string
+type alarm_kind += A_py_uncaught_exception of expr * string * Universal.Strings.Powerset.StringPower.t
 
 
-let raise_py_uncaught_exception_alarm exn name range lattice flow =
+let raise_py_uncaught_exception_alarm exn exn_name exn_messages range lattice flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_py_uncaught_exception (exn,name)) cs range in
+  let alarm = mk_alarm (A_py_uncaught_exception (exn,exn_name,exn_messages)) cs range in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
 
@@ -45,17 +45,18 @@ let () =
                    );
       compare = (fun default a a' ->
         match a, a' with
-        | A_py_uncaught_exception (e, s), A_py_uncaught_exception (e', s') ->
+        | A_py_uncaught_exception (e, n, m), A_py_uncaught_exception (e', n', m') ->
            Compare.compose
              [
                (fun () -> compare_expr e e');
-               (fun () -> Stdlib.compare s s');
+               (fun () -> Stdlib.compare n n');
+               (fun () -> Universal.Strings.Powerset.StringPower.compare m m');
              ]
         | _ -> default a a'
       );
       print = (fun default fmt a ->
         match a with
-        | A_py_uncaught_exception (e, s) -> Format.fprintf fmt "Uncaught Python exception: %s" s
+        | A_py_uncaught_exception (e, n, m) -> Format.fprintf fmt "Uncaught Python exception: %s: %a" n (format Universal.Strings.Powerset.StringPower.print) m
         | _ -> default fmt a
         );
       join = (fun next a1 a2 ->
@@ -73,13 +74,13 @@ type py_exc_kind =
   | Py_exc_with_callstack of range * callstack
 
 type token +=
-  | T_py_exception of expr * string * py_exc_kind
+   | T_py_exception of expr (* the exception *) * string (* type of exception as str *) * Universal.Strings.Powerset.StringPower.t (* exception messages *) * py_exc_kind
 
 let mk_py_unprecise_exception obj name =
-  T_py_exception(obj,name,Py_exc_unprecise)
+  T_py_exception(obj,name,Universal.Strings.Powerset.StringPower.empty,Py_exc_unprecise)
 
-let mk_py_exception obj name ~cs range =
-  T_py_exception (obj, name, Py_exc_with_callstack (range,cs))
+let mk_py_exception obj name messages ~cs range =
+  T_py_exception (obj, name, messages, Py_exc_with_callstack (range,cs))
 
 let pp_py_exc_kind fmt = function
   | Py_exc_unprecise -> ()
@@ -89,9 +90,11 @@ let () =
   register_token {
     compare = (fun next tk1 tk2 ->
         match tk1, tk2 with
-        | T_py_exception (e1,_,k1), T_py_exception (e2,_,k2) ->
+        | T_py_exception (e1,n1,m1,k1), T_py_exception (e2,n2,m2,k2) ->
           Compare.compose [
-            (fun () -> compare_expr e1 e2);
+              (fun () -> compare_expr e1 e2);
+              (fun () -> Stdlib.compare n1 n2);
+              (fun () -> Universal.Strings.Powerset.StringPower.compare m1 m2);
             (fun () ->
                match k1, k2 with
                | Py_exc_unprecise, Py_exc_unprecise -> 0
@@ -107,7 +110,7 @@ let () =
       );
     print = (fun next fmt tk ->
         match tk with
-        | T_py_exception (_,str,k) -> Format.fprintf fmt "@[<hv 2>PyExc(%s)@,%a@]" str pp_py_exc_kind k
+        | T_py_exception (_,name,str,k) -> Format.fprintf fmt "@[<hv 2>PyExc(%s: %a)@,%a@]" name (format Universal.Strings.Powerset.StringPower.print) str pp_py_exc_kind k
         | _ -> next fmt tk);
   }
 

@@ -122,8 +122,8 @@ struct
   let collect_uncaught_exceptions man prog_range flow =
     Post.return @@ Flow.fold (fun acc tk env ->
         match tk with
-        | Alarms.T_py_exception (e, s, k) ->
-          let a = Alarms.A_py_uncaught_exception (e,s) in
+        | Alarms.T_py_exception (e, s, m, k) ->
+          let a = Alarms.A_py_uncaught_exception (e,s,m) in
           let alarm =
             match k with
             | Alarms.Py_exc_unprecise ->
