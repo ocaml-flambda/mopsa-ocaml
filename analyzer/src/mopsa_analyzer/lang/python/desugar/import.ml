@@ -199,7 +199,7 @@ module Domain =
                 let file_candidates = [dir ^ "/" ^ name ^ ".py";
                                        name ^ ".py";
                                        dir ^ "/typeshed/" ^ name ^ ".pyi";
-                                       name ^ "module.c";
+                                       (* name ^ "module.c"; *)
                                        "mopsa.db"
                                        ]
                 in
@@ -214,12 +214,17 @@ module Domain =
                 if filename = dir ^ "/typeshed/" ^ name ^ ".pyi" then
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
                   o, b, true, flow
-                else if List.mem filename [name ^ "module.c"; "mopsa.db"] then
+                else if List.mem filename [(*name ^ "module.c";*)
+                                           "mopsa.db"] then
                   let prog = C.Frontend.parse_program [filename] in
                   let () = debug "Parsed C program %a" pp_program prog in
                   let () = C.Iterators.Program.Domain.opt_entry_function := "PyInit_" ^ name in
+                  (* panic_at range "c.coverage hook mem: %b" (Hook.mem_hook "c.coverage"); *)
                   let () = debug "Searching for entry function %s" !C.Iterators.Program.Domain.opt_entry_function in
                   let flow = C.Iterators.Program.Domain.init prog man flow in
+                  let () =
+                    if Hook.is_hook_active "c.coverage" then
+                      C.Hooks.Coverage.Hook.init (Flow.get_ctx flow) in
                   let body = mk_stmt (S_program(prog, None)) range in
                   let addr =
                     {

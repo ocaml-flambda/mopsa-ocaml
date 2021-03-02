@@ -129,7 +129,7 @@ struct
     | None -> ()
     | Some fcov -> Hashtbl.replace cov c.call_fun_uniq_name (update_fun_cov range fcov)
 
-  
+
   (** Print coverage statistics *)
   let print_cov_stats () =
     (* Get analyzed functions *)
@@ -196,7 +196,7 @@ struct
     in
     printf "@\n"
 
-    
+
 
 
   (** {2 Initialization} *)
@@ -204,9 +204,11 @@ struct
 
   let init ctx =
     (* Initialize coverage table *)
-    let prog = find_ctx c_program_ctx ctx in
-    init_cov prog.c_functions
-
+    match find_ctx_opt c_program_ctx ctx with
+    | None ->
+       warn "%s hook initialization impossible: no C program in the context" name
+    | Some prog ->
+       init_cov prog.c_functions
 
   (** {2 Events handlers} *)
   (** ******************* *)
