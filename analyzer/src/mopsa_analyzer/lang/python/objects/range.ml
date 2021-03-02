@@ -190,18 +190,32 @@ struct
             Utils.check_instances f man flow range args
               ["int"; "int"; "int"]
               (fun args flow ->
-                 let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
-                 let alloc_range = tag_range range "alloc_%s" "range" in
-                 man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
-                   (fun eaddr flow ->
-                     let addr = Addr.from_expr eaddr in
-                     let obj = mk_py_object (addr, None) range in
-                     man.exec    (mk_add eaddr range) flow >>%
-                       man.exec   (mk_assign (mk_py_attr obj "start" range) start range) >>%
-                       man.exec   (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
-                       man.exec   (mk_assign (mk_py_attr obj "step" range) step range) >>%
-                       Eval.singleton obj
-                   )
+                let start, stop, step = match args with a::b::c::[] -> a, b, c | _ -> assert false in
+                let easy_constant = match snd @@ object_of_expr step with
+                | Some {ekind = E_constant (C_int z)} -> Some (Z.to_int z)
+                | _ -> None in
+                let do_alloc flow =
+                  let alloc_range = tag_range range "alloc_%s" "range" in
+                  man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
+                    (fun eaddr flow ->
+                      let addr = Addr.from_expr eaddr in
+                      let obj = mk_py_object (addr, None) range in
+                      man.exec (mk_add eaddr range) flow >>%
+                        man.exec (mk_assign (mk_py_attr obj "start" range) start range) >>%
+                        man.exec (mk_assign (mk_py_attr obj "stop" range) stop range) >>%
+                          man.exec (mk_assign (mk_py_attr obj "step" range) step range) >>%
+                        Eval.singleton obj
+                    ) in
+                match easy_constant with
+                | Some z when z <> 0 ->
+                   do_alloc flow
+                | Some z -> (* z = 0 *)
+                   man.exec (Utils.mk_builtin_raise_msg "ValueError" "range() arg 3 must not be zero" range) flow >>% Eval.empty
+                | None ->
+                  assume (ne step (mk_zero range ~typ:(T_py None)) ~etyp:(T_py None) range) man flow
+                    ~fthen:(do_alloc)
+                    ~felse:(fun flow ->
+                      man.exec (Utils.mk_builtin_raise_msg "ValueError" "range() arg 3 must not be zero" range) flow >>% Eval.empty)
               )
         )
 
@@ -210,20 +224,21 @@ struct
       Exceptions.panic "todo: %a@\n" pp_expr exp
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
-      man.eval   arg flow >>$
- (fun arg flow ->
-          let ra s = mk_py_attr arg s range in
-          man.eval
-            (mk_binop ~etyp:(T_py None)
-               (mk_binop ~etyp:(T_py None)
-                  (ra "stop")
-                  O_minus
-                  (ra "start")
-                  range
-               )
-               O_py_floor_div (ra "step") range) flow
-        )
-      |> OptionExt.return
+      man.eval arg flow >>$? fun arg flow ->
+      let ra s = mk_py_attr arg s range in
+      Utils.try_eval_expr ~on_empty:(fun _ _ _ _ -> None)
+        ~on_result:(Eval.singleton)
+        man
+        (mk_binop ~etyp:(T_py None)
+           (mk_binop ~etyp:(T_py None)
+              (ra "stop")
+              O_minus
+              (ra "start")
+              range
+           )
+           O_py_floor_div (ra "step") range)
+        flow
+        range
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f, _))}, _)}, args, []) ->
        Utils.check_instances f man flow range args
