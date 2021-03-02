@@ -6,7 +6,7 @@ variables:
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
 
-image: mopsa/mopsa-build:latest
+image: mopsa-cpython:latest
 
 stages:
 - build
@@ -38,7 +38,6 @@ build_job:
     - eval `opam config env`
     - echo $CPY_FILE
     - echo $PWD
-    - sudo apt-get install python3-dev python3-setuptools
     - cd analyzer/tests/cpython
     - LDSHARED="../../../bin/mopsa-wrappers/x86_64-linux-gnu-gcc -shared" CC="../../../bin/mopsa-wrappers/x86_64-linux-gnu-gcc" python3 setup.py build --force
     - ../../../bin/mopsa-cpython $CPY_FILE > log || true
