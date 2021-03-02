@@ -1,5 +1,5 @@
 #include <Python.h>
-#include "structmember.h"
+#include <structmember.h>
 
 #ifdef MOPSA
 #include "python_stubs.c"
