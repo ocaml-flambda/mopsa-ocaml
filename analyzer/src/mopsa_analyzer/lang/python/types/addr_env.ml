@@ -151,7 +151,7 @@ struct
        Post.return flow
     | Some aset ->
        let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
-       let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
+       let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind a) = 0 | _ -> false) aset in
        let float = check_baddr addr_float in
        let str = check_baddr addr_strings in
        (if str then let () = debug "processing %a for strings" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
@@ -424,11 +424,11 @@ struct
        let flow = set_env T_cur ncur man flow in
        let flow = Flow.fold (fun acc tk d ->
               match tk with
-              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
+              | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, m, k) when compare_addr a oa = 0 ->
                  List.fold_left (fun acc ea' ->
                      match ekind ea' with
                      | E_addr (a', _) ->
-                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice (Flow.add tk d man.lattice acc)
+                        Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, m, k)) d man.lattice (Flow.add tk d man.lattice acc)
                      | _ -> assert false) acc addrs
               | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow in
        begin match akind a with
@@ -453,14 +453,14 @@ struct
        let flow = set_env T_cur ncur man flow in
        let to_rename = Flow.fold (fun acc tk d ->
                            match tk with
-                           | T_py_exception ({ekind = E_py_object _}, _, _) -> true
+                           | T_py_exception ({ekind = E_py_object _}, _, _, _) -> true
                            | _ -> acc) false flow in
        let flow =
          if to_rename then
            Flow.fold (fun acc tk d ->
                match tk with
-               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, k) when compare_addr a oa = 0 ->
-                  Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, k)) d man.lattice acc
+               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, m, k) when compare_addr a oa = 0 ->
+                  Flow.add (T_py_exception ({e with ekind = E_py_object (a', oe)}, s, m, k)) d man.lattice acc
                | _ -> Flow.add tk d man.lattice acc) (Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow)) flow
          else
            flow in
@@ -495,20 +495,11 @@ struct
        end |> OptionExt.return
 
     | S_py_delete {ekind = E_var (v, _)} ->
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_unsupported_stmt stmt)
-           range flow
-       in
-       man.exec   (mk_remove_var v range) flow |> OptionExt.return
+       man.exec (mk_remove_var v range) flow |> OptionExt.return
 
-    | S_py_delete _ ->
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_unsupported_stmt stmt)
-           range flow
-       in
-       flow |> Post.return |> OptionExt.return
+    | S_py_delete {ekind = E_py_index_subscript(v, index)} ->
+       man.exec (mk_expr_stmt (mk_py_call (mk_py_attr v "__delitem__" range) [index] range) range) flow
+       |> OptionExt.return
 
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
@@ -766,7 +757,7 @@ struct
                      if List.exists (fun a' -> compare_addr  addr (OptionExt.none_to_exn a') = 0)
                           [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
                        (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
-                     else if compare_addr (OptionExt.none_to_exn !addr_integers) addr = 0 then
+                     else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind addr) = 0 then
                        let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
                        let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
                        (s, int_info) :: acc

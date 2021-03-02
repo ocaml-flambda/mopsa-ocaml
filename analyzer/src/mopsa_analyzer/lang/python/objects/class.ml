@@ -116,13 +116,13 @@ struct
             | [] -> [find_builtin "object"]
             | _ -> List.map (fun x -> let a, e = object_of_expr x in (a, None))  bases
           in
-          if Libs.Py_mopsa.is_builtin_clsdec cls then
-            let name = Libs.Py_mopsa.builtin_clsdec_name cls in
+          if is_builtin_clsdec cls then
+            let name = builtin_clsdec_name cls in
             create_builtin_class (C_builtin name) name cls bases' range;
             man.exec cls.py_cls_body flow >>%
             Post.return
           else
-          if Libs.Py_mopsa.is_unsupported_clsdec cls then
+          if is_unsupported_clsdec cls then
             let name = get_orig_vname cls.py_cls_var in
             create_builtin_class (C_unsupported name) name cls bases' range;
             man.exec cls.py_cls_body flow >>%

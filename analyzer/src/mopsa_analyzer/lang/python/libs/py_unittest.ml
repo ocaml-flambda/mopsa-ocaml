@@ -29,6 +29,13 @@ open Addr
 open Ast
 open Universal.Ast
 
+let () = Universal.Heap.Policies.register_mk_addr
+           (fun default ak -> match ak with
+                              | A_py_instance {addr_kind = A_py_class (C_user c, _)} when get_orig_vname c.py_cls_var = "ExceptionContext" && Filename.basename (Location.get_range_file c.py_cls_range) = "unittest.py" ->
+                                 Universal.Heap.Policies.mk_addr_range ak
+                              | _ -> default ak)
+
+
 module Domain =
   struct
 
@@ -146,6 +153,12 @@ module Domain =
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2; _], [])
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2], []) ->
+         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ne arg2 range) range flow
+         |> OptionExt.return
+
+
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
          Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_gt arg2 range) range flow
          |> OptionExt.return
@@ -203,45 +216,30 @@ module Domain =
          Py_mopsa.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
          |> OptionExt.return
 
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin "unittest.TestCase.assertRaises")}, _)}, test :: exn :: f :: args, []) ->
-       *    let stmt = mk_try
-       *                 (mk_block [
-       *                      mk_stmt (S_expression (mk_py_call f args range)) range;
-       *                      mk_assert_unreachable range
-       *                    ] range)
-       *                 [
-       *                   mk_except
-       *                     (Some exn)
-       *                     None
-       *                     (mk_assert_reachable range);
-       *                   mk_except
-       *                     None
-       *                     None
-       *                     (mk_assert_unreachable range)
-       *                 ]
-       *                 (mk_block [] range)
-       *                 (mk_block [] range)
-       *                 range
-       *    in
-       *    let flow = man.exec stmt flow in
-       *    Eval.singleton (mk_py_none range) flow
-       *    |> OptionExt.return *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)} as caller, test :: exn :: f :: args, []) ->
+         (* rewriting into: with exn: f(args) *)
+         let stmt = mk_stmt (S_py_with ({exp with ekind = E_py_call(caller, [test;exn], [])}, None,
+                      mk_stmt (S_expression (mk_py_call f args range)) range)) range
+         in
+         man.exec stmt flow >>%
+         Eval.singleton (mk_py_none range)
+         |> OptionExt.return
 
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
-       *    (\* Instantiate ExceptionContext with the given exception exn *\)
-       *    let exp' = mk_call "unittest.ExceptionContext" [exn] range in
-       *    man.eval exp' flow |> OptionExt.return *)
-
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, _, _) ->
-       *    Py_mopsa.check man (mk_py_top T_py_bool range) range flow
-       *    |> OptionExt.return *)
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
+         (* Instantiate ExceptionContext with the given exception exn *)
+         let unittest = OptionExt.none_to_exn @@ man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow in
+         let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
+         man.eval exp' flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
+         let r = man.eval exn flow >>$ (fun exn flow ->
+          debug "ExceptionContext: self = %a, exn = %a" pp_expr self pp_expr exn;
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
            ~fthen:(fun flow ->
              (* No exception raised => assertion failed *)
-             Py_mopsa.check man (mk_py_false range) range flow
+             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+             man.eval (mk_py_false range) flow
            )
            ~felse:(fun flow ->
              (* Check that the caught exception is an instance of the expected exception *)
@@ -270,24 +268,36 @@ module Domain =
                                man.eval (mk_py_true range) flow
                          else
                            let exc_msg = Universal.Strings.Powerset.StringPower.choose exc_powerset in
-                           let re = Str.regexp regex in
-                           let () = warn_at range "assertRaisesRegex hackish implementation" in
+                           let quoted_regex =
+                             if String.length regex >= 2 && String.sub regex (String.length regex - 2) 2 = ".*" then
+                               Str.quote (String.sub regex 0 (String.length regex - 2)) ^ ".*"
+                             else
+                               Str.quote regex in
+                           let re = Str.regexp quoted_regex in
+                           let () = warn_at range "assertRaisesRegex hackish implementation, only .* at the end is supported" in
+                           let () = debug "assertRaisesRegex regex=%s exc_msg=%s" quoted_regex exc_msg in
                            if Str.string_match re exc_msg 0 then
                              Py_mopsa.check man (mk_py_true range) range flow >>$
                                fun _ flow ->
                                man.eval (mk_py_true range) flow
                            else
-                             Py_mopsa.check man (mk_py_false range) range flow
+                             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+                             man.eval (mk_py_false range) flow
 
                      )
                )
                ~felse:(fun flow ->
-                 Py_mopsa.check man (mk_py_false range) range flow
+                 debug "not the good type of exn";
+                 man.eval (mk_py_false range) flow
                )
                man flow
            )
            man flow
-         |> OptionExt.return
+           ) in
+         (* let _ = r >>$ fun r flow ->
+          *                debug "r = %a@.flow=%a" pp_expr r (format man.lattice.print) (Flow.get T_cur man.lattice flow);
+          *                Cases.empty flow in *)
+         r |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, _)
            when is_builtin_class_function "unittest.TestCase" f ->

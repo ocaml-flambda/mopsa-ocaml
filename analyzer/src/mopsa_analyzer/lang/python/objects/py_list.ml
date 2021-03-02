@@ -510,16 +510,14 @@ struct
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin other "range" range) man flow
                    ~fthen:(fun flow ->
-                     (* FIXME: length precision *)
-                     (* TODO: more precision on top (for range) *)
                      let ra a = mk_py_attr other a range in
                      let flow =
                        flow |>
                          man.exec   (mk_assign (mk_var var_els range) (mk_py_top T_int range) range) >>%
                          man.exec   (mk_assume (mk_binop ~etyp:(T_py None)
-                                                (mk_binop ~etyp:(T_py None) (ra "start") O_le (mk_var var_els range) range)
+                                                (mk_binop ~etyp:(T_py None) (ra "start") O_le (mk_var ~mode:(Some STRONG) var_els range) range)
                                                 O_py_and
-                                                (mk_binop ~etyp:(T_py None) (mk_var var_els range) O_lt (ra "stop") range) range) range) in
+                                                (mk_binop ~etyp:(T_py None) (mk_var ~mode:(Some STRONG) var_els range) O_lt (ra "stop") range) range) range) in
                      flow >>%
                      man.eval
                        (mk_py_call (mk_py_object (find_builtin_function "len") range) [other] range) >>$
@@ -564,9 +562,24 @@ struct
                                      )
                                  )
                                ~felse:(fun flow ->
-                                 let msg = Format.asprintf "%a is not iterable" pp_expr list in
-                                   man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
-                                 )
+                                 (* last chance:
+                                    for item in other:
+                                      list.append(item)
+                                    if the loop fails, it'll create the good exception, which is TypeError: 'other' is not iterable
+                                  *)
+                                 let item = mk_range_attr_var range "tmp_item" (T_py None) in
+                                 let loop =
+                                   mk_stmt
+                                     (
+                                       S_py_for (mk_var item range, other,
+                                                 mk_expr_stmt (mk_py_call (mk_py_object (find_builtin_function "list.append") range) [list; mk_var item range] range) range
+                                                 , mk_block [] range)
+                                     ) range in
+                                 man.exec loop flow >>%
+                                   man.exec (mk_remove_var item range) >>%
+                                   man.eval (mk_py_none range)
+                               )
+                         )
                      )
                )
         )
@@ -642,6 +655,30 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__delitem__" as f, _))}, _)}, args, []) ->
+       Utils.check_instances f man flow range args
+         ["list"; "int"]
+         (fun args flow ->
+           (* FIXME: the list abstraction should keep what might have been deleted too? *)
+           let list, index = match args with [a;b] -> a, b | _ -> assert false in
+           let len_list = mk_var (length_var_of_eobj list) range in
+           man.eval index flow >>$ fun index flow ->
+           let index_u = OptionExt.none_to_exn @@ snd @@ object_of_expr index in
+           assume
+             (log_and
+                (le (mk_zero ~typ:T_int range) index_u ~etyp:T_bool range)
+                (lt index_u len_list ~etyp:T_bool range)
+                ~etyp:T_bool
+                range
+             )
+             man flow
+             ~fthen:(fun flow ->
+               man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) flow >>%
+             man.eval (mk_py_none range)
+             )
+             ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow >>% Eval.empty)
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.remove" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:1 f man flow range args
@@ -770,6 +807,8 @@ struct
           l = ['a', 'b', 'c']
           l.remove('a')
           assert(not l.contains('a'))
+
+          FIXME: unsure because var_of_eobj list should be weak and thus everything ok
         *)
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["list"]
         (fun args flow ->
@@ -1087,6 +1126,10 @@ struct
          )
        |> OptionExt.return
 
+    | S_add {ekind = E_addr ({addr_kind = A_py_iterator _}, _)} ->
+       Post.return flow |> OptionExt.return
+
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_iterator (kind, _)} as a, _)}, {ekind = E_addr (a', _)}) ->
        let va = itseq_of_addr a in
        let va' = itseq_of_addr a' in
@@ -1161,6 +1204,9 @@ struct
          man.exec   (mk_stmt va vas range) >>%
          man.exec  (mk_stmt la las range) |>
          OptionExt.return
+
+    | S_add {ekind = E_addr ({addr_kind = A_py_list}, _)} ->
+       Post.return flow |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_list} as a, _)}, {ekind = E_addr (a', _)}) ->
       (* FIXME: I guess we could just do it for every data_container. Maybe add a data_container domain on top of them performing the renaming?*)
