@@ -137,6 +137,8 @@ let init_hook hook ctx =
     let () = Hashtbl.add initialized_hooks hook (module H) in
     H.init ctx
 
+let is_hook_active n : bool =
+  Hashtbl.mem active_hooks n
 
 (** Initialize all active hooks *)
 let init_active_hooks ctx =
