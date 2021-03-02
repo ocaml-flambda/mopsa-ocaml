@@ -202,7 +202,7 @@ class Test(unittest.TestCase):
         r3 = c.callback(callback3)
         self.assertEqual(r3[0], a)
         self.assertEqual(r3[1], 3)
-        with self.assertRaisesRegex(TypeError, "unsupported operanted type(s) for +.*"):
+        with self.assertRaisesRegex(TypeError, "unsupported operand type(s) for '+': .*"):
             r4 = c.callback(callback4)
         # with self.assertRaisesRegex(TypeError, "Argument must be a callable"):
         #     r5 = c.callback("notafunction")

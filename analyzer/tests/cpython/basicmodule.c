@@ -93,7 +93,7 @@ Cbox_callback(Cbox *self, PyObject *args)
 {
     PyObject* callback = PyTuple_GetItem(args, 0);
     if(!PyCallable_Check(callback)) {
-        PyErr_SetString(PyExc_TypeError, "Argument must be a callable");
+        PyErr_SetString(PyExc_ValueError, "Argument must be a callable");
         return NULL;
     }
     PyObject* res =  PyObject_CallFunction(callback, "Oi", self->contents, self->counter);

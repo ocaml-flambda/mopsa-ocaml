@@ -1346,41 +1346,86 @@ module Domain =
 
 
       | E_c_builtin_call ("PyObject_CallFunction", callable::fmt::refs) ->
-         c_to_python_boundary callable man flow range >>$
+         c_to_python_boundary callable man flow range >>$?
            (fun py_callable flow ->
-             safe_get_name_of fmt man flow >>$
+             safe_get_name_of fmt man flow >>$?
                fun ofmt_str flow ->
                (* FIXME: fmt can be null, meaning no arguments *)
                let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
-               build_value man flow range fmt_str refs >>$
+               build_value man flow range fmt_str refs >>$?
                  fun tuple flow ->
-                 fold_c_to_python_boundary man range tuple flow >>$
+                 fold_c_to_python_boundary man range tuple flow >>$?
                    fun py_tuple flow ->
                    (* FIXME: what happens if an exception is raised? *)
-                   man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable py_tuple range) flow >>$
-                     fun py_call_res flow ->
-                     debug "py_call_res %a" pp_expr py_call_res;
-                     let addr_py_res, oe_py_res = object_of_expr py_call_res in
-                     let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
-                     debug "PyObject_CallFunction: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
-                     man.eval c_addr flow
-
-           ) |> OptionExt.return
+                   Python.Utils.try_eval_expr
+                     man ~route:(Semantic "Python")
+                     (Python.Ast.mk_py_call py_callable py_tuple range) flow range
+                     ~on_empty:(fun exc_exp exc_str exc_msg flow ->
+                       (* exception raised on the python side:
+                          let's put in the exc field, and return NULL *)
+                       man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+                       let exc_addr, exc_oe = object_of_expr exc_typ in
+                       let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+                       let setstring msg =
+                           man.exec
+                             (mk_c_call_stmt
+                                (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                                [
+                                  mk_addr exc_addr range;
+                                  msg
+                                ]
+                                range) flow
+                            >>%
+                              man.eval (mk_c_null range) in
+                       Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+                         (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+                       |> OptionExt.return
+                     )
+                     ~on_result:(fun py_call_res flow ->
+                        debug "py_call_res %a" pp_expr py_call_res;
+                        let addr_py_res, oe_py_res = object_of_expr py_call_res in
+                        let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
+                        debug "PyObject_CallFunction: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
+                        man.eval c_addr flow
+                     )
+           )
 
       | E_c_builtin_call ("PyObject_CallObject", [callable;arg]) ->
-         c_to_python_boundary callable man flow range >>$ (fun py_callable flow ->
-         c_to_python_boundary ~on_null:(fun flow -> man.eval ~route:(Semantic "Python") (mk_expr ~etyp:(T_py None) (E_py_tuple []) range) flow) arg man flow range >>$ fun py_arg flow ->
+         c_to_python_boundary callable man flow range >>$? (fun py_callable flow ->
+         c_to_python_boundary ~on_null:(fun flow -> man.eval ~route:(Semantic "Python") (mk_expr ~etyp:(T_py None) (E_py_tuple []) range) flow) arg man flow range >>$? fun py_arg flow ->
          (* FIXME: we're assuming py_arg is a tuple but we shoudl check *)
          let py_arg_vars = Python.Objects.Tuple.Domain.var_of_eobj py_arg in
          (* FIXME: also handle case where an exception is raised *)
          debug "calling object";
-         man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow >>$
-           fun py_call_res flow ->
-           debug "calling object done, got %a" pp_expr py_call_res;
-           let addr_py_res, oe_py_res = object_of_expr py_call_res in
-           let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
-           man.eval c_addr flow
-        ) |> OptionExt.return
+         Python.Utils.try_eval_expr man ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow range
+           ~on_empty:(fun exc_exp exc_name exc_msg flow ->
+                       (* exception raised on the python side:
+                          let's put in the exc field, and return NULL *)
+                       man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+                       let exc_addr, exc_oe = object_of_expr exc_typ in
+                       let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+                       let setstring msg =
+                           man.exec
+                             (mk_c_call_stmt
+                                (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                                [
+                                  mk_addr exc_addr range;
+                                  msg
+                                ]
+                                range) flow
+                            >>%
+                              man.eval (mk_c_null range) in
+                       Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+                         (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+                       |> OptionExt.return
+           )
+           ~on_result:(fun py_call_res flow ->
+             debug "calling object done, got %a" pp_expr py_call_res;
+             let addr_py_res, oe_py_res = object_of_expr py_call_res in
+             let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
+             man.eval c_addr flow
+           )
+        )
 
       | E_c_builtin_call ("PyObject_RichCompareBool", [left; right; op]) ->
          c_to_python_boundary left man flow range >>$ (fun py_left flow ->
