@@ -307,85 +307,90 @@ test-pyty 3/3:
     PY_FILE: 'exception_tests.py'
   extends: .test-pyty
 
-test-py 1/16:
+test-py 1/17:
   variables:
     PY_FILE: 'bool_tests.py'
   extends: .test-py
 
-test-py 2/16:
+test-py 2/17:
   variables:
     PY_FILE: 'builtins_tests.py'
   extends: .test-py
 
-test-py 3/16:
+test-py 3/17:
   variables:
     PY_FILE: 'class_tests.py'
   extends: .test-py
 
-test-py 4/16:
+test-py 4/17:
   variables:
     PY_FILE: 'dict_tests.py'
   extends: .test-py
 
-test-py 5/16:
+test-py 5/17:
   variables:
     PY_FILE: 'exception_tests.py'
   extends: .test-py
 
-test-py 6/16:
+test-py 6/17:
   variables:
     PY_FILE: 'float_tests.py'
   extends: .test-py
 
-test-py 7/16:
+test-py 7/17:
   variables:
     PY_FILE: 'function_tests.py'
   extends: .test-py
 
-test-py 8/16:
+test-py 8/17:
   variables:
     PY_FILE: 'generator_tests.py'
   extends: .test-py
 
-test-py 9/16:
+test-py 9/17:
   variables:
     PY_FILE: 'int_tests.py'
   extends: .test-py
 
-test-py 10/16:
+test-py 10/17:
   variables:
     PY_FILE: 'iter_assign_tests.py'
   extends: .test-py
 
-test-py 11/16:
+test-py 11/17:
   variables:
     PY_FILE: 'list_tests.py'
   extends: .test-py-no-unittest
 
-test-py 12/16:
+test-py 12/17:
   variables:
     PY_FILE: 'loop_tests.py'
   extends: .test-py
 
-test-py 13/16:
+test-py 13/17:
   variables:
     PY_FILE: 'misc_tests.py'
   extends: .test-py
 
-test-py 14/16:
+test-py 14/17:
   variables:
     PY_FILE: 'operator_tests.py'
   extends: .test-py
 
-test-py 15/16:
+test-py 15/17:
   variables:
     PY_FILE: 'str_tests.py'
   extends: .test-py
 
-test-py 16/16:
+test-py 16/17:
   variables:
     PY_FILE: 'with_tests.py'
   extends: .test-py
+
+test-py 17/17:
+  variables:
+    PY_FILE: 'import_tests.py'
+  extends: .test-py-no-unittest
 
 test-typpete 1/43:
   variables:
