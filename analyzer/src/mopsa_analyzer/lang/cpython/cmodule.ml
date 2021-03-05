@@ -1066,18 +1066,18 @@ module Domain =
 
 
       | E_c_builtin_call ("PyModule_AddObject", [module_object; obj_name; obj]) ->
-         resolve_c_pointer_into_addr module_object man flow >>$
+         c_to_python_boundary module_object man flow range >>$
            (
-             fun module_oaddr flow ->
-             let module_addr = OptionExt.none_to_exn module_oaddr in
+             fun module_object flow ->
+             let module_addr, module_oexpr = object_of_expr module_object in
 
              safe_get_name_of obj_name man flow >>$
                fun oobj_name flow ->
                let obj_name = Top.top_to_exn (OptionExt.none_to_exn oobj_name) in
 
-               resolve_c_pointer_into_addr obj man flow >>$
-                 fun obj_oaddr flow ->
-                 let obj_addr = OptionExt.none_to_exn obj_oaddr in
+               c_to_python_boundary obj man flow range >>$
+                 fun obj flow ->
+                 let obj_addr, obj_oe = object_of_expr obj in
                  (* bind class to module *)
                  bind_in_python module_addr obj_name obj_addr range man flow
                  >>= fun flow ->
@@ -1779,7 +1779,7 @@ module Domain =
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("member_descriptor.__get__", "wrapper_descriptor"))}, _)},
                    member_descr_instance ::
                      inst ::
-                       ({ekind = E_py_object ({addr_kind = A_py_c_class c}, _)} as cls_inst) :: [],
+                       cls_inst :: [],
                    kwargs) ->
          (* FIXME: reuse the Py/C call machinery+checks above *)
          debug "member_get";
