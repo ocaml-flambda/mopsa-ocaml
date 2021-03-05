@@ -301,6 +301,10 @@ module Domain =
         man.eval (mk_avalue_from_pyaddr obj_addr T_int range) flow >>$
           fun int_value flow ->
           Cases.return (Some int_value) flow
+       else if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_strings) = 0 then
+        man.eval (mk_avalue_from_pyaddr obj_addr T_string range) flow >>$
+          fun str_value flow ->
+          Cases.return (Some str_value) flow
       else
         Cases.return None flow) >>$
         fun obj_oe flow ->
