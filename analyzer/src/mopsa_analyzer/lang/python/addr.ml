@@ -282,6 +282,29 @@ let mk_py_type e range =
   let obj = find_builtin "type" in
   mk_py_call (mk_py_object obj range) [e] range
 
+type py_c_function_kind =
+  | Builtin_function_or_method
+  | Wrapper_descriptor of string option (* optional wrapper: in that case name *)
+  | Method_descriptor
+
+let str_of_py_c_function_kind =
+  function
+  | Builtin_function_or_method -> "builtin_function_or_method"
+  | Wrapper_descriptor _ -> "wrapper_descriptor"
+  | Method_descriptor -> "method_descriptor"
+
+(* multilanguage *)
+type addr_kind +=
+   | A_py_c_module of string (** name *) (** Mopsa.program (* C program *)*)
+   | A_py_c_function of
+       string (** name *) *
+       int (** function uid *) *
+       py_c_function_kind *
+       int option (* ml_flags *) *
+       py_object (** self *)
+   | A_py_c_class of var (** static variable used in the C stack to define the class *)
+
+
 exception C3_lin_failure
 
 (** Computes the c3 linearization of an object. This is Python's
@@ -326,7 +349,8 @@ let rec c3_lin (obj: py_object) : py_object list =
    *)
   match kind_of_object obj with
   | A_py_class (C_builtin "object", b) -> [obj]
-  | A_py_class (c, [])  -> [obj]
+  | A_py_class (_, [])
+  | A_py_c_class _  -> [obj; find_builtin "object"]
   | A_py_class (c, bases) ->
      let l_bases = List.map c3_lin bases in
      let bases = List.map (fun x -> [x]) bases in
@@ -473,27 +497,6 @@ let register_addr_kind_structural_type f  = structural_type_of_addr_kind := f !s
 let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak
 let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
 
-type py_c_function_kind =
-  | Builtin_function_or_method
-  | Wrapper_descriptor of string option (* optional wrapper: in that case name *)
-  | Method_descriptor
-
-let str_of_py_c_function_kind =
-  function
-  | Builtin_function_or_method -> "builtin_function_or_method"
-  | Wrapper_descriptor _ -> "wrapper_descriptor"
-  | Method_descriptor -> "method_descriptor"
-
-(* multilanguage *)
-type addr_kind +=
-   | A_py_c_module of string (** name *) (** Mopsa.program (* C program *)*)
-   | A_py_c_function of
-       string (** name *) *
-       int (** function uid *) *
-       py_c_function_kind *
-       int option (* ml_flags *) *
-       py_object (** self *)
-   | A_py_c_class of var (** static variable used in the C stack to define the class *)
 
 
 let mro (obj: py_object) : py_object list =

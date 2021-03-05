@@ -153,9 +153,19 @@ struct
                end
             end
 
-          | A_py_instance cls, A_py_c_class _ ->
-             warn_at range "isinstance: inheritance not handled with C-defined classes";
-             man.eval (mk_py_bool (compare_addr cls addr_attr = 0) range) flow
+          | A_py_instance cls, A_py_c_class c ->
+             begin match akind cls with
+             | A_py_class (_, imro) ->
+                let res = List.exists (fun x -> match akind @@ fst x with
+                                                | A_py_c_class x -> compare_var x c = 0
+                                                | _ -> false) imro in
+                man.eval (mk_py_bool res range) flow
+
+             | A_py_c_class c' ->
+                man.eval (mk_py_bool (compare_var c c' = 0) range) flow
+
+             | _ -> assert false
+             end
 
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow

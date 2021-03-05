@@ -760,11 +760,30 @@ module Domain =
               man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
+              let set_tp_alloc_py_class = C.Ast.find_c_fundec_by_name "set_tp_alloc_py_class" flow in
               let flow =
                 if is_cls then
                   (* if cls: should call set_default_flags *)
                   post_to_flow man
                     (
+                      (* FIXME:
+                         inherit_slots;
+                         inheriting builtin types doesn't propagate the types, done by inherit_special in typeobject.c
+                       *)
+                      let flow =
+                        match akind addr with
+                        | A_py_class (_, m) ->
+                           let base_addr, _ = List.hd @@ List.tl m in
+                           let base_obj = py_addr_to_c_expr base_addr pytypeobject_typ range man flow in
+                           post_to_flow man
+                             (man.exec
+                             (mk_expr_stmt
+                                (mk_c_call
+                                   set_tp_alloc_py_class
+                                   [obj; base_obj]
+                                   range)
+                                range) flow)
+                        | _ -> flow in
                       man.exec
                         (mk_expr_stmt
                            (mk_c_call
@@ -1781,9 +1800,10 @@ module Domain =
          )
          |> OptionExt.return
 
+
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("member_descriptor.__set__", "wrapper_descriptor"))}, _)},
                    member_descr_instance ::
-                     ({ekind = E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_c_class c}}, _)} as inst) ::
+                     ({ekind = E_py_object ({addr_kind = A_py_instance _}, _)} as inst) ::
                        value :: [],
                    kwargs) ->
          let cfunc = find_c_fundec_by_name "PyMember_SetOne" flow in
