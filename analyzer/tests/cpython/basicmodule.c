@@ -555,5 +555,6 @@ PyInit_basic(void) // need to define PyInit_c rather than _bla
         return NULL;
     }
     PyModule_AddIntConstant(m, "version", 0);
+    PyModule_AddObject(m, "version_str", Py_BuildValue("s", "0.0.0"));
     return m;
 }

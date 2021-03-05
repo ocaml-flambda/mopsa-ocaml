@@ -14,6 +14,9 @@ class Test(unittest.TestCase):
     def test_module_addintconstant(self):
         self.assertEqual(basic.version, 0)
 
+    def test_module_addstringconstant(self):
+        self.assertEqual(basic.version_str, "0.0.0")
+
     def test_type_int(self):
         # tests c function calls, PyArg_ParseTuple on one object, and Py_TYPE
         self.assertEqual(basic.typ(0), int)
@@ -52,6 +55,25 @@ class Test(unittest.TestCase):
         self.assertEqual(c.counter, 4)
         c.counter += 3
         self.assertEqual(c.counter, 7)
+
+    def test_c_subclass(self):
+        class C(basic.Cbox): pass
+        a = A(1)
+        c = C(a, 3)
+        self.assertIsInstance(c, basic.Cbox)
+        self.assertIsInstance(c, C)
+        self.assertEqual(c.getcontents(), a)
+        self.assertEqual(c.contents, a)
+        a.x = 3
+        self.assertEqual(c.contents.x, a.x)
+        c.contents.x = 4
+        self.assertEqual(a.x, c.contents.x)
+        self.assertEqual(c.counter, 3)
+        self.assertEqual(c.incr(), None)
+        self.assertEqual(c.counter, 4)
+        c.counter += 3
+        r = c.counter
+        self.assertEqual(r, 7)
 
     def test_c_casesplit(self):
         a = A(1)
