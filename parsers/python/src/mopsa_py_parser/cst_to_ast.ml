@@ -716,5 +716,5 @@ and block_range sl =
     mk_orig_range (get_range_start hd.srange) (get_range_end last.srange)
 
 and module_hd modl =
-  Str.split (Str.regexp "\\.") modl |>
-  List.hd
+  let s = Str.split (Str.regexp "\\.") modl in
+  List.nth s (List.length s - 1)

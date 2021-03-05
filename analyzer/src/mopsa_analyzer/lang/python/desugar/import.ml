@@ -77,7 +77,8 @@ module Domain =
         match x with
         | Nt s ->
            if ModuleSet.cardinal x = 1 then ModuleSet.choose x
-           else assert false
+           else
+             assert false
         | _ -> raise Not_found
     end
 
@@ -104,12 +105,6 @@ module Domain =
     let rec exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
-      | S_py_import(modul, _, _) when String.contains modul '.'->
-         panic_at range "import of sub-module %s not supported" modul
-
-      | S_py_import_from(modul, _, _, _) when String.contains modul '.'->
-         panic_at range "import from sub-module %s not supported" modul
-
       | S_py_import(modul, vasname, vroot) ->
         begin debug "stmt = %a" pp_stmt stmt;
         try
@@ -118,6 +113,7 @@ module Domain =
             | None -> vroot
             | Some v -> v
           in
+          debug "performing assignement %a = %a" pp_var v Pp.pp_py_object obj;
           man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow >>%
           Post.return |>
           OptionExt.return
@@ -133,7 +129,7 @@ module Domain =
         (* FIXME: objects defined in modul other than name should not appear *)
         debug "importing %s from module %s" name modul;
         let obj, flow, ispyi = import_module man modul range flow in
-        debug "import ok, adding a few eq";
+        debug "%a import_module ok, adding a few eq" pp_stmt stmt;
         if ispyi then
           match kind_of_object obj with
           | A_py_module (M_user (_, globals)) ->
@@ -148,7 +144,7 @@ module Domain =
                 let v =
                   try List.find (fun v -> get_orig_vname v = name) globals
                   with Not_found ->
-                    panic_at range "import: name %s not found in module %s" name modul
+                    panic_at range "import: name %s not found in module %s@.globals = %a" name modul (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) globals
                 in
                 let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
                 man.exec stmt flow
@@ -162,7 +158,7 @@ module Domain =
              let v =
                try List.find (fun v -> get_orig_vname v = name) globals
                with Not_found ->
-                 panic_at range "import: name %s not found in module %s" name modul
+                    panic_at range "import: name %s not found in %a" name pp_addr_kind (kind_of_object obj);
              in
              mk_var v range
            | A_py_module(M_builtin m) ->
@@ -174,6 +170,7 @@ module Domain =
          in
          let stmt = mk_assign (mk_var vmodul range) e range in
          let () = debug "assign %a!" pp_stmt stmt in
+         debug "%a" (format print) (get_env T_cur man flow);
          man.exec stmt flow >>%
          Post.return |>
          OptionExt.return
@@ -189,15 +186,18 @@ module Domain =
       else
         let (addr, expr), flow, is_stub =
           try
+            debug "%a" (format print) (get_env T_cur man flow);
             let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_env T_cur man flow) in
             debug "module %s already imported, cache hit!" name;
             (a, e), flow, is_stub
           with Not_found ->
             begin
               let dir = Paths.get_lang_stubs_dir "python" () in
+              let name = String.map (fun c -> if c = '.' then '/' else c) name in
               let filename =
                 let file_candidates = [dir ^ "/" ^ name ^ ".py";
                                        name ^ ".py";
+                                       name ^ "/__init__.py";
                                        dir ^ "/typeshed/" ^ name ^ ".pyi";
                                        (* name ^ "module.c"; *)
                                        "mopsa.db"
@@ -206,7 +206,7 @@ module Domain =
                 match List.find_opt Sys.file_exists file_candidates with
                 | Some s -> s
                 | None ->
-                   let () = warn_at range "module %s not found (searched in %s and in %s and in the current directory (%s))" name dir (dir ^ "/typeshed/") (Sys.getcwd ()) in
+                   let () = warn_at range "module %s not found (file candidates: %a)" name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) file_candidates in
                    raise (Module_not_found name)
               in
               let () = debug "importing file %s" filename in
@@ -215,7 +215,7 @@ module Domain =
                   let o, b, flow = import_stubs_module man (dir ^ "/typeshed") name flow in
                   o, b, true, flow
                 else if List.mem filename [(*name ^ "module.c";*)
-                                           "mopsa.db"] then
+                            "mopsa.db"] then
                   let prog = C.Frontend.parse_program [filename] in
                   let () = debug "Parsed C program %a" pp_program prog in
                   let () = C.Iterators.Program.Domain.opt_entry_function := "PyInit_" ^ name in
@@ -238,7 +238,9 @@ module Domain =
                   let prog = Frontend.parse_program [filename] in
                   let globals, body =
                     match prog.prog_kind with
-                    | Py_program(_, globals, body) -> globals, body
+                    | Py_program(_, globals, body) ->
+                       debug "parsed %s, globals = %a, body = %a" filename (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var) globals pp_stmt body;
+                       globals, body
                     | _ -> assert false
                   in
                   let name_assign =
