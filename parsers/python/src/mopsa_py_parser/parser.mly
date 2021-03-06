@@ -402,7 +402,7 @@ import_from:
 importfrom_module:
     | dotted_name   { Some $1, Some 0 }
     | dot_level dotted_name { Some $2, Some $1 }
-    | DOT dot_level     { (None : identifier option), Some (1 + $2) }
+    | DOT dot_or_zero     { (None : identifier option), Some (1 + $2) }
 ;
 
 dot_level:

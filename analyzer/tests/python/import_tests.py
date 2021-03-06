@@ -10,6 +10,10 @@ class A(unittest.TestCase):
         self.assertEqual(type(r0), list)
         self.assertEqual(import_test.xsubdir, 2)
         self.assertEqual(import_test.subdir.x, 2)
+        self.assertEqual(import_test.bluuu, 42)
+        self.assertEqual(type(import_test.yetanother), type(unittest))
+        self.assertEqual(import_test.yetanother.bla, "bli")
+        self.assertEqual(import_test.imported_bla, import_test.yetanother.bla)
 
     def test2(self):
         from import_test import othersubdir

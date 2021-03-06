@@ -37,7 +37,7 @@ let parse_file ?(counter=(List.length Builtins.all)) (filename:string) : Ast.pro
     Scoping.start_counter_at counter;
 
     (* Simplify the CST into an AST *)
-    Cst_to_ast.translate_program cst |>
+    Cst_to_ast.translate_program (Sys.getcwd () ^ "/" ^ filename) cst |>
 
     (* Resolve scopes and generate unique IDs for variables *)
     Scoping.translate_program
@@ -49,4 +49,4 @@ let parse_file ?(counter=(List.length Builtins.all)) (filename:string) : Ast.pro
 
   | Parser.Error ->
     let range = Location.from_lexing_range (Lexing.lexeme_start_p buf) (Lexing.lexeme_end_p buf) in
-    Exceptions.unnamed_syntax_error range
+    Exceptions.syntax_error range "Parsing error"
