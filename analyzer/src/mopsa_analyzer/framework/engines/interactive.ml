@@ -267,6 +267,9 @@ struct
     | Where
     (** Show current program point *)
 
+    | WhereI
+    (** Show current interpreter transfer function *)
+
     | LoadHook of string
     (** Activate a hook *)
 
@@ -279,14 +282,14 @@ struct
     | BackTrace
     (** Print the callstack *)
 
+    | Trace
+    (** Print the analysis trace *)
+
     | Debug of string
     (** Set debug channels *)
 
     | Save of string
     (** Save the environment in a file *)
-
-    | Trace
-    (** Print the analysis trace *)
 
 
   (** Information sub-commands *)
@@ -310,6 +313,7 @@ struct
     | Print       -> Format.pp_print_string fmt "print"
     | Env         -> Format.pp_print_string fmt "env"
     | Where       -> Format.pp_print_string fmt "where"
+    | WhereI       -> Format.pp_print_string fmt "wherei"
     | LoadHook h  -> Format.fprintf fmt "hook %s" h
     | UnloadHook h     -> Format.fprintf fmt "unload %s" h
     | Info Alarms      -> Format.fprintf fmt "info alarms"
@@ -339,6 +343,7 @@ struct
     printf "  b[ack]t[race]         print the current call stack@.";
     printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
+    printf "  w[here]i              show current interpreter transfer function@.";
     printf "  h[oo] <hook>          activate a hook@.";
     printf "  u[nload] <hook>       deactivate a hook@.";
     printf "  d[ebug] <channels>    set debug channels@.";
@@ -381,6 +386,7 @@ struct
       | ["print"    | "p"]   -> Print
       | ["env"      | "e"]   -> Env
       | ["where"    | "w"]   -> Where
+      | ["wherei"   |"wi"]   -> WhereI
       | ["backtrace"|"bt"]   -> BackTrace
       | ["trace"    | "t"]   -> Trace
       | ["break"    | "b"; loc] -> Break loc
@@ -728,7 +734,7 @@ struct
         pp_action_source_code fmt action
 
       (* For interpreter-level navigation, show next transfer function *)
-      | NextI | StepI ->
+      | NextI | StepI | WhereI ->
         pp_action fmt action
 
       | _ -> assert false
@@ -791,6 +797,11 @@ struct
     | Where ->
       fprintf std_formatter "%a@." Debug.(color fushia pp_relative_range) (action_range action);
       pp_action_source_code std_formatter action;
+      interact action flow
+
+    | WhereI ->
+      fprintf std_formatter "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      pp_action std_formatter action;
       interact action flow
 
     | LoadHook hook ->
