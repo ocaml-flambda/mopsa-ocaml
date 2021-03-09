@@ -472,6 +472,9 @@ struct
 
     mutable trace: xaction list;
     (** Trace of executed transfer functions *)
+
+    mutable call_preamble : bool;
+    (** Flag set when calling a function and reset when reaching its first loc *)
   }
 
 
@@ -486,6 +489,7 @@ struct
     loc = None;
     locstack = [];
     trace = [];
+    call_preamble = false;
   }
 
   (* Copy a state *)
@@ -498,7 +502,8 @@ struct
       callstack = state.callstack;
       loc = state.loc;
       locstack = state.locstack;
-      trace = state.trace; }
+      trace = state.trace;
+      call_preamble = state.call_preamble; }
 
 
   (** {2 Interaction detection} *)
@@ -571,13 +576,13 @@ struct
       is_new_loc old action &&
       ( not (is_call state.command_callstack) ||
         is_range_breakpoint () ||
-        is_function_breakpoint () )
+        ( state.call_preamble && is_function_breakpoint () ) )
 
     (* [Continue] stops at new lines of code with attached breakpoints *)
     | Continue ->
       is_new_loc old action &&
       ( is_range_breakpoint () ||
-        is_function_breakpoint () ) (* FIXME: check if we are entering a function *)
+        ( state.call_preamble && is_function_breakpoint () ) )
 
     (* [Finish] stops at new lines of code after function return or at breakpoints *)
     | Finish ->
@@ -641,10 +646,11 @@ struct
 
     | Eval(exp,route,translate,translate_when) ->
       let s = asprintf "@[<v>%a@]" pp_expr exp in
-      fprintf fmt "%a %a %s %a@."
+      fprintf fmt "%a %a %s : %a %a@."
         Debug.(color 209 pp_print_string) "𝔼"
         Debug.(color 209 pp_print_string) "⟦"
         (if truncate then truncate_string s else fix_string_indentation s)
+        pp_typ exp.etyp
         Debug.(color 209 pp_print_string) "⟧"
 
   let pp_trace fmt trace =
@@ -709,9 +715,9 @@ struct
     (* Print the target line *)
     and pp_target_line max_line fmt (i,l) =
       fprintf fmt " %a %a  %a@."
-        Debug.(color green pp_print_string) "►"
-        Debug.(color green (pp_right_align_int max_line)) i
-        (Debug.bold pp_print_string) l
+        Debug.(color 78 pp_print_string) "►"
+        Debug.(color 78 (pp_right_align_int max_line)) i
+        Debug.(color 78 pp_print_string) l
     in
     doit ()
 
@@ -904,28 +910,33 @@ struct
          can retrieve it when returning from the function to check if we
          encounter a new loc after the call. *)
       ( if is_call old.callstack then
-          state.locstack <- old.loc :: old.locstack
+          ( state.call_preamble <- true;
+            state.locstack <- old.loc :: old.locstack )
         else
         (* When returning from a function, we pop the loc from the stack,
            and we consider it as the old loc *)
         if is_return old.callstack then
-          match old.locstack with
-          | []     ->
-            old.loc <- None;
-            state.loc <- None
-          | hd::tl ->
-            old.loc <- hd;
-            state.loc <- hd;
-            state.locstack <- tl
-      );
+          ( state.call_preamble <- false;
+            match old.locstack with
+            | []     ->
+              old.loc <- None;
+              state.loc <- None
+            | hd::tl ->
+              old.loc <- hd;
+              state.loc <- hd;
+              state.locstack <- tl ) );
       (* Check if we reached a new loc *)
-      ( if is_new_loc old action then
+      let new_loc = is_new_loc old action in
+      ( if new_loc then
           let range = action_range action in
           state.loc <- Some range
       );
       (* Check if we reached an interaction point *)
+      let interaction = is_interaction_point old action in
+      (* Reset call flag if we reached a new loc *)
+      if new_loc then state.call_preamble <- false;
       let ret =
-        if is_interaction_point old action then (
+        if interaction then (
           pp_interaction std_formatter action;
           interact action flow
         ) else
