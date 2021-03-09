@@ -425,31 +425,16 @@ struct
     | Exec(stmt,_)    -> stmt.srange
     | Eval(exp,_,_,_) -> exp.erange
 
-
-  (** Flag to print welcome message at the beginning *)
-  let print_welcome = ref true
-
-
-  (** Print an action *)
   let pp_action : type a. formatter -> a action -> unit = fun fmt action ->
-    if !print_welcome then (
-      print_welcome := false;
-      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
-        (Debug.bold pp_print_string) "Welcome to Mopsa v1.0!"
-        (Debug.bold pp_print_string) "help"
-    )
-    else (
-      fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
-      match action with
-      | Exec(stmt,route) ->
-        fprintf fmt "@[<v 4>S[ %a@] ]@."
-          pp_stmt stmt
+    match action with
+    | Exec(stmt,route) ->
+      fprintf fmt "@[<v 4>S[ %a@] ]@."
+        pp_stmt stmt
 
-      | Eval(exp,route,translate,translate_when) ->
-        fprintf fmt "@[<v 4>E[ %a@] : %a ]@."
-          pp_expr exp
-          pp_typ (etyp exp)
-    )
+    | Eval(exp,route,translate,translate_when) ->
+      fprintf fmt "@[<v 4>E[ %a@] : %a ]@."
+        pp_expr exp
+        pp_typ (etyp exp)
 
 
   (** {2 Global state} *)
@@ -538,8 +523,11 @@ struct
     callstack_begins_with old state.callstack
 
   (* Test if an action corresponds to a new line of code *)
-  let is_new_loc old action =
-    ( let range = action_range action in
+  let is_new_loc : type a. state -> a action -> bool = fun old action ->
+    match action with
+    | Eval _ -> false
+    | Exec(stmt,_) ->
+      let range = stmt.srange in
       is_orig_range range &&
       ( match old.loc with
         | None        -> true
@@ -547,7 +535,7 @@ struct
           let p = get_range_start range in
           let p' = get_range_start range' in
           p.pos_file <> p'.pos_file ||
-          p.pos_line <> p'.pos_line ) )
+          p.pos_line <> p'.pos_line )
 
   (** Test there is a breakpoint at a given program location *)
   let is_range_breakpoint () =
@@ -599,7 +587,7 @@ struct
     | Continue ->
       is_new_loc old action &&
       ( is_range_breakpoint () ||
-        is_function_breakpoint () )
+        is_function_breakpoint () ) (* FIXME: check if we are entering a function *)
 
     (* [Finish] stops at new lines of code after function return or at breakpoints *)
     | Finish ->
@@ -611,8 +599,90 @@ struct
     | _ -> false
 
 
+  (** {2 Interaction messages} *)
+  (** ************************ *)
+
+  (** Print source code of an action *)
+  let pp_action_source_code fmt action =
+    let rec doit () =
+      let range = action_range action in
+      let start = get_range_start range in
+      let file = start.pos_file in
+      let line = start.pos_line in
+      if not (Sys.file_exists file) then ()
+      else
+        let ch = open_in file in
+        let before,at,after = read_lines_around ch line in
+        let max_line = line + List.length after in
+        let max_digits = nb_digits max_line in
+        List.iter (pp_surrounding_line max_digits std_formatter) before;
+        pp_target_line max_digits std_formatter at;
+        List.iter (pp_surrounding_line max_digits std_formatter) after;
+        close_in ch
+    and read_lines_around ch line =
+      let rec iter before at after i =
+        try
+          let l = input_line ch in
+          if i < line - 5 then iter before at after (i+1) else
+          if i > line + 5 then (before,at,after)
+          else
+            if i < line then iter ((i,l)::before) at after (i+1) else
+            if i = line then iter before (i,l) after (i+1)
+            else iter before at ((i,l)::after) (i+1)
+        with End_of_file -> (before,at,after)
+      in
+      let before,at,after = iter [] (0,"") [] 1 in
+      List.rev before, at, List.rev after
+    and pp_surrounding_line max_line fmt (i,l) =
+      fprintf fmt "   %a  %s@."
+        (align max_line) i
+        l
+    and pp_target_line max_line fmt (i,l) =
+      fprintf fmt " %a %a  %a@."
+        (Debug.color "green" pp_print_string) "►"
+        (Debug.color "green" (align max_line)) i
+        (Debug.bold pp_print_string) l
+    and align max_digits fmt i =
+      let digits = nb_digits i in
+      fprintf fmt "%s%d" (String.init (max_digits - digits) (fun _ -> ' ')) i
+    and nb_digits n =
+      int_of_float (log10 (float_of_int n)) + 1
+    in
+    doit ()
+
+
+  (** Flag to print welcome message at the beginning *)
+  let print_welcome = ref true
+
+  (** Print the next action of the analyzer before asking user what to do *)
+  let pp_interaction fmt action =
+    (* First interaction => print welcome message *)
+    if !print_welcome then (
+      print_welcome := false;
+      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
+        (Debug.bold pp_print_string) ("Welcome to Mopsa " ^ Version.version ^ "!")
+        (Debug.bold pp_print_string) "help"
+    )
+    else (
+      (* Print the range of the next action *)
+      fprintf fmt "%a@." (Debug.color "fushia" pp_relative_range) (action_range action);
+      match state.command with
+      (* For source-level navigation, show a listing of the program *)
+      | Next | Step | Continue | Finish | Where ->
+        pp_action_source_code fmt action
+
+      (* For interpreter-level navigation, show next transfer function *)
+      | NextI | StepI ->
+        pp_action fmt action
+
+      | _ -> assert false
+    )
+
+
   (** {2 Interactive engine} *)
   (** ********************** *)
+
+
 
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
@@ -661,6 +731,7 @@ struct
       interact action flow
 
     | Where ->
+      fprintf std_formatter "%a@." (Debug.color "fushia" pp_relative_range) (action_range action);
       pp_action std_formatter action;
       interact action flow
 
@@ -784,7 +855,7 @@ struct
       (* Check if we reached an interaction point *)
       let ret =
         if is_interaction_point old action then (
-          pp_action std_formatter action;
+          pp_interaction std_formatter action;
           interact action flow
         ) else
           apply_action action flow
