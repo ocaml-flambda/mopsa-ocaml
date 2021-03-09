@@ -270,23 +270,26 @@ struct
     | WhereI
     (** Show current interpreter transfer function *)
 
-    | LoadHook of string
-    (** Activate a hook *)
-
-    | UnloadHook of string
-    (** Deactivate a hook *)
-
     | Info of info_command
     (** Print extra information *)
+
+    | Enable of enable_command
+    (** Enable an option *)
+
+    | Disable of enable_command
+    (** Disable an option *)
+
+    | Set of set_command * string
+    (** Set an option *)
+
+    | Unset of set_command
+    (** Unset an option *)
 
     | BackTrace
     (** Print the callstack *)
 
     | Trace
     (** Print the analysis trace *)
-
-    | Debug of string
-    (** Set debug channels *)
 
     | Save of string
     (** Save the environment in a file *)
@@ -298,6 +301,14 @@ struct
     | Breakpoints
     | Tokens
     | Variables
+
+  (** Enable/Disable sub-commands *)
+  and enable_command =
+    | Hook of string
+
+  (** Set/Unset sub-commands *)
+  and set_command =
+    | Debug
 
 
   (** Print a command *)
@@ -314,14 +325,15 @@ struct
     | Env         -> Format.pp_print_string fmt "env"
     | Where       -> Format.pp_print_string fmt "where"
     | WhereI       -> Format.pp_print_string fmt "wherei"
-    | LoadHook h  -> Format.fprintf fmt "hook %s" h
-    | UnloadHook h     -> Format.fprintf fmt "unload %s" h
     | Info Alarms      -> Format.fprintf fmt "info alarms"
     | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
     | Info Tokens      -> Format.fprintf fmt "info tokens"
     | Info Variables   -> Format.fprintf fmt "info variables"
+    | Enable (Hook h)  -> Format. fprintf fmt "enable hook %s" h
+    | Disable (Hook h) -> Format. fprintf fmt "disable hook %s" h
+    | Set (Debug, d)  -> Format. fprintf fmt "set debug %s" d
+    | Unset Debug -> Format. fprintf fmt "unset debug"
     | BackTrace   -> Format.fprintf fmt "backtrace"
-    | Debug ch    -> Format.fprintf fmt "debug %s" ch
     | Save file   -> Format.fprintf fmt "save %s" file
     | Trace   -> Format.fprintf fmt "trace"
 
@@ -344,13 +356,14 @@ struct
     printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
     printf "  w[here]i              show current interpreter transfer function@.";
-    printf "  h[oo] <hook>          activate a hook@.";
-    printf "  u[nload] <hook>       deactivate a hook@.";
-    printf "  d[ebug] <channels>    set debug channels@.";
     printf "  i[info] a[larms]      print the list of alarms@.";
     printf "  i[info] b[reakpoints] print the list of breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
     printf "  i[info] v[ariables]   print the list of variables@.";
+    printf "  e[nable] h[hook] <h>  enable a hook@.";
+    printf "  d[isable] h[hook] <h> disable a hook@.";
+    printf "  s[et] d[ebug] <d>     set debug channels@.";
+    printf "  u[nset] d[ebug]       unset debug channels@.";
     printf "  save <file>           save the abstract state in a file@.";
     printf "  help                  print this message@.";
     ()
@@ -400,17 +413,18 @@ struct
       | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
       | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
       | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
-      | ["info" |"i"; "variables" | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
+      | ["info" |"i"; "variables"   | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
+
+      | ["enable" |"e";  "hook" | "h"; h] | ["eh"; h] -> Enable (Hook h)
+      | ["disable"|"d";  "hook" | "h"; h] | ["dh"; h] -> Disable (Hook h)
+
+      | ["set"  |"s";  "debug"| "d"; d] | ["sd"; d] -> Set (Debug, d)
+      | ["unset"|"u";  "debug"| "d"] | ["ud"] -> Unset Debug
 
       | [""] ->
         ( match !last_command with
           | None ->  read_command ()
           | Some c -> c )
-
-      | ["hook"   | "h"; hook] -> LoadHook hook
-      | ["unload" | "u"; hook] -> UnloadHook hook
-
-      | ["debug"  | "d"; channel] -> Debug channel
 
       | ["save"; file] -> Save file
 
@@ -475,6 +489,9 @@ struct
 
     mutable call_preamble : bool;
     (** Flag set when calling a function and reset when reaching its first loc *)
+
+    mutable print_welcome : bool;
+    (** Flag to print welcome message at the beginning *)
   }
 
 
@@ -490,6 +507,7 @@ struct
     locstack = [];
     trace = [];
     call_preamble = false;
+    print_welcome = true;
   }
 
   (* Copy a state *)
@@ -503,7 +521,8 @@ struct
       loc = state.loc;
       locstack = state.locstack;
       trace = state.trace;
-      call_preamble = state.call_preamble; }
+      call_preamble = state.call_preamble;
+      print_welcome = state.print_welcome; }
 
 
   (** {2 Interaction detection} *)
@@ -597,8 +616,6 @@ struct
   (** {2 Pretty printers} *)
   (** ******************* *)
 
-  (** Flag to print welcome message at the beginning *)
-  let print_welcome = ref true
 
   (* Get the number of digits of an integer *)
   let nb_digits n =
@@ -725,8 +742,8 @@ struct
   (** Print the next action of the analyzer before asking user what to do *)
   let pp_interaction fmt action =
     (* First interaction => print welcome message *)
-    if !print_welcome then (
-      print_welcome := false;
+    if state.print_welcome then (
+      state.print_welcome <- false;
       fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
         (Debug.bold pp_print_string) ("Welcome to Mopsa " ^ Version.version ^ "!")
         (Debug.bold pp_print_string) "help"
@@ -810,7 +827,7 @@ struct
       pp_action std_formatter action;
       interact action flow
 
-    | LoadHook hook ->
+    | Enable (Hook hook) ->
       if not (Hook.mem_hook hook) then (
         printf "Hook '%s' not found@." hook;
         interact action flow
@@ -821,7 +838,7 @@ struct
         interact action flow
       )
 
-    | UnloadHook hook ->
+    | Disable (Hook hook) ->
       if not (Hook.mem_hook hook) then (
         printf "Hook '%s' not found@." hook;
         interact action flow
@@ -884,8 +901,12 @@ struct
           interact action flow
       end
 
-    | Debug channel ->
+    | Set (Debug, channel) ->
       Debug.set_channels channel;
+      interact action flow
+
+    | Unset Debug ->
+      Debug.set_channels "";
       interact action flow
 
     | Save file ->
