@@ -222,9 +222,10 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
+          let end_range = set_range_start exp.erange (get_range_end exp.erange) in
           man.exec stmt' flow >>%? fun flow ->
           man.eval e flow |>
-          Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
+          Cases.add_cleaners (List.map (fun v -> mk_remove_var v end_range) local_vars) |>
           OptionExt.return
 
         | _ -> panic "E_c_statement %a not supported" pp_expr exp

@@ -118,7 +118,8 @@ struct
     | S_block(block,local_vars) ->
       Some (
         let post = List.fold_left (fun acc stmt -> acc >>% man.exec stmt) (Post.return flow) block in
-        let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var stmt.srange)) post local_vars in
+        let end_range = set_range_start stmt.srange (get_range_end stmt.srange) in
+        let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var end_range)) post local_vars in
         post
       )
 
