@@ -202,25 +202,6 @@ struct
       (BreakpointSet.elements bs)
 
 
-  (** Test there is a breakpoint at a given program location *)
-  let is_range_breakpoint range breakpoints =
-    BreakpointSet.exists
-      (function B_line(file,line) -> match_range_file file range
-                                     && match_range_line line range
-              | B_function _ -> false
-      ) breakpoints
-
-
-  (** Test if there is a breakpoint at a given function *)
-  let is_function_breakpoint cs breakpoints =
-    not (is_empty_callstack cs)
-    && ( let call = callstack_top cs in
-         BreakpointSet.exists
-           (function
-             | B_function f -> f = call.call_fun_orig_name
-             | B_line _ -> false
-           ) breakpoints )
-
 
   (** Exception raised when parsing an invalid breakpoint string *)
   exception Invalid_breakpoint_syntax
@@ -441,8 +422,8 @@ struct
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
-    | Exec(stmt,_) -> stmt.srange
-    | Eval(exp,_,_,_)  -> exp.erange
+    | Exec(stmt,_)    -> stmt.srange
+    | Eval(exp,_,_,_) -> exp.erange
 
 
   (** Flag to print welcome message at the beginning *)
@@ -450,7 +431,7 @@ struct
 
 
   (** Print an action *)
-  let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
+  let pp_action : type a. formatter -> a action -> unit = fun fmt action ->
     if !print_welcome then (
       print_welcome := false;
       fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
@@ -469,63 +450,6 @@ struct
           pp_expr exp
           pp_typ (etyp exp)
     )
-
-  (** Check that an action is atomic *)
-  let is_atomic_action: type a. a action -> bool = fun action ->
-    match action with
-    | Exec(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
-    | Eval _       -> false
-
-
-
-  (** {2 Function state automaton} *)
-  (** **************************** *)
-
-  (* We use an automaton to track the current position within the
-     analyzed function *)
-
-  (** Function states *)
-  type fstate =
-    | FunStartNonAtomic
-    | FunStartAtomic
-    | NonAtomic
-    | Atomic
-    | InsideAtomic of int
-
-
-  (** Print a function state *)
-  let pp_fstate fmt = function
-    | FunStartNonAtomic -> Format.pp_print_string fmt "fun-start-non-atomic"
-    | FunStartAtomic    -> Format.pp_print_string fmt "fun-start-atomic"
-    | NonAtomic         -> Format.pp_print_string fmt "non-atomic"
-    | Atomic            -> Format.pp_print_string fmt "atomic"
-    | InsideAtomic d    -> Format.fprintf fmt "inside(%d)" d
-
-
-  (** Change the state of the automaton before executing an action *)
-  let next_fstate_on_pre_action action depth = function
-    | FunStartNonAtomic ->
-      if is_atomic_action action
-      then FunStartAtomic
-      else FunStartNonAtomic
-
-    | NonAtomic ->
-      if is_atomic_action action
-      then Atomic
-      else NonAtomic
-
-    | FunStartAtomic | Atomic -> InsideAtomic depth
-
-    | InsideAtomic _ as fs -> fs
-
-
-  (** Change the state of the automaton after executing an action *)
-  let next_fstate_on_post_action action depth = function
-    | FunStartNonAtomic    -> FunStartNonAtomic
-    | NonAtomic            -> NonAtomic
-    | FunStartAtomic       -> NonAtomic
-    | Atomic               -> NonAtomic
-    | InsideAtomic d as fs -> if d = depth then NonAtomic else fs
 
 
   (** {2 Global state} *)
@@ -548,11 +472,14 @@ struct
     mutable command_callstack : callstack;
     (** Callstack when the command was issued *)
 
-    mutable fstack : fstate list;
-    (** Stack of function automata *)
-
     mutable callstack : callstack;
     (** Current call-stack *)
+
+    mutable loc : range option;
+    (** Last analyzed line of code *)
+
+    mutable locstack : range option list;
+    (** Stack of lines of codes *)
   }
 
 
@@ -563,116 +490,123 @@ struct
     depth = 0;
     command_depth = 0;
     command_callstack = empty_callstack;
-    fstack = [];
     callstack = empty_callstack;
+    loc = None;
+    locstack = [];
   }
 
-
-  (** Print the global state *)
-  let pp_state fmt () =
+  (** Print a state *)
+  let pp_state fmt s =
     Format.fprintf fmt "@[<v>breakpoints: @[%a@]@,\
                         depth: %d@,\
                         command: @[%a@]@,\
                         command_depth: %d@,\
-                        fstack: @[<v>%a@]@,\
                         callstack: @[%a@]@,\
-                        command_callstack: @[%a@]@]"
-      pp_breakpoint_set state.breakpoints
-      state.depth
-      pp_command state.command
-      state.command_depth
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_fstate) state.fstack
-      pp_callstack state.callstack
-      pp_callstack state.command_callstack
+                        command_callstack: @[%a@]@,\
+                        loc: %a@,\
+                        locstack: @[<v>%a]@]"
+      pp_breakpoint_set s.breakpoints
+      s.depth
+      pp_command s.command
+      s.command_depth
+      pp_callstack s.callstack
+      pp_callstack s.command_callstack
+      (OptionExt.print pp_relative_range) s.loc
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") (OptionExt.print pp_relative_range)) s.locstack
+
+  (* Copy a state *)
+  let copy_state () =
+    { breakpoints = state.breakpoints;
+      command = state.command;
+      depth = state.depth;
+      command_depth = state.command_depth;
+      command_callstack = state.command_callstack;
+      callstack = state.callstack;
+      loc = state.loc;
+      locstack = state.locstack }
 
 
-  (** Detect if we are in a new call *)
-  let detect_call action prev cur =
-    callstack_begins_with cur prev
+  (** {2 Interaction detection} *)
+  (** ************************* *)
+
+  (* Test if the currest state corresponds to a function call *)
+  let is_call old =
+    callstack_begins_with state.callstack old
+
+  (* Test if the currest state corresponds to a function return *)
+  let is_return old =
+    callstack_begins_with old state.callstack
+
+  (* Test if an action corresponds to a new line of code *)
+  let is_new_loc old action =
+    ( let range = action_range action in
+      is_orig_range range &&
+      ( match old.loc with
+        | None        -> true
+        | Some range' ->
+          let p = get_range_start range in
+          let p' = get_range_start range' in
+          p.pos_file <> p'.pos_file ||
+          p.pos_line <> p'.pos_line ) )
+
+  (** Test there is a breakpoint at a given program location *)
+  let is_range_breakpoint () =
+    match state.loc with
+    | None -> false
+    | Some range ->
+      BreakpointSet.exists
+        (function
+          | B_line(file,line) -> match_range_file file range
+                                 && match_range_line line range
+          | B_function _ -> false
+        ) state.breakpoints
 
 
-  (** Detect if we returned from a call *)
-  let detect_return action prev cur =
-    callstack_begins_with prev cur
+  (** Test if there is a breakpoint at a given function *)
+  let is_function_breakpoint () =
+    not (is_empty_callstack state.callstack)
+    && ( let call = callstack_top state.callstack in
+         BreakpointSet.exists
+           (function
+             | B_function f -> f = call.call_fun_orig_name
+             | B_line _ -> false
+           ) state.breakpoints )
 
 
-  (** Change the state when an action is going to be executed *)
-  let on_pre_action action flow : unit =
-    let cs = Flow.get_callstack flow in
-    let prev_depth = state.depth in
-    let prev_cs = state.callstack in
-    state.depth <- state.depth + 1;
-    state.callstack <- cs;
-    if detect_call action prev_cs cs then
-      let fs0 = if is_atomic_action action then FunStartAtomic else FunStartNonAtomic in
-      let fs = next_fstate_on_pre_action action prev_depth fs0 in
-      state.fstack <- fs :: state.fstack
-    else
-    if detect_return action prev_cs cs then
-      let fs,tl =
-        match state.fstack with
-        | _::hd::tl -> hd,tl
-        | _         -> assert false
-      in
-      let fs' = next_fstate_on_pre_action action prev_depth fs in
-      state.fstack <- fs' :: tl
-    else
-      let fs,tl =
-        match state.fstack with
-        | hd::tl -> hd,tl
-        | []     -> NonAtomic,[]
-      in
-      let fs' = next_fstate_on_pre_action action prev_depth fs in
-      state.fstack <- fs' :: tl
-
-  (** Change the state when an action was executed *)
-  let on_post_action action : unit =
-    let fs,tl =
-      match state.fstack with
-      | hd::tl -> hd,tl
-      | _ -> assert false
-    in
-    let fs' = next_fstate_on_post_action action state.depth fs in
-    state.fstack <- fs' :: tl;
-    state.depth <- state.depth - 1
-
-
-  (** Check if we are at a breakpoint *)
-  let is_breakpoint action =
-    let fs = List.hd state.fstack in
-    ( (fs = Atomic || fs = FunStartAtomic)
-      && is_range_breakpoint (action_range action) state.breakpoints)
-    || ( fs = FunStartAtomic
-         && is_function_breakpoint state.callstack state.breakpoints )
-
-
-  (** Check if we are at an interaction point *)
-  let is_interaction_point action =
+  (* Check if the analyzer reached an interaction point *)
+  let is_interaction_point old action =
     match state.command with
+    (* Always interact with [StepI] *)
     | StepI -> true
 
+    (* [NextI] stops only if the current depth is less than
+       the depth when the user entered the [NextI] command *)
     | NextI -> state.depth <= state.command_depth
 
-    | Step | Next | Continue | Finish when not (is_atomic_action action) -> false
-
-    | Step | Next | Continue | Finish when is_breakpoint action -> true
-
+    (* [Step] stops at any new line of codes *)
     | Step ->
-      let fs = List.hd state.fstack in
-      fs = Atomic || fs = FunStartAtomic
+      is_new_loc old action
 
+    (* [Next] stops at new lines of codes that are not in inner calls (unless if
+       there is a breakpoint) *)
     | Next ->
-      let fs = List.hd state.fstack in
-      fs = Atomic
-      && not (callstack_begins_with state.callstack state.command_callstack)
+      is_new_loc old action &&
+      ( not (is_call state.command_callstack) ||
+        is_range_breakpoint () ||
+        is_function_breakpoint () )
 
-    | Continue -> false
+    (* [Continue] stops at new lines of code with attached breakpoints *)
+    | Continue ->
+      is_new_loc old action &&
+      ( is_range_breakpoint () ||
+        is_function_breakpoint () )
 
+    (* [Finish] stops at new lines of code after function return or at breakpoints *)
     | Finish ->
-      let fs = List.hd state.fstack in
-      fs = Atomic
-      && state.command_callstack <> []
-      && not (callstack_begins_with state.callstack (pop_callstack state.command_callstack |> snd))
+      is_new_loc old action &&
+      ( is_return state.command_callstack ||
+        is_range_breakpoint () ||
+        is_function_breakpoint () )
 
     | _ -> false
 
@@ -727,7 +661,7 @@ struct
       interact action flow
 
     | Where ->
-      pp_action flow std_formatter action;
+      pp_action std_formatter action;
       interact action flow
 
     | LoadHook hook ->
@@ -817,20 +751,45 @@ struct
       close_out ch;
       interact action flow
 
-
   (** Interact with the user input or apply the action *)
   and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
     try
-      on_pre_action action flow;
+      let old = copy_state () in
+      state.depth <- state.depth + 1;
+      state.callstack <- Flow.get_callstack flow;
+      (* When entering a functio, we pusth the old loc to locstack, so that we
+         can retrieve it when returning from the function to check if we
+         encounter a new loc after the call. *)
+      ( if is_call old.callstack then
+          state.locstack <- old.loc :: old.locstack
+        else
+        (* When returning from a function, we pop the loc from the stack,
+           and we consider it as the old loc *)
+        if is_return old.callstack then
+          match old.locstack with
+          | []     ->
+            old.loc <- None;
+            state.loc <- None
+          | hd::tl ->
+            old.loc <- hd;
+            state.loc <- hd;
+            state.locstack <- tl
+      );
+      (* Check if we reached a new loc *)
+      ( if is_new_loc old action then
+          let range = action_range action in
+          state.loc <- Some range
+      );
+      (* Check if we reached an interaction point *)
       let ret =
-        if is_interaction_point action then (
-          pp_action flow std_formatter action;
+        if is_interaction_point old action then (
+          pp_action std_formatter action;
           interact action flow
         ) else
           apply_action action flow
       in
-      on_post_action action;
+      state.depth <- state.depth - 1;
       ret
     with Sys.Break ->
       interact action flow
