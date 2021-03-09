@@ -180,6 +180,15 @@ struct
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
            let open Universal.Ast in
            let ret_var = mktmp ~typ:fundec.c_func_return () in
+           let body' =
+             if exists_stmt
+                 (fun e -> false)
+                 (fun s -> match skind s with S_c_goto _ -> true | _ -> false)
+                 body
+             then
+               {skind = S_c_goto_stab (body); srange = tag_range (srange body) "goto-stabilization"}
+             else body
+           in
            let fundec' = {
              fun_orig_name = fundec.c_func_org_name;
              fun_uniq_name = fundec.c_func_unique_name;
@@ -191,7 +200,7 @@ struct
                 environment. Since the environment is automatically
                 cleaned by the scope mechanism, local variables are
                 removed twice. *)
-             fun_body = {skind = S_c_goto_stab (body); srange = srange body};
+             fun_body = body';
              fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
              fun_return_var = ret_var;
              fun_range = fundec.c_func_range;
