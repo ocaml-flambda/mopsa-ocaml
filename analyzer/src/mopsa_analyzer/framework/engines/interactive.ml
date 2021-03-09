@@ -383,12 +383,24 @@ struct
   (** The last entered command *)
   let last_command = ref None
 
+  (** Multi-command buffer *)
+  let buffer = Queue.create ()
 
   (** Read a command from user input *)
   let rec read_command () =
-    print_prompt ();
-    let l =  LineEdit.read_line linedit_ctx |> String.trim in
-    let parts = String.split_on_char ' ' l in
+    let s =
+      if Queue.is_empty buffer then
+        ( print_prompt ();
+          let input = LineEdit.read_line linedit_ctx in
+          match String.split_on_char ';' input with
+          | []     -> input
+          | hd::tl ->
+            List.iter (fun c -> Queue.add c buffer) tl;
+            hd )
+      else
+        Queue.pop buffer
+    in
+    let parts = String.split_on_char ' ' (String.trim s) in
     let c = match parts with
       | ["continue" | "c"]   -> Continue
       | ["next"     | "n"]   -> Next
@@ -429,7 +441,7 @@ struct
       | ["save"; file] -> Save file
 
       | _ ->
-        printf "Unknown command %s@." l;
+        printf "Unknown command %s@." s;
         print_usage ();
         read_command ()
     in
