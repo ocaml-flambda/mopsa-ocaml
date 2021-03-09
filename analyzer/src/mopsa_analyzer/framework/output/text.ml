@@ -52,10 +52,10 @@ let print out fmt =
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
 
 let color_of_diag = function
-  | Safe        -> "green"
-  | Unreachable -> "gray"
-  | Error       -> "red"
-  | Warning     -> "orange"
+  | Safe        -> Debug.green
+  | Unreachable -> Debug.gray
+  | Error       -> Debug.red
+  | Warning     -> Debug.orange
 
 let icon_of_diag = function
   | Safe        -> "✔"
@@ -287,8 +287,8 @@ let print_summary checks_map total safe error warning time out =
 let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
   if is_sound_report rep
-  then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
-  else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
+  then print out "%a@." (Debug.color_str Debug.green) "Analysis terminated successfully"
+  else print out "%a@." (Debug.color_str Debug.orange) "Unsound analysis";
 
   if !opt_display_lastflow then
     print out "Last flow =@[@\n%a@]@\n"
@@ -298,7 +298,7 @@ let report man flow ~time ~files ~out =
   ;
 
   if is_safe_report rep
-  then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔";
+  then print out "%a No alarm@." ((Debug.color Debug.green) pp_print_string) "✔";
 
   let total, safe, error, warning, checks_map = print_and_count_alarms rep out in
   print_summary checks_map total safe error warning time out
@@ -314,7 +314,7 @@ let report man flow ~time ~files ~out =
 
 
 let panic exn ~btrace ~time ~files ~out =
-  print out "%a@." (Debug.color_str "red") "Analysis aborted";
+  print out "%a@." (Debug.color_str Debug.red) "Analysis aborted";
   let () =
     match exn with
     | Exceptions.Panic (msg, "") -> print out "panic: %s@." msg

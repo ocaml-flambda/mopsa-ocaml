@@ -201,10 +201,10 @@ struct
             else if StmtSet.exists search_stmt entry.reachable_stmts then
               (* okay, statement reached *)
               let () = incr covered_lines in
-              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
+              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.green l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
               let () = incr covered_lines in
-              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
+              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.yellow l
             else
               begin
                 match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.reachable_exprs with
@@ -217,7 +217,7 @@ struct
                                      max (get_pos_column @@ get_range_end e.erange) n*) in
                 Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                   (String.sub l 0 cols)
-                  (List.assoc "green" Debug.colors)
+                  Debug.green
                   (String.sub l cols (cole-cols))
                   (String.sub l cole (n-cole))
               | None ->
@@ -230,12 +230,12 @@ struct
                         max (get_pos_column @@ get_range_end e.erange) n*) in
                     Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                       (String.sub l 0 cols)
-                      (List.assoc "yellow" Debug.colors)
+                      Debug.yellow
                       (String.sub l cols (cole-cols))
                       (String.sub l cole (n-cole))
                   | None ->
                     (* statement not analyzed *)
-                    Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "red" Debug.colors) l
+                    Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.red l
                 end
               end;
             process_file (lineno+1)

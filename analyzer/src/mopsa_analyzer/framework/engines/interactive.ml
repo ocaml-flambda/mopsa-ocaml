@@ -106,7 +106,7 @@ let pp_var_with_type fmt (v,t) =
 
 (** Print the value of a variable *)
 let rec pp_var_value fmt v =
-  pp_print_option (Debug.color_str "blue") fmt v.var_value;
+  pp_print_option (Debug.color_str Debug.blue) fmt v.var_value;
   match v.var_sub_value with
   | None -> ()
   | Some sv -> fprintf fmt "@,@[<v2>  %a@]" pp_var_sub_value sv
@@ -276,7 +276,7 @@ struct
     | Info of info_command
     (** Print extra information *)
 
-    | Backtrace
+    | BackTrace
     (** Print the callstack *)
 
     | Debug of string
@@ -284,6 +284,9 @@ struct
 
     | Save of string
     (** Save the environment in a file *)
+
+    | Trace
+    (** Print the analysis trace *)
 
 
   (** Information sub-commands *)
@@ -313,9 +316,10 @@ struct
     | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
     | Info Tokens      -> Format.fprintf fmt "info tokens"
     | Info Variables   -> Format.fprintf fmt "info variables"
-    | Backtrace   -> Format.fprintf fmt "backtrace"
+    | BackTrace   -> Format.fprintf fmt "backtrace"
     | Debug ch    -> Format.fprintf fmt "debug %s" ch
     | Save file   -> Format.fprintf fmt "save %s" file
+    | Trace   -> Format.fprintf fmt "trace"
 
 
   (** Print help message *)
@@ -333,6 +337,7 @@ struct
     printf "  p[rint]               print the abstract state@.";
     printf "  e[nv]                 print the current abstract environment@.";
     printf "  b[ack]t[race]         print the current call stack@.";
+    printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
     printf "  h[oo] <hook>          activate a hook@.";
     printf "  u[nload] <hook>       deactivate a hook@.";
@@ -349,8 +354,8 @@ struct
   (** Print input prompt *)
   let print_prompt () =
     printf "%a %a @?"
-      (Debug.color_str "teal") "mopsa"
-      (Debug.color_str "green") ">>"
+      Debug.(color_str teal) "mopsa"
+      Debug.(color_str green) ">>"
 
 
   (** Context of LineEdit library *)
@@ -376,7 +381,8 @@ struct
       | ["print"    | "p"]   -> Print
       | ["env"      | "e"]   -> Env
       | ["where"    | "w"]   -> Where
-      | ["backtrace"|"bt"]   -> Backtrace
+      | ["backtrace"|"bt"]   -> BackTrace
+      | ["trace"    | "t"]   -> Trace
       | ["break"    | "b"; loc] -> Break loc
       | ["print"    | "p"; var] -> PrintVar var
 
@@ -419,22 +425,14 @@ struct
     | Exec : stmt * route -> Toplevel.t post action
     | Eval : expr * route * semantic * (semantic*(expr->bool)) list -> Toplevel.t eval action
 
+  (* Actions with hidden return type *)
+  type xaction = Action : 'a action -> xaction
+
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
     | Exec(stmt,_)    -> stmt.srange
     | Eval(exp,_,_,_) -> exp.erange
-
-  let pp_action : type a. formatter -> a action -> unit = fun fmt action ->
-    match action with
-    | Exec(stmt,route) ->
-      fprintf fmt "@[<v 4>S[ %a@] ]@."
-        pp_stmt stmt
-
-    | Eval(exp,route,translate,translate_when) ->
-      fprintf fmt "@[<v 4>E[ %a@] : %a ]@."
-        pp_expr exp
-        pp_typ (etyp exp)
 
 
   (** {2 Global state} *)
@@ -465,6 +463,9 @@ struct
 
     mutable locstack : range option list;
     (** Stack of lines of codes *)
+
+    mutable trace: xaction list;
+    (** Trace of executed transfer functions *)
   }
 
 
@@ -478,26 +479,8 @@ struct
     callstack = empty_callstack;
     loc = None;
     locstack = [];
+    trace = [];
   }
-
-  (** Print a state *)
-  let pp_state fmt s =
-    Format.fprintf fmt "@[<v>breakpoints: @[%a@]@,\
-                        depth: %d@,\
-                        command: @[%a@]@,\
-                        command_depth: %d@,\
-                        callstack: @[%a@]@,\
-                        command_callstack: @[%a@]@,\
-                        loc: %a@,\
-                        locstack: @[<v>%a]@]"
-      pp_breakpoint_set s.breakpoints
-      s.depth
-      pp_command s.command
-      s.command_depth
-      pp_callstack s.callstack
-      pp_callstack s.command_callstack
-      (OptionExt.print pp_relative_range) s.loc
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") (OptionExt.print pp_relative_range)) s.locstack
 
   (* Copy a state *)
   let copy_state () =
@@ -508,7 +491,8 @@ struct
       command_callstack = state.command_callstack;
       callstack = state.callstack;
       loc = state.loc;
-      locstack = state.locstack }
+      locstack = state.locstack;
+      trace = state.trace; }
 
 
   (** {2 Interaction detection} *)
@@ -599,11 +583,88 @@ struct
     | _ -> false
 
 
-  (** {2 Interaction messages} *)
-  (** ************************ *)
+  (** {2 Pretty printers} *)
+  (** ******************* *)
+
+  (** Flag to print welcome message at the beginning *)
+  let print_welcome = ref true
+
+  (* Get the number of digits of an integer *)
+  let nb_digits n =
+    int_of_float (log10 (float_of_int n)) + 1
+
+  (* Right align an integer *)
+  let pp_right_align_int width fmt i =
+    let digits = nb_digits i in
+    fprintf fmt "%s%d"
+      (String.init (width - digits) (fun _ -> ' '))
+      i
+
+  let pp_right_align width pp fmt x =
+    let s = asprintf "%a" pp x in
+    let len = String.length s in
+    fprintf fmt "%s%s"
+      (String.init (width - len) (fun _ -> ' '))
+      s
+
+  let pp_action : type a. ?truncate:bool -> (formatter -> a action -> unit) = fun ?(truncate=false) fmt action ->
+    (* Format has issues when identing in presence of unicode characters. So we
+       do it manually. *)
+    let fix_string_indentation s =
+      let lines = String.split_on_char '\n' s in
+      match lines with
+      | [] | [_] -> s
+      | hd::tl ->
+        let lines' = hd :: List.map (fun l -> "    " ^ l) tl in
+        String.concat "\n" lines'
+    in
+    let truncate_string s =
+      let lines = String.split_on_char '\n' s in
+      match lines with
+      | [] | [_] -> s
+      | hd::tl -> hd ^ " ..."
+    in
+    match action with
+    | Exec(stmt,route) ->
+      let s = asprintf "@[<v>%a@]" pp_stmt stmt in
+      fprintf fmt "%a %a %s %a@."
+        Debug.(color 45 pp_print_string) "𝕊"
+        Debug.(color 45 pp_print_string) "⟦"
+        (if truncate then truncate_string s else fix_string_indentation s)
+        Debug.(color 45 pp_print_string) "⟧"
+
+    | Eval(exp,route,translate,translate_when) ->
+      let s = asprintf "@[<v>%a@]" pp_expr exp in
+      fprintf fmt "%a %a %s %a@."
+        Debug.(color 209 pp_print_string) "𝔼"
+        Debug.(color 209 pp_print_string) "⟦"
+        (if truncate then truncate_string s else fix_string_indentation s)
+        Debug.(color 209 pp_print_string) "⟧"
+
+  let pp_trace fmt trace =
+    let remove_new_lines s =
+      Bytes.of_string s |>
+      Bytes.map (function '\n' -> ' ' | x -> x) |>
+      Bytes.to_string
+    in
+    let trace',n = List.fold_left (fun (acc,i) a -> (i,a)::acc,(i+1)) ([],0) trace in
+    let max_digits = nb_digits n in
+    fprintf fmt "@[<v>%a@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         (fun fmt (i,Action a) ->
+            let s = asprintf "@[<h>%a%a  @[%a@] at %a@]"
+                (fun fmt () -> if i = 0 then () else fprintf fmt "@,") ()
+                (pp_right_align (max_digits+1) pp_print_string) ("#" ^ (string_of_int (n-i-1)))
+                (pp_action ~truncate:true) a
+                pp_relative_range (action_range a) in
+            let s' = remove_new_lines s in
+            pp_print_string fmt s'
+         )
+      ) trace'
 
   (** Print source code of an action *)
   let pp_action_source_code fmt action =
+    (* Entry point *)
     let rec doit () =
       let range = action_range action in
       let start = get_range_start range in
@@ -619,6 +680,7 @@ struct
         pp_target_line max_digits std_formatter at;
         List.iter (pp_surrounding_line max_digits std_formatter) after;
         close_in ch
+    (* Read lines before and after a target line *)
     and read_lines_around ch line =
       let rec iter before at after i =
         try
@@ -633,26 +695,20 @@ struct
       in
       let before,at,after = iter [] (0,"") [] 1 in
       List.rev before, at, List.rev after
+    (* Print a surrounding line *)
     and pp_surrounding_line max_line fmt (i,l) =
       fprintf fmt "   %a  %s@."
-        (align max_line) i
+        (pp_right_align_int max_line) i
         l
+    (* Print the target line *)
     and pp_target_line max_line fmt (i,l) =
       fprintf fmt " %a %a  %a@."
-        (Debug.color "green" pp_print_string) "►"
-        (Debug.color "green" (align max_line)) i
+        Debug.(color green pp_print_string) "►"
+        Debug.(color green (pp_right_align_int max_line)) i
         (Debug.bold pp_print_string) l
-    and align max_digits fmt i =
-      let digits = nb_digits i in
-      fprintf fmt "%s%d" (String.init (max_digits - digits) (fun _ -> ' ')) i
-    and nb_digits n =
-      int_of_float (log10 (float_of_int n)) + 1
     in
     doit ()
 
-
-  (** Flag to print welcome message at the beginning *)
-  let print_welcome = ref true
 
   (** Print the next action of the analyzer before asking user what to do *)
   let pp_interaction fmt action =
@@ -665,7 +721,7 @@ struct
     )
     else (
       (* Print the range of the next action *)
-      fprintf fmt "%a@." (Debug.color "fushia" pp_relative_range) (action_range action);
+      fprintf fmt "%a@." Debug.(color fushia pp_relative_range) (action_range action);
       match state.command with
       (* For source-level navigation, show a listing of the program *)
       | Next | Step | Continue | Finish | Where ->
@@ -681,8 +737,6 @@ struct
 
   (** {2 Interactive engine} *)
   (** ********************** *)
-
-
 
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
@@ -716,9 +770,13 @@ struct
     | Continue | Next | NextI | Step | StepI | Finish ->
       apply_action action flow
 
-    | Backtrace ->
+    | BackTrace ->
       let cs = Flow.get_callstack flow in
       printf "%a@." pp_callstack cs;
+      interact action flow
+
+    | Trace ->
+      printf "@[<v>%a@]@." pp_trace state.trace;
       interact action flow
 
     | Print ->
@@ -731,8 +789,8 @@ struct
       interact action flow
 
     | Where ->
-      fprintf std_formatter "%a@." (Debug.color "fushia" pp_relative_range) (action_range action);
-      pp_action std_formatter action;
+      fprintf std_formatter "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      pp_action_source_code std_formatter action;
       interact action flow
 
     | LoadHook hook ->
@@ -829,6 +887,8 @@ struct
       let old = copy_state () in
       state.depth <- state.depth + 1;
       state.callstack <- Flow.get_callstack flow;
+      let trace = state.trace in
+      state.trace <- (Action action) :: trace;
       (* When entering a functio, we pusth the old loc to locstack, so that we
          can retrieve it when returning from the function to check if we
          encounter a new loc after the call. *)
@@ -861,6 +921,7 @@ struct
           apply_action action flow
       in
       state.depth <- state.depth - 1;
+      state.trace <- trace;
       ret
     with Sys.Break ->
       interact action flow
