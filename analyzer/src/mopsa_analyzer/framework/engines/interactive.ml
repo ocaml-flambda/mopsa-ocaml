@@ -255,11 +255,8 @@ struct
     | StepI
     (** Step into interpretation sub-tree  *)
 
-    | PrintVar of string
-    (** Print the value of a variable *)
-
-    | Print
-    (** Print the current abstract state *)
+    | Print of string list
+    (** Print the current abstract state or the value of variables *)
 
     | Env
     (** Print the current abstract environment, associated to token T_cur *)
@@ -320,22 +317,26 @@ struct
     | NextI       -> Format.pp_print_string fmt "nexti"
     | Step        -> Format.pp_print_string fmt "step"
     | StepI       -> Format.pp_print_string fmt "stepi"
-    | PrintVar v  -> Format.fprintf fmt "print %s" v
-    | Print       -> Format.pp_print_string fmt "print"
-    | Env         -> Format.pp_print_string fmt "env"
-    | Where       -> Format.pp_print_string fmt "where"
-    | WhereI       -> Format.pp_print_string fmt "wherei"
-    | Info Alarms      -> Format.fprintf fmt "info alarms"
-    | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
-    | Info Tokens      -> Format.fprintf fmt "info tokens"
-    | Info Variables   -> Format.fprintf fmt "info variables"
-    | Enable (Hook h)  -> Format. fprintf fmt "enable hook %s" h
-    | Disable (Hook h) -> Format. fprintf fmt "disable hook %s" h
-    | Set (Debug, d)  -> Format. fprintf fmt "set debug %s" d
-    | Unset Debug -> Format. fprintf fmt "unset debug"
-    | BackTrace   -> Format.fprintf fmt "backtrace"
-    | Save file   -> Format.fprintf fmt "save %s" file
-    | Trace   -> Format.fprintf fmt "trace"
+    | Print []    -> Format.pp_print_string fmt "print"
+    | Print vars  -> Format.fprintf fmt "print %a"
+                       (pp_print_list
+                          ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                          pp_print_string
+                       ) vars
+    | Env              -> Format.pp_print_string fmt "env"
+    | Where            -> Format.pp_print_string fmt "where"
+    | WhereI           -> Format.pp_print_string fmt "wherei"
+    | Info Alarms      -> Format.pp_print_string fmt "info alarms"
+    | Info Breakpoints -> Format.pp_print_string fmt "info breakpoints"
+    | Info Tokens      -> Format.pp_print_string fmt "info tokens"
+    | Info Variables   -> Format.pp_print_string fmt "info variables"
+    | Enable (Hook h)  -> Format.fprintf fmt "enable hook %s" h
+    | Disable (Hook h) -> Format.fprintf fmt "disable hook %s" h
+    | Set (Debug, d)   -> Format.fprintf fmt "set debug %s" d
+    | Unset Debug      -> Format.pp_print_string fmt "unset debug"
+    | BackTrace        -> Format.pp_print_string fmt "backtrace"
+    | Save file        -> Format.fprintf fmt "save %s" file
+    | Trace            -> Format.pp_print_string fmt "trace"
 
 
   (** Print help message *)
@@ -349,7 +350,7 @@ struct
     printf "  s[tep]                step into function calls@.";
     printf "  s[tep]i               step into interpretation sub-tree@.";
     printf "  f[inish]              finish current function@.";
-    printf "  p[rint] <variable>    print the value of a variable@.";
+    printf "  p[rint] <var>,...     print the value of variables@.";
     printf "  p[rint]               print the abstract state@.";
     printf "  e[nv]                 print the current abstract environment@.";
     printf "  b[ack]t[race]         print the current call stack@.";
@@ -400,7 +401,10 @@ struct
       else
         Queue.pop buffer
     in
-    let parts = String.split_on_char ' ' (String.trim s) in
+    let parts = String.trim s |>
+                String.split_on_char ' ' |>
+                List.filter (function "" -> false | _ -> true)
+    in
     let c = match parts with
       | ["continue" | "c"]   -> Continue
       | ["next"     | "n"]   -> Next
@@ -408,19 +412,27 @@ struct
       | ["finish"   | "f"]   -> Finish
       | ["nexti"    |"ni"]   -> NextI
       | ["stepi"    |"si"]   -> StepI
-      | ["print"    | "p"]   -> Print
       | ["env"      | "e"]   -> Env
       | ["where"    | "w"]   -> Where
       | ["wherei"   |"wi"]   -> WhereI
       | ["backtrace"|"bt"]   -> BackTrace
       | ["trace"    | "t"]   -> Trace
       | ["break"    | "b"; loc] -> Break loc
-      | ["print"    | "p"; var] -> PrintVar var
+      | ("print"    | "p") :: vars ->
+        let vars =
+          List.fold_left
+            (fun acc s ->
+               let parts = String.split_on_char ',' s |>
+                           List.filter (function "" -> false | _ -> true)
+               in
+               SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
+            ) SetExt.StringSet.empty vars
+        in
+        Print (SetExt.StringSet.elements vars)
 
       | ["help" | "h"]   ->
         print_usage ();
         read_command ()
-
 
       | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
       | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
@@ -433,7 +445,7 @@ struct
       | ["set"  |"s";  "debug"| "d"; d] | ["sd"; d] -> Set (Debug, d)
       | ["unset"|"u";  "debug"| "d"] | ["ud"] -> Unset Debug
 
-      | [""] ->
+      | [] | [""] ->
         ( match !last_command with
           | None ->  read_command ()
           | Some c -> c )
@@ -779,6 +791,9 @@ struct
   (** {2 Interactive engine} *)
   (** ********************** *)
 
+  (** Unique range for expressions/statements constructed by the interactive engine *)
+  let interactive_range = tag_range (mk_fresh_range ()) "interactive"
+
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
     fun action flow ->
@@ -820,8 +835,57 @@ struct
       printf "@[<v>%a@]@." pp_trace state.trace;
       interact action flow
 
-    | Print ->
+    | Print [] ->
       printf "%a@." (format (Flow.print man.lattice.print)) flow;
+      interact action flow
+
+    | Print vnames ->
+      let vars = man.ask Q_debug_variables flow in
+      let map =
+        List.fold_left
+          (fun acc v ->
+             let vname = asprintf "%a" pp_var v in
+             MapExt.StringMap.add vname v acc)
+          MapExt.StringMap.empty vars
+      in
+      let found,not_found =
+        List.fold_left
+          (fun (found,not_found) vname ->
+             match MapExt.StringMap.find_opt vname map with
+             | Some var -> var::found,not_found
+             | None     -> found,vname::not_found
+          ) ([],[]) vnames
+      in
+      let not_found' =
+        match found with
+        | [] -> []
+        | _ ->
+          let printer = empty_printer () in
+          let found,not_found =
+            List.fold_left
+              (fun (found,not_found) v ->
+                 let e = mk_var v interactive_range in
+                 try
+                   let () = man.print_expr flow printer e in
+                   true,not_found
+                 with Not_found ->
+                   let vname = asprintf "%a" pp_var v in
+                   found,vname::not_found
+              ) (false,[]) found
+          in
+          if found then printf "%a@." pflush printer;
+          not_found
+      in
+      ( match not_found@not_found' with
+        | [] -> ()
+        | l  ->
+          printf "Variable%a %a not found@."
+            Debug.plurial_list not_found
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+               (fun fmt vname -> fprintf fmt "'%s'" vname)
+            ) l
+      );
       interact action flow
 
     | Env ->
@@ -895,23 +959,6 @@ struct
         ) vars
       ;
       interact action flow
-
-    | PrintVar vname ->
-      let vars = man.ask Q_debug_variables flow in
-      begin try
-          let var = List.find
-              (fun var' ->
-                 let vname' = Format.asprintf "%a" pp_var var' in
-                 vname = vname'
-              ) vars
-          in
-          let value = man.ask (Q_debug_variable_value var) flow in
-          printf "%a = %a@." pp_var_with_type (var,value.var_value_type) pp_var_value value;
-          interact action flow
-        with Not_found ->
-          printf "Variable '%s' not found@." vname;
-          interact action flow
-      end
 
     | Set (Debug, channel) ->
       Debug.set_channels channel;
