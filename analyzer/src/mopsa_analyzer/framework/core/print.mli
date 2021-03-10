@@ -92,9 +92,11 @@ type print_selector =
 type print_path = print_selector list
 (** Path of a print object *)
 
-val find_print_object : printer -> print_path -> print_object
-(** [find_print_object printer path] returns the object placed at [path] in [printer] *)
+val find_print_object : print_path -> print_object -> print_object
+(** [find_print_object path obj] returns the object placed at [path] in [obj] *)
 
+val match_print_object_keys : Str.regexp -> print_object -> print_object
+(** [match_print_object_keys re obj] slices [obj] to paths containing keys that match [re] *)
 
 (****************************************************************************)
 (**                    {1 Generic print functions}                          *)
@@ -187,6 +189,9 @@ val pp_obj_map :
 (****************************************************************************)
 (**                              {1 Format}                                 *)
 (****************************************************************************)
+
+val pp_print_object : Format.formatter -> print_object -> unit
+(** Pretty-print a printer objct *)
 
 val pflush : Format.formatter -> printer -> unit
 (** Pretty-print the printer output in a format string *)

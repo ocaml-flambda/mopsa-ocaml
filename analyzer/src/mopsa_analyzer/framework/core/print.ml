@@ -52,7 +52,7 @@ type print_object =
   | Int    of Z.t
   | Float  of float
   | String of string
-  | Map    of print_object MapExt.StringMap.t * map_symbols
+  | Map    of print_object StringMap.t * map_symbols
   | List   of print_object list * list_symbols
 
 let default_map_symbols = { mopen = ""; msep = ","; mclose = ""; mbind = ":" }
@@ -96,24 +96,54 @@ type print_selector =
 
 type print_path = print_selector list
 
-let find_print_object printer path =
-  let rec iter p s =
-    match p,s with
-    | [],_ -> s
-    | Key k::tl, Map (m,_) -> iter tl (StringMap.find k m)
-    | Key k::tl, Empty -> Empty
-    | Key _::_,_ -> Exceptions.panic "find_print_object: key selector on non-map object"
-    | Index i::tl, List (l,_) -> begin try iter tl (List.nth l i) with Failure _ -> raise Not_found end
-    | Index i::tl, Empty -> Empty
-    | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
-    | Head::tl, List (l,_) -> begin try iter tl (List.hd l) with Failure _ -> raise Not_found end
-    | Head::tl, Empty -> Empty
-    | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
-    | Tail::tl, List (l,_) -> begin try iter tl (ListExt.last l) with Failure _ -> raise Not_found end
-    | Tail::tl, Empty -> Empty
-    | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
-  in
-  iter path printer.body
+let rec find_print_object path obj =
+  match path, obj with
+  | [],_ -> obj
+
+  (* Maps *)
+  | Key k::tl, Map (m,_) -> find_print_object tl (StringMap.find k m)
+  | Key k::tl, Empty -> Empty
+  | Key _::_,_ -> Exceptions.panic "find_print_object: key selector on non-map object"
+
+  (* Lists *)
+  | Index i::tl, List (l,_) -> begin try find_print_object tl (List.nth l i) with Failure _ -> raise Not_found end
+  | Index i::tl, Empty -> Empty
+  | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
+
+  | Head::tl, List (l,_) -> begin try find_print_object tl (List.hd l) with Failure _ -> raise Not_found end
+  | Head::tl, Empty -> Empty
+  | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
+
+  | Tail::tl, List (l,_) -> begin try find_print_object tl (ListExt.last l) with Failure _ -> raise Not_found end
+  | Tail::tl, Empty -> Empty
+  | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
+
+let rec match_print_object_keys re obj =
+  match obj with
+  | Map (map,sym) ->
+    let map' =
+      StringMap.fold
+        (fun k v acc ->
+           if Str.string_match re k 0
+           then StringMap.add k v acc
+           else acc
+        ) map StringMap.empty in
+    if StringMap.is_empty map' then Empty else Map(map',sym)
+
+  | List(list,sym) ->
+    let list' =
+      List.fold_left
+        (fun acc v ->
+           let v' = match_print_object_keys re v in
+           match v' with
+           | Empty -> acc
+           | _     -> v' :: acc
+        ) [] list in
+    if list' = [] then Empty else List(List.rev list',sym)
+
+  | Empty | Int _ | Bool _ | Float _ | String _ -> obj
+
+
 
 
 (****************************************************************************)

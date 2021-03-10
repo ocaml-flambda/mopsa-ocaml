@@ -258,8 +258,9 @@ struct
     | Print of string list
     (** Print the current abstract state or the value of variables *)
 
-    | Env
-    (** Print the current abstract environment, associated to token T_cur *)
+    | Env of string list
+    (** Print the current abstract environment, associated to token T_cur,
+        eventually projected on a list of domains *)
 
     | Where
     (** Show current program point *)
@@ -323,7 +324,12 @@ struct
                           ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
                           pp_print_string
                        ) vars
-    | Env              -> Format.pp_print_string fmt "env"
+    | Env []           -> Format.pp_print_string fmt "env"
+    | Env domains      -> Format.fprintf fmt "env %a"
+                            (pp_print_list
+                               ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                               pp_print_string
+                            ) domains
     | Where            -> Format.pp_print_string fmt "where"
     | WhereI           -> Format.pp_print_string fmt "wherei"
     | Info Alarms      -> Format.pp_print_string fmt "info alarms"
@@ -350,9 +356,10 @@ struct
     printf "  s[tep]                step into function calls@.";
     printf "  s[tep]i               step into interpretation sub-tree@.";
     printf "  f[inish]              finish current function@.";
-    printf "  p[rint] <var>,...     print the value of variables@.";
     printf "  p[rint]               print the abstract state@.";
+    printf "  p[rint] <var>,...     print the value of selected variables@.";
     printf "  e[nv]                 print the current abstract environment@.";
+    printf "  e[nv] <domain>,...    print the current abstract environment of selected domains@.";
     printf "  b[ack]t[race]         print the current call stack@.";
     printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
@@ -412,12 +419,24 @@ struct
       | ["finish"   | "f"]   -> Finish
       | ["nexti"    |"ni"]   -> NextI
       | ["stepi"    |"si"]   -> StepI
-      | ["env"      | "e"]   -> Env
       | ["where"    | "w"]   -> Where
       | ["wherei"   |"wi"]   -> WhereI
       | ["backtrace"|"bt"]   -> BackTrace
       | ["trace"    | "t"]   -> Trace
-      | ["break"    | "b"; loc] -> Break loc
+      | ["break"    | "b"; l]-> Break l
+
+      | ("env"      | "e") :: domains ->
+        let domains =
+          List.fold_left
+            (fun acc s ->
+               let parts = String.split_on_char ',' s |>
+                           List.filter (function "" -> false | _ -> true)
+               in
+               SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
+            ) SetExt.StringSet.empty domains
+        in
+        Env (SetExt.StringSet.elements domains)
+
       | ("print"    | "p") :: vars ->
         let vars =
           List.fold_left
@@ -439,8 +458,8 @@ struct
       | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
       | ["info" |"i"; "variables"   | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
 
-      | ["enable" |"e";  "hook" | "h"; h] | ["eh"; h] -> Enable (Hook h)
-      | ["disable"|"d";  "hook" | "h"; h] | ["dh"; h] -> Disable (Hook h)
+      | ["enable" | "en"; "hook" | "h"; h] | ["eh"; h] -> Enable (Hook h)
+      | ["disable"|"d";   "hook" | "h"; h] | ["dh"; h] -> Disable (Hook h)
 
       | ["set"  |"s";  "debug"| "d"; d] | ["sd"; d] -> Set (Debug, d)
       | ["unset"|"u";  "debug"| "d"] | ["ud"] -> Unset Debug
@@ -888,9 +907,28 @@ struct
       );
       interact action flow
 
-    | Env ->
+    | Env [] ->
       let env = Flow.get T_cur man.lattice flow in
       printf "%a@." (Print.format man.lattice.print) env;
+      interact action flow
+
+    | Env domains ->
+      let env = Flow.get T_cur man.lattice flow in
+      let re =
+        List.map
+          (fun d ->
+             (* Replace wildcard shortcut '_' *)
+             let d' = Str.global_replace (Str.regexp_string "_") ".*" d in
+             (* Accept any domain name containing the given string *)
+             ".*" ^ d' ^ ".*"
+          ) domains |>
+        (* Add alternative operator between domains names *)
+        String.concat "\\|" |>
+        Str.regexp
+      in
+      let pobj = pbox man.lattice.print env in
+      let pobj' = match_print_object_keys re pobj in
+      printf "%a@." pp_print_object pobj';
       interact action flow
 
     | Where ->
