@@ -296,6 +296,7 @@ struct
   (** Information sub-commands *)
   and info_command =
     | Alarms
+    | Checks
     | Breakpoints
     | Tokens
     | Variables
@@ -333,6 +334,7 @@ struct
     | Where            -> Format.pp_print_string fmt "where"
     | WhereI           -> Format.pp_print_string fmt "wherei"
     | Info Alarms      -> Format.pp_print_string fmt "info alarms"
+    | Info Checks      -> Format.pp_print_string fmt "info checks"
     | Info Breakpoints -> Format.pp_print_string fmt "info breakpoints"
     | Info Tokens      -> Format.pp_print_string fmt "info tokens"
     | Info Variables   -> Format.pp_print_string fmt "info variables"
@@ -364,8 +366,9 @@ struct
     printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
     printf "  w[here]i              show current interpreter transfer function@.";
-    printf "  i[info] a[larms]      print the list of alarms@.";
-    printf "  i[info] b[reakpoints] print the list of breakpoints@.";
+    printf "  i[info] a[larms]      print the list of detected alarms@.";
+    printf "  i[info] c[hecks]      print the list of performed checks@.";
+    printf "  i[info] b[reakpoints] print the list of registered breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
     printf "  i[info] v[ariables]   print the list of variables@.";
     printf "  e[nable] h[hook] <h>  enable a hook@.";
@@ -456,6 +459,7 @@ struct
       | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
       | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
       | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
+      | ["info" |"i"; "checks"      | "c"] | ["ic"] -> Info Checks
       | ["info" |"i"; "variables"   | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
 
       | ["enable" | "en"; "hook" | "h"; h] | ["eh"; h] -> Enable (Hook h)
@@ -968,21 +972,17 @@ struct
 
     | Info Alarms ->
       let report = Flow.get_report flow in
-      begin
-        if Alarm.is_safe_report report then
-          printf "No alarm@."
-        else (
-          let errors,warnings = Alarm.count_alarms report in
-          let nb = errors+warnings in
-          printf "%d alarm%a found:@." nb Debug.plurial_int nb;
-          Alarm.diagnostics_of_report report |>
-          DiagnosticSet.filter (fun d -> d.diag_kind = Error || d.diag_kind = Warning) |>
-          Alarm.group_diagnostics_by_check |>
-          Alarm.CheckMap.iter (fun check ds ->
-              printf "  %a: %d@." Alarm.pp_check check (DiagnosticSet.cardinal ds)
-            )
-        )
-      end;
+      ( if is_safe_report report
+        then printf "%a No alarm@." Debug.(color_str green) "✔";
+        let _ = Output.Text.construct_checks_summary ~print:true report None in
+        ()
+      );
+      interact action flow
+
+    | Info Checks ->
+      let report = Flow.get_report flow in
+      let total, safe, error, warning, checks_map = Output.Text.construct_checks_summary report None in
+      Output.Text.print_checks_summary checks_map total safe error warning None;
       interact action flow
 
     | Info Breakpoints ->
