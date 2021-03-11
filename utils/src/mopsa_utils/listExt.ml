@@ -133,6 +133,10 @@ let rec mem_compare cmp e l = match l with
 
 (** {2 Parallel functions} *)
 
+        (*
+Disabled for now.
+Not used, yet causes compiler warnings about threading...
+
 let par_iteri (nb_threads:int) (f: int -> 'a -> unit) (l:'a list) : unit =
   if nb_threads <= 1 || List.length l <= 1
   then List.iteri f l
@@ -172,6 +176,7 @@ let par_iteri (nb_threads:int) (f: int -> 'a -> unit) (l:'a list) : unit =
     match !exn with
     | None -> ()
     | Some x -> raise x (* rethrow exception from thread *)
+         *)
 (**
    As List.iter, but in parallel using nb_threads threads.
    As threads are used, this only makes sense if the iterated function
