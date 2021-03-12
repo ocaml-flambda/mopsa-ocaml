@@ -155,8 +155,8 @@ struct
 
 
   (* Allocate in the heap *)
-  let eval_stub_alloc res range man flow =
-    let alloc = mk_alloc_addr (A_stub_resource res) range in
+  let eval_stub_alloc res mode range man flow =
+    let alloc = mk_alloc_addr (A_stub_resource res) ~mode range in
     man.eval alloc flow >>$ fun eaddr flow ->
     match ekind eaddr with
     | E_addr (addr, _) ->
@@ -189,8 +189,8 @@ struct
 
   let eval exp man flow =
     match ekind exp with
-    | E_stub_alloc res ->
-      eval_stub_alloc res exp.erange man flow |>
+    | E_stub_alloc (res,mode) ->
+      eval_stub_alloc res mode exp.erange man flow |>
       OptionExt.return
 
     | E_stub_resource_mem(p, res) ->
