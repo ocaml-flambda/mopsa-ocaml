@@ -234,6 +234,11 @@ struct
       man.eval e flow |>
       OptionExt.return
 
+    | E_c_cast(e,_) when is_c_type e.etyp &&
+                         compare_typ exp.etyp e.etyp = 0 ->
+      man.eval e flow |>
+      OptionExt.return
+
     | _ -> None
 
 
