@@ -763,7 +763,7 @@ let raise_c_invalid_float_class_alarm ?(bottom=true) float msg range man input_f
 
 (** There are five IEEE 754 exceptions.
     We only singal include invalid operation, division by zero and 
-    overflow. We don't care about inderflow (rounding to 0) and
+    overflow. We don't care about underflow (rounding to 0) and
     inexact (rounding).
  *)
 type check +=

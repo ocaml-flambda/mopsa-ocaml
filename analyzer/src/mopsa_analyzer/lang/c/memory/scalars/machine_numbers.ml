@@ -114,7 +114,7 @@ struct
       category = "C";
       doc = " invalid float operations generate errors instead of silent NaN";
       spec = ArgExt.Bool (fun b -> opt_float_invalid_operation := b);
-      default = "true";
+      default = "false";
     }
 
   let opt_float_division_by_zero = ref false
@@ -124,7 +124,7 @@ struct
       category = "C";
       doc = " float divisions by 0 generate errors instead of infinities";
       spec = ArgExt.Bool (fun b -> opt_float_division_by_zero := b);
-      default = "true";
+      default = "false";
     }
 
   let opt_float_overflow = ref false
@@ -134,7 +134,7 @@ struct
       category = "C";
       doc = " float overflows generate errors";
       spec = ArgExt.Bool (fun b -> opt_float_overflow := b);
-      default = "true";
+      default = "false";
     }
 
 
