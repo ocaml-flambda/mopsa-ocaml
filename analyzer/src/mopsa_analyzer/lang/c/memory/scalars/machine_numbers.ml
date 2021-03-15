@@ -195,6 +195,7 @@ struct
 
   let is_c_overflow_op = function
     | O_mult | O_plus | O_minus -> true
+    | O_bit_and | O_bit_or -> true
     | _ -> false
 
   let is_c_div_op = function
