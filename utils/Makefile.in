@@ -41,7 +41,7 @@ C_SRC = mopsa_utils/itvUtils/floats_round.c
 
 
 # External packages, as given to ocamlfind
-PKGS = str gmp zarith camlidl threads
+PKGS = str gmp zarith camlidl
 
 
 # MOPSA make rules
