@@ -114,7 +114,7 @@ module Domain =
                        assume
                          (Utils.mk_hasattr cls2 "__iter__" range)
                          ~fthen:(fun true_flow ->
-                             let v = mktmp ~typ:(T_py None) () in
+                             let v = mk_range_attr_var range "iter_v" (T_py None) in
                              let stmt = mk_stmt (S_py_for (
                                  mk_var v range,
                                  e2,

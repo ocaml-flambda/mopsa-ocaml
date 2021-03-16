@@ -355,17 +355,17 @@ module Domain =
          (* Allocate an object for the function and assign it to the variable
          representing the name of the function *)
          let kind =
-           if Libs.Py_mopsa.is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var)
-           else if Libs.Py_mopsa.is_builtin_fundec func then
-             let name = Libs.Py_mopsa.builtin_fundec_name func in
-             F_builtin (name, Libs.Py_mopsa.builtin_type_name "function" func)
+           if is_unsupported_fundec func then F_unsupported (get_orig_vname func.py_func_var)
+           else if is_builtin_fundec func then
+             let name = builtin_fundec_name func in
+             F_builtin (name, builtin_type_name "function" func)
            else F_user func
          in
          debug "creating function object %a" pp_addr_kind (A_py_function kind);
          eval_alloc man (A_py_function kind) stmt.srange flow |>
          bind_result (fun addr flow ->
              let obj = (addr, None) in
-             if Libs.Py_mopsa.is_unsupported_fundec func || Libs.Py_mopsa.is_builtin_fundec func then
+             if is_unsupported_fundec func || is_builtin_fundec func then
                add_builtin_function obj ();
              man.exec
                (mk_assign

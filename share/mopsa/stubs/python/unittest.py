@@ -32,6 +32,9 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertEqual")
     def assertEqual(self, x, y): pass
 
+    @mopsa.builtin("unittest.TestCase.assertNotEqual")
+    def assertNotEqual(self, x, y): pass
+
     @mopsa.builtin("unittest.TestCase.assertGreater")
     def assertGreater(self, x, y): pass
 
@@ -62,8 +65,8 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.assertNotIsInstance")
     def assertNotIsInstance(self, x, y): pass
 
-    def assertRaises(self, exn):
-        return ExceptionContext(exn)
+    @mopsa.builtin("unittest.TestCase.assertRaises")
+    def assertRaises(self, exn): pass
 
     def assertRaisesRegex(self, exn, regex):
         # FIXME: and the message?

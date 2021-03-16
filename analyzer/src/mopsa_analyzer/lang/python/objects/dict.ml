@@ -433,6 +433,9 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_add {ekind = E_addr ({addr_kind = A_py_dict}, _)} ->
+       Post.return flow |> OptionExt.return
+
     | S_rename ({ekind = E_addr ({addr_kind = A_py_dict} as a, _)}, {ekind = E_addr (a', _)}) ->
       let kva, vva = var_of_addr a in
       let kva', vva' = var_of_addr a' in

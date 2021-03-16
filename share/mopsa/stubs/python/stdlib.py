@@ -625,7 +625,12 @@ class enumerate(object):
 
 class filter(object): pass
 
-class reversed(object): pass
+class reversed(object):
+    def __new__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __next__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __iter__(self): pass
 
 class zip(object):
     def __new__(self): pass

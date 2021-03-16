@@ -29,13 +29,13 @@ open MapExt
 open SetExt
 open Universal.Ast
 
-type ('a, _) query += Q_exn_string_query : expr -> ('a, string * string) query
+type ('a, _) query += Q_exn_string_query : expr -> ('a, string * Universal.Strings.Powerset.StringPower.t) query
 
 let () = register_query {
     join = (let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
               fun next query a b ->
                 match query with
-                | Q_exn_string_query _ -> (fst a ^ fst b, snd a ^ snd b)
+                | Q_exn_string_query _ -> (fst a ^ fst b, Universal.Strings.Powerset.StringPower.join (snd a) (snd b))
                 | _ -> next.pool_join query a b in
             f
            );
@@ -181,7 +181,8 @@ struct
           | None -> old_a
           | Some va -> AttrSet.join old_a va in
         remove a cur |>
-        add a' new_va' in
+          add a' new_va' in
+      debug "ncur = %a" (format print) ncur;
       let flow = set_env T_cur ncur man flow in
       man.exec to_rename_stmt flow |>
         OptionExt.return
@@ -198,13 +199,14 @@ struct
        let flow = set_env T_cur ncur man flow in
        man.exec   to_remove_stmt flow |> OptionExt.return
 
-    | S_add ({ekind = E_addr (a, _)}) ->
+    | S_add ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, om)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
-      if mem a cur && a.addr_mode = STRONG then panic_at range "%a but the address exists@.%a" pp_stmt stmt (format @@ Flow.print man.lattice.print) flow;
+      if mem a cur && addr_mode a om = STRONG then panic_at range "%a but the address exists" pp_stmt stmt;
+      (* FIXME: if addr is weak, we shouldn't add *)
       let ncur = add a AttrSet.empty cur in
       debug "S_add ok?";
-      set_env T_cur ncur man flow |>
+      set_env T_cur (if addr_mode a om = STRONG then ncur else join cur ncur) man flow |>
       Post.return |>
       OptionExt.return
 
@@ -313,7 +315,7 @@ struct
           (* else if Hashtbl.mem typed_functions attr then
            *   failwith "~ok" *)
           else
-            let () = debug "else for var %a" pp_var v in
+            let () = debug "else for var %a@.%a" pp_var v (format @@ Flow.print man.lattice.print) flow in
             man.eval   (mk_var v range) flow
 
         | A_py_class (C_builtin c, b) ->
@@ -445,7 +447,7 @@ struct
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr (a, _)} as e) ->
-       if List.exists (fun a' -> compare_addr a (OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
+       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
        else
        let range = erange e in
        let cur = get_env T_cur man flow in
@@ -485,18 +487,16 @@ struct
                Cases.reduce_result (fun etuple flow ->
                    let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                    (* FIXME *)
-                   let pset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow in
-                   if Universal.Strings.Powerset.Value.is_top pset then "T"
-                   else Universal.Strings.Powerset.StringPower.choose pset
+                   man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow
                  )
-                 ~join:(fun _ _ -> assert false)
-                 ~meet:(fun _ _ -> assert false)
-                 ~bottom:""
+                 ~join:(Universal.Strings.Powerset.StringPower.join)
+                 ~meet:(Universal.Strings.Powerset.StringPower.meet)
+                 ~bottom:Universal.Strings.Powerset.StringPower.empty
            else
-             ""
+             Universal.Strings.Powerset.StringPower.empty
          in
          name, message in
-       let () = debug "answer to query is %s %s@\n" exc message in
+       let () = debug "answer to query is %s %a@\n" exc (format Universal.Strings.Powerset.StringPower.print) message in
        Some (exc, message)
 
     | Universal.Ast.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->

@@ -157,8 +157,9 @@ struct
               let ootb_accesses =
                 if (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.MINF) (ItvUtils.IntItv.B.of_int (- List.length tuple_vars - 1)))) ||
                      (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.of_int (List.length tuple_vars)) (ItvUtils.IntItv.B.PINF))) then
-                  (man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>%
-                     Eval.empty) :: []
+                  (man.exec   (Utils.mk_builtin_raise_msg "IndexError" "tuple index out of range" range) flow >>% fun flow ->
+                                                                                                                  debug "ootb access here!";
+                     Eval.empty flow) :: []
                 else []
               in
               Eval.join_list ~empty:(fun () -> assert false)
@@ -281,6 +282,9 @@ struct
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)} ->
        let vas = var_of_addr a in
        List.fold_left (fun flow v -> flow >>% man.exec   (mk_remove_var v range)) (Post.return flow) vas |> OptionExt.return
+
+    | S_add {ekind = E_addr ({addr_kind = A_py_tuple _}, _)} ->
+       Post.return flow |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_tuple _} as a, _)}, {ekind = E_addr (a', _)}) ->
       let vas = var_of_addr a in

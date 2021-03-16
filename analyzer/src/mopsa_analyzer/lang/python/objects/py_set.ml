@@ -247,6 +247,9 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_add {ekind = E_addr ({addr_kind = A_py_set}, _)} ->
+       Post.return flow |> OptionExt.return
+
     | S_remove {ekind = E_addr ({addr_kind = A_py_set} as a, _)} ->
        let va = var_of_addr a in
        flow |>

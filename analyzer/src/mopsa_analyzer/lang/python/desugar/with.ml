@@ -64,7 +64,6 @@ module Domain =
 
          (* Execute body *)
          let tmpexn = mktmp ~typ:(T_py None) () in
-         let tmpret = mktmp ~typ:(T_py None) () in
          let eexit e1 e2 e3 = mk_py_call exit [econtext; e1; e2; e3] erange in
          let stmt =
            mk_try
@@ -84,20 +83,17 @@ module Domain =
                 (Some (mk_py_object (find_builtin "BaseException") srange))
                 (Some tmpexn)
                 (mk_block [
-                    (* In case of exception, call __exit__ and give the exception as argument *)
-                    (* FIXME : the type and the traceback are not implmented *)
-                    mk_assign (mk_var tmpret srange)
-                      (eexit
-                         (mk_py_none srange)
-                         (mk_var tmpexn srange)
-                         (mk_py_none srange)
-                      )
-                      srange
-                    ;
                     (* Check the return value of the __exit__ method and re-raise the exception when it is false *)
                       mk_stmt
                         (S_py_if
-                           (mk_var tmpret srange,
+                           (
+                             (* In case of exception, call __exit__ and give the exception as argument *)
+                             (* FIXME : the type and the traceback are not implmented *)
+                             (eexit
+                               (mk_py_none srange)
+                               (mk_var tmpexn srange)
+                               (mk_py_none srange)
+                            ),
                             mk_block [] srange,
                             mk_stmt (S_py_raise (Some (mk_var tmpexn erange))) srange)
                         )
@@ -112,7 +108,6 @@ module Domain =
          flow >>%
          man.exec stmt >>%
          man.exec (mk_remove_var tmpexn srange) >>%
-         man.exec (mk_remove_var tmpret srange) >>%
          Post.return |>
          OptionExt.return
 
