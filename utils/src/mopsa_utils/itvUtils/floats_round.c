@@ -875,7 +875,7 @@ CAMLprim value ml_divpos_sgl_itv_inner(value a, value b, value r) {
 #define SKIP_SPACE(s)                           \
   while (*(s) == ' ') (s)++
 
-static double parse_string(int up, char* s)
+static double parse_string(int up, const char* s)
 {
   int neg = 0;
   int exponent = 0;

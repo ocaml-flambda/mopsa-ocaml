@@ -30,30 +30,27 @@ open Location
 
 let debug fmt = Debug.debug ~channel:"c_stubs_parser.main" fmt
 
+let starts_with text prefix =
+  (String.length text >= String.length prefix) &&
+  (String.sub text 0 (String.length prefix) = prefix)
 
 let is_stub_comment com =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
-  let lexeme = "/*$" in
-  let start = String.sub comment 0 (String.length lexeme) in
-  start = lexeme
+  starts_with comment "/*$"
 
 let is_predicates_comment com =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
-  let lexeme = "/*$=" in
-  let start = String.sub comment 0 (String.length lexeme) in
-  start = lexeme
+  starts_with comment "/*$="
 
 let is_directive_comment com =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
-  let lexeme = "/*$!" in
-  let start = String.sub comment 0 (String.length lexeme) in
-  start = lexeme
+  starts_with comment "/*$!"
 
 
 exception StubNotFound

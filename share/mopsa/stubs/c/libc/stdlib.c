@@ -729,7 +729,7 @@ static const size_t _sizeof_ptr = sizeof(void*);
 
 /*$
  * requires: __alignment % _sizeof_ptr == 0;
- * requires: __alignment & (__alignment - 1) == 0; // __alignment is a power of 2
+ * requires: (__alignment & (__alignment - 1)) == 0; // __alignment is a power of 2
  *
  * case "success" {
  *   local:   void* r = new Memory;
@@ -757,7 +757,7 @@ int posix_memalign (void **__memptr, size_t __alignment, size_t __size);
 //#ifdef __USE_ISOC11
 
 /*$
- * requires: __alignment & (__alignment - 1) == 0; // __alignment is a power of 2
+ * requires: (__alignment & (__alignment - 1)) == 0; // __alignment is a power of 2
  * requires: __size % __alignment == 0;
  *
  * case "success" {

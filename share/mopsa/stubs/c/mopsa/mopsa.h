@@ -62,6 +62,9 @@ extern unsigned long _mopsa_range_u64(unsigned long l, unsigned long u);
 extern float _mopsa_range_float(float l, float u);
 extern double _mopsa_range_double(double l, double u);
 
+extern float _mopsa_valid_float();
+extern double _mopsa_valid_double();
+
 
 // Invalid pointer
 extern void *_mopsa_invalid_pointer();

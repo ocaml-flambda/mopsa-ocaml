@@ -1646,13 +1646,13 @@ void encrypt (char *__glibc_block, int __edflag);
  * requires: valid_bytes(__to, __n);
  *
  * case "odd" {
- *   assumes: __n >= 0 and __n & 1 == 0;
+ *   assumes: __n >= 0 and (__n & 1) == 0;
  *   assigns: ((unsigned char*)__to)[0, __n);
  *   ensures: forall ssize_t i in [0, __n): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';
  * }
  *
  * case "even" {
- *   assumes: __n >= 1 and __n & 1 == 1;
+ *   assumes: __n >= 1 and (__n & 1) == 1;
  *   assigns: ((unsigned char*)__to)[0, __n - 1);
  *   // the last byte is unspecified
  *   ensures: forall ssize_t i in [0, __n - 1): ((unsigned char*)__from)[i] ==  (((unsigned char*)__to)[i ^ 1])';

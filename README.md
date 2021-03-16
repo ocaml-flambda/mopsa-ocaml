@@ -94,7 +94,7 @@ let _ = Mopsa_analyzer.Framework.Runner.run()
 ```
 It can be compiled with:
 ```shell
-ocamlfind ocamlopt -thread -package mopsa.analyzer -linkpkg test.ml
+ocamlfind ocamlopt -package mopsa.analyzer -linkpkg test.ml
 ```
 
 ## Additional resources
