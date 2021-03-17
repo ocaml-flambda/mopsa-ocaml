@@ -204,7 +204,8 @@ struct
       let a, bnd' = add_missing_vars (a,bnd) [var1] in
       let a, bnd' = remove_var var2 (a,bnd') in
       let v1, _ = Binding.mopsa_to_apron_var var1 bnd in
-      let v2, _ = Binding.mopsa_to_apron_var var2 bnd in
+      let bnd' = Binding.remove_apron_var v1 bnd in
+      let v2, bnd' = Binding.mopsa_to_apron_var var2 bnd' in
       (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd') |>
       OptionExt.return
 
