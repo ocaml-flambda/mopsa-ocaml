@@ -101,18 +101,17 @@ struct
   let add_missing_vars (a,bnd) lv =
     let env = Apron.Abstract1.env a in
     let lv = List.sort_uniq compare lv in
-    let lv = List.filter (fun v -> not (Apron.Environment.mem_var env (Binding.mk_apron_var v))) lv in
+    let lv = List.filter (fun v -> not (Apron.Environment.mem_var env (Binding.mopsa_to_apron_var v bnd |> fst))) lv in
 
     let int_vars, bnd =
-      List.filter (fun v -> vtyp v = T_int || vtyp v = T_bool) lv |>
-      Binding.vars_to_apron bnd
+      let lv' = List.filter (fun v -> vtyp v = T_int || vtyp v = T_bool) lv in
+      Binding.mopsa_to_apron_vars lv' bnd
     in
 
     let float_vars, bnd =
-      List.filter (function { vtyp = T_float _} -> true | _ -> false) lv |>
-      Binding.vars_to_apron bnd
+      let lv' = List.filter (function { vtyp = T_float _} -> true | _ -> false) lv in
+      Binding.mopsa_to_apron_vars lv' bnd
     in
-
 
     let env' = Apron.Environment.add env
         (Array.of_list int_vars)
@@ -154,18 +153,19 @@ struct
 
   let init prog = top
 
-  let remove_var v (a,bnd) =
+  let remove_var (v:var) (a,bnd) =
     let env = Apron.Abstract1.env a in
-    let vars, bnd =
-      List.filter (fun v -> is_env_var v a) [v] |>
-      Binding.vars_to_apron bnd
-    in
-    let env = Apron.Environment.remove env (Array.of_list vars) in
-    (Apron.Abstract1.change_environment ApronManager.man a env true, bnd)
+    if is_env_var v (a,bnd) then
+      let vv,bnd = Binding.mopsa_to_apron_var v bnd in
+      let env = Apron.Environment.remove env [|vv|] in
+      let bnd = Binding.remove_apron_var vv bnd in
+      (Apron.Abstract1.change_environment ApronManager.man a env true, bnd)
+    else
+      (a,bnd)
 
 
   let forget_var v (a,bnd) =
-    let v,bnd = Binding.var_to_apron bnd v in
+    let v,bnd = Binding.mopsa_to_apron_var v bnd in
     Apron.Abstract1.forget_array ApronManager.man a [|v|] false, bnd
 
 
@@ -201,11 +201,11 @@ struct
 
 
     | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
-      let a, bnd = add_missing_vars (a,bnd) [var1] in
-      let a, bnd = remove_var var2 (a,bnd) in
-      let v1, bnd = Binding.var_to_apron bnd var1 in
-      let v2, bnd = Binding.var_to_apron bnd var2 in
-      (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd) |>
+      let a, bnd' = add_missing_vars (a,bnd) [var1] in
+      let a, bnd' = remove_var var2 (a,bnd') in
+      let v1, _ = Binding.mopsa_to_apron_var var1 bnd in
+      let v2, _ = Binding.mopsa_to_apron_var var2 bnd in
+      (Apron.Abstract1.rename_array ApronManager.man a [| v1  |] [| v2 |], bnd') |>
       OptionExt.return
 
     | S_project vars
@@ -217,10 +217,11 @@ struct
         ) vars
       in
       let env = Apron.Abstract1.env a in
-      let vars, bnd = Binding.vars_to_apron bnd vars in
+      let vars, bnd = Binding.mopsa_to_apron_vars vars bnd in
       let old_vars1, old_vars2 = Apron.Environment.vars env in
       let old_vars = Array.to_list old_vars1 @ Array.to_list old_vars2 in
       let to_remove = List.filter (fun v -> not (List.mem v vars)) old_vars in
+      let bnd = Binding.remove_apron_vars to_remove bnd in
       let new_env = Apron.Environment.remove env (Array.of_list to_remove) in
       Some (
         Apron.Abstract1.change_environment ApronManager.man a new_env true,
@@ -229,7 +230,7 @@ struct
 
     | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG ->
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
-      let v = Binding.mk_apron_var var in
+      let v, bnd = Binding.mopsa_to_apron_var var bnd in
       begin try
           let e, a, bnd, l = exp_to_apron e (a,bnd) [] in
           let aenv = Apron.Abstract1.env a in
@@ -257,8 +258,8 @@ struct
           | _ -> assert false
         ) vl
       in
-      let v, bnd = Binding.var_to_apron bnd v in
-      let vl, bnd = Binding.vars_to_apron bnd vl in
+      let v, bnd = Binding.mopsa_to_apron_var v bnd in
+      let vl, bnd = Binding.mopsa_to_apron_vars vl bnd in
       let abs' = Apron.Abstract1.expand ApronManager.man a v (Array.of_list vl) in
       Some (abs', bnd)
 
@@ -270,8 +271,9 @@ struct
           | _ -> assert false
         ) vl
       in
-      let v, bnd = Binding.var_to_apron bnd v in
-      let vl, bnd = Binding.vars_to_apron bnd vl in
+      let v, bnd = Binding.mopsa_to_apron_var v bnd in
+      let vl, bnd = Binding.mopsa_to_apron_vars vl bnd in
+      let bnd = Binding.remove_apron_vars vl bnd in
       let abs' = Apron.Abstract1.fold ApronManager.man a (Array.of_list (v::vl)) in
       Some (abs', bnd)
 
@@ -313,13 +315,13 @@ struct
 
   let vars (abs,bnd) =
     fold_env (fun v acc ->
-        let vv = Binding.apron_to_var bnd v in
+        let vv = Binding.apron_to_mopsa_var v bnd in
         vv :: acc
       ) (Apron.Abstract1.env abs) []
 
   let bound_var v (abs,bnd) =
-    if is_env_var v abs then
-      let vv = Binding.mk_apron_var v in
+    if is_env_var v (abs,bnd) then
+      let vv,_ = Binding.mopsa_to_apron_var v bnd in
       Apron.Abstract1.bound_variable ApronManager.man abs vv |>
       Values.Intervals.Integer.Value.of_apron
     else
