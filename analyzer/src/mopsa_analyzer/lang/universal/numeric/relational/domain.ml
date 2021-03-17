@@ -363,7 +363,8 @@ struct
 
 
   let print_state printer (a,_) =
-    unformat Apron.Abstract1.print printer a
+    pprint printer
+      (pbox (Apron_pp.pp_env ApronManager.man) a)
       ~path:[Key "numeric-relations"]
 
   let print_expr man ctx a printer exp =
