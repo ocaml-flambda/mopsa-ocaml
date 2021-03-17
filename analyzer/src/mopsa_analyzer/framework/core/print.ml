@@ -151,9 +151,9 @@ let rec pp_print_object fmt = function
   | String s -> Format.pp_print_string fmt s
   | Map (m,sym) ->
     Format.(
-      fprintf fmt "@[<hv>%s%a%s@]"
+      fprintf fmt "%s @[<v>%a@] %s"
         sym.mopen
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.msep)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.msep)
            (fun fmt (k,v) ->
               fprintf fmt "@[<hov2>%s %s @,%a@]"
                 k sym.mbind
@@ -164,9 +164,9 @@ let rec pp_print_object fmt = function
     )
   | List (l,sym) ->
     Format.(
-      fprintf fmt "@[<hov>%s%a%s@]"
+      fprintf fmt "%s @[<v>%a@] %s"
         sym.lopen
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.lsep)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.lsep)
            pp_print_object
         ) l
         sym.lclose
