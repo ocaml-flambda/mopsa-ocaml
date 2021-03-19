@@ -21,6 +21,8 @@
 
 (** Abstraction of generators *)
 
+(* FIXME: safe check for StopIteration *)
+
 open Mopsa
 open Sig.Abstraction.Stateless
 open Ast

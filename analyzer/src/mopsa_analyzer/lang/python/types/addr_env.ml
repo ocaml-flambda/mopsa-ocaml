@@ -562,13 +562,16 @@ struct
             let flow = Flow.set_ctx annots flow in
             match a with
             | Undef_global when is_builtin_var v ->
-              Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range) flow :: acc, annots
+               (Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+                 Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range |>
+                 Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range)) :: acc, annots
 
             | Undef_local when is_builtin_var v ->
-              Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range) flow :: acc, annots
+               (Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+                  Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range |>
+                  Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range)) :: acc, annots
 
             | Undef_global ->
-              debug "Incoming NameError, on var %a, range %a, cs = %a @\n" pp_var v pp_range range pp_callstack (Flow.get_callstack flow);
               let msg = Format.asprintf "name '%a' is not defined" pp_var v in
               let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow) in
               Eval.empty flow :: acc, Flow.get_ctx flow
@@ -613,6 +616,9 @@ struct
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
                   Utils.change_evar_type T_string exp
                 | _ -> exp in
+              let flow =
+                Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+                  Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range in
               let res = man.eval (mk_py_object (addr, Some exp) range) flow in
               let annots = Cases.get_ctx res in
               res :: acc, annots
@@ -624,6 +630,9 @@ struct
       else if is_builtin_var v then
         let () = debug "is it a builtin?" in
         let obj = find_builtin @@ get_orig_vname v in
+        let flow =
+          Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+            Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range in
         Eval.singleton (mk_py_object obj range) flow |> OptionExt.return
       else if is_bottom cur then
         let () = debug "cur to bottom, empty singleton" in

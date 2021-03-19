@@ -195,6 +195,7 @@ struct
                 | Some {ekind = E_constant (C_int z)} -> Some (Z.to_int z)
                 | _ -> None in
                 let do_alloc flow =
+                  let flow = Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow in
                   let alloc_range = tag_range range "alloc_%s" "range" in
                   man.eval   (mk_alloc_addr ~mode:STRONG (A_py_instance (fst @@ find_builtin "range")) alloc_range) flow >>$
                     (fun eaddr flow ->
@@ -315,10 +316,11 @@ struct
               man.exec (Utils.mk_builtin_raise_msg "IndexError" "range object index out of range" range) flow >>% Eval.empty
             )
             ~felse:(fun flow ->
+              Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
               man.eval (add
                           (mk_py_attr r "start" range)
                           (mul (mk_var i range) (mk_py_attr r "step" range) ~typ:(T_py None) range)
-                          ~typ:(T_py None) range) flow
+                          ~typ:(T_py None) range)
             )
         |> Cases.add_cleaners [mk_remove_var i range; mk_remove_var l range]
         )
@@ -336,8 +338,9 @@ struct
            assume
              (lt index length ~etyp:(T_py None) range)
                man flow
-             ~fthen:(fun flow ->
-               man.eval   (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range) flow |>
+               ~fthen:(fun flow ->
+                 let flow = Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow in
+                 man.eval   (mk_binop ~etyp:(T_py None) start O_plus (mk_binop ~etyp:(T_py None) index O_mult step range) range) flow |>
                  (* add_cleaners is ugly, but a bind_result is incorrect
                     (the return of eval will be something like <<int
                     :: start + index * step>>. If we update index
@@ -363,13 +366,16 @@ struct
          ~fthennew:(fun flow ->
            let to_rev = List.hd args in
            assume (mk_py_hasattr to_rev "__reversed__" range) man flow
-             ~fthen:(man.eval (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range))
+             ~fthen:(fun flow ->
+               Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+               man.eval (mk_py_call (mk_py_attr (List.hd args) "__reversed__" range) [] range))
              ~felse:(fun flow ->
                assume (py_and (mk_py_hasattr to_rev "__len__" range) (mk_py_hasattr to_rev "__getitem__" range) range) man flow
                  ~fthen:(fun flow ->
                    (* - allocate reversed object,
                       - put _index to be len(to_rev)-1,
                       - _seq to be to_rev *)
+                   let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
                    allocate_builtin man range flow "reversed" None >>$ fun reversed_obj flow ->
                    man.exec (mk_assign (mk_py_attr reversed_obj "_index" range) (sub (mk_py_call (mk_py_attr to_rev "__len__" range) [] range) (mk_one ~typ:(T_py None) range) ~typ:(T_py None) range) range) flow >>%
                    man.exec (mk_assign (mk_py_attr reversed_obj "_seq" range) to_rev range) >>%
@@ -392,6 +398,7 @@ struct
            let seq = mk_py_attr rev "_seq" range in
            assume (ge index (mk_zero ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
              ~fthen:(fun flow ->
+               let flow = Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow in
                man.eval (mk_py_call (mk_py_attr seq "__getitem__" range) [index] range) flow |>
                  (* add_cleaners is ugly but necessary, see comment for range_iterator.__next__ *)
                  Cases.add_cleaners [mk_assign index (sub index (mk_int 1 ~typ:(T_py None) range) ~typ:(T_py None) range) range]

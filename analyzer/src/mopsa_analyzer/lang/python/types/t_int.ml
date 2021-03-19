@@ -143,6 +143,7 @@ struct
             assume
               (mk_py_isinstance_builtin e1 "int" range)
               ~fthen:(fun true_flow ->
+                  let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
                   assume
                     (mk_py_isinstance_builtin e2 "int" range)
                     ~fthen:(fun true_flow ->
@@ -174,6 +175,7 @@ struct
           assume
             (mk_py_isinstance_builtin e1 "int" range)
             ~fthen:(fun true_flow ->
+                let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange true_flow in
                 assume
                   (mk_py_isinstance_builtin e2 "int" range)
                   ~fthen:(fun true_flow ->
@@ -187,6 +189,7 @@ struct
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty
                            )
                            ~felse:(fun flow ->
+                             let flow = Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR range flow in
                              let casted_e1 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e1) range in
                              let casted_e2 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e2) range in
                              if is_reverse_operator f then
@@ -210,7 +213,9 @@ struct
                              ~fthen:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty
                              )
-                             ~felse:res
+                             ~felse:(fun flow ->
+                               Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR range flow |>
+                               res)
                          else res flow
 
                   )
@@ -281,11 +286,12 @@ struct
                (mk_binop ~etyp:T_bool (Utils.extract_oobject @@ List.hd e) O_le max_intfloat range)
                range)
             man flow
-          ~fthen:(fun flow ->
-            man.eval  (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
- (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
-          ~felse:(fun flow ->
-            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty)
+            ~fthen:(fun flow ->
+              let flow = Flow.add_safe_check Alarms.CHK_PY_OVERFLOWERROR (List.hd e).erange flow in
+              man.eval  (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
+                (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
+            ~felse:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty)
         ) |> OptionExt.return
     | _ -> None
 

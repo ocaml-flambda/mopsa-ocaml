@@ -74,14 +74,16 @@ let check_instances ?(arguments_after_check=0) funname man flow range exprs inst
     match lexprs, linstances with
     | _, [] ->
       if arguments_after_check = List.length lexprs then
-        processing iexprs flow
+        processing iexprs (Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow)
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
           Eval.empty
     | e::es, i::is ->
       assume (Addr.mk_py_isinstance_builtin e i range) man flow
-        ~fthen:(aux (pos+1) iexprs es is)
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e.erange flow |>
+          aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance of '%s', but found %a at argument #%d" funname i pp_expr e pos in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -101,8 +103,9 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
   let rec aux pos iexprs lexprs linstances flow =
     match lexprs, linstances with
     | _, [] ->
-      if arguments_after_check = List.length lexprs then
-        processing iexprs flow
+       if arguments_after_check = List.length lexprs then
+         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+           processing iexprs
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -113,7 +116,9 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
           mk_binop ~etyp:(T_py None) acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
       assume cond man flow
-        ~fthen:(aux (pos+1) iexprs es is)
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e.erange flow |>
+          aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance ∈ {%a}, but found %a at argument #%d"
               funname
@@ -145,7 +150,10 @@ let new_wrapper man range flow newcls argcls ~fthennew =
       assume
         (Addr.mk_py_issubclass_builtin_r argcls newcls range)
         man flow
-        ~fthen:fthennew
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argcls.erange flow |>
+            fthennew
+        )
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s.__new__(%a): %a is not a subtype of int" newcls pp_expr argcls pp_expr ecls in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%

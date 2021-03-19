@@ -310,7 +310,9 @@ struct
                         if is_noreturn then
                           raised_exn @ acc, flow_notok
                         else
-                          let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) >>$
+                          let ret = (
+                              Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range nflow |>
+                              Eval.singleton (mk_var ret_var range) ~cleaners:([mk_remove_var ret_var range]) >>$
  (man.eval)) in
                           ret::raised_exn @ acc, flow_notok
                     with Invalid_sig ->

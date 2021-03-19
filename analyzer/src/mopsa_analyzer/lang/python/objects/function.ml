@@ -302,6 +302,7 @@ module Domain =
             else
               (* Initialize local variables to undefined value and give the call to {!Universal} *)
               (
+                let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
                 let flow =
                   if pyfundec.py_func_locals = [] then Post.return flow else
                     man.exec

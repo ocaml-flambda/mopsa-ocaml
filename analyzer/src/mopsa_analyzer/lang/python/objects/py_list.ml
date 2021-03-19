@@ -171,8 +171,10 @@ struct
            let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
            assume (mk_py_isinstance_builtin list "list" range) man flow
              ~fthen:(fun flow ->
+               let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR list.erange flow in
                assume (mk_py_isinstance_builtin index "int" range) man flow
                  ~fthen:(fun flow ->
+                   let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR index.erange flow in
                    Cases.bind_list [list; index] man.eval flow |>
                      Cases.bind_result (fun eargs flow ->
                          let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
@@ -186,7 +188,9 @@ struct
                               range
                            )
                            man flow
-                           ~fthen:(man.eval (mk_var var_els range))
+                           ~fthen:(fun flow ->
+                             Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                             man.eval (mk_var var_els range))
                            ~felse:(fun flow ->
                              man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
                                Eval.empty
@@ -196,6 +200,7 @@ struct
                  ~felse:(fun flow ->
                    assume (mk_py_hasattr index "__index__" range) man flow
                      ~fthen:(fun flow ->
+                       let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR index.erange flow in
                        Cases.bind_list [list; mk_py_call (mk_py_attr index "__index__" range) [] range] (man.eval  ) flow |>
                          Cases.bind_result (fun eargs flow ->
                              let list, index = match eargs with [l; i] -> l, i | _ -> assert false in
@@ -210,7 +215,9 @@ struct
                                   range
                                )
                                man flow
-                               ~fthen:(man.eval (mk_var var_els range))
+                               ~fthen:(fun flow ->
+                                 Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                                   man.eval (mk_var var_els range))
                                ~felse:(fun flow ->
                                  man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
                                    Eval.empty
@@ -221,6 +228,7 @@ struct
                        assume (mk_py_isinstance_builtin index "slice" range) man flow
                          ~fthen:(fun flow ->
                            debug "slice!";
+                           let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR index.erange flow in
                            let addr_list = mk_alloc_addr A_py_list range in
                            man.eval   addr_list flow >>$
                              (fun eaddr_list flow ->
@@ -247,7 +255,9 @@ struct
                                                      mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range;
                                                      mk_binop ~etyp:T_bool stop O_lt start range
                                                    ],
-                                                   (fun flow -> man.exec
+                                                   (fun flow ->
+                                                     debug "switch 1, step=%a" pp_expr step;
+                                                     man.exec
                                                                   (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                            (
                                                                                              mk_binop ~etyp:T_int
@@ -269,7 +279,9 @@ struct
                                                      mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range;
                                                      mk_binop ~etyp:T_bool start O_lt stop range
                                                    ],
-                                                   (fun flow -> man.exec
+                                                   (fun flow ->
+                                                     debug "switch 2";
+                                                     man.exec
                                                                   (mk_assign new_length (mk_binop ~etyp:T_int
                                                                                            (
                                                                                              mk_binop ~etyp:T_int
@@ -298,7 +310,9 @@ struct
                                                       (mk_binop ~etyp:T_bool (mk_not (mk_binop ~etyp:T_bool step O_lt (mk_zero ~typ:T_int range) range) range) O_log_and (mk_not (mk_binop ~etyp:T_bool start O_lt stop range) range) range)
                                                       range
                                                    ],
-                                                   (fun flow -> man.exec
+                                                   (fun flow ->
+                                                     debug "switch 3";
+                                                     man.exec
                                                                   (mk_assign new_length (mk_zero ~typ:T_int range) range) flow
                                                    )
                                                  ]
@@ -380,6 +394,7 @@ struct
            let list, index, value = match args with | [l; i; v] -> l, i, v | _ -> assert false in
            assume (mk_py_isinstance_builtin index "int" range) man flow
              ~fthen:(fun flow ->
+                 let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR index.erange flow in
                  let var_els = var_of_eobj list in
                  let length_els = length_var_of_eobj list in
                  assume
@@ -390,8 +405,9 @@ struct
                       range
                    )
                     man flow
-                   ~fthen:(fun flow ->
-                       man.exec   (mk_assign (mk_var var_els range) value range) flow >>% man.eval   (mk_py_none range)
+                    ~fthen:(fun flow ->
+                       Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                       man.exec   (mk_assign (mk_var var_els range) value range) >>% man.eval   (mk_py_none range)
                      )
                    ~felse:(fun flow ->
                        man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow >>%
@@ -401,7 +417,8 @@ struct
              ~felse:(fun flow ->
                  assume (mk_py_isinstance_builtin index "slice" range) man flow
                    ~fthen:(fun flow ->
-                       man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range) flow
+                       Flow.add_safe_check Alarms.CHK_PY_TYPEERROR index.erange flow |>
+                       man.eval (mk_py_call (mk_py_object (find_builtin "list.extend") range) [list; value] range)
                      )
                    ~felse:(fun flow ->
                        let msg = Format.asprintf "list indices must be integers or slices, not %a" pp_addr_kind (akind @@ fst @@ object_of_expr index) in
@@ -613,7 +630,9 @@ struct
            let eval_verror_f = man.exec (Utils.mk_builtin_raise_msg "ValueError" msg range) flow |> post_to_flow man in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_verror = Eval.empty eval_verror_f in
-           let eval_res = man.eval (mk_py_top T_int range) flow in
+           let eval_res =
+             Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |>
+             man.eval (mk_py_top T_int range) in
            Eval.join_list ~empty:(fun () -> Eval.empty flow) (eval_res :: eval_verror :: []))
       |> OptionExt.return
 
@@ -638,7 +657,7 @@ struct
              )
               man flow
              ~fthen:(fun flow ->
-                 flow |>
+                 Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
                  man.exec  (mk_assign (mk_var len_els range)
                                              (mk_binop  ~etyp:T_int (mk_var len_els range) O_minus (mk_int 1 range)range) range) >>%
                  man.eval (mk_var var_els range)
@@ -673,8 +692,9 @@ struct
              )
              man flow
              ~fthen:(fun flow ->
-               man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) flow >>%
-             man.eval (mk_py_none range)
+               Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                 man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) >>%
+                 man.eval (mk_py_none range)
              )
              ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "IndexError" "list assignment index out of range" range) flow >>% Eval.empty)
          )
@@ -689,7 +709,8 @@ struct
            let eval_verror = Eval.empty eval_verror_f in
            let flow = Flow.copy_ctx eval_verror_f flow in
            let eval_none =
-             man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) flow >>%
+             Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |>
+             man.exec (mk_assign len_list (mk_binop ~etyp:T_int len_list O_minus (mk_int ~typ:T_int 1 range) range) range) >>%
              man.eval (mk_py_none range) in
            Eval.join_list ~empty:(fun () -> Eval.empty flow) (eval_none :: eval_verror :: [])
         )
@@ -748,9 +769,10 @@ struct
                                                         man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty
 
                                                      | Result (e,_,_) ->
+                                                        Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
                                                         man.exec
                                                           (mk_assign (mk_var it_pos range)
-                                                             (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) ~etyp:T_int range) range) flow >>%
+                                                             (mk_binop (mk_var it_pos range) O_plus (mk_int 1 range) ~etyp:T_int range) range) >>%
                                                         Eval.singleton e
 
                                                      | NotHandled -> assert false
@@ -836,7 +858,9 @@ struct
                   (* FIXME: we're assuming that we use the list abstraction *)
                   let var_els_in_ty = var_of_eobj in_ty in
                   assume (mk_py_isinstance_builtin (mk_var var_els_in_ty range) "float" range) man flow
-                    ~fthen:(man.eval (mk_py_top (T_float F_DOUBLE) range))
+                    ~fthen:(fun flow ->
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                      man.eval (mk_py_top (T_float F_DOUBLE) range))
                     ~felse:(fun flow ->
                         man.exec (Utils.mk_builtin_raise_msg "TypeError" "must be real number" range) flow >>%
                         Eval.empty
@@ -884,9 +908,11 @@ struct
           man.eval   (mk_var (itseq_of_eobj iterator) range) flow >>$
             (fun list_eobj flow ->
               let var_els = var_of_eobj list_eobj in
-              let els = man.eval (mk_expr ~etyp:(T_py None)
+              let els =
+                Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                man.eval (mk_expr ~etyp:(T_py None)
                                     (E_py_tuple [{(mk_int_general_interval ItvUtils.IntBound.zero ItvUtils.IntBound.PINF range) with etyp=(T_py None)}; mk_var var_els range])
-                                    range) flow in
+                                    range) in
               let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
               Cases.join_list ~empty:(fun () -> assert false) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
             )
@@ -927,8 +953,10 @@ struct
                   let list1_eobj, list2_eobj = match its with [a; b] -> a, b | _ -> assert false in
                   let var_els1 = var_of_eobj list1_eobj in
                   let var_els2 = var_of_eobj list2_eobj in
-                  let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_els1 range;
-                                                           mk_var var_els2 range]) range) flow in
+                  let els =
+                    Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                    man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_els1 range;
+                                                           mk_var var_els2 range]) range) in
                   let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                   let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
                   Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els::stopiteration::[])

@@ -46,7 +46,7 @@ module Domain =
            man.eval e flow >>$ fun e flow ->
          Flow.join
            man.lattice
-           (man.exec (mk_assume e range) flow |> post_to_flow man)
+           (man.exec (mk_assume e range) flow |> post_to_flow man |> Flow.add_safe_check Alarms.CHK_PY_ASSERTIONERROR e.erange)
            (man.exec (mk_assume (mk_py_not e range) range) flow >>%
               man.exec (Utils.mk_builtin_raise "AssertionError" range) |> post_to_flow man)
          |> Post.return

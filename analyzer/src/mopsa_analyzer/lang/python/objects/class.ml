@@ -43,7 +43,10 @@ struct
   let rec eval  exp man (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
-    (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [name; bases; dict], []) ->
+       (* FIXME: mechanism more general than S_py_class, since we don't assign any variable to the class object, and just return it. Refactoring needed *)
+       panic_at range "dynamic class creation"
+
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
@@ -90,7 +93,9 @@ struct
                       (fun r flow ->
                           assume
                             (mk_py_isinstance_builtin r "NoneType" range)
-                            ~fthen:(fun flow -> man.eval    inst flow)
+                            ~fthen:(fun flow ->
+                              Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                              man.eval inst)
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -147,7 +152,9 @@ struct
                   man.exec cls.py_cls_body flow >>% fun flow ->
                   let parent = List.hd @@ List.tl mro in
                   man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow >>$
-                    (fun _ flow -> Post.return flow)
+                    (fun _ flow ->
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                      Post.return)
                 )
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;

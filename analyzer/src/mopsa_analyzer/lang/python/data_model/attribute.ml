@@ -47,7 +47,8 @@ module Domain =
              Eval.empty
         | cls::tl ->
            if is_builtin_attribute cls attr then
-             Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range) flow
+             Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow |>
+             Eval.singleton (mk_py_object (find_builtin_attribute cls attr) range)
            else
              search tl in
       search mro

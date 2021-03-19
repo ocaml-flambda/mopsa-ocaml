@@ -59,10 +59,10 @@ module Domain =
                let rop_fun = binop_to_rev_fun op in
 
                man.eval   (mk_py_type e1 range) flow >>$
- (fun ocls1 flow ->
+                 (fun ocls1 flow ->
                      let cls1 = object_of_expr ocls1 in
                      man.eval   (mk_py_type e2 range) flow >>$
- (fun ocls2 flow ->
+                       (fun ocls2 flow ->
                            let cls2 = object_of_expr ocls2 in
 
                            let is_same_type = compare_py_object cls1 cls2 = 0 in
@@ -77,12 +77,14 @@ module Domain =
                                man flow
                                ~fthen:(fun flow ->
                                  man.eval   (mk_py_call (mk_py_object_attr cls2 rop_fun range) [e2; e1] range) flow >>$
- (fun r flow ->
+                                   (fun r flow ->
                                        assume
                                          (is_notimplemented r)
                                          man flow
                                          ~fthen:(typerr)
-                                         ~felse:(Eval.singleton r)
+                                         ~felse:(fun flow ->
+                                           Flow.add_safe_check Alarms.CHK_PY_TYPEERROR r.erange flow |>
+                                           Eval.singleton r)
                                      )
                                )
                                ~felse:felseradd in
@@ -93,14 +95,16 @@ module Domain =
                              ~fthen:(fun flow ->
                                let call_add flow =
                                  man.eval   (mk_py_call (mk_py_object_attr cls1 op_fun range) [e1; e2] range) flow >>$
- (fun r flow ->
+                                   (fun r flow ->
                                        assume (is_notimplemented r)
                                          man flow
                                          ~fthen:(fun flow ->
                                            if is_same_type then typerr flow
                                            else call_radd man None flow ~felseradd:(typerr)
                                          )
-                                         ~felse:(Eval.singleton r)
+                                         ~felse:(fun flow ->
+                                           Flow.add_safe_check Alarms.CHK_PY_TYPEERROR r.erange flow |>
+                                             Eval.singleton r)
                                      ) in
                                if is_same_type then call_add flow else
                                  call_radd man (Some (mk_py_issubclass ocls2 ocls1 range)) flow
@@ -127,7 +131,8 @@ module Domain =
                      assume
                        (Utils.mk_object_hasattr cls op_fun range)
                        ~fthen:(fun true_flow ->
-                         man.eval   (mk_py_call (mk_py_object_attr cls op_fun range) [e] range) true_flow
+                         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e.erange true_flow |>
+                         man.eval   (mk_py_call (mk_py_object_attr cls op_fun range) [e] range)
                        )
                        ~felse:(fun false_flow ->
                          let msg = Format.asprintf "bad operand type for unary '%s': '%a'" op_fun pp_addr_kind (akind @@ fst cls) in

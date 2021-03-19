@@ -79,7 +79,8 @@ struct
             man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
               (fun eaddr flow ->
                 let addr = Addr.from_expr eaddr in
-                man.exec   (mk_add eaddr range) flow >>%
+                man.exec   (mk_add eaddr range) flow >>% fun flow ->
+                Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
                 Eval.singleton (mk_py_object (addr, None) range)
               )
         )
@@ -97,6 +98,7 @@ struct
                 let mro_ptype = mro (object_of_expr ptype) in
                 search_mro man attribute
                   ~cls_found:(fun cls flow ->
+                      let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
                       man.eval
                         (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow >>$
                         (fun attribute flow ->
@@ -117,9 +119,11 @@ struct
                   ~nothing_found:(fun flow ->
                       match o_meta_get, o_meta_attribute with
                       | Some meta_get, _ ->
-                        man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
+                         let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                         man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
                       | None, Some meta_attribute ->
-                        Eval.singleton meta_attribute flow
+                         let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                         Eval.singleton meta_attribute flow
                       | None, None ->
                          let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
                         man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
@@ -147,7 +151,9 @@ struct
                               assume
                                 (mk_py_hasattr (mk_py_type meta_attribute range) "__set__" range)
                                 man flow
-                                ~fthen:(man.eval (mk_py_call meta_get [meta_attribute; ptype; metatype] range))
+                                ~fthen:(fun flow ->
+                                  let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                                  man.eval (mk_py_call meta_get [meta_attribute; ptype; metatype] range) flow)
                                 ~felse:(lookintype (Some meta_attribute) (Some meta_get))
                             )
                         )
@@ -168,10 +174,13 @@ struct
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           let tryinstance ~fother flow =
             assume (mk_py_ll_hasattr instance attribute range) man flow
-              ~fthen:(man.eval   (mk_py_ll_getattr instance attribute range))
+              ~fthen:(fun flow ->
+                let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                man.eval   (mk_py_ll_getattr instance attribute range) flow)
               ~felse:fother in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
+                let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
                 man.eval
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$

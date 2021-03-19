@@ -77,6 +77,7 @@ module Domain = struct
         let switch flow =
           match op with
           | O_eq | O_ne ->
+            let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
             assume (mk_expr ~etyp:(T_py None) (E_binop(O_py_is, e1, e2)) range) man flow
               ~fthen:(man.eval   (mk_py_bool (O_eq =  op) range))
               ~felse:(man.eval   (mk_py_bool (O_eq <> op) range))
@@ -95,7 +96,9 @@ module Domain = struct
  (fun cmp flow ->
                       assume (is_notimplemented cmp) man flow
                         ~fthen:switch
-                        ~felse:(Eval.singleton cmp)
+                        ~felse:(fun flow ->
+                          let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR cmp.erange flow in
+                          Eval.singleton cmp flow)
                     )
                 )
               ~felse:switch
@@ -110,7 +113,9 @@ module Domain = struct
                   assume (is_notimplemented cmp)
                     man flow
                     ~fthen:check_reverse
-                    ~felse:(Eval.singleton cmp)
+                    ~felse:(fun flow ->
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR cmp.erange flow |>
+                        Eval.singleton cmp)
 
                 )
             )
@@ -129,7 +134,9 @@ module Domain = struct
                 assume (is_notimplemented cmp)
                   man flow
                   ~fthen:(call_op true)
-                  ~felse:(Eval.singleton cmp)
+                  ~felse:(fun flow ->
+                    Flow.add_safe_check Alarms.CHK_PY_TYPEERROR cmp.erange flow |>
+                    Eval.singleton cmp)
               )
           )
         ~felse:(call_op false)

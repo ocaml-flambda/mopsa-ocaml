@@ -107,8 +107,9 @@ module Domain =
                  assume
                    (Utils.mk_hasattr cls2 "__contains__" range)
                    ~fthen:(fun true_flow ->
-                       let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
-                       man.eval exp' true_flow
+                     let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
+                     Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e2.erange true_flow |>
+                       man.eval exp'
                      )
                    ~felse:(fun false_flow ->
                        assume
@@ -126,7 +127,8 @@ module Domain =
                                  (mk_block [] range)
                                )) range
                              in
-                             man.exec stmt true_flow >>%
+                             Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e2.erange true_flow |>
+                             man.exec stmt >>%
                              man.eval (mk_var v range) |>
                              Cases.add_cleaners [mk_remove_var v range]
                            )

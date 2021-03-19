@@ -152,9 +152,13 @@ struct
                 | Bot.Nb itv ->
                    List.map (fun x -> f (Z.to_int x)) (ItvUtils.IntItv.to_list itv) in
               let pos_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv 0 (List.length tuple_vars - 1)) |>
-                                   map_itv (fun ppos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars ppos) range) flow) in
+                                   map_itv (fun ppos ->
+                                       Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                                       man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars ppos) range)) in
               let neg_accesses = ItvUtils.IntItv.meet_bot itv (mk_itv (- List.length tuple_vars) (-1)) |>
-                                   map_itv (fun npos -> man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + npos)) range) flow) in
+                                   map_itv (fun npos ->
+                                       Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
+                                       man.eval (mk_var ~mode:(Some STRONG) (List.nth tuple_vars (List.length tuple_vars + npos)) range)) in
               let ootb_accesses =
                 if (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.MINF) (ItvUtils.IntItv.B.of_int (- List.length tuple_vars - 1)))) ||
                      (ItvUtils.IntItv.intersect_bot itv (mk_itv_bound (ItvUtils.IntItv.B.of_int (List.length tuple_vars)) (ItvUtils.IntItv.B.PINF))) then
@@ -169,6 +173,7 @@ struct
             ~felse:(fun flow ->
               assume (mk_py_isinstance_builtin pos "slice" range) man flow
                 ~fthen:(fun flow ->
+                  let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
                   let tuple_length = List.length tuple_vars in
                   man.eval (mk_py_call (mk_py_attr pos "indices" range) [mk_int tuple_length ~typ:(T_py None) range] range) flow >>$
                     fun tuple_indices flow ->
@@ -234,21 +239,22 @@ struct
       (* todo: checks? *)
       (* ugly assign iterator = iterator at pos+1... *)
       man.eval   iterator flow >>$
- (fun eiterator flow ->
+        (fun eiterator flow ->
           let tuple_it_addr, tuple_pos = match ekind eiterator with
             | E_py_object ({addr_kind = Py_list.A_py_iterator (s, d)} as addr, _) when s = "tuple_iterator" -> addr, d
             | _ -> assert false in
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj eiterator) range) flow >>$
- (fun tuple_eobj flow ->
-                let vars_els = var_of_eobj tuple_eobj in
-                match tuple_pos with
-                | Some d when d < List.length vars_els ->
-                   man.exec
-                                (mk_rename (mk_addr tuple_it_addr range)
-                                   (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow >>%
+            (fun tuple_eobj flow ->
+              let vars_els = var_of_eobj tuple_eobj in
+              match tuple_pos with
+              | Some d when d < List.length vars_els ->
+                 let flow = Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow in
+                 man.exec
+                   (mk_rename (mk_addr tuple_it_addr range)
+                      (mk_addr {tuple_it_addr with addr_kind = Py_list.A_py_iterator ("tuple_iterator", Some (d+1))} range) range) flow >>%
                    man.eval (mk_var ~mode:(Some STRONG) (List.nth vars_els d) range)
-                | _ ->
-                   man.exec   (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty
+              | _ ->
+                 man.exec   (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty
               )
         )
       |> OptionExt.return

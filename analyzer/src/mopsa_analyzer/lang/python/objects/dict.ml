@@ -195,7 +195,9 @@ struct
 
            let flow = Flow.copy_ctx keyerror_f flow in
            debug "evaluating %a" pp_var var_v;
-           let evals = man.eval (mk_var var_v range) flow in
+           let evals =
+             Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |>
+             man.eval (mk_var var_v range) in
 
            Eval.join_list ~empty:(fun () -> Eval.empty flow) (evals :: Cases.copy_ctx evals keyerror :: [])
         )
@@ -223,7 +225,9 @@ struct
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let eval_r = man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
+           let eval_r =
+             Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |>
+             man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) in
 
            let flow = Flow.set_ctx (Cases.get_ctx eval_r) flow in
 
@@ -320,7 +324,9 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k = kvar_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_var var_k ~mode:(Some WEAK) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_var var_k ~mode:(Some WEAK) range) in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
@@ -335,7 +341,9 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_v = vvar_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_var var_v ~mode:(Some WEAK) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_var var_v ~mode:(Some WEAK) range) in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
@@ -350,8 +358,10 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k, var_v = var_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
-                                                         mk_var var_v ~mode:(Some WEAK) range]) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
+                                                                   mk_var var_v ~mode:(Some WEAK) range]) range) in
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
                 Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])

@@ -22,7 +22,22 @@
 open Mopsa
 
 
-type check      += CHK_PY_UNCAUGHT_EXCEPTION
+type check +=
+   | CHK_PY_UNCAUGHT_EXCEPTION
+   | CHK_PY_STOPITERATION
+   | CHK_PY_ATTRIBUTEERROR
+   | CHK_PY_ASSERTIONERROR
+   | CHK_PY_INDEXERROR
+   | CHK_PY_KEYERROR
+   | CHK_PY_LOOKUPERROR
+   | CHK_PY_MODULENOTFOUNDERROR
+   | CHK_PY_NAMEERROR
+   | CHK_PY_OVERFLOWERROR
+   | CHK_PY_TYPEERROR
+   | CHK_PY_UNBOUNDLOCALERROR
+   | CHK_PY_VALUEERROR
+   | CHK_PY_ZERODIVISIONERROR
+
 type alarm_kind += A_py_uncaught_exception of expr * string * Universal.Strings.Powerset.StringPower.t
 
 
@@ -31,18 +46,63 @@ let raise_py_uncaught_exception_alarm exn exn_name exn_messages range lattice fl
   let alarm = mk_alarm (A_py_uncaught_exception (exn,exn_name,exn_messages)) cs range in
   Flow.raise_alarm alarm ~bottom:false lattice flow
 
+let py_name_to_check = function
+  | "StopIteration" -> CHK_PY_STOPITERATION
+  | "AttributeError" -> CHK_PY_ATTRIBUTEERROR
+  | "AssertionError" -> CHK_PY_ASSERTIONERROR
+  | "IndexError" -> CHK_PY_INDEXERROR
+  | "KeyError" -> CHK_PY_KEYERROR
+  | "LookUpError" -> CHK_PY_LOOKUPERROR
+  | "ModuleNotFoundError" -> CHK_PY_MODULENOTFOUNDERROR
+  | "NameError" -> CHK_PY_NAMEERROR
+  | "OverflowError" -> CHK_PY_OVERFLOWERROR
+  | "TypeError" -> CHK_PY_TYPEERROR
+  | "UnboundLocalError" -> CHK_PY_UNBOUNDLOCALERROR
+  | "ValueError" -> CHK_PY_VALUEERROR
+  | "ZeroDivisionError" -> CHK_PY_ZERODIVISIONERROR
+  | _ -> CHK_PY_UNCAUGHT_EXCEPTION
+
+let py_check_to_name = function
+  | CHK_PY_UNCAUGHT_EXCEPTION -> "Python"
+  | CHK_PY_STOPITERATION -> "StopIteration"
+  | CHK_PY_ATTRIBUTEERROR -> "AttributeError"
+  | CHK_PY_ASSERTIONERROR -> "AssertionError"
+  | CHK_PY_INDEXERROR -> "IndexError"
+  | CHK_PY_KEYERROR -> "KeyError"
+  | CHK_PY_LOOKUPERROR -> "LookupError"
+  | CHK_PY_MODULENOTFOUNDERROR -> "ModuleNotFoundError"
+  | CHK_PY_NAMEERROR -> "NameError"
+  | CHK_PY_OVERFLOWERROR -> "OverflowError"
+  | CHK_PY_TYPEERROR -> "TypeError"
+  | CHK_PY_UNBOUNDLOCALERROR -> "UnboundLocalError"
+  | CHK_PY_VALUEERROR -> "ValueError"
+  | CHK_PY_ZERODIVISIONERROR -> "ZeroDivisionError"
+  | _ -> assert false
 
 let () =
   register_check (fun default fmt a ->
         match a with
-        | CHK_PY_UNCAUGHT_EXCEPTION -> Format.fprintf fmt "Uncaught Python exception"
+        | CHK_PY_UNCAUGHT_EXCEPTION
+        | CHK_PY_STOPITERATION
+        | CHK_PY_ATTRIBUTEERROR
+        | CHK_PY_ASSERTIONERROR
+        | CHK_PY_INDEXERROR
+        | CHK_PY_KEYERROR
+        | CHK_PY_LOOKUPERROR
+        | CHK_PY_MODULENOTFOUNDERROR
+        | CHK_PY_NAMEERROR
+        | CHK_PY_OVERFLOWERROR
+        | CHK_PY_TYPEERROR
+        | CHK_PY_UNBOUNDLOCALERROR
+        | CHK_PY_VALUEERROR
+        | CHK_PY_ZERODIVISIONERROR -> Format.fprintf fmt "%s exception" (py_check_to_name a)
         | _ -> default fmt a
     );
   register_alarm {
       check = (fun next -> function
-                     | A_py_uncaught_exception _ -> CHK_PY_UNCAUGHT_EXCEPTION
-                     | a -> next a
-                   );
+                | A_py_uncaught_exception (_, n, _) -> py_name_to_check n
+                | a -> next a
+              );
       compare = (fun default a a' ->
         match a, a' with
         | A_py_uncaught_exception (e, n, m), A_py_uncaught_exception (e', n', m') ->

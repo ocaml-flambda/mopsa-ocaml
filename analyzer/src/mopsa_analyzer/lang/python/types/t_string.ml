@@ -173,7 +173,9 @@ module Domain =
                   man.eval   (mk_py_call (mk_py_attr etype "__str__" range) [obj] range) flow >>$
  (fun stro flow ->
                       assume (mk_py_isinstance_builtin stro "str" range) man flow
-                        ~fthen:(Eval.singleton stro)
+                        ~fthen:(fun flow ->
+                          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR stro.erange flow |>
+                          Eval.singleton stro)
                         ~felse:(fun flow -> man.exec (Utils.mk_builtin_raise_msg "TypeError" "__str__ returned non-string" range) flow >>% Eval.empty)
                     )
                 )
@@ -191,6 +193,7 @@ module Domain =
             assume
               (mk_py_isinstance_builtin e1 "str" range)
               ~fthen:(fun true_flow ->
+                  let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange true_flow in
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
@@ -224,6 +227,7 @@ module Domain =
             assume
               (mk_py_isinstance_builtin e1 "str" range)
               ~fthen:(fun true_flow ->
+                  let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange true_flow in
                   assume
                     (mk_py_isinstance_builtin e2 "str" range)
                     ~fthen:(fun true_flow ->
@@ -275,7 +279,7 @@ module Domain =
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
-             let res = man.eval (mk_py_top T_string range) flow in
+             let res = Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |> man.eval (mk_py_top T_string range) in
              let tyerror = tyerror_f |> Eval.empty in
              Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
@@ -287,7 +291,7 @@ module Domain =
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
-             let res = man.eval (mk_py_top T_string range) flow in
+             let res = Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |> man.eval (mk_py_top T_string range) in
              let tyerror = tyerror_f |> Eval.empty in
              Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
@@ -326,7 +330,7 @@ module Domain =
           (fun _ flow ->
              let stopiteration_f = post_to_flow man (man.exec (Utils.mk_builtin_raise "StopIteration" range) flow) in
              let flow = Flow.copy_ctx stopiteration_f flow in
-             let els = man.eval (mk_py_top T_string range) flow in
+             let els = Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |> man.eval (mk_py_top T_string range) in
              let stopiteration = stopiteration_f |> Eval.empty in
              Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx els stopiteration :: els :: [])
           )
@@ -345,7 +349,8 @@ module Domain =
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
               ~fthen:(fun flow ->
-                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range) flow
+                Flow.add_safe_check Alarms.CHK_PY_LOOKUPERROR range flow |>
+                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range)
               )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
@@ -364,7 +369,8 @@ module Domain =
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
 
               ~fthen:(fun flow ->
-                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Str)))) range) flow)
+                Flow.add_safe_check Alarms.CHK_PY_LOOKUPERROR range flow |>
+                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Str)))) range))
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%
@@ -392,7 +398,7 @@ module Domain =
              (* TODO: constant strings are kept in the objects, so we could raise less alarms *)
              let tyerror_f = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "ValueError" "incomplete format" range) flow) in
              let flow = Flow.copy_ctx tyerror_f flow in
-             let res = man.eval (mk_py_top T_string range) flow in
+             let res = Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |> man.eval (mk_py_top T_string range) in
              let tyerror = tyerror_f |> Eval.empty in
              Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx res tyerror :: res :: [])
           )
@@ -403,7 +409,7 @@ module Domain =
           ["str"; "str"]
           (fun eargs flow ->
              Eval.join
-               (man.eval   (mk_py_top T_int range) flow)
+               (Flow.add_safe_check Alarms.CHK_PY_VALUEERROR range flow |> man.eval   (mk_py_top T_int range))
                (man.exec (Utils.mk_builtin_raise_msg "ValueError" "substring not found" range) flow >>% Eval.empty)
           )
         |> OptionExt.return

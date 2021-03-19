@@ -154,14 +154,16 @@ module Domain =
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
-                   Post.return flow')
+                   Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exp.erange flow' |>
+                   Post.return)
                ~felse:(fun false_flow ->
                    assume
                      (* isclass obj <=> isinstance(obj, type) *)
                      (mk_py_isinstance_builtin exp "type" range)
                      man
                      ~fthen:(fun true_flow ->
-                         man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
+                         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exp.erange true_flow |>
+                         man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))}
                          >>% Post.return)
                      ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
@@ -192,23 +194,23 @@ module Domain =
         match excpt.py_excpt_name with
         | None -> mk_range_attr_var range "artificial_except_var" (T_py None)
         | Some v -> v in
-      let flow1 =
+      let flow1, caught_excs =
         match excpt.py_excpt_type with
         (* Default except case: catch all exceptions *)
         | None ->
           (* Add all remaining exceptions env to cur *)
-          Flow.fold (fun acc tk env ->
+          Flow.fold (fun (acc, excs) tk env ->
               match tk with
-              | T_py_exception _ -> Flow.add T_cur env man.lattice acc
-              | _ -> acc)
-            flow0 flow
+              | T_py_exception (_, exc_name, _, _) -> Flow.add T_cur env man.lattice acc, exc_name :: excs
+              | _ -> (acc, excs))
+            (flow0, []) flow
 
         (* Catch a particular exception *)
         | Some e ->
           (* Add exception that match expression e *)
-          Flow.fold (fun acc tk env ->
+          Flow.fold (fun (acc, excs) tk env ->
               match tk with
-              | T_py_exception (exn, _, _, _) ->
+              | T_py_exception (exn, exc_name, _, _) ->
                 (* Evaluate e in env to check if it corresponds to eaddr *)
                 debug "T_cur now matches tk %a@\n" pp_token tk;
                 let flow = Flow.set T_cur env man.lattice flow0 in
@@ -223,7 +225,8 @@ module Domain =
                         (mk_py_isinstance exn e range)
                         man
                         ~fthen:(fun flow ->
-                          man.exec (mk_assign (mk_var except_var range) exn range) flow)
+                          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exn.erange flow |>
+                          man.exec (mk_assign (mk_var except_var range) exn range))
                         ~felse:(fun flow ->
                           Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
                         )
@@ -236,9 +239,10 @@ module Domain =
                     match tk with
                     | T_cur | T_py_exception _ -> Flow.add tk env man.lattice acc
                     | _ -> acc
-                  ) acc flow'
-              | _ -> acc
-            ) flow0 flow
+                  ) acc flow',
+                exc_name :: excs
+              | _ -> (acc, excs)
+            ) (flow0, []) flow
       in
       let clean_except_var = mk_remove_var except_var (tag_range range "clean_except_var") in
       let except_body =
@@ -252,7 +256,15 @@ module Domain =
       in
       debug "except flow1 =@ @[%a@]" (format (Flow.print man.lattice.print)) flow1;
       man.exec except_body flow1
-      >>% man.exec clean_except_var |> post_to_flow man
+      >>% man.exec clean_except_var >>%
+        (fun flow ->
+          Post.return
+            (if not @@ man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+              List.fold_left (fun flow name ->
+                  Flow.add_safe_check (Alarms.py_name_to_check name) except_body.srange flow) flow caught_excs
+            else
+              flow))
+        |> post_to_flow man
 
 
     and escape_except man excpt range flow =

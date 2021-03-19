@@ -114,7 +114,8 @@ module Domain =
             | Some v -> v
           in
           debug "performing assignement %a = %a" pp_var v Pp.pp_py_object obj;
-          man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) flow >>%
+          Flow.add_safe_check Alarms.CHK_PY_MODULENOTFOUNDERROR range flow |>
+            man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) >>%
           Post.return |>
           OptionExt.return
         with Module_not_found m ->
