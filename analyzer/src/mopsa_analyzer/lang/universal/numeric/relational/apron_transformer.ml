@@ -95,19 +95,16 @@ struct
   (** Construct a list of linear constraints from an abstract value. *)
   let to_constraints (a,bnd) =
     let earray = Apron.Abstract1.to_lincons_array ApronManager.man a in
-    let rec iter i =
-      if i = Apron.Lincons1.array_length earray then []
-      else
-        let l = ref [] in
-        let cons = Apron.Lincons1.array_get earray i in
-        Apron.Lincons1.iter (fun c v ->
-            l := (c, Binding.apron_to_var bnd v) :: !l
-          ) cons
-        ;
-        (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
-    in
-    iter 0
-
+    let ll = ref [] in
+    for i = 0 to Apron.Lincons1.array_length earray -1 do
+      let l = ref [] in
+      let cons = Apron.Lincons1.array_get earray i in
+      Apron.Lincons1.iter (fun c v ->
+          l := (c, Binding.apron_to_var bnd v) :: !l
+        ) cons;
+      ll := (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) ::  !ll
+    done;
+    !ll
 
   (** Restrict linear constraints involving variable [v] *)
   let constraints_of_var v constraints =
