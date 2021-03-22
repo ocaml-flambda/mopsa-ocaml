@@ -184,23 +184,24 @@ struct
     in
     meet x1 x2
 
+  let is_var_numeric_type v = is_int_type (vtyp v)
 
   let rec exec stmt man ctx (a,bnd) =
     match skind stmt with
-    | S_add { ekind = E_var (var, _) } ->
+    | S_add { ekind = E_var (var, _) } when is_var_numeric_type var ->
       add_missing_vars (a,bnd) [var] |>
       OptionExt.return
 
-    | S_remove { ekind = E_var (var, _) } ->
+    | S_remove { ekind = E_var (var, _) } when is_var_numeric_type var ->
       remove_var var (a,bnd) |>
       OptionExt.return
 
-    | S_forget { ekind = E_var (var, _) } ->
+    | S_forget { ekind = E_var (var, _) } when is_var_numeric_type var ->
       forget_var var (a,bnd) |>
       OptionExt.return
 
 
-    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) ->
+    | S_rename ({ ekind = E_var (var1, _) }, { ekind = E_var (var2, _) }) when is_var_numeric_type var1 && is_var_numeric_type var2 ->
       let a, bnd = add_missing_vars (a,bnd) [var1] in
       let a, bnd = remove_var var2 (a,bnd) in
       let v1, bnd = Binding.var_to_apron bnd var1 in
@@ -209,7 +210,7 @@ struct
       OptionExt.return
 
     | S_project vars
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vars
+      when List.for_all (function { ekind = E_var (v, _) } -> is_var_numeric_type v | _ -> false) vars
       ->
       let vars = List.map (function
           | { ekind = E_var (v, _) } -> v
@@ -227,7 +228,7 @@ struct
         bnd
       )
 
-    | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG ->
+    | S_assign({ ekind = E_var (var, mode) }, e) when var_mode var mode = STRONG && is_var_numeric_type var ->
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
       let v = Binding.mk_apron_var var in
       begin try
@@ -242,7 +243,7 @@ struct
            | UnsupportedExpression -> None
       end
 
-    | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK ->
+    | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK && is_var_numeric_type var ->
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |>
       OptionExt.lift @@ fun (a',bnd') ->
@@ -250,7 +251,7 @@ struct
 
 
     | S_expand({ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      when is_var_numeric_type v && List.for_all (function { ekind = E_var (v, _) } -> is_var_numeric_type v | _ -> false) vl
       ->
       let vl = List.map (function
           | { ekind = E_var (v, _) } -> v
@@ -263,7 +264,7 @@ struct
       Some (abs', bnd)
 
     | S_fold({ekind = E_var (v, _)}, vl)
-      when List.for_all (function { ekind = E_var _ } -> true | _ -> false) vl
+      when is_var_numeric_type v && List.for_all (function { ekind = E_var (v, _) } -> is_var_numeric_type v | _ -> false) vl
       ->
       let vl = List.map (function
           | { ekind = E_var (v, _) } -> v
@@ -275,7 +276,7 @@ struct
       let abs' = Apron.Abstract1.fold ApronManager.man a (Array.of_list (v::vl)) in
       Some (abs', bnd)
 
-    | S_assume(e) -> begin
+    | S_assume(e) when is_numeric_type (etyp e) -> begin
         let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
         let env = Apron.Abstract1.env a in
 
