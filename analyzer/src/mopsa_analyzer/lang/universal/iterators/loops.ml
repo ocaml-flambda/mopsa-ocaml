@@ -171,7 +171,6 @@ let () =
     default = "disabled";
   }
 
-
 (*==========================================================================*)
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
@@ -274,6 +273,15 @@ struct
   let init prog man flow =
     Flow.map_ctx (add_ctx LastFixpointCtx.key LoopHeadMap.empty) flow
 
+  let decr_iteration cond body man flow_init flow =
+    Flow.remove T_continue flow |>
+    Flow.remove T_break |>
+    Flow.remove_report |>
+    man.exec (mk_assume cond cond.erange) >>%
+    man.exec body >>% fun flow ->
+    merge_cur_and_continue man flow |>
+    Flow.join man.lattice flow_init |>
+    Post.return
 
   let rec lfp count delay cond body man flow_init flow =
     debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
@@ -290,18 +298,11 @@ struct
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
       (* Add a decreasing iteration if new alarms are reported *)
-      if subset_report (Flow.get_report flow') (Flow.get_report flow_init) then
+      if not !opt_loop_decreasing_it && subset_report (Flow.get_report flow') (Flow.get_report flow_init) then
         Post.return flow'
       else
         let () = debug "decreasing iteration" in
-        Flow.remove T_continue flow' |>
-        Flow.remove T_break |>
-        Flow.remove_report |>
-        man.exec (mk_assume cond cond.erange) >>%
-        man.exec body >>% fun f ->
-        merge_cur_and_continue man f |>
-        Flow.join man.lattice flow_init |>
-        Post.return
+        decr_iteration cond body man flow_init flow'
     else if delay = 0 then
       let wflow = Flow.widen man.lattice flow flow' in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
@@ -336,15 +337,6 @@ struct
         unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' ->
         Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
 
-  let decr_iteration cond body man flow_init flow =
-    Flow.remove T_continue flow |>
-    Flow.remove T_break |>
-    man.exec (mk_assume cond cond.erange) >>%
-    man.exec body >>% fun flow ->
-    let flow = merge_cur_and_continue man flow |>
-               Flow.join man.lattice flow_init in
-    Post.return flow
-
 
   let rec exec stmt man flow =
     match skind stmt with
@@ -370,11 +362,6 @@ struct
           Post.return flow_init
         else
           lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp ->
-          begin
-            if !opt_loop_decreasing_it then
-              decr_iteration cond body man flow_init flow_lfp
-            else Post.return flow_lfp
-          end >>% fun flow_lfp ->
           let flow_lfp = if !opt_loop_use_cache then
                            store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           Post.return flow_lfp
