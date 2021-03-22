@@ -120,7 +120,8 @@ struct
     tag_range prog_range "unprecise exception range"
 
   let collect_uncaught_exceptions man prog_range flow =
-    Post.return @@ Flow.fold (fun acc tk env ->
+    let report =
+     Flow.fold (fun acc tk env ->
         match tk with
         | Alarms.T_py_exception (e, s, m, k) ->
           let a = Alarms.A_py_uncaught_exception (e,s,m) in
@@ -132,9 +133,11 @@ struct
             | Alarms.Py_exc_with_callstack (range,cs) ->
               mk_alarm a cs range
           in
-          Flow.add_alarm alarm ~force:true man.lattice acc
+          add_alarm alarm acc
         | _ -> acc
-      ) flow flow
+       ) Alarm.empty_report flow in
+    let report = Alarm.join_report report (Flow.get_report flow) in
+    Post.return (Flow.set_report report flow)
 
 
   let exec stmt man (flow: 'a flow) : 'a post option  =
