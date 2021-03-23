@@ -62,6 +62,7 @@ open Program
 open Operator
 open Constant
 open Var
+open Addr
 open Format
 open Semantic
 
@@ -163,6 +164,28 @@ val strongify_var_expr : expr -> expr
 
 val var_mode : var -> mode option -> mode
 (** Get the overloaded access mode of a variable *)
+
+
+(** {2 Heap addresses expressions} *)
+
+(** Heap addresses *)
+type expr_kind += E_addr of addr         (** address *) *
+                            mode option  (** optional access mode overloading
+                                             the address access mode *)
+
+               | E_alloc_addr of addr_kind * mode
+
+val mk_addr : addr -> ?etyp:typ -> ?mode:mode option -> range -> expr
+(** Create an address expression *)
+
+val mk_alloc_addr : ?mode:mode -> addr_kind -> range -> expr
+(** Create an allocation expression *)
+
+val weaken_addr_expr : expr -> expr
+(** Change the access mode of an address expression to [WEAK] *)
+
+val strongigy_addr_expr : expr -> expr
+(** Change the access mode of an address expression to [STRONG] *)
 
 
 (** {2 Constant expressions} *)

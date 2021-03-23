@@ -26,16 +26,19 @@ open Mopsa_utils
 type typ = ..
 
 type typ += T_any (** Generic unknown type. *)
+         | T_addr (** Heap addresses *)
 
 let typ_compare_chain = TypeExt.mk_compare_chain (fun t1 t2 ->
     match t1, t2 with
     | T_any, T_any -> 0
+    | T_addr, T_addr -> 0
     | _ -> compare t1 t2
   )
 
 let typ_pp_chain = TypeExt.mk_print_chain (fun fmt typ ->
     match typ with
     | T_any -> Format.pp_print_string fmt "?"
+    | T_addr -> Format.pp_print_string fmt "addr"
     | _ -> Exceptions.panic "typ_pp_chain: unknown type"
   )
 

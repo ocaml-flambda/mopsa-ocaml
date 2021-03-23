@@ -365,6 +365,14 @@ let () =
     default = "";
   }
 
+let () = register_builtin_option {
+    key = "-heap-use-hash-format";
+    category = "Heap";
+    doc = "  format heap addresses with their hash";
+    spec = ArgExt.Set Core.Ast.Addr.opt_hash_addr;
+    default = "false";
+  }
+
 (** Help message *)
 let help () =
   let options =

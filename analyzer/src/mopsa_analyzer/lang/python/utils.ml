@@ -53,7 +53,7 @@ let mk_object_hasattr obj attr range =
   mk_hasattr (mk_py_object obj range) attr range
 
 let mk_addr_hasattr obj attr range =
-  mk_hasattr (Universal.Ast.mk_addr obj range) attr range
+  mk_hasattr (mk_addr obj range) attr range
 
 let mk_try_stopiteration body except range =
   mk_try
@@ -134,7 +134,7 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
 let strip_object (e:expr) =
   let ekind = match ekind e with
     | E_py_object (addr, oe) ->
-      let addr = {addr with addr_partitioning = Universal.Ast.G_all } in
+      let addr = {addr with addr_partitioning = G_all } in
       E_py_object (addr, oe)
     | _ -> assert false in
   {e with ekind}

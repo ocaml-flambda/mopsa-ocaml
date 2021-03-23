@@ -63,6 +63,8 @@ let expr_visit_chain = ref (fun exp ->
     | E_binop(binop, e1, e2) ->
       {exprs = [e1; e2]; stmts = []},
       (fun parts -> {exp with ekind = E_binop(binop, List.hd parts.exprs, List.nth parts.exprs 1)})
+    | E_alloc_addr _ -> leaf exp
+    | E_addr _ -> leaf exp
     | _ ->
       Exceptions.panic "expr visitor: unknown expression %a" pp_expr exp
   )
