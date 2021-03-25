@@ -33,6 +33,7 @@ type check +=
    | CHK_PY_MODULENOTFOUNDERROR
    | CHK_PY_NAMEERROR
    | CHK_PY_OVERFLOWERROR
+   | CHK_PY_SYSTEMERROR
    | CHK_PY_TYPEERROR
    | CHK_PY_UNBOUNDLOCALERROR
    | CHK_PY_VALUEERROR
@@ -56,6 +57,7 @@ let py_name_to_check = function
   | "ModuleNotFoundError" -> CHK_PY_MODULENOTFOUNDERROR
   | "NameError" -> CHK_PY_NAMEERROR
   | "OverflowError" -> CHK_PY_OVERFLOWERROR
+  | "SystemError" -> CHK_PY_SYSTEMERROR
   | "TypeError" -> CHK_PY_TYPEERROR
   | "UnboundLocalError" -> CHK_PY_UNBOUNDLOCALERROR
   | "ValueError" -> CHK_PY_VALUEERROR
@@ -73,6 +75,7 @@ let py_check_to_name = function
   | CHK_PY_MODULENOTFOUNDERROR -> "ModuleNotFoundError"
   | CHK_PY_NAMEERROR -> "NameError"
   | CHK_PY_OVERFLOWERROR -> "OverflowError"
+  | CHK_PY_SYSTEMERROR -> "SystemError"
   | CHK_PY_TYPEERROR -> "TypeError"
   | CHK_PY_UNBOUNDLOCALERROR -> "UnboundLocalError"
   | CHK_PY_VALUEERROR -> "ValueError"
@@ -92,6 +95,7 @@ let () =
         | CHK_PY_MODULENOTFOUNDERROR
         | CHK_PY_NAMEERROR
         | CHK_PY_OVERFLOWERROR
+        | CHK_PY_SYSTEMERROR
         | CHK_PY_TYPEERROR
         | CHK_PY_UNBOUNDLOCALERROR
         | CHK_PY_VALUEERROR

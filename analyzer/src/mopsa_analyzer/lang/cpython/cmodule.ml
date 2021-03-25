@@ -494,12 +494,15 @@ module Domain =
             assert false
         )
 
-    let c_to_python_boundary  ?(on_null = fun flow -> assert false) expr man flow range =
+    let c_to_python_boundary ?(safe_check = None) ?(on_null = fun flow -> assert false) expr man flow range =
       resolve_c_pointer_into_addr expr man flow >>$
         fun oaddr flow ->
         match oaddr with
         | Some addr ->
            begin
+             let flow = match safe_check with
+               | None -> flow
+               | Some c -> Flow.add_safe_check c range flow in
              match akind addr with
              | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
                 man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
@@ -551,6 +554,7 @@ module Domain =
             fun oexc_addr flow ->
             match oexc_addr with
             | Some exc_addr ->
+               let flow = Flow.add_safe_check Python.Alarms.CHK_PY_SYSTEMERROR range flow in
                safe_get_name_of (mk_c_arrow_access_by_name exc "exc_msg" range) man flow >>$
                  fun exc_msg flow ->
                  debug "%s: exc_addr: %a, exc_msg: %a" function_name pp_addr exc_addr (OptionExt.print (Top.top_fprint Format.pp_print_string)) exc_msg;
@@ -895,12 +899,12 @@ module Domain =
         fun py_pos flow ->
         Eval.singleton (mk_py_object (Addr.from_expr py_pos, Some (mk_avalue_from_pyaddr (Addr.from_expr py_pos) T_int range)) range) flow
 
-    let fold_c_to_python_boundary man range c_objs flow =
+    let fold_c_to_python_boundary ?(safe_check = None) man range c_objs flow =
       let rec aux c_objs py_acc flow =
         match c_objs with
         | [] -> Cases.singleton (List.rev py_acc) flow
         | c_hd :: tl ->
-           c_to_python_boundary c_hd man flow range >>$
+           c_to_python_boundary ~safe_check c_hd man flow range >>$
              fun py_object flow ->
              aux tl (py_object :: py_acc) flow
       in aux c_objs [] flow
@@ -1542,7 +1546,7 @@ module Domain =
          let py_arg_vars = Python.Objects.Tuple.Domain.var_of_eobj py_arg in
          (* FIXME: also handle case where an exception is raised *)
          debug "calling object";
-         Python.Utils.try_eval_expr man ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow range
+         Python.Utils.try_eval_expr man ~route:(Semantic "Python") (Python.Ast.mk_py_call py_callable (List.map (fun v -> mk_var v range) py_arg_vars) range) flow
            ~on_empty:(fun exc_exp exc_name exc_msg flow ->
                        (* exception raised on the python side:
                           let's put in the exc field, and return NULL *)
@@ -1901,7 +1905,7 @@ module Domain =
              man.eval ~route:(Semantic "C") call flow >>$
                fun call_res flow ->
                debug "call result %s %a" name pp_expr call_res;
-               c_to_python_boundary call_res man flow range
+               c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call_res man flow range
                  ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
            )
          |> OptionExt.return
@@ -1926,7 +1930,7 @@ module Domain =
          let call = mk_c_call cfunc cfunc_args range in
          debug "[%a] calling %a" pp_expr exp pp_expr call;
          (
-           c_to_python_boundary call man flow range
+           c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call man flow range
              ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
          )
          |> OptionExt.return
@@ -1954,21 +1958,13 @@ module Domain =
          (* FIXME: boundary for c_descriptor? *)
          assume (mk_binop ~etyp:T_c_bool call O_ge (mk_zero range) range) man flow
            ~fthen:(fun flow ->
+             (* FIXME: safe check here? *)
              man.eval (mk_py_none range) flow
            )
            ~felse:(fun flow ->
              debug "not zero in:@.%a" (format @@ Flow.print man.lattice.print) flow;
                check_consistent_null cfunc.c_func_org_name man flow range
            )
-         (* (match ekind addr_value with
-          *  | E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}}, _) ->
-          *     (\* FIXME: We're moving from Python to C, so we need to attach
-          *        integer values to the addresses (not precise in the python
-          *       p        art but necessary here. *\)
-          *     man.exec (mk_assign (mk_var (mk_addr_attr (Addr.from_expr addr_value) "value" T_int) range) (OptionExt.none_to_exn @@ snd @@ object_of_expr value) range) flow >>%
-          *       call
-          *  | _ ->
-          *     call flow) *)
          |> OptionExt.return
 
       | _ -> None

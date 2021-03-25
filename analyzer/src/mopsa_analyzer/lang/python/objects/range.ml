@@ -239,7 +239,6 @@ struct
            )
            O_py_floor_div (ra "step") range)
         flow
-        range
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__iter__" as f, _))}, _)}, args, []) ->
        Utils.check_instances f man flow range args

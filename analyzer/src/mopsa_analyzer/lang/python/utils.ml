@@ -200,7 +200,7 @@ let get_eobj_itv man flow e =
 
 (* tries to evaluate python expr.
    If the evaluation fails and raises an exception, the exception flow is caught, put back to cur and `on_empty` is then run *)
-let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~(on_result:expr -> 'a flow -> ('a, expr) cases) (man: ('a, 'b) man) ?(route=Core.Route.toplevel) expr (flow: 'a flow) range : ('a, expr) cases option =
+let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~(on_result:expr -> 'a flow -> ('a, expr) cases) (man: ('a, 'b) man) ?(route=Core.Route.toplevel) expr (flow: 'a flow) : ('a, expr) cases option =
   man.eval ~route:route expr flow >>=?
     fun case flow' ->
     Some (
