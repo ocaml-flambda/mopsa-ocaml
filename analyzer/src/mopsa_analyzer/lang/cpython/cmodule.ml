@@ -1006,6 +1006,56 @@ module Domain =
       process 0 0 fmt_length [] flow
 
 
+    let convert_single man obj fmt output_ref range flow  =
+      match fmt with
+      | 'O' ->
+         begin match ekind obj, ekind output_ref  with
+         | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
+            debug "ParseTuple O ~> %a" pp_addr addr;
+            let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+            let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+            man.exec (mk_assign c c_addr range) flow >>%
+              fun flow -> Cases.return 1 flow
+         | _ -> assert false
+         end
+      | 'i' ->
+         (* FIXME: this sould be a boundary between python and C.
+                                 As such, it should handle integer translation.
+                                 Python function call PyLong_AsLong *)
+         begin match ekind obj, ekind output_ref with
+         | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
+            debug "got obj = %a" pp_expr obj;
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+              let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+              let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+              (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
+              debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
+              assume (mk_c_call
+                        (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
+                        [c_addr; mk_c_address_of c range]
+                        range)
+                man flow
+                ~fthen:(fun flow ->
+                  Cases.return 1 flow
+                )
+                ~felse:(fun flow ->
+                  Cases.return 0 flow
+                )
+            else
+              let () = debug "wrong type for convert_single integer" in
+              (* set error *)
+              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                fun flow ->
+                Cases.return 0 flow
+         | _ -> assert false
+         end
+      | _ ->
+         if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+           let () = warn_at range "PyArg_ParseTuple(AndKeywords)? %c unsupported, but cur is bottom" fmt in
+           Cases.return 1 flow
+         else
+           panic_at range "TODO: implement PyArg_ParseTuple(AndKeywords)? %c@.%a" fmt (format @@ Flow.print man.lattice.print) flow
+
     let rec eval exp man flow =
       let range = erange exp in
       match ekind exp with
@@ -1231,119 +1281,44 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
-         safe_get_name_of fmt man flow >>$
-           (fun ofmt_str flow ->
-             let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
-             resolve_c_pointer_into_addr args man flow >>$
-               (fun oaddr flow ->
-                 let addr = OptionExt.none_to_exn oaddr in
-                 man.eval (Python.Ast.mk_py_call
-                             (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
-                             [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
-                   (
-                     (* Currently does not handle variable size arguments etc *)
-                     (* Also, need to check if format is correct *)
-                     (*
-                        check that size = len(fmt_str), otherwise raise TypeError
-                        each conversion may fail: in that case, return 0 FIXME: also, clean
-                        if everything succeeds, return 1
-                      *)
-
-                     fun earg flow ->
-                     let size = match ekind @@ OptionExt.none_to_exn @@ snd @@ object_of_expr earg with
-                       | E_constant (C_int z) -> Z.to_int z
-                       | _ -> assert false in
-                     let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
-                     debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi size;
-                     if size < fmt_str_itv_lo || size > fmt_str_itv_hi then
-                       let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
-                                   (if fmt_str_itv_hi = fmt_str_itv_lo then "exactly" else if size < fmt_str_itv_lo then "at least" else "at most")
-                            (if size < fmt_str_itv_lo then fmt_str_itv_lo else fmt_str_itv_hi)
-                            (let s =
-                               if size < fmt_str_itv_hi then fmt_str_itv_lo
-                               else fmt_str_itv_hi in
-                             if s = 1 then "" else "s")
-                            size in
-                       let () = debug "wrong number of arguments: %s" msg in
-                       c_set_exception "PyExc_TypeError"
-                         msg range man flow >>%
-                         fun flow ->
-                         Eval.singleton (mk_zero range) flow
-                     else
-                       let convert_single pos output_ref flow =
-                         debug "convert_single %c %a" fmt_str.[pos] pp_expr output_ref;
-                         let range = tag_range range "convert_single[%d]" pos in
-                         match fmt_str.[pos] with
-                         | 'O' ->
-                            man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$
-                              (fun obj flow ->
-                                match ekind obj, ekind output_ref  with
-                                | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
-                                   debug "ParseTuple O ~> %a" pp_addr addr;
-                                   let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
-                                   let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-                                   man.exec (mk_assign c c_addr range) flow >>%
-                                     fun flow -> Cases.return 1 flow
-                                | _ -> assert false
-                              )
-                         | 'i' ->
-                            man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$
-                              (* FIXME: this sould be a boundary between python and C.
-                                 As such, it should handle integer translation.
-                                 Python function call PyLong_AsLong *)
-                              (fun obj flow ->
-                                match ekind obj, ekind output_ref with
-                                | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
-                                   debug "got obj = %a" pp_expr obj;
-                                   if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-                                     let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
-                                     let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-                                     (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
-                                     debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
-                                     assume (mk_c_call
-                                               (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
-                                               [c_addr; mk_c_address_of c range]
-                                               range)
-                                       man flow
-                                       ~fthen:(fun flow ->
-                                         Cases.return 1 flow
-                                       )
-                                       ~felse:(fun flow ->
-                                         Cases.return 0 flow
-                                       )
-                                   else
-                                     let () = debug "wrong type for convert_single integer" in
-                                     (* set error *)
-                                     c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
-                                       fun flow ->
-                                       Cases.return 0 flow
-                                | _ -> assert false
-                              )
-
-                         | _ ->
-                            if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-                              let () = warn_at range "PyArg_ParseTuple %s unsupported, but cur is bottom" fmt_str in
-                              Cases.return 1 flow
-                            else
-                              panic_at range "TODO: implement PyArg_ParseTuple %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
-                       in
-
-                       let rec process pos refs flow =
-                         if pos < size then
-                           convert_single pos (List.hd refs) flow >>$
-                             fun ret flow ->
-                             if ret = 1 then
-                               process (pos+1) (List.tl refs) flow
-                             else
-                               (* error *)
-                               Eval.singleton (mk_zero range) flow
-                         else
-                           Eval.singleton (mk_one range) flow
-                       in
-                       process 0 refs flow
-                   )
-               )
-           )
+         safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
+          let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
+          resolve_c_pointer_into_addr args man flow >>$ fun tuple_oaddr flow ->
+          let tuple_addr = OptionExt.none_to_exn tuple_oaddr in
+          len_of man tuple_addr flow range >>$ fun tuple_size flow ->
+          (* Currently does not handle variable size arguments etc *)
+          (* Also, need to check if format is correct *)
+          (*
+               check that size = len(fmt_str), otherwise raise TypeError
+               each conversion may fail: in that case, return 0 FIXME: also, clean
+               if everything succeeds, return 1
+          *)
+          let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
+          debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi tuple_size;
+          if tuple_size < fmt_str_itv_lo || tuple_size > fmt_str_itv_hi then
+            let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
+                        (if fmt_str_itv_hi = fmt_str_itv_lo then "exactly" else if tuple_size < fmt_str_itv_lo then "at least" else "at most")
+                        (if tuple_size < fmt_str_itv_lo then fmt_str_itv_lo else fmt_str_itv_hi)
+                        (let s =
+                           if tuple_size < fmt_str_itv_hi then fmt_str_itv_lo
+                           else fmt_str_itv_hi in
+                         if s = 1 then "" else "s")
+                        tuple_size in
+            let () = debug "wrong number of arguments: %s" msg in
+            c_set_exception "PyExc_TypeError" msg range man flow >>% Eval.singleton (mk_zero range)
+          else
+            let rec process pos refs flow =
+              let range = tag_range range "convert_single[%d]" pos in
+              if pos < tuple_size then
+                man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (tuple_addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$ fun obj flow ->
+                convert_single man obj fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
+                if ret = 1 then process (pos+1) (List.tl refs) flow
+                else Eval.singleton (mk_zero range) flow
+              else
+                Eval.singleton (mk_one range) flow
+            in
+            process 0 refs flow
+        )
          |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTupleAndKeywords", args::kwds::fmt::kwlist::refs) ->
@@ -1368,70 +1343,16 @@ module Domain =
                          if s = 1 then "" else "s")
                         size in
             let () = debug "wrong number of arguments: %s" msg in
-            c_set_exception "PyExc_TypeError"
-              msg range man flow >>%
-              fun flow ->
-              Eval.singleton (mk_zero range) flow
+            c_set_exception "PyExc_TypeError" msg range man flow >>% Eval.singleton (mk_zero range)
           else
-            (* |kwlist| = fmt_str_itv_hi ? *)
+            (* check that |kwlist| = fmt_str_itv_hi ? *)
             (* start with process until size = tuple_size. Then keep index but use kwlist[index] to search for the correct argument in kwds *)
-            let convert_single obj fmt output_ref range flow  =
-              match fmt with
-              | 'O' ->
-                 begin match ekind obj, ekind output_ref  with
-                     | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
-                        debug "ParseTuple O ~> %a" pp_addr addr;
-                        let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
-                        let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-                        man.exec (mk_assign c c_addr range) flow >>%
-                          fun flow -> Cases.return 1 flow
-                     | _ -> assert false
-                 end
-              | 'i' ->
-                   (* FIXME: this sould be a boundary between python and C.
-                                 As such, it should handle integer translation.
-                                 Python function call PyLong_AsLong *)
-                 begin match ekind obj, ekind output_ref with
-                     | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
-                        debug "got obj = %a" pp_expr obj;
-                        if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-                          let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
-                          let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-                          (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
-                          debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
-                          assume (mk_c_call
-                                    (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
-                                    [c_addr; mk_c_address_of c range]
-                                    range)
-                            man flow
-                            ~fthen:(fun flow ->
-                              Cases.return 1 flow
-                            )
-                            ~felse:(fun flow ->
-                              Cases.return 0 flow
-                            )
-                        else
-                          let () = debug "wrong type for convert_single integer" in
-                          (* set error *)
-                          c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
-                            fun flow ->
-                            Cases.return 0 flow
-                     | _ -> assert false
-                 end
-              | _ ->
-                 if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-                   let () = warn_at range "PyArg_ParseTuple %s unsupported, but cur is bottom" fmt_str in
-                   Cases.return 1 flow
-                 else
-                   panic_at range "TODO: implement PyArg_ParseTupleAndKeywords %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
-            in
-
             let rec process pos nb_kwargs refs flow =
               debug "process %d" pos;
               let range = tag_range range "convert_single[%d]" pos in
               if pos < tuple_size then
                 man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (tuple_addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$ fun obj flow ->
-                convert_single obj fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
+                convert_single man obj fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
                   if ret = 1 then process (pos+1) nb_kwargs (List.tl refs) flow
                   else Eval.singleton (mk_zero range) flow
               else if pos < size then
@@ -1444,7 +1365,7 @@ module Domain =
                     process (pos+1) nb_kwargs refs flow |> OptionExt.return )
                   ~on_result:(fun arg_value flow ->
                     debug "found %a for %s" pp_expr arg_value kw_name;
-                    convert_single arg_value fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
+                    convert_single man arg_value fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
                     if ret = 1 then process (pos+1) (nb_kwargs-1) (List.tl refs) flow
                     else Eval.singleton (mk_zero range) flow
                   )
@@ -1508,7 +1429,7 @@ module Domain =
                    (* FIXME: what happens if an exception is raised? *)
                    Python.Utils.try_eval_expr
                      man ~route:(Semantic "Python")
-                     (Python.Ast.mk_py_call py_callable py_tuple range) flow range
+                     (Python.Ast.mk_py_call py_callable py_tuple range) flow
                      ~on_empty:(fun exc_exp exc_str exc_msg flow ->
                        (* exception raised on the python side:
                           let's put in the exc field, and return NULL *)
