@@ -55,7 +55,8 @@
                             "python.types.type_annot",
                             "python.objects.list",
                             "python.objects.tuple",
-                            "python.objects.dict",
+                            // "python.objects.dict",
+                            "python.objects.constant_dict",
                             "python.objects.set",
                             "python.objects.iterable"
                         ]

@@ -342,5 +342,18 @@ class Test(unittest.TestCase):
         self.assertFalse(basic.compare(c1, c1, 4))
         self.assertTrue(basic.compare(c1, c1, 5))
 
+    def test_kwds(self):
+        # FIXME: do this we chars and concatenate, or build a tuple, to be sure arguments are not swapped
+        kwds = basic.kwds
+        self.assertEqual(kwds(), 1)
+        self.assertEqual(kwds(3), 3)
+        self.assertEqual(kwds(3, b = 2), 6)
+        self.assertEqual(kwds(2, 3, 5), 30)
+        with self.assertRaises(TypeError):
+            kwds(3, a = 2)
+        with self.assertRaises(TypeError):
+            kwds(2, 3, 5, 7)
+
+
 if __name__ == "__main__":
     unittest.main()

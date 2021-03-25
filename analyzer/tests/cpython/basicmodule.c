@@ -503,6 +503,19 @@ basic_compare(PyObject* self, PyObject* args)
 }
 
 
+
+static PyObject*
+basic_kwds(PyObject* self, PyObject* args, PyObject *kwds)
+{
+    static char *kwlist[] = {"a", "b", "c", NULL};
+    int a = 1, b = 1, c = 1;
+    if(!PyArg_ParseTupleAndKeywords(args, kwds, "|iii", kwlist, &a, &b, &c))
+        return NULL;
+
+    return Py_BuildValue("i", a*b*c);
+}
+
+
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
@@ -521,6 +534,7 @@ static PyMethodDef module_methods[] = {
     {"twistedcbox", (PyCFunction) basic_twistedcbox, METH_VARARGS, ""},
     {"sequence_tail", (PyCFunction) basic_sequence_tail, METH_VARARGS, ""},
     {"compare", (PyCFunction) basic_compare, METH_VARARGS, ""},
+    {"kwds", (PyCFunction) basic_kwds, METH_VARARGS | METH_KEYWORDS, ""},
     {NULL, NULL, 0, NULL}
 };
 

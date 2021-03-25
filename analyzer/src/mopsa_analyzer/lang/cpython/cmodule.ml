@@ -242,6 +242,7 @@ module Domain =
           "PyType_GenericAlloc_Helper";
           "PyType_IsSubtype";
           "PyArg_ParseTuple";
+          "PyArg_ParseTupleAndKeywords";
           "PyArg_UnpackTuple";
           "Py_BuildValue";
           "PyObject_CallFunction";
@@ -829,6 +830,35 @@ module Domain =
                   ]
                   range) flow
 
+    let normalize_fmt_str fmt_str =
+      let mandatory_fmt, optional_fmt = match String.split_on_char '|' fmt_str with
+        | [s] -> s, ""
+        | [s; s'] -> s, s'
+        | _ -> assert false in
+      let strip_error_message s = List.hd (String.split_on_char ';' s) in
+      let strip_error_funcname s = List.hd (String.split_on_char ':' s) in
+      let compute_length s =
+        let s = strip_error_message s in
+        let s = strip_error_funcname s in
+        let rec aux pos acc =
+          if pos >= String.length s then acc
+          else
+            match s.[pos] with
+            | '(' | ')' -> aux (pos+1) acc
+            | _ -> aux (pos+1) (acc+1)
+        in aux 0 0 in
+      let min_size = compute_length mandatory_fmt in
+      let max_size = min_size + compute_length optional_fmt in
+      mandatory_fmt ^ optional_fmt, min_size, max_size
+
+    let len_of man addr flow range =
+      man.eval (Python.Ast.mk_py_call
+                  (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
+                  [Python.Ast.mk_py_object (addr, None) range] range) flow >>$ fun earg flow ->
+          match ekind @@ OptionExt.none_to_exn @@ snd @@ object_of_expr earg with
+          | E_constant (C_int z) -> Cases.singleton (Z.to_int z) flow
+          | _ -> assert false
+
     let pylong_to_c_type arg range man flow (type_min_value, type_max_value, type_name) =
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
          resolve_c_pointer_into_addr arg man flow >>$
@@ -1219,26 +1249,7 @@ module Domain =
                      let size = match ekind @@ OptionExt.none_to_exn @@ snd @@ object_of_expr earg with
                        | E_constant (C_int z) -> Z.to_int z
                        | _ -> assert false in
-                     let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi =
-                       let mandatory_fmt, optional_fmt = match String.split_on_char '|' fmt_str with
-                         | [s] -> s, ""
-                         | [s; s'] -> s, s'
-                         | _ -> assert false in
-                       let strip_error_message s = List.hd (String.split_on_char ';' s) in
-                       let strip_error_funcname s = List.hd (String.split_on_char ':' s) in
-                       let compute_length s =
-                         let s = strip_error_message s in
-                         let s = strip_error_funcname s in
-                         let rec aux pos acc =
-                           if pos >= String.length s then acc
-                           else
-                             match s.[pos] with
-                             | '(' | ')' -> aux (pos+1) acc
-                             | _ -> aux (pos+1) (acc+1)
-                         in aux 0 0 in
-                       let min_size = compute_length mandatory_fmt in
-                       let max_size = min_size + compute_length optional_fmt in
-                       mandatory_fmt ^ optional_fmt, min_size, max_size in
+                     let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
                      debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi size;
                      if size < fmt_str_itv_lo || size > fmt_str_itv_hi then
                        let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
@@ -1330,6 +1341,117 @@ module Domain =
                )
            )
          |> OptionExt.return
+
+      | E_c_builtin_call ("PyArg_ParseTupleAndKeywords", args::kwds::fmt::kwlist::refs) ->
+         safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
+          let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
+          resolve_c_pointer_into_addr args man flow >>$ fun tuple_oaddr flow ->
+          let tuple_addr = OptionExt.none_to_exn tuple_oaddr in
+          len_of man tuple_addr flow range >>$ fun tuple_size flow ->
+          resolve_c_pointer_into_addr kwds man flow >>$ fun dict_oaddr flow ->
+          let dict_addr = OptionExt.none_to_exn dict_oaddr in
+          len_of man dict_addr flow range >>$ fun dict_size flow ->
+          let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
+          let size = tuple_size + dict_size in
+          debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi size;
+          if size < fmt_str_itv_lo || size > fmt_str_itv_hi then
+            let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
+                        (if fmt_str_itv_hi = fmt_str_itv_lo then "exactly" else if size < fmt_str_itv_lo then "at least" else "at most")
+                        (if size < fmt_str_itv_lo then fmt_str_itv_lo else fmt_str_itv_hi)
+                        (let s =
+                           if size < fmt_str_itv_hi then fmt_str_itv_lo
+                           else fmt_str_itv_hi in
+                         if s = 1 then "" else "s")
+                        size in
+            let () = debug "wrong number of arguments: %s" msg in
+            c_set_exception "PyExc_TypeError"
+              msg range man flow >>%
+              fun flow ->
+              Eval.singleton (mk_zero range) flow
+          else
+            (* |kwlist| = fmt_str_itv_hi ? *)
+            (* start with process until size = tuple_size. Then keep index but use kwlist[index] to search for the correct argument in kwds *)
+            let convert_single obj fmt output_ref range flow  =
+              match fmt with
+              | 'O' ->
+                 begin match ekind obj, ekind output_ref  with
+                     | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
+                        debug "ParseTuple O ~> %a" pp_addr addr;
+                        let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+                        let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+                        man.exec (mk_assign c c_addr range) flow >>%
+                          fun flow -> Cases.return 1 flow
+                     | _ -> assert false
+                 end
+              | 'i' ->
+                   (* FIXME: this sould be a boundary between python and C.
+                                 As such, it should handle integer translation.
+                                 Python function call PyLong_AsLong *)
+                 begin match ekind obj, ekind output_ref with
+                     | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
+                        debug "got obj = %a" pp_expr obj;
+                        if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+                          let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+                          let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+                          (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
+                          debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
+                          assume (mk_c_call
+                                    (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
+                                    [c_addr; mk_c_address_of c range]
+                                    range)
+                            man flow
+                            ~fthen:(fun flow ->
+                              Cases.return 1 flow
+                            )
+                            ~felse:(fun flow ->
+                              Cases.return 0 flow
+                            )
+                        else
+                          let () = debug "wrong type for convert_single integer" in
+                          (* set error *)
+                          c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                            fun flow ->
+                            Cases.return 0 flow
+                     | _ -> assert false
+                 end
+              | _ ->
+                 if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+                   let () = warn_at range "PyArg_ParseTuple %s unsupported, but cur is bottom" fmt_str in
+                   Cases.return 1 flow
+                 else
+                   panic_at range "TODO: implement PyArg_ParseTupleAndKeywords %s@.%a" fmt_str (format @@ Flow.print man.lattice.print) flow
+            in
+
+            let rec process pos nb_kwargs refs flow =
+              debug "process %d" pos;
+              let range = tag_range range "convert_single[%d]" pos in
+              if pos < tuple_size then
+                man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (tuple_addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$ fun obj flow ->
+                convert_single obj fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
+                  if ret = 1 then process (pos+1) nb_kwargs (List.tl refs) flow
+                  else Eval.singleton (mk_zero range) flow
+              else if pos < size then
+                safe_get_name_of (mk_c_subscript_access kwlist (mk_int pos range) range) man flow >>$ fun okw_name flow ->
+                let kw_name = Top.top_to_exn (OptionExt.none_to_exn okw_name) in
+                OptionExt.none_to_exn @@ Python.Utils.try_eval_expr man (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (dict_addr, None) range) (mk_string ~etyp:(T_py None) kw_name range) ~etyp:(T_py None) range) flow
+                  ~route:(Semantic "Python")
+                  ~on_empty:(fun _ _ _ flow ->
+                    debug "haven't found anything for %s" kw_name;
+                    process (pos+1) nb_kwargs refs flow |> OptionExt.return )
+                  ~on_result:(fun arg_value flow ->
+                    debug "found %a for %s" pp_expr arg_value kw_name;
+                    convert_single arg_value fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
+                    if ret = 1 then process (pos+1) (nb_kwargs-1) (List.tl refs) flow
+                    else Eval.singleton (mk_zero range) flow
+                  )
+              else
+                if nb_kwargs > 0 then
+                  c_set_exception "PyExc_TypeError" "invalid number of arguments" range man flow >>% Eval.singleton (mk_zero range)
+                else
+                  Eval.singleton (mk_one range) flow
+            in
+            process 0 dict_size refs flow
+        ) |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_UnpackTuple", args::fname::minargs::maxargs::refs) ->
          (* rewritten into a call to PyArg_ParseTuple *)
@@ -1664,8 +1786,10 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, oflags, self)}, _)}, args, kwargs) ->
+         (* cf cfunction_call_varargs + _Py_CheckFunctionResult in call.c *)
          debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
          let ometh_varargs = Some 1 in
+         let ometh_varargs_keywords = Some 3 in
          let ometh_o = Some 8 in
          let ometh_noargs = Some 4 in
          (* FIXME: if oflag = Some METH_O, we can forget the tuple *)
@@ -1691,7 +1815,7 @@ module Domain =
               subst_addr_eobj fst_arg (List.hd args), List.tl args
          in
          let py_args =
-           if oflags = None || Stdlib.compare ometh_varargs oflags = 0 then
+           if oflags = None || Stdlib.compare ometh_varargs oflags = 0 || Stdlib.compare ometh_varargs_keywords oflags = 0 then
              mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" )
            else if Stdlib.compare ometh_o oflags = 0 then
              let () = debug "METH_O, keeping only first argument" in
@@ -1699,17 +1823,23 @@ module Domain =
            else if Stdlib.compare ometh_noargs oflags = 0 then
              let () = debug "METH_NOARGS, hopefully caught later on?" in
              mk_c_null range
-           else assert false
+           else
+             let () = debug "oflags = %a" (OptionExt.print Format.pp_print_int) oflags in
+             assert false
          in
          debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
          let py_kwds =
-           (* FIXME: okay, lets cheat here *)
-           mk_c_null range
+           if Stdlib.compare ometh_varargs_keywords oflags = 0 then
+             let keys, values = List.map (fun (so, e) -> mk_string ~etyp:(T_py None) (OptionExt.none_to_exn so) range, e) kwargs |> List.split in
+             mk_expr ~etyp:(T_py None) (E_py_dict (keys, values)) (tag_range range "kwargs assignment")
+           else
+             (* FIXME: okay, lets cheat here *)
+             mk_c_null range
          in
          (* FIXME: if |args| = 1, no need to eval py args *)
-         man.eval py_args flow >>$
-           (fun py_args flow ->
-             let cfunc_args =
+         man.eval py_args flow >>$ (fun py_args flow ->
+           man.eval py_kwds flow >>$ fun py_kwds flow ->
+           let cfunc_args =
                match List.length cfunc.c_func_parameters with
                | 1 -> [self]
                | 2 ->
@@ -1721,6 +1851,7 @@ module Domain =
                | _ -> assert false in
              let call = match kind with
                | Wrapper_descriptor (Some wrapper_name) ->
+                  (* wrapperdescr_call in descrobject.c *)
                   let wrapper = C.Ast.find_c_fundec_by_name wrapper_name flow in
                   debug "wrapper %s has %d args@.cfunc_args = %a" wrapper_name (List.length wrapper.c_func_parameters) (Format.pp_print_list pp_expr) cfunc_args;
                   let wrapper_args =
