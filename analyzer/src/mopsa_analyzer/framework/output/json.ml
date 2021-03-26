@@ -54,10 +54,13 @@ let render_pos pos =
 
 
 let render_range range =
-  `Assoc [
-    "start", render_pos (Location.get_range_start range);
-    "end", render_pos (Location.get_range_end range)
-  ]
+  if not @@ is_orig_range @@ untag_range range then
+    `Assoc []
+  else
+    `Assoc [
+        "start", render_pos (Location.get_range_start range);
+        "end", render_pos (Location.get_range_end range)
+      ]
 
 let render_call (c:callsite)  =
   `Assoc [
