@@ -515,6 +515,15 @@ basic_kwds(PyObject* self, PyObject* args, PyObject *kwds)
     return Py_BuildValue("i", a*b*c);
 }
 
+static PyObject*
+basic_parsebuild_float(PyObject* self, PyObject* args)
+{
+    float a = 0;
+    if(!PyArg_ParseTuple(args, "f", &a)) return NULL;
+
+    return Py_BuildValue("f", a+1);
+}
+
 
 static PyMethodDef module_methods[] = {
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
@@ -535,6 +544,7 @@ static PyMethodDef module_methods[] = {
     {"sequence_tail", (PyCFunction) basic_sequence_tail, METH_VARARGS, ""},
     {"compare", (PyCFunction) basic_compare, METH_VARARGS, ""},
     {"kwds", (PyCFunction) basic_kwds, METH_VARARGS | METH_KEYWORDS, ""},
+    {"pb_float", (PyCFunction) basic_parsebuild_float, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

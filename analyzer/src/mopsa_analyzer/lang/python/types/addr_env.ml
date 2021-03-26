@@ -152,7 +152,7 @@ struct
     | Some aset ->
        let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind a) = 0 | _ -> false) aset in
-       let float = check_baddr addr_float in
+       let float = check_baddr addr_float || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_float) (akind a) = 0 | _ -> false) aset in
        let str = check_baddr addr_strings in
        (if str then let () = debug "processing %a for strings" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
        (if intb then let () = debug "processing %a for int/bools" pp_stmt (fstmt T_int) in man.exec  (fstmt T_int) flow else Post.return flow) >>% fun flow ->
@@ -743,7 +743,7 @@ struct
 
              let check_baddr a  = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
              let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
-             let float = check_baddr addr_float in
+             let float = check_baddr addr_float || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_float) (akind a) = 0 | _ -> false) aset  in
              let str = check_baddr addr_strings in
              let r = if intb then VarSet.add (Utils.change_var_type T_int v) r else r in
              let r = if float then VarSet.add (Utils.change_var_type (T_float F_DOUBLE) v) r else r in
@@ -770,7 +770,7 @@ struct
                        let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
                        let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
                        (s, int_info) :: acc
-                     else if compare_addr (OptionExt.none_to_exn !addr_float) addr = 0 then
+                     else if compare_addr_kind  (akind @@ OptionExt.none_to_exn !addr_float) (akind addr) = 0 then
                        let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
                        let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
                        (s, float_info) :: acc

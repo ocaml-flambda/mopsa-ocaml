@@ -354,6 +354,11 @@ class Test(unittest.TestCase):
         with self.assertRaises(TypeError):
             kwds(2, 3, 5, 7)
 
+    def test_pb_float(self):
+        f = basic.pb_float(3.141592653589793115997963468544185161590576171875)
+        self.assertEqual(f, 4.14159297943115234375)
+        with self.assertRaises(TypeError):
+            basic.pb_float("abc")
 
 if __name__ == "__main__":
     unittest.main()

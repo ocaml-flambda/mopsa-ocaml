@@ -27,6 +27,9 @@
 #undef PyList_GET_SIZE
 #undef PyList_GET_ITEM
 
+#undef PyFloat_AS_DOUBLE
+#define PyFloat_AS_DOUBLE PyFloat_AsDouble
+
 /* // stubs used by the analysis */
 typedef struct exc_data {
     PyObject* exc_state;
@@ -662,6 +665,7 @@ init_flags()
     Py_TYPE(&PyType_Type) = &PyType_Type;
     Py_TYPE(&PyBaseObject_Type) = &PyType_Type;
     Py_TYPE(&PyLong_Type) = &PyType_Type;
+    Py_TYPE(&PyFloat_Type) = &PyType_Type;
     Py_TYPE(&PyUnicode_Type) = &PyType_Type;
     Py_TYPE(&PyList_Type) = &PyType_Type;
     Py_TYPE(&PyRange_Type) = &PyType_Type;
@@ -674,6 +678,7 @@ init_flags()
     PyType_Type.tp_as_sequence = 0;
     PyBaseObject_Type.tp_as_sequence = 0;
     PyLong_Type.tp_as_sequence = 0;
+    PyFloat_Type.tp_as_sequence = 0;
     // FIXME: unicode_as_sequence
     PyTuple_Type.tp_as_sequence = &tuple_as_sequence;
     PyList_Type.tp_as_sequence = &list_as_sequence;
@@ -688,6 +693,7 @@ init_flags()
     PyType_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TYPE_SUBCLASS | Py_TPFLAGS_READY;
     PyBaseObject_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY;
     PyLong_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LONG_SUBCLASS | Py_TPFLAGS_READY;
+    PyFloat_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY;
     PyUnicode_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_UNICODE_SUBCLASS | Py_TPFLAGS_READY;
     PyList_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_LIST_SUBCLASS | Py_TPFLAGS_READY;
     PyRange_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
