@@ -1394,7 +1394,7 @@ module Domain =
           len_of man dict_addr flow range >>$ fun dict_size flow ->
           let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
           let size = tuple_size + dict_size in
-          debug "fmt_str_itv = [%d, %d]; size = %d" fmt_str_itv_lo fmt_str_itv_hi size;
+          debug "fmt_str_itv = [%d, %d]; size = (%d, %d)" fmt_str_itv_lo fmt_str_itv_hi tuple_size dict_size;
           if size < fmt_str_itv_lo || size > fmt_str_itv_hi then
             let msg = Format.asprintf "function takes %s %d argument%s (%d given)"
                         (if fmt_str_itv_hi = fmt_str_itv_lo then "exactly" else if size < fmt_str_itv_lo then "at least" else "at most")
@@ -1410,7 +1410,7 @@ module Domain =
             (* check that |kwlist| = fmt_str_itv_hi ? *)
             (* start with process until size = tuple_size. Then keep index but use kwlist[index] to search for the correct argument in kwds *)
             let rec process pos nb_kwargs refs flow =
-              debug "process %d" pos;
+              debug "process %d %d" pos nb_kwargs;
               let range = tag_range range "convert_single[%d]" pos in
               if pos < tuple_size then
                 man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (tuple_addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$ fun obj flow ->
@@ -1418,13 +1418,14 @@ module Domain =
                   if ret = 1 then process (pos+1) nb_kwargs (List.tl refs) flow
                   else Eval.singleton (mk_zero range) flow
               else if pos < size then
+              else if pos < fmt_str_itv_hi (* should be |kwlist| *) then
                 safe_get_name_of (mk_c_subscript_access kwlist (mk_int pos range) range) man flow >>$ fun okw_name flow ->
                 let kw_name = Top.top_to_exn (OptionExt.none_to_exn okw_name) in
                 OptionExt.none_to_exn @@ Python.Utils.try_eval_expr man (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (dict_addr, None) range) (mk_string ~etyp:(T_py None) kw_name range) ~etyp:(T_py None) range) flow
                   ~route:(Semantic "Python")
                   ~on_empty:(fun _ _ _ flow ->
                     debug "haven't found anything for %s" kw_name;
-                    process (pos+1) nb_kwargs refs flow |> OptionExt.return )
+                    process (pos+1) nb_kwargs (List.tl refs) flow |> OptionExt.return )
                   ~on_result:(fun arg_value flow ->
                     debug "found %a for %s" pp_expr arg_value kw_name;
                     convert_single man arg_value fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
