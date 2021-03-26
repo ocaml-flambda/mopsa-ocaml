@@ -412,9 +412,17 @@ and from_project prj =
 
 and find_target target targets =
   let re = Str.regexp (".*" ^ target ^ "$") in
-  List.find (fun t ->
-      Str.string_match re t 0
-    ) targets
+  let search_targets r =
+    List.find (fun t ->
+        Str.string_match r t 0
+      ) targets in
+  try
+    search_targets re
+  with Not_found ->
+    let re_permissive = Str.regexp (".*" ^ target ^ ".*") in
+    let t = search_targets re_permissive in
+    warn "permissive search selected target %s" t;
+    t
 
 (** {2 functions} *)
 (** ============= *)
