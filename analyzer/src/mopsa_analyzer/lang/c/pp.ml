@@ -23,6 +23,8 @@ open Format
 open Mopsa
 open Ast
 
+let print_implicit_cast = false
+ 
 let rec pp_c_type_short fmt =
   function
   | T_c_void -> pp_print_string fmt "void"
@@ -160,8 +162,11 @@ let () =
       | E_c_increment _ -> assert false
       | E_c_address_of (e) -> fprintf fmt "&%a" pp_expr e
       | E_c_deref(p) -> fprintf fmt "*%a" pp_expr p
-      | E_c_cast(e, true) -> fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
-      | E_c_cast(e, false) -> pp_expr fmt e
+      | E_c_cast(e, x) ->
+         if x || print_implicit_cast then
+           fprintf fmt "(%a) %a" pp_typ (etyp expr) pp_expr e
+         else
+           pp_expr fmt e
       | E_c_statement s -> fprintf fmt "@[<v 4>{@,%a@]@,}" pp_stmt s
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e

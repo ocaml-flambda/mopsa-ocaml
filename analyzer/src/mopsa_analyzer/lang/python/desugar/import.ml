@@ -77,8 +77,7 @@ module Domain =
         match x with
         | Nt s ->
            if ModuleSet.cardinal x = 1 then ModuleSet.choose x
-           else
-             assert false
+           else assert false
         | _ -> raise Not_found
     end
 
@@ -188,7 +187,6 @@ module Domain =
         let name = String.map (fun c -> if c = '.' then '/' else c) name in
         let (addr, expr), flow, is_stub =
           try
-            (* debug "%a" (format @@ Flow.print man.lattice.print) flow; *)
             let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_env T_cur man flow) in
             debug "module %s already imported, cache hit!" name;
             (a, e), flow, is_stub
@@ -273,8 +271,8 @@ module Domain =
                   (addr, None), body, false, flow in
               let () = debug "pre body" in
               let flow' = post_to_flow man @@ man.exec body flow in
-              let () = debug "post body %b" (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
-              let cur = get_env T_cur man flow' in
+              let () = debug "post body" in
+              let cur = get_env T_cur man flow in
               let flow' = set_env T_cur (ModulesMap.add name (Modules.singleton ((a, e), is_stub)) cur) man flow' in
               (a, e), flow', is_stub
             end

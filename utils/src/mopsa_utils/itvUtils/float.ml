@@ -321,7 +321,7 @@ module Single = struct
   let min_denormal : t = ldexp 1. (min_exponent-mantissa_bits)
   let min_normal : t = ldexp 1. min_exponent
   let max_normal : t = ldexp (2. -. ldexp 1. (-mantissa_bits)) max_exponent
-  let max_exact : t = ldexp 1. mantissa_bits
+  let max_exact : t = ldexp 1. (mantissa_bits+1)
 
   let ulp : t = ldexp 1. (-mantissa_bits)
   (** Units in the last place (relative precision). *)
@@ -459,7 +459,7 @@ module Double = struct
   let min_denormal : t = ldexp 1. (min_exponent-mantissa_bits)
   let min_normal : t = ldexp 1. min_exponent
   let max_normal : t = ldexp (2. -. ldexp 1. (-mantissa_bits)) max_exponent
-  let max_exact : t = ldexp 1. mantissa_bits
+  let max_exact : t = ldexp 1. (mantissa_bits+1)
 
   let ulp : t = ldexp 1. (-mantissa_bits)
   (** Units in the last place (relative precision). *)

@@ -359,3 +359,13 @@ void _mopsa_assert_valid_wide_string(wchar_t *s);
  * }
  */
 void _mopsa_wcsnrand(wchar_t *s, size_t n);
+
+/*$
+ * ensures: valid_float(return);
+ */
+double _mopsa_valid_double();
+
+/*$
+ * ensures: valid_float(return);
+ */
+float _mopsa_valid_float();
