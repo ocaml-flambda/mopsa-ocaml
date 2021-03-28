@@ -93,9 +93,12 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   Format.pp_print_string fmt base64
 
 let pp_addr_partitioning fmt ak =
-  if !opt_hash_addr
-  then pp_addr_partitioning_hash fmt ak
-  else !addr_partitioning_pp_chain fmt ak
+  match ak with
+  | G_all -> !addr_partitioning_pp_chain fmt ak
+  | _ ->
+    if !opt_hash_addr
+    then pp_addr_partitioning_hash fmt ak
+    else !addr_partitioning_pp_chain fmt ak
 
 let compare_addr_partitioning a1 a2 =
   if a1 == a2 then 0 else !addr_partitioning_compare_chain a1 a2
