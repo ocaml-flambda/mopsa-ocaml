@@ -58,7 +58,8 @@ let addr_partitioning_compare_chain : (addr_partitioning -> addr_partitioning ->
 let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit) ref =
   ref (fun fmt g ->
       match g with
-      | _ -> Format.pp_print_string fmt "*"
+      | G_all -> Format.pp_print_string fmt "*"
+      | _     -> Exceptions.panic "pp_addr_partitioning: not registered"
     )
 
 (** Command line option to use hashes as address format *)
@@ -96,8 +97,6 @@ let pp_addr_partitioning fmt ak =
   then pp_addr_partitioning_hash fmt ak
   else !addr_partitioning_pp_chain fmt ak
 
-
-
 let compare_addr_partitioning a1 a2 =
   if a1 == a2 then 0 else !addr_partitioning_compare_chain a1 a2
 
@@ -106,14 +105,12 @@ let register_addr_partitioning (info: addr_partitioning TypeExt.info) =
   addr_partitioning_pp_chain := info.print !addr_partitioning_pp_chain;
   ()
 
-
 (** Heap addresses. *)
 type addr = {
-  addr_kind : addr_kind;   (** Kind of the address. *)
-  addr_partitioning : addr_partitioning; (** Group of the address *)
-  addr_mode : mode;        (** Assignment mode of address (string or weak) *)
+  addr_kind : addr_kind;                 (** Kind of the address. *)
+  addr_partitioning : addr_partitioning; (** Partitioning policy of the address *)
+  addr_mode : mode;                      (** Assignment mode of address (string or weak) *)
 }
-
 
 let akind addr = addr.addr_kind
 
@@ -123,7 +120,6 @@ let pp_addr fmt a =
     pp_addr_partitioning a.addr_partitioning
     (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
 
-
 let compare_addr a b =
   if a == b then 0
   else Compare.compose [
@@ -131,7 +127,6 @@ let compare_addr a b =
       (fun () -> compare_addr_partitioning a.addr_partitioning b.addr_partitioning);
       (fun () -> compare_mode a.addr_mode b.addr_mode);
     ]
-
 
 let addr_mode (a:addr) (omode: mode option) : mode =
   match omode with
