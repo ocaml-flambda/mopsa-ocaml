@@ -252,6 +252,7 @@ module Domain =
           "PyObject_CallObject";
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
+          "PyObject_IsTrue";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
@@ -259,10 +260,16 @@ module Domain =
           "PyLong_AsSsize_t";
           "PyFloat_FromDouble";
           "PyFloat_AsDouble";
+          "PyBytes_FromStringAndSize";
+          "PyBytes_Size";
+          "PyBytes_AsString";
           "PyUnicode_GetLength";
+          "PyUnicode_InternFromString";
           "PyUnicode_FromString";
           "PyUnicode_FromKindAndData";
           "PyUnicode_FromWideChar";
+          "PyUnicode_AsEncodedString";
+          "PyUnicode_AsUnicode";
           "PyTuple_New";
           "PyTuple_SetItem";
           "PyTuple_Size";
@@ -1304,6 +1311,50 @@ module Domain =
           Eval.singleton c_addr flow
         ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyBytes_FromStringAndSize", [v; len]) ->
+         man.eval (mk_top (T_py (Some Bytes)) range) flow >>$ (fun py_bytes flow ->
+          let py_bytes_addr, py_bytes_oe = object_of_expr py_bytes in
+          let c_addr, flow = python_to_c_boundary py_bytes_addr None py_bytes_oe range man flow in
+          Eval.singleton c_addr flow
+        ) |> OptionExt.return
+
+      | E_c_builtin_call ("PyBytes_Size", args) ->
+         resolve_c_pointer_into_addr (List.hd args) man flow >>$
+           (fun oaddr flow ->
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+             (* FIXME: maybe we should do an isinstance check? *)
+             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
+               man.eval (mk_expr ~etyp:T_int (E_len (mk_avalue_from_pyaddr addr T_string range)) range) flow >>$
+               fun str_length flow ->
+               Eval.singleton str_length flow
+             else
+               let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+               man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+                 Eval.singleton (mk_int (-1) ~typ:T_int range)
+           )
+         |> OptionExt.return
+
+      | E_c_builtin_call ("PyBytes_AsString", args) ->
+         let o = List.hd args in
+         c_to_python_boundary o man flow range >>$ (fun py_o flow ->
+          let addr, oe = object_of_expr py_o in
+          if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
+            (* FIXME: conversion is not the best thing to do, maybe we could have a cast? Or a string expression? *)
+            let open Universal.Strings.Powerset in
+            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
+            Eval.join_list ~empty:(fun () -> assert false)
+              (StringPower.fold (fun s acc ->
+                   debug "PyBytes_AsString, got %s" s;
+                   Eval.singleton (mk_c_string s range) flow :: acc
+              ) strp [])
+          else
+            let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+            man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+              Eval.singleton (mk_int (-1) ~typ:T_int range)
+        ) |> OptionExt.return
+
+
+
       | E_c_builtin_call ("PyUnicode_GetLength", args) ->
          (* FIXME: cheating on py_ssize_t *)
          (* let py_ssize_t = C.Ast.ul in *)
@@ -1323,6 +1374,7 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyUnicode_InternFromString", args)
       | E_c_builtin_call ("PyUnicode_FromString", args) ->
          resolve_pointer (List.hd args) man flow >>$ (fun pt flow ->
           match pt with
@@ -1344,6 +1396,14 @@ module Domain =
              let c_addr, flow = python_to_c_boundary (fst @@ object_of_expr str_addr) None (Some (mk_top T_string range)) range man flow in
            Eval.singleton c_addr flow)
          |> OptionExt.return
+
+      | E_c_builtin_call ("PyUnicode_AsEncodedString", [unicode; encoding; errors]) ->
+         c_to_python_boundary unicode man flow range >>$ (fun py_unicode flow ->
+          man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr py_unicode "encode" range) [] range) flow >>$ fun py_encoded flow ->
+          let addr_py_encoded, oe_py_encoded = object_of_expr py_encoded in
+          let c_addr, flow = python_to_c_boundary addr_py_encoded None oe_py_encoded range man flow in
+          man.eval c_addr flow
+        ) |> OptionExt.return
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
@@ -1603,6 +1663,13 @@ module Domain =
          let py_result_addr, py_result_oe = object_of_expr py_result in
          let c_addr, flow = python_to_c_boundary py_result_addr None py_result_oe range man flow in
          Eval.singleton c_addr flow
+        ) |> OptionExt.return
+
+      | E_c_builtin_call ("PyObject_IsTrue", [v]) ->
+         c_to_python_boundary v man flow range >>$ (fun py_v flow ->
+          assume ~route:(Semantic "Python") (Python.Utils.mk_builtin_call "bool" [py_v] range) man flow
+            ~fthen:(Eval.singleton (mk_one range))
+            ~felse:(Eval.singleton (mk_zero range))
         ) |> OptionExt.return
 
       (**

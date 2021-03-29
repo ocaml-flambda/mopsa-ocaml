@@ -1,6 +1,9 @@
 #ifndef CPYTHON_STUBS_SEEN
 #define CPYTHON_STUBS_SEEN
 
+#include <Python.h>
+#include <structmember.h>
+
 #undef PyArg_ParseTuple
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
@@ -8,13 +11,13 @@
 
 // FIXME: add other builtins like that
 #undef PyUnicode_GET_LENGTH
+#undef PyUnicode_GET_SIZE
 #undef PyTuple_GET_SIZE
 #undef PyTuple_GET_ITEM
 #define PyUnicode_GET_LENGTH PyUnicode_GetLength
+#define PyUnicode_GET_SIZE PyUnicode_GetLength
 #define PyTuple_GET_SIZE PyTuple_Size
 #define PyTuple_GET_ITEM PyTuple_GetItem
-
-#undef PyUnicode_GET_SIZE
 #undef PyUnicode_AS_UNICODE
 #undef Py_UNICODE_IS_SURROGATE
 #undef Py_UNICODE_IS_LOW_SURROGATE
@@ -22,10 +25,15 @@
 #undef PyString_GET_SIZE
 
 #undef PyBytes_GET_SIZE
+#define PyBytes_GET_SIZE PyBytes_Size
 #undef PyBytes_AS_STRING
 
 #undef PyList_GET_SIZE
+#define PyList_GET_SIZE PyList_Size
 #undef PyList_GET_ITEM
+#define PyList_GET_ITEM PyList_GetItem
+
+
 
 #undef PyFloat_AS_DOUBLE
 #define PyFloat_AS_DOUBLE PyFloat_AsDouble
@@ -108,6 +116,13 @@ int PyErr_BadArgument(void)
                     "bad argument type for built-in operation");
     return 0;
 }
+
+int
+PyErr_ExceptionMatches(PyObject *lexc)
+{
+    return exc->exc_state == lexc;
+}
+
 
 
 int PyType_ReadyCheat(PyTypeObject *type)
@@ -214,7 +229,6 @@ PyMember_GetOne(const char *addr, PyMemberDef *l)
         PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
         v = NULL;
     }
-//    _mopsa_print();
     return v;
 }
 
@@ -641,6 +655,7 @@ static PySequenceMethods list_as_sequence =
 {
     .sq_length=(lenfunc)PyList_Size,
     .sq_item=(ssizeargfunc)PyList_GetItem,
+//    .sq_ass_item=???
 };
 
 PyObject* _PyRange_GetItem(PyObject*, Py_ssize_t);
@@ -658,6 +673,11 @@ static PySequenceMethods range_as_sequence =
     .sq_item=(ssizeargfunc)_PyRange_GetItem,
 // these two functions are not defined in the C api
 };
+
+PyObject* _PyList_Iter(PyObject *);
+PyObject* _PyTuple_Iter(PyObject *);
+PyObject* _PyRange_Iter(PyObject *);
+
 
 void
 init_flags()
@@ -688,6 +708,27 @@ init_flags()
     // FIXME: bytes_as_sequence
     // FIXME: dict_as_sequence
 
+    PyType_Type.tp_iternext = 0;
+    PyBaseObject_Type.tp_iternext = 0;
+    PyLong_Type.tp_iternext = 0;
+    PyFloat_Type.tp_iternext = 0;
+    PyTuple_Type.tp_iternext = 0;
+    PyList_Type.tp_iternext = 0;
+    PyRange_Type.tp_iternext = 0;
+    _PyNone_Type.tp_iternext = 0;
+    _PyNotImplemented_Type.tp_iternext = 0;
+
+    PyType_Type.tp_iter = 0;
+    PyBaseObject_Type.tp_iter = 0;
+    PyLong_Type.tp_iter = 0;
+    PyFloat_Type.tp_iter = 0;
+    PyTuple_Type.tp_iter = _PyTuple_Iter;
+    PyList_Type.tp_iternext = _PyList_Iter;
+    PyRange_Type.tp_iternext = _PyRange_Iter;
+    _PyNone_Type.tp_iternext = 0;
+    _PyNotImplemented_Type.tp_iternext = 0;
+
+
     // all flags are in the object declaration except Ready, which is
     // added upon completion of PyType_Ready
     PyType_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_TYPE_SUBCLASS | Py_TPFLAGS_READY;
@@ -713,6 +754,14 @@ PyObject _Py_NotImplementedStruct = {
     _PyObject_EXTRA_INIT
     1, &_PyNotImplemented_Type
 };
+
+// this is all the work done by type_new actually
+void set_tp_alloc_py_class(PyTypeObject *t, PyTypeObject *base)
+{
+    t->tp_alloc = PyType_GenericAlloc;
+    t->tp_basicsize = base->tp_basicsize;
+    t->tp_itemsize = base->tp_itemsize;
+}
 
 
 void set_default_flags(PyTypeObject *t)
@@ -848,6 +897,73 @@ PySequence_GetItem(PyObject *s, Py_ssize_t i)
         return type_error("%.200s is not a sequence", s);
     }
     return type_error("'%.200s' object does not support indexing", s);
+}
+
+
+PyObject *
+PySequence_Fast(PyObject *v, const char *m)
+{
+    PyObject *it;
+
+    if (v == NULL) {
+        return null_error();
+    }
+
+    if (PyList_CheckExact(v) || PyTuple_CheckExact(v)) {
+        Py_INCREF(v);
+        return v;
+    }
+
+    it = PyObject_GetIter(v);
+    if (it == NULL) {
+        if (PyErr_ExceptionMatches(PyExc_TypeError))
+            PyErr_SetString(PyExc_TypeError, m);
+        return NULL;
+    }
+
+    v = PySequence_List(it);
+    Py_DECREF(it);
+
+    return v;
+}
+
+
+PyObject *
+PyIter_Next(PyObject *iter)
+{
+    PyObject *result;
+    result = (*iter->ob_type->tp_iternext)(iter);
+    if (result == NULL &&
+        PyErr_Occurred() &&
+        PyErr_ExceptionMatches(PyExc_StopIteration))
+        PyErr_Clear();
+    return result;
+}
+
+PyObject *
+PyObject_GetIter(PyObject *o)
+{
+    PyTypeObject *t = o->ob_type;
+    getiterfunc f;
+
+    f = t->tp_iter;
+    if (f == NULL) {
+        if (PySequence_Check(o))
+            return PySeqIter_New(o);
+        return type_error("'%.200s' object is not iterable", o);
+    }
+    else {
+        PyObject *res = (*f)(o);
+        if (res != NULL && !PyIter_Check(res)) {
+            PyErr_Format(PyExc_TypeError,
+                         "iter() returned non-iterator "
+                         "of type '%.100s'",
+                         res->ob_type->tp_name);
+            Py_DECREF(res);
+            res = NULL;
+        }
+        return res;
+    }
 }
 
 
