@@ -275,6 +275,7 @@ module Domain =
           "PyUnicode_FromWideChar";
           "PyUnicode_AsEncodedString";
           "PyUnicode_AsUnicode";
+          "PyUnicode_AsUTF8AndSize";
           "PyTuple_New";
           "PyTuple_SetItem";
           "PyTuple_Size";
@@ -1498,6 +1499,33 @@ module Domain =
           let c_addr, flow = python_to_c_boundary addr_py_encoded None oe_py_encoded range man flow in
           man.eval c_addr flow
         ) |> OptionExt.return
+
+      | E_c_builtin_call ("PyUnicode_AsUTF8AndSize", [unicode; size]) ->
+         c_to_python_boundary unicode man flow range >>$ (fun py_unicode flow ->
+          let addr_unicode, oe_unicode = object_of_expr py_unicode in
+          if compare_addr_kind (akind addr_unicode) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
+            resolve_c_pointer_into_addr size man flow >>$ fun size_oaddr flow ->
+            (match size_oaddr with
+            | None -> Post.return flow
+            | Some (Nt size_addr) ->
+               man.eval ~route:(Semantic "Python") (Python.Utils.mk_builtin_call "len" [py_unicode] range) flow >>$ fun py_unicode_length flow ->
+               let addr_py_u_l, oe_py_u_l = object_of_expr py_unicode_length in
+               let c_addr, flow = python_to_c_boundary addr_py_u_l None oe_py_u_l range man flow in
+               man.exec (mk_assign (mk_addr size_addr range) (mk_c_call (C.Ast.find_c_fundec_by_name "PyLong_AsSsize_t" flow) [c_addr] range) range) flow
+            | Some TOP -> assert false
+            ) >>% fun flow ->
+            let open Universal.Strings.Powerset in
+            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            Eval.join_list ~empty:(fun () -> assert false)
+              (StringPower.fold (fun s acc ->
+                   Eval.singleton (mk_c_string s range) flow :: acc
+                 ) strp [])
+          else
+            let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+            man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+                 Eval.singleton (mk_c_null range)
+        ) |> OptionExt.return
+
 
       | E_c_builtin_call ("PyArg_ParseTuple", args::fmt::refs) ->
          safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
