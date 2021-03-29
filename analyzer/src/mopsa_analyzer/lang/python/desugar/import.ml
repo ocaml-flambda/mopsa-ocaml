@@ -77,6 +77,7 @@ module Domain =
         match x with
         | Nt s ->
            if ModuleSet.cardinal x = 1 then ModuleSet.choose x
+           else if ModuleSet.cardinal x = 0 then raise Not_found
            else assert false
         | _ -> raise Not_found
     end
