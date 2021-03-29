@@ -213,6 +213,11 @@ module Domain =
 
     let checks = []
 
+    let set_singleton p a man flow =
+      let r = get_env T_cur man flow |>
+                set p (Nt (ValueSet.singleton a)) in
+      set_env T_cur r man flow
+
     let yield_results_before_crash man flow =
       Framework.Output.Text.report man flow ~time:(0.) ~files:[] ~out:None
 
@@ -300,18 +305,15 @@ module Domain =
                      Cases.singleton (Some Top.TOP) flow
                   | P_null ->
                      Cases.singleton None flow
-                  | _ -> panic "points_to %a" pp_points_to points_to
+                  | _ -> panic "safe_get_name_of points_to %a" pp_points_to points_to
                 ) in
       (* assert(Cases.cardinal r <= 1); *)
       r
 
-    let set_singleton p a man flow =
-      let r = get_env T_cur man flow |>
-                set p (Nt (ValueSet.singleton a)) in
-      set_env T_cur r man flow
 
     (* Creates stmt binder_addr · obj_name = obj_addr *)
     let bind_in_python binder_addr obj_name obj_addr range man flow =
+      (* FIXME: bind_in_python should call the boundaries maybe? *)
       (if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_integers) = 0 then
         man.eval (mk_avalue_from_pyaddr obj_addr T_int range) flow >>$
           fun int_value flow ->
@@ -492,11 +494,12 @@ module Domain =
         (fun points_to flow ->
           debug "[resolve_c_pointer %a:%a] searching for %a" pp_expr expr pp_typ (etyp expr) pp_points_to points_to;
           if points_to = P_null then Cases.singleton None flow
+          else if points_to = P_top then Cases.singleton (Some Top.TOP) flow
           else
           let aset = Top.detop @@ find points_to (get_env T_cur man flow) in
           debug "got %a" (ValueSet.fprint SetExt.printer_default pp_addr) aset;
           if ValueSet.cardinal aset = 1 then
-            Cases.singleton (OptionExt.return @@ ValueSet.choose aset) flow
+            Cases.singleton (OptionExt.return (Top.Nt (ValueSet.choose aset))) flow
           else if ValueSet.cardinal aset = 0 then
             match points_to with
             | P_block ({base_kind = Var v}, _, _) ->
@@ -507,16 +510,16 @@ module Domain =
                   Cases.empty
                | _ -> assert false
                end
-            | _ -> panic_at expr.erange "%a" pp_points_to points_to;
+            | _ -> panic_at expr.erange "resolve_c_pointer_into_addr %a" pp_points_to points_to;
           else
             assert false
         )
 
-    let c_to_python_boundary ?(safe_check = None) ?(on_null = fun flow -> assert false) expr man flow range =
+    let c_to_python_boundary ?(safe_check = None) ?(on_null = fun flow -> assert false) ?(on_top = fun flow -> assert false) expr man flow range =
       resolve_c_pointer_into_addr expr man flow >>$
         fun oaddr flow ->
         match oaddr with
-        | Some addr ->
+        | Some (Nt addr) ->
            begin
              let flow = match safe_check with
                | None -> flow
@@ -530,12 +533,14 @@ module Domain =
                 man.eval (mk_avalue_from_pyaddr addr (T_float F_DOUBLE) range) flow >>$
                   fun float_value flow ->
                   Eval.singleton (mk_py_object (addr, Some float_value) range) flow
+             | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)}
              | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
                 man.eval (mk_avalue_from_pyaddr addr T_string range) flow >>$
                   fun str_value flow ->
                   Eval.singleton (mk_py_object (addr, Some str_value) range) flow
              | _ -> Eval.singleton (mk_py_object (addr, None) range) flow
            end
+        | Some TOP -> on_top flow
         | None -> on_null flow
 
     (* bind function pointed to by expr, as cls.name in python side *)
@@ -575,7 +580,7 @@ module Domain =
           resolve_c_pointer_into_addr (mk_c_arrow_access_by_name exc "exc_state" range) man flow >>$
             fun oexc_addr flow ->
             match oexc_addr with
-            | Some exc_addr ->
+            | Some (Nt exc_addr) ->
                let flow = Flow.add_safe_check Python.Alarms.CHK_PY_SYSTEMERROR range flow in
                safe_get_name_of (mk_c_arrow_access_by_name exc "exc_msg" range) man flow >>$
                  fun exc_msg flow ->
@@ -601,6 +606,7 @@ module Domain =
                                range) flow >>% fun flow ->
                    let flow = Flow.set_callstack old_cs flow in
                    Eval.empty flow
+            | Some TOP -> assert false
             | None ->
                debug "%s: NULL found" function_name;
                man.exec (Python.Ast.mk_raise
@@ -843,7 +849,8 @@ module Domain =
            post >>% man.exec (mk_assign
                        (mk_avalue_from_pyaddr addr (T_float F_DOUBLE) range)
                        (OptionExt.none_to_exn oe) range)
-        | A_py_class (C_builtin "str", _) ->
+        | A_py_class (C_builtin "str", _)
+        | A_py_class (C_builtin "bytes", _) ->
            debug "boundary @ %a, assigning %a.value = %a" pp_range range pp_addr addr (OptionExt.print pp_expr) oe;
            post >>% man.exec (mk_assign
                        (mk_avalue_from_pyaddr addr T_string range)
@@ -894,31 +901,34 @@ module Domain =
          (* FIXME: upon translation from Python to C, integer arguments should get a value attribute. Issue if multiple integer arguments... tag it with the precise range otherwise?  Also, need to clean the "value" attribute afterwards *)
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
-             match akind addr with
-             | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
-                man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
-                  fun int_value flow ->
-                  let max_value = mk_z type_max_value ~typ:T_int range in
-                  let min_value = mk_z type_min_value ~typ:T_int range in
-                  let overflow_check =
-                    log_and
-                       (le int_value max_value range)
-                       (ge int_value min_value range)
-                       range in
-                  assume
-                    overflow_check
-                    man flow
-                    ~fthen:(Eval.singleton int_value)
-                    ~felse:(fun flow ->
-                      (* Overflow: need to set the error and then return -1 *)
-                      c_set_exception "PyExc_OverflowError" (Format.asprintf "Python int too large to convert to C %s" type_name) range man flow >>%
-                        Eval.singleton (mk_int ~typ:T_int (-1) range)
-                    )
-             | _ ->
-                c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
-                  fun flow ->
-                  Eval.singleton (mk_int ~typ:T_int (-1) range) flow
+             match oaddr with
+             | Some (Nt addr) ->
+                begin match akind addr with
+                | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                   man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
+                     fun int_value flow ->
+                     let max_value = mk_z type_max_value ~typ:T_int range in
+                     let min_value = mk_z type_min_value ~typ:T_int range in
+                     let overflow_check =
+                       log_and
+                         (le int_value max_value range)
+                         (ge int_value min_value range)
+                         range in
+                     assume
+                       overflow_check
+                       man flow
+                       ~fthen:(Eval.singleton int_value)
+                       ~felse:(fun flow ->
+                         (* Overflow: need to set the error and then return -1 *)
+                         c_set_exception "PyExc_OverflowError" (Format.asprintf "Python int too large to convert to C %s" type_name) range man flow >>%
+                           Eval.singleton (mk_int ~typ:T_int (-1) range)
+                       )
+                | _ ->
+                   c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                     fun flow ->
+                     Eval.singleton (mk_int ~typ:T_int (-1) range) flow
+                end
+             | _ -> assert false
            )
 
     let c_int_to_python arg man flow range =
@@ -943,12 +953,6 @@ module Domain =
         else
           let range = tag_range range "process[%d]" pos in
           begin match fmt_str.[pos] with
-          | 'O' ->
-             (* FIXME: if its NULL, an exception should have been set.
-                       Otherwise:                 PyErr_SetString(PyExc_SystemError,
-                    "NULL object passed to Py_BuildValue");
-              *)
-             man.eval (List.nth refs ref_pos) flow >>$
           | 'c' ->
              let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyBytes_FromStringAndSize" flow in
              man.eval (mk_c_call pyunicode_fromwidechar
@@ -958,6 +962,10 @@ module Domain =
                          ] range) flow >>$
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'd' | 'f' ->
+             let pyfloat_fromdouble = C.Ast.find_c_fundec_by_name "PyFloat_FromDouble" flow in
+             man.eval (mk_c_call pyfloat_fromdouble [mk_c_cast (List.nth refs ref_pos) (T_c_float C_double) range] range) flow >>$
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
@@ -969,18 +977,22 @@ module Domain =
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
-          | 'f' | 'd' ->
-             let pyfloat_fromdouble = C.Ast.find_c_fundec_by_name "PyFloat_FromDouble" flow in
-             man.eval (mk_c_call pyfloat_fromdouble [mk_c_cast (List.nth refs ref_pos) (T_c_float C_double) range] range) flow >>$
-               fun res_pos flow ->
-               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
           | 'k' ->
              let pylong_fromunsignedlong = C.Ast.find_c_fundec_by_name "PyLong_FromUnsignedLong" flow in
              (* FIXME: cast *)
              man.eval (mk_c_call pylong_fromunsignedlong [mk_c_cast (List.nth refs ref_pos) ul range] range) flow >>$
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'O' ->
+             (* FIXME: if its NULL, an exception should have been set.
+                       Otherwise:                 PyErr_SetString(PyExc_SystemError,
+                    "NULL object passed to Py_BuildValue");
+              *)
+             man.eval (List.nth refs ref_pos) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
 
           | 's' ->
              let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
@@ -1127,7 +1139,7 @@ module Domain =
               let () = warn_at range "PyArg_ParseTuple(AndKeywords)? %c unsupported, but cur is bottom" fmt in
               Cases.return 1 flow
             else
-              panic_at range "TODO: implement PyArg_ParseTuple(AndKeywords)? %c@.%a" fmt (format @@ Flow.print man.lattice.print) flow
+              panic_at range "TODO: implement PyArg_ParseTuple(AndKeywords)? %c" fmt
          end
       | _ -> assert false
 
@@ -1279,7 +1291,7 @@ module Domain =
          let cls = List.hd args in
          resolve_c_pointer_into_addr cls man flow >>$
            (fun cls_oaddr flow ->
-             let cls_addr = OptionExt.none_to_exn cls_oaddr in
+             let cls_addr = Top.detop @@ OptionExt.none_to_exn cls_oaddr in
              (* FIXME: should we use the range from where the allocation is performed to help the recency? Or at least use the callstack to disambiguate for those specific instances... *)
              alloc_py_addr man (Python.Addr.A_py_instance cls_addr) range flow >>$
                fun inst_eaddr flow ->
@@ -1319,7 +1331,7 @@ module Domain =
       | E_c_builtin_call ("PyFloat_AsDouble", args) ->
          (* FIXME: this function is actually more permissive *)
          resolve_c_pointer_into_addr (List.hd args) man flow >>$ (fun oaddr flow ->
-          let addr = OptionExt.none_to_exn oaddr in
+          let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
           match akind addr with
           | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
              (* FIXME: do the cast but for now it just doesn't work *)
@@ -1388,8 +1400,9 @@ module Domain =
          debug "GetLength %a" pp_expr (List.hd args);
          resolve_c_pointer_into_addr (List.hd args) man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              debug "addr is %a %b" pp_addr addr (compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0);
+             (* FIXME: maybe we should do an isinstance check? *)
              if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
                man.eval (mk_expr ~etyp:T_int (E_len (mk_avalue_from_pyaddr addr T_string range)) range) flow >>$
                fun str_length flow ->
@@ -1410,8 +1423,13 @@ module Domain =
                fun str_addr flow ->
                let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_string s range)) range man flow in
                Eval.singleton c_addr flow
+          | P_top ->
+             alloc_py_addr man (A_py_instance (fst @@ find_builtin "str")) range flow >>$
+               fun str_addr flow ->
+               let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_top T_string range)) range man flow in
+               Eval.singleton c_addr flow
           | _ ->
-             assert false
+             panic_at range "PyUnicode_*FromString %a" pp_points_to pt
         ) |> OptionExt.return
 
       | E_c_builtin_call ("PyUnicode_FromWideChar", args)
@@ -1436,7 +1454,7 @@ module Domain =
          safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
           let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
           resolve_c_pointer_into_addr args man flow >>$ fun tuple_oaddr flow ->
-          let tuple_addr = OptionExt.none_to_exn tuple_oaddr in
+          let tuple_addr = Top.detop @@ OptionExt.none_to_exn tuple_oaddr in
           len_of man tuple_addr flow range >>$ fun tuple_size flow ->
           (* Currently does not handle variable size arguments etc *)
           (* Also, need to check if format is correct *)
@@ -1477,11 +1495,13 @@ module Domain =
          safe_get_name_of fmt man flow >>$ (fun ofmt_str flow ->
           let fmt_str = Top.top_to_exn (OptionExt.none_to_exn ofmt_str) in
           resolve_c_pointer_into_addr args man flow >>$ fun tuple_oaddr flow ->
-          let tuple_addr = OptionExt.none_to_exn tuple_oaddr in
+          let tuple_addr = Top.detop @@ OptionExt.none_to_exn tuple_oaddr in
           len_of man tuple_addr flow range >>$ fun tuple_size flow ->
           resolve_c_pointer_into_addr kwds man flow >>$ fun dict_oaddr flow ->
-          let dict_addr = OptionExt.none_to_exn dict_oaddr in
-          len_of man dict_addr flow range >>$ fun dict_size flow ->
+          (match dict_oaddr with
+          | None -> Cases.return 0 flow
+          | Some (Nt dict_addr) -> len_of man dict_addr flow range
+          | _ -> assert false ) >>$ fun dict_size flow ->
           let fmt_str, fmt_str_itv_lo, fmt_str_itv_hi = normalize_fmt_str fmt_str in
           let size = tuple_size + dict_size in
           debug "fmt_str_itv = [%d, %d]; size = (%d, %d)" fmt_str_itv_lo fmt_str_itv_hi tuple_size dict_size;
@@ -1503,15 +1523,17 @@ module Domain =
               debug "process %d %d" pos nb_kwargs;
               let range = tag_range range "convert_single[%d]" pos in
               if pos < tuple_size then
+                let () = debug "in tuple" in
                 man.eval (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (tuple_addr, None) range) (mk_int pos ~typ:(Python.Ast.T_py None) range) range) flow >>$ fun obj flow ->
                 convert_single man obj fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
                   if ret = 1 then process (pos+1) nb_kwargs (List.tl refs) flow
-                  else Eval.singleton (mk_zero range) flow
-              else if pos < size then
-              else if pos < fmt_str_itv_hi (* should be |kwlist| *) then
+                  else
+                    let () = debug "ZERO a" in
+                    Eval.singleton (mk_zero range) flow
+              else if pos < fmt_str_itv_hi (* should be |kwlist| *) && dict_oaddr <> None then
                 safe_get_name_of (mk_c_subscript_access kwlist (mk_int pos range) range) man flow >>$ fun okw_name flow ->
                 let kw_name = Top.top_to_exn (OptionExt.none_to_exn okw_name) in
-                OptionExt.none_to_exn @@ Python.Utils.try_eval_expr man (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (dict_addr, None) range) (mk_string ~etyp:(T_py None) kw_name range) ~etyp:(T_py None) range) flow
+                OptionExt.none_to_exn @@ Python.Utils.try_eval_expr man (Python.Ast.mk_py_index_subscript (Python.Ast.mk_py_object (Top.detop @@ OptionExt.none_to_exn dict_oaddr, None) range) (mk_string ~etyp:(T_py None) kw_name range) ~etyp:(T_py None) range) flow
                   ~route:(Semantic "Python")
                   ~on_empty:(fun _ _ _ flow ->
                     debug "haven't found anything for %s" kw_name;
@@ -1520,12 +1542,16 @@ module Domain =
                     debug "found %a for %s" pp_expr arg_value kw_name;
                     convert_single man arg_value fmt_str.[pos] (List.hd refs) range flow >>$ fun ret flow ->
                     if ret = 1 then process (pos+1) (nb_kwargs-1) (List.tl refs) flow
-                    else Eval.singleton (mk_zero range) flow
+                    else
+                      let () = debug "ZERO b" in
+                      Eval.singleton (mk_zero range) flow
                   )
               else
                 if nb_kwargs > 0 then
+                  let () = debug "ZERO c" in
                   c_set_exception "PyExc_TypeError" "invalid number of arguments" range man flow >>% Eval.singleton (mk_zero range)
                 else
+                  let () = debug "ok" in
                   Eval.singleton (mk_one range) flow
             in
             process 0 dict_size refs flow
@@ -1736,7 +1762,7 @@ module Domain =
          (* FIXME: check the type *)
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              man.eval (Python.Ast.mk_py_call
                          (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
                          [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
@@ -1755,7 +1781,7 @@ module Domain =
          debug "PyTuple_GetItem";
          resolve_c_pointer_into_addr tuple man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              let py_tuple = Python.Ast.mk_py_object (addr, None) range in
              (* NB: alternative to c_int_to_python would be to make a query directly? *)
              c_int_to_python pos man flow range >>$ fun py_obj flow ->
@@ -1777,7 +1803,7 @@ module Domain =
            debug "%a" pp_expr exp;
            resolve_c_pointer_into_addr tuple man flow >>$
              fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              let py_tuple = Python.Ast.mk_py_object (addr, None) range in
              c_int_to_python start man flow start.erange >>$
                fun py_start flow ->
@@ -1815,7 +1841,7 @@ module Domain =
       | E_c_builtin_call ("PyList_GetItem", [list; pos]) ->
          resolve_c_pointer_into_addr list man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              let py_list = Python.Ast.mk_py_object (addr, None) (tag_range range "list") in
              (* NB: alternative to c_int_to_python would be to make a query directly? *)
              c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
@@ -1835,10 +1861,10 @@ module Domain =
       | E_c_builtin_call ("PyList_SetItem", [list;pos;item]) ->
          resolve_c_pointer_into_addr list man flow >>$?
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              let py_list = Python.Ast.mk_py_object (addr, None) (tag_range range "list") in
              c_int_to_python pos man flow (tag_range range "pos") >>$? fun py_obj flow ->
-             c_to_python_boundary pos man flow range >>$? fun py_item flow ->
+             c_to_python_boundary item man flow range >>$? fun py_item flow ->
              Python.Utils.try_eval_expr man ~route:(Semantic "Python")
                (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "list.__setitem__") range)
                   [py_list; py_obj; py_item] range)
@@ -1869,7 +1895,7 @@ module Domain =
       | E_c_builtin_call ("_PyRange_GetItem", [rrange; pos]) ->
          resolve_c_pointer_into_addr rrange man flow >>$
            (fun oaddr flow ->
-             let addr = OptionExt.none_to_exn oaddr in
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
              let py_range = Python.Ast.mk_py_object (addr, None) (tag_range range "range") in
              c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
              (* FIXME: ootb error handling *)
@@ -2040,7 +2066,9 @@ module Domain =
                debug "call result %s %a" name pp_expr call_res;
                c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call_res man flow range
                  ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
-           )
+         )
+         )
+         )
          |> OptionExt.return
 
       (** member descriptors: attr get/set on descriptors defined in C classes *)
