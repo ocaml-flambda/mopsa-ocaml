@@ -76,7 +76,7 @@
 
 (* List of tokens for keywords *)
 
-%token FALSE NONE NOTIMPLEMENTED TRUE AND AS ASSERT BREAK
+%token FALSE NONE ELLIPSIS NOTIMPLEMENTED TRUE AND AS ASSERT BREAK
 %token CLASS CONTINUE DEF DEL ELIF ELSE EXCEPT
 %token FINALLY FOR FROM GLOBAL IF IMPORT IN
 %token IS LAMBDA NONLOCAL NOT OR PASS RAISE
@@ -690,6 +690,7 @@ atom:
     | DOT DOT DOT       { {erange = from_lexing_range $startpos $endpos; ekind = Ellipsis} }
     | NONE              { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant SNone} }
     | NOTIMPLEMENTED    { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant SNotImplemented} }
+    | ELLIPSIS          { {erange = from_lexing_range $startpos $endpos; ekind = Ellipsis } }
     | TRUE              { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant True} }
     | FALSE             { {erange = from_lexing_range $startpos $endpos; ekind = NameConstant False} }
 ;
