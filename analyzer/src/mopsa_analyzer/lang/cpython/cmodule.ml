@@ -1132,33 +1132,19 @@ module Domain =
       match ekind obj, ekind output_ref  with
       | Python.Ast.E_py_object(addr, oe), E_c_address_of c ->
          begin match fmt with
-         | 'O' ->
-            debug "ParseTuple O ~> %a" pp_addr addr;
-            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
-            let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-            man.exec (mk_assign c c_addr range) flow >>%
-              fun flow -> Cases.return 1 flow
-         | 'i' ->
-            (* FIXME: this sould be a boundary between python and C.
-                                 As such, it should handle integer translation.
-                                 Python function call PyLong_AsLong *)
-            debug "got obj = %a" pp_expr obj;
-            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+         | 'c' ->
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
               strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
-              (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
-              debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
-              assume (mk_c_call
-                        (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
-                        [c_addr; mk_c_address_of c range]
-                        range)
-                man flow
-                ~fthen:(Cases.return 1)
-                ~felse:(Cases.return 0)
+              assume ~route:(Semantic "Python") (eq (Python.Utils.mk_builtin_call "len" [obj] range) (mk_one ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
+                ~fthen:(fun flow ->
+                  let pybytes_asstring = C.Ast.find_c_fundec_by_name "PyBytes_AsString" flow in
+                  man.exec (mk_assign c (mk_c_subscript_access (mk_c_call pybytes_asstring [c_addr] range) (mk_zero range) range) range) flow >>% Cases.return 1
+                )
+                ~felse:(fun flow ->
+                  c_set_exception "PyExc_TypeError" "expected a byte string of length 1, got ???" range man flow >>% Cases.return 0)
             else
-              let () = debug "wrong type for convert_single integer" in
-              (* set error *)
-              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+                  c_set_exception "PyExc_TypeError" "expected a byte string of length 1, got ???" range man flow >>% Cases.return 0
 
          | 'd'
            | 'f' ->
@@ -1184,6 +1170,55 @@ module Domain =
             else
               let () = debug "not a float..." in
               c_set_exception "PyExc_TypeError" "a float is required (got type ???)" range man flow >>% Cases.return 0
+
+         | 'i' ->
+            (* FIXME: this sould be a boundary between python and C.
+                                 As such, it should handle integer translation.
+                                 Python function call PyLong_AsLong *)
+            debug "got obj = %a" pp_expr obj;
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+              (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
+              debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
+              assume (mk_c_call
+                        (C.Ast.find_c_fundec_by_name "PyParseTuple_int_helper" flow)
+                        [c_addr; mk_c_address_of c range]
+                        range)
+                man flow
+                ~fthen:(Cases.return 1)
+                ~felse:(Cases.return 0)
+            else
+              let () = debug "wrong type for convert_single integer" in
+              (* set error *)
+              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+
+         | 'n' ->
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+              let pylong_as_ssizet = C.Ast.find_c_fundec_by_name "PyLong_AsSsize_t" flow in
+              man.exec (mk_assign c (mk_c_call pylong_as_ssizet [c_addr] range) range) flow >>% Cases.return 1
+            else
+              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+
+
+         | 'O' ->
+            debug "ParseTuple O ~> %a" pp_addr addr;
+            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+            let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+            man.exec (mk_assign c c_addr range) flow >>%
+              fun flow -> Cases.return 1 flow
+
+         | 's' ->
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+              let pyunicode_asuas = C.Ast.find_c_fundec_by_name "PyUnicode_AsUTF8AndSize" flow in
+              man.exec (mk_assign c (mk_c_call pyunicode_asuas [c_addr; mk_c_null range] range) range) flow >>% Cases.return 1
+            else
+              c_set_exception "PyExc_TypeError" "a string is required (got type ???)" range man flow >>% Cases.return 0
+
          | _ ->
             if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
               let () = warn_at range "PyArg_ParseTuple(AndKeywords)? %c unsupported, but cur is bottom" fmt in
@@ -1432,7 +1467,10 @@ module Domain =
             let open Universal.Strings.Powerset in
             let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
-              (StringPower.fold (fun s acc ->
+              (if StringPower.is_top strp then
+                 [Eval.singleton (mk_top (T_c_array(s8, C_array_no_length)) range) flow]
+               else
+                 StringPower.fold (fun s acc ->
                    debug "PyBytes_AsString, got %s" s;
                    Eval.singleton (mk_c_string s range) flow :: acc
               ) strp [])
