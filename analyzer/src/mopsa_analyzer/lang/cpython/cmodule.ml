@@ -949,6 +949,15 @@ module Domain =
                     "NULL object passed to Py_BuildValue");
               *)
              man.eval (List.nth refs ref_pos) flow >>$
+          | 'c' ->
+             let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyBytes_FromStringAndSize" flow in
+             man.eval (mk_c_call pyunicode_fromwidechar
+                         [
+                           List.nth refs ref_pos;
+                           mk_one range
+                         ] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
@@ -995,6 +1004,24 @@ module Domain =
              man.eval (mk_c_call pyunicode_fromwidechar [List.nth refs ref_pos; mk_c_call wcslen [List.nth refs ref_pos] range] range) flow >>$
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+          | 'y' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
+             let pybytes_fromsas = C.Ast.find_c_fundec_by_name "PyBytes_FromStringAndSize" flow in
+             man.eval (mk_c_call pybytes_fromsas
+                         [
+                           List.nth refs ref_pos;
+                           List.nth refs (ref_pos+1);
+                         ] range) flow >>$
+               fun res_pos flow ->
+               process (pos+2) (ref_pos+2) until (res_pos :: acc) flow
+
+          | 'y' ->
+             let pybytes_fromsas = C.Ast.find_c_fundec_by_name "PyBytes_FromStringAndSize" flow in
+             let strlen = C.Ast.find_c_fundec_by_name "strlen" flow in
+             man.eval (mk_c_call pybytes_fromsas [List.nth refs ref_pos; mk_c_call strlen [List.nth refs ref_pos] range] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
 
           | '{' ->
              let closing_bracket_pos =
