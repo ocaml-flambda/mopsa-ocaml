@@ -216,7 +216,7 @@ module Domain =
     let yield_results_before_crash man flow =
       Framework.Output.Text.report man flow ~time:(0.) ~files:[] ~out:None
 
-    let strongify_int_addr_hack range cs addr =
+    let strongify_int_addr_hack addr man range flow =
       (* since integer addresses are always weak in python, this
          creates huge precision issues for the value attribute used to
          pass the abstract value of an integer object *)
@@ -225,13 +225,16 @@ module Domain =
       (* FIXME: if this address goes back to Python, we need to fix it in the boundary too *)
       (* ASSUMPTION: the concrete C can't change the value of the object.
          This should be fine on integers *)
-      if List.exists (fun a -> compare_addr addr (OptionExt.none_to_exn !a) = 0) [Python.Types.Addr_env.addr_integers; Python.Types.Addr_env.addr_float] then
-        let strong = {addr_partitioning = Universal.Heap.Policies.G_stack_range (cs, range);
-         addr_kind = akind addr;
-         addr_mode = STRONG} in
+      if List.exists (fun a -> compare_addr addr (OptionExt.none_to_exn !a) = 0) [Python.Types.Addr_env.addr_integers; Python.Types.Addr_env.addr_float;
+                                                                                  Python.Types.Addr_env.addr_bytes; Python.Types.Addr_env.addr_strings
+           ] then
+        man.eval (mk_alloc_addr (akind addr) range) flow >>$ fun eaddr flow ->
+        let strong = Addr.from_expr eaddr in
         let () = warn "changing %a into strong integer addr %a to improve C precision" pp_addr addr pp_addr strong in
-        strong
-      else addr
+        man.exec (mk_add eaddr range) flow >>% fun flow ->
+        Cases.singleton strong flow
+      else
+        Cases.singleton addr flow
 
     let init _ man flow =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ())
@@ -1035,7 +1038,7 @@ module Domain =
          begin match fmt with
          | 'O' ->
             debug "ParseTuple O ~> %a" pp_addr addr;
-            let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
             let c_addr, flow = python_to_c_boundary addr None oe range man flow in
             man.exec (mk_assign c c_addr range) flow >>%
               fun flow -> Cases.return 1 flow
@@ -1045,7 +1048,7 @@ module Domain =
                                  Python function call PyLong_AsLong *)
             debug "got obj = %a" pp_expr obj;
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-              let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
               debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
@@ -1065,7 +1068,7 @@ module Domain =
            | 'f' ->
          (* Call PyFloat_AsDouble. If value is -1 and PyErr_Occurred, return 0. Otherwise return value (or cast for 'f') *)
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_float) = 0 then
-              let addr = strongify_int_addr_hack range (Flow.get_callstack flow) addr in
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               let pyfloat_asdouble = C.Ast.find_c_fundec_by_name "PyFloat_AsDouble" flow in
               let pyerr_occurred = (* not calling the macro as it seems to create issues *)
@@ -1668,7 +1671,7 @@ module Domain =
                            [py_tuple; py_obj] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-                 let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
+                 strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
                  let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                  debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
                  man.eval c_addr flow
@@ -1728,7 +1731,7 @@ module Domain =
                            [py_list; py_obj] range) flow >>$
                  fun py_elem flow ->
                  let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-                 let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
+                 strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elemn flow ->
                  let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                  debug "PyList_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
                  man.eval c_addr flow
@@ -1779,7 +1782,7 @@ module Domain =
              man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "range.__getitem__") range) [py_range; py_obj] range) flow >>$
                fun py_elem flow ->
                let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-               let addr_py_elem = strongify_int_addr_hack range (Flow.get_callstack flow) addr_py_elem in
+               strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
                let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
                man.eval c_addr flow
            )
@@ -1836,33 +1839,37 @@ module Domain =
          let subst_addr_eobj a' e = match ekind e with
            | E_py_object(a, oe) -> {e with ekind = E_py_object(a', oe)}
            | _ -> assert false in
-         let self =
-           match (fst self).addr_kind with
-           | A_py_c_class v -> C.Ast.mk_c_address_of (mk_var v range) range
-           | _ ->
-              let addr_self = strongify_int_addr_hack (tag_range range "self") (Flow.get_callstack flow) (fst self) in
-              Universal.Ast.mk_addr addr_self ~etyp:(List.hd args_types) range in
-         let self, args =
-           match kind with
-           | Builtin_function_or_method
-             -> self, args
+         (match (fst self).addr_kind with
+          | A_py_c_class v -> Eval.singleton (C.Ast.mk_c_address_of (mk_var v range) range) flow
+          | _ ->
+             strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
+             let c_addr, flow = python_to_c_boundary addr_self (Some (List.hd args_types)) (snd self) range man flow in
+             Eval.singleton c_addr flow) >>$ (fun self flow ->
+         (match kind with
+           | Builtin_function_or_method ->
+             Cases.return (self, args) flow
            | Wrapper_descriptor _ | Method_descriptor ->
-              let fst_arg = strongify_int_addr_hack (tag_range range "_descr") (Flow.get_callstack flow) (fst @@ object_of_expr @@ List.hd args) in
-              subst_addr_eobj fst_arg (List.hd args), List.tl args
-         in
-         let py_args =
-           if oflags = None || Stdlib.compare ometh_varargs oflags = 0 || Stdlib.compare ometh_varargs_keywords oflags = 0 then
-             mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" )
-           else if Stdlib.compare ometh_o oflags = 0 then
-             let () = debug "METH_O, keeping only first argument" in
-             List.hd args
-           else if Stdlib.compare ometh_noargs oflags = 0 then
-             let () = debug "METH_NOARGS, hopefully caught later on?" in
-             mk_c_null range
+              strongify_int_addr_hack (fst @@ object_of_expr @@ List.hd args) man (tag_range range "_descr") flow >>$ fun fst_arg flow ->
+              let c_addr, flow = python_to_c_boundary fst_arg None (snd @@ object_of_expr @@ List.hd args) range man flow in
+              Cases.return (subst_addr_eobj (Addr.from_expr c_addr)  (List.hd args), List.tl args) flow) >>$ fun (self, args) flow ->
+         (if oflags = None || Stdlib.compare ometh_varargs oflags = 0 || Stdlib.compare ometh_varargs_keywords oflags = 0 then
+           Eval.singleton (mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" )) flow
+         else if Stdlib.compare ometh_o oflags = 0 then
+           let () = debug "METH_O, keeping only first argument" in
+           if List.length args > 0 then
+             Eval.singleton (List.hd args) flow
            else
-             let () = debug "oflags = %a" (OptionExt.print Format.pp_print_int) oflags in
-             assert false
-         in
+             man.exec (Python.Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%s takes exactly one argument (%d given)" name (List.length args)) range) flow >>% Eval.empty
+         else if Stdlib.compare ometh_noargs oflags = 0 then
+            let () = debug "METH_NOARGS, hopefully caught later on?" in
+            if List.length args = 0 then
+              Eval.singleton (mk_c_null range) flow
+            else
+             man.exec (Python.Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%s takes no argument (%d given)" name (List.length args)) range) flow >>% Eval.empty
+         else
+           let () = debug "oflags = %a" (OptionExt.print Format.pp_print_int) oflags in
+           assert false
+         ) >>$ (fun py_args flow ->
          debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
          let py_kwds =
            if Stdlib.compare ometh_varargs_keywords oflags = 0 then
@@ -1981,8 +1988,8 @@ module Domain =
          let addr_inst = addr_of_eobject inst in
          let addr_value = addr_of_eobject value in
          let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
-         let addr_inst = strongify_int_addr_hack (tag_range range "addr_inst") (Flow.get_callstack flow) addr_inst in
-         let addr_value = strongify_int_addr_hack (tag_range range "addr_value") (Flow.get_callstack flow) addr_value in
+         strongify_int_addr_hack addr_inst man (tag_range range "addr_inst") flow >>$ (fun addr_inst flow ->
+         strongify_int_addr_hack addr_value man  (tag_range range "addr_value") flow >>$ fun addr_value flow ->
          let c_addr_inst, flow = python_to_c_boundary addr_inst (Some inst_typ) (snd @@ object_of_expr inst) range man flow in
          let c_addr_value, flow = python_to_c_boundary addr_value (Some value_typ) (snd @@ object_of_expr value) range man flow in
          let cfunc_args = [c_addr_inst; c_descriptor; c_addr_value] in
@@ -1997,6 +2004,7 @@ module Domain =
              debug "not zero in:@.%a" (format @@ Flow.print man.lattice.print) flow;
                check_consistent_null cfunc.c_func_org_name man flow range
            )
+         )
          |> OptionExt.return
 
       | _ -> None
@@ -2040,6 +2048,7 @@ module Domain =
                post >>% man.exec (exec_value (mk_avalue_from_pyaddr src T_int range) (mk_avalue_from_pyaddr dst T_int range) range)
             | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                post >>% man.exec (exec_value (mk_avalue_from_pyaddr src (T_float F_DOUBLE) range) (mk_avalue_from_pyaddr dst (T_float F_DOUBLE) range) range)
+            | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)}
             | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
                post >>% man.exec (exec_value (mk_avalue_from_pyaddr src T_string range) (mk_avalue_from_pyaddr dst T_string range) range)
             | _ -> post
