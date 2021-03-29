@@ -984,6 +984,14 @@ module Domain =
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
+          | 'n' ->
+             let pylong_fromssize_t = C.Ast.find_c_fundec_by_name "PyLong_FromSsize_t" flow in
+             (* FIXME: cast to long *)
+             man.eval (mk_c_call pylong_fromssize_t [List.nth refs ref_pos] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
+
           | 'O' ->
              (* FIXME: if its NULL, an exception should have been set.
                        Otherwise:                 PyErr_SetString(PyExc_SystemError,
@@ -993,12 +1001,32 @@ module Domain =
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
+          | 's' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
+             warn_at range "Py_BuildValue: s# processed as s";
+             let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
+             assume (eq (List.nth refs ref_pos) (mk_c_null range) range) man flow
+               ~fthen:(fun flow ->
+                 let c_addr, flow = python_to_c_boundary (OptionExt.none_to_exn !Python.Types.Addr_env.addr_none) None None range man flow in
+                 process (pos+2) (ref_pos+2) until (c_addr :: acc) flow
+               )
+               ~felse:(fun flow ->
+                 man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
+                 fun res_pos flow ->
+                 process (pos+2) (ref_pos+2) until (res_pos :: acc) flow
+               )
 
           | 's' ->
              let pyunicode_fromstring = C.Ast.find_c_fundec_by_name "PyUnicode_FromString" flow in
-             man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
-               fun res_pos flow ->
-               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+             assume (eq (List.nth refs ref_pos) (mk_c_null range) range) man flow
+               ~fthen:(fun flow ->
+                 let c_addr, flow = python_to_c_boundary (OptionExt.none_to_exn !Python.Types.Addr_env.addr_none) None None range man flow in
+                 process (pos+1) (ref_pos+1) until (c_addr :: acc) flow
+               )
+               ~felse:(fun flow ->
+                 man.eval (mk_c_call pyunicode_fromstring [List.nth refs ref_pos] range) flow >>$
+                 fun res_pos flow ->
+                 process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+               )
 
           | 'u' when pos+1 < fmt_length && fmt_str.[pos+1] = '#'->
              let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyUnicode_FromWideChar" flow in
@@ -1049,7 +1077,28 @@ module Domain =
              debug "starting process_dict %s" dict_subfmt;
              process_dict pos ref_pos closing_bracket_pos flow >>$
                fun dict flow ->
+               (* FIXME: # in count *)
                process (closing_bracket_pos+1) (ref_pos + 2 * (List.length (String.split_on_char ',' dict_subfmt))) until (dict :: acc) flow
+
+          | '(' ->
+             let closing_par_pos =
+               let rec search count pos =
+                 if fmt_str.[pos] = ')' then
+                   if count = 0 then pos
+                   else search (count-1) (pos+1)
+                 else if fmt_str.[pos] = '(' then
+                   search (count+1) (pos+1)
+                 else search count (pos+1) in
+               search 0 (pos+1) in
+             let tuple_subfmt = String.sub fmt_str pos (closing_par_pos - pos - 1) in
+             process (pos+1) (ref_pos+1) closing_par_pos [] flow >>$ fun tuple_values flow ->
+             fold_c_to_python_boundary man range tuple_values flow >>$ fun tuple_values flow ->
+             man.eval (mk_expr (Python.Ast.E_py_tuple tuple_values) range) flow >>$ fun py_tuple flow ->
+             let addr_py_tuple, oe_py_tuple = object_of_expr py_tuple in
+             let c_addr, flow = python_to_c_boundary addr_py_tuple None oe_py_tuple range man flow in
+             (* FIXME: # in count *)
+             process (closing_par_pos + 1) (ref_pos + String.length tuple_subfmt) until (c_addr::acc) flow
+
 
           | _ -> panic_at range "Py_BuildValue unhandled format %s" fmt_str
           end
@@ -1059,11 +1108,11 @@ module Domain =
             let () = assert(fmt_str.[cur_pos+1] = ':') in
             let () = assert(fmt_str.[cur_pos+3] = ',' || cur_pos + 3 >= end_pos) in
             process cur_pos ref_pos (cur_pos+1) [] flow >>$ fun key flow ->
-                                                            process (cur_pos+2) (ref_pos+1) (cur_pos+3) [] flow >>$ fun value flow ->
-                                                                                                                    let key = match key with [k] -> k | _ -> assert false in
-                                                                                                                    let value = match value with [v] -> v | _ -> assert false in
-                                                                                                                    debug "key = %a, value = %a" pp_expr key pp_expr value;
-                                                                                                                    aux (cur_pos+4) (ref_pos+2) ((key,value) :: dict_acc) flow
+            process (cur_pos+2) (ref_pos+1) (cur_pos+3) [] flow >>$ fun value flow ->
+            let key = match key with [k] -> k | _ -> assert false in
+            let value = match value with [v] -> v | _ -> assert false in
+            debug "key = %a, value = %a" pp_expr key pp_expr value;
+            aux (cur_pos+4) (ref_pos+2) ((key,value) :: dict_acc) flow
         in
         aux (beg_pos+1) ref_pos [] flow >>$
           fun dict flow ->
