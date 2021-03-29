@@ -139,10 +139,11 @@ module Domain =
       | E_constant (C_top (T_py (Some Str))) ->
          Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
-      | E_constant (C_top (T_py (Some Bytes)))
-      | E_py_bytes _ ->
-        allocate_builtin man range flow "bytes" (Some exp) |> OptionExt.return
+      | E_constant (C_top (T_py (Some Bytes))) ->
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, Some {exp with etyp=T_string}) range) flow |> OptionExt.return
 
+      | E_py_bytes s ->
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, Some {exp with etyp=T_string; ekind = E_constant (C_string s)}) range) flow |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, []) when StringMap.mem f stub_base ->
         debug "function %s in stub_base, processing@\n" f;
@@ -349,8 +350,9 @@ module Domain =
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
               ~fthen:(fun flow ->
+                let _, oexp = object_of_expr earg in
                 Flow.add_safe_check Alarms.CHK_PY_LOOKUPERROR range flow |>
-                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Bytes)))) range)
+                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, oexp) range)
               )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
@@ -367,10 +369,12 @@ module Domain =
           (fun eargs flow ->
             let earg, eencoding = match eargs with [e1;e2] -> e1, e2 | _ -> assert false in
             assume (mk_binop ~etyp:(T_py None) eencoding O_eq {(mk_string "utf-8" range) with etyp=(T_py (Some Str))} range) man flow
-
               ~fthen:(fun flow ->
+                let _, oexp = object_of_expr earg in
+                debug "earg = %a" pp_expr earg;
                 Flow.add_safe_check Alarms.CHK_PY_LOOKUPERROR range flow |>
-                man.eval   (mk_expr ~etyp:(T_py None) (E_constant (C_top (T_py (Some Str)))) range))
+                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, oexp) range)
+              )
               ~felse:(fun flow ->
                 let msg = Format.asprintf "unknown encoding: %a" pp_expr eencoding in
                 man.exec (Utils.mk_builtin_raise_msg "LookupError" msg range) flow >>%

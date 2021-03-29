@@ -335,6 +335,8 @@ struct
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, OptionExt.return @@ mk_top (T_float F_DOUBLE) range) range) flow
             | "str" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, OptionExt.return @@ mk_top T_string range) range) flow
+            | "bytes" ->
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, OptionExt.return @@ mk_top T_string range) range) flow
             | "NotImplementedType" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_notimplemented, None) range) flow
             | "NoneType" ->
@@ -755,14 +757,11 @@ struct
 
   let ask _ _ _ = None
 
-  let merge pre (a, e) (a', e') =
-    if a == a' then a
-    else if is_empty_effect e' then a
-    else if is_empty_effect e then a'
-    else assert false
+  let merge pre (a, e) (a', e') = assert false
 
   let print_state printer m =
-    pprint ~path:[Key "TypeVar annotations"] printer (pbox TVMap.print m)
+    ()
+    (* pprint ~path:[Key "TypeVar annotations"] printer (pbox TVMap.print m) *)
 
   let print_expr _ _ _ _ = ()
 

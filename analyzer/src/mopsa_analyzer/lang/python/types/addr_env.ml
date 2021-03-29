@@ -89,9 +89,11 @@ let () =
 
 let addr_none = ref None
 let addr_notimplemented = ref None
+let addr_ellipsis = ref None
 let addr_integers = ref None
 let addr_float = ref None
 let addr_strings = ref None
+let addr_bytes = ref None
 let addr_true = ref None
 let addr_false = ref None
 let addr_bool_top = ref None
@@ -135,9 +137,11 @@ struct
   let init prog man flow =
     addr_none := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NoneType"); addr_mode = STRONG};
     addr_notimplemented := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "NotImplementedType"); addr_mode = STRONG};
+    addr_ellipsis := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "ellipsis"); addr_mode = STRONG};
     addr_integers := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "int"); addr_mode = WEAK};
     addr_float := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "float"); addr_mode = WEAK};
     addr_strings := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "str"); addr_mode = WEAK};
+    addr_bytes := Some {addr_partitioning = G_all; addr_kind = A_py_instance (fst @@ find_builtin "bytes"); addr_mode = WEAK};
     addr_true := Some {addr_partitioning = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
     addr_false := Some {addr_partitioning = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
     addr_bool_top := Some {addr_partitioning = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK};
@@ -154,7 +158,9 @@ struct
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind a) = 0 | _ -> false) aset in
        let float = check_baddr addr_float || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_float) (akind a) = 0 | _ -> false) aset in
        let str = check_baddr addr_strings in
+       let bytes = check_baddr addr_bytes in
        (if str then let () = debug "processing %a for strings" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
+       (if bytes then let () = debug "processing %a for bytes" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
        (if intb then let () = debug "processing %a for int/bools" pp_stmt (fstmt T_int) in man.exec  (fstmt T_int) flow else Post.return flow) >>% fun flow ->
        (if float then let ()  = debug "processing %a for floats" pp_stmt (fstmt (T_float F_DOUBLE)) in man.exec  (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
 
@@ -228,12 +234,14 @@ struct
                          let cstmt = fun t -> {stmt with skind = S_assign(Utils.change_evar_type t vl, Utils.change_evar_type t wl)} in
                          match pyaddr with
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}} ->
-                            flow >>% man.exec   (cstmt T_string)
+                            flow >>% man.exec ~route:(Semantic "Universal") (cstmt T_string)
+                         | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)}} ->
+                            flow >>% man.exec ~route:(Semantic "Universal") (cstmt T_string)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}}
                            | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}} ->
-                            flow >>% man.exec  (cstmt T_int)
+                            flow >>% man.exec ~route:(Semantic "Universal") (cstmt T_int)
                          | Def {addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}}  ->
-                            flow >>% man.exec  (cstmt (T_float F_DOUBLE))
+                            flow >>% man.exec ~route:(Semantic "Universal") (cstmt (T_float F_DOUBLE))
                          | _ -> flow
                        ) aset (Post.return flow) in
           flow >>% fun flow ->
@@ -267,12 +275,14 @@ struct
                 debug "calling values for %a" pp_addr addr;
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                   man.exec   (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
+                   man.exec ~route:(Semantic "Universal")   (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
+                | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
+                   man.exec ~route:(Semantic "Universal")  (mk_assign (Utils.change_evar_type T_string evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                   | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                   man.exec  (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
+                   man.exec ~route:(Semantic "Universal")  (mk_assign (Utils.change_evar_type T_int evar) expr range) flow
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                   man.exec  (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
+                   man.exec ~route:(Semantic "Universal")  (mk_assign (Utils.change_evar_type (T_float F_DOUBLE) evar) expr range) flow
                 | _ ->
                    Post.return flow
                 end
@@ -297,6 +307,8 @@ struct
                                   | E_py_object (addr, _) ->
                                      begin match akind addr with
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                                        man.exec   (mk_assign (Utils.change_evar_type T_string evar) (mk_top T_string range) range) flow
+                                     | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
                                         man.exec   (mk_assign (Utils.change_evar_type T_string evar) (mk_top T_string range) range) flow
                                      | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                                        | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
@@ -502,7 +514,7 @@ struct
        |> OptionExt.return
 
 
-    | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"] ->
+    | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"; "bytes"] ->
        flow |> Post.return |> OptionExt.return
 
     | S_invalidate {ekind = E_addr (a, _)}
@@ -588,8 +600,16 @@ struct
                   | Def addr' when compare_addr_kind (akind addr) (akind addr') <> 0 -> (* only the kind. If two str addrs, we can't remove anything *)
                     debug "removing other numerical vars";
                     let f = begin match akind addr' with
-                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
-                        man.exec   (mk_remove_var (Utils.change_var_type T_string v) range) flow
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
+                        | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
+                         begin match akind addr with
+                         | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
+                           | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
+                            Post.return flow
+
+                         | _ -> man.exec   (mk_remove_var (Utils.change_var_type T_string v) range) flow
+                         end
+
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
                          begin match akind addr with
@@ -614,6 +634,8 @@ struct
                 | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                   Utils.change_evar_type (T_float F_DOUBLE) exp
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
+                  Utils.change_evar_type T_string exp
+                | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
                   Utils.change_evar_type T_string exp
                 | _ -> exp in
               let flow =
@@ -648,6 +670,9 @@ struct
 
     | E_constant C_py_none ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_none, None) range) flow |> OptionExt.return
+
+    | E_constant C_py_ellipsis ->
+      Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_ellipsis, None) range) flow |> OptionExt.return
 
     | E_constant C_py_not_implemented ->
       Eval.singleton (mk_py_object (OptionExt.none_to_exn !addr_notimplemented, None) range) flow |> OptionExt.return
@@ -745,9 +770,11 @@ struct
              let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top in
              let float = check_baddr addr_float || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_float) (akind a) = 0 | _ -> false) aset  in
              let str = check_baddr addr_strings in
+             let bytes = check_baddr addr_bytes in
              let r = if intb then VarSet.add (Utils.change_var_type T_int v) r else r in
              let r = if float then VarSet.add (Utils.change_var_type (T_float F_DOUBLE) v) r else r in
              let r = if str then VarSet.add (Utils.change_var_type T_string v) r else r in
+             let r = if bytes then VarSet.add (Utils.change_var_type T_string v) r else r in
              Some (VarSet.union acc r)
          end
 
@@ -774,7 +801,14 @@ struct
                        let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
                        let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
                        (s, float_info) :: acc
-                     else if compare_addr (OptionExt.none_to_exn !addr_strings) addr = 0 then
+                     else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_strings) (akind addr) = 0 then
+                       let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let str_info =
+                         {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
+                          var_value_type = T_string;
+                          var_sub_value = None} in
+                       (s, str_info) :: acc
+                     else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_strings) (akind addr) = 0 then
                        let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
                        let str_info =
                          {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
