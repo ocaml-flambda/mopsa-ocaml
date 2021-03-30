@@ -256,6 +256,8 @@ module Domain =
           "PyNumber_Add";
           "PyObject_CallFunction";
           "PyObject_CallObject";
+          "PyObject_CallMethod";
+          "PyObject_GetAttrString";
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
           "PyObject_IsTrue";
@@ -1821,6 +1823,27 @@ module Domain =
              man.eval c_addr flow
            )
         )
+
+      | E_c_builtin_call ("PyObject_CallMethod", [obj; name; format; va]) ->
+         man.eval (mk_c_call (find_c_fundec_by_name "PyObject_GetAttrString" flow) [obj; name] range) flow >>$ (fun callable flow ->
+         assume (eq callable (mk_c_null range) range) man flow
+           ~fthen:(Eval.singleton (mk_c_null range))
+           ~felse:(fun flow ->
+             assume (eq format (mk_c_null range) range) man flow
+               ~fthen:(man.eval (mk_c_call (find_c_fundec_by_name "PyObject_CallObject" flow) [callable; format] range))
+               ~felse:(fun flow -> panic_at range "PyObject_CallMethod, format %a not supported" pp_expr format)
+           )
+        ) |> OptionExt.return
+
+      | E_c_builtin_call ("PyObject_GetAttrString", [v; name]) ->
+         c_to_python_boundary v man flow range >>$ (fun py_v flow ->
+         safe_get_name_of name man flow >>$ fun oname flow ->
+         let name = Top.detop @@ OptionExt.none_to_exn oname in
+         man.eval ~route:(Semantic "Python") (Python.Ast.mk_py_attr py_v name range) flow >>$ fun py_res flow ->
+         let addr_py_res, oe_py_res = object_of_expr py_res in
+         let c_addr, flow = python_to_c_boundary addr_py_res None oe_py_res range man flow in
+         Eval.singleton c_addr flow
+        ) |> OptionExt.return
 
       | E_c_builtin_call ("PyObject_RichCompareBool", [left; right; op]) ->
          c_to_python_boundary left man flow range >>$ (fun py_left flow ->
