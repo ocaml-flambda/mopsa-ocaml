@@ -235,6 +235,44 @@ struct
          )
        |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, args, [])
+      when is_compare_op_fun "tuple" f ->
+      Utils.check_instances ~arguments_after_check:1 f man flow range args ["tuple"]
+        (fun eargs flow ->
+          let e1, e2 = match args with [l; r] -> l, r | _ -> assert false in
+          man.eval e2 flow >>$ fun e2 flow ->
+           assume (mk_py_isinstance_builtin e2 "tuple" range) man flow
+             ~fthen:(fun flow ->
+               let e1_vars = var_of_eobj e1 in
+               let e2_vars = var_of_eobj e2 in
+               if List.length e1_vars <> List.length e2_vars then
+                 man.eval (mk_py_top T_bool range) flow
+               else
+                 let op =
+                   let splitted = String.split_on_char '.' f in
+                   ListExt.nth splitted (ListExt.length splitted - 1) in
+                 let py_compare op e1 e2 range =
+                   mk_py_call (mk_py_attr (mk_var e1 range) op range) [mk_var e2 range] range
+                 in
+                 let rec compare l1 l2 flow =
+                   match l1, l2 with
+                   | [hd1], [hd2] ->
+                      man.eval (py_compare op hd1 hd2 range) flow
+                   | hd1::tl1, hd2::tl2 ->
+                     assume (py_compare "__eq__" hd1 hd2 range) man flow
+                       ~fthen:(fun flow -> compare tl1 tl2 flow)
+                       ~felse:(fun flow -> man.eval (py_compare op hd1 hd2 range) flow)
+                   | _ -> assert false
+                 in
+                 compare e1_vars e2_vars flow
+             )
+             ~felse:(fun flow ->
+                 let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
+                 man.eval expr flow)
+        )
+      |> OptionExt.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks? *)
       (* ugly assign iterator = iterator at pos+1... *)

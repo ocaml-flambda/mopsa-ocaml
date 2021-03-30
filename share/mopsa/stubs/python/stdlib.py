@@ -776,6 +776,18 @@ class tuple(object):
     def __getitem__(self, k): pass
     @mopsa.type("wrapper_descriptor")
     def __len__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __eq__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __ge__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __gt__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __le__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __lt__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __ne__(self, o): pass
 
 class tuple_iterator(object):
     @mopsa.type("wrapper_descriptor")
@@ -790,6 +802,8 @@ class slice(object):
 
 class NotImplementedType(object): pass
 
+class ellipsis(object): pass
+
 class NoneType(object):
     @mopsa.type("wrapper_descriptor")
     def __bool__(self): pass
@@ -799,6 +813,7 @@ class NoneType(object):
 class bytearray(object): pass
 
 class bytes(object):
+    def __new__(self, args): pass
     @mopsa.type("wrapper_descriptor")
     def __getitem__(self, i): pass
     @mopsa.type("wrapper_descriptor")
