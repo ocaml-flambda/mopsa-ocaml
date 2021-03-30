@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Copyright (C) 2017-2021 The MOPSA Project.                               *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -370,9 +370,15 @@ let test () =
   test_bwd_binop "bwd ^" (bwd_binop bwd_bit_xor Z.logxor);
   test_bwd_binop "bwd |" (bwd_binop bwd_bit_or Z.logor);
   test_bwd_binop "bwd &" (bwd_binop bwd_bit_and Z.logand);
-  test_bwd_shift "<<" (bwd_binop bwd_shift_left (fun a b -> Z.shift_left a (Z.to_int b)));
-  test_bwd_shift ">>" (bwd_binop bwd_shift_right (fun a b -> Z.shift_right a (Z.to_int b)));
-  test_bwd_shift ">>>" (bwd_binop bwd_shift_right_trunc (fun a b -> Z.div a (Z.shift_left Z.one (Z.to_int b))));
+  test_bwd_shift "bwd <<" (bwd_binop bwd_shift_left (fun a b -> Z.shift_left a (Z.to_int b)));
+  test_bwd_shift "bwd >>" (bwd_binop bwd_shift_right (fun a b -> Z.shift_right a (Z.to_int b)));
+  test_bwd_shift "bwd >>>" (bwd_binop bwd_shift_right_trunc (fun a b -> Z.div a (Z.shift_left Z.one (Z.to_int b))));
+  test_bwd_binop "bwd log ==" (bwd_binop bwd_log_eq (fun a b -> if a = b then Z.one else Z.zero));
+  test_bwd_binop "bwd log !=" (bwd_binop bwd_log_neq (fun a b -> if a <> b then Z.one else Z.zero));
+  test_bwd_binop "bwd log <" (bwd_binop bwd_log_lt (fun a b -> if a < b then Z.one else Z.zero));
+  test_bwd_binop "bwd log >" (bwd_binop bwd_log_gt (fun a b -> if a > b then Z.one else Z.zero));
+  test_bwd_binop "bwd log <=" (bwd_binop bwd_log_leq (fun a b -> if a <= b then Z.one else Z.zero));
+  test_bwd_binop "bwd log >=" (bwd_binop bwd_log_geq (fun a b -> if a >= b then Z.one else Z.zero));
   ()
   
 let _ = test ()
