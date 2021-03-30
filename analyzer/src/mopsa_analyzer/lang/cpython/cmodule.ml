@@ -253,6 +253,7 @@ module Domain =
           "PyArg_ParseTupleAndKeywords";
           "PyArg_UnpackTuple";
           "Py_BuildValue";
+          "PyNumber_Add";
           "PyObject_CallFunction";
           "PyObject_CallObject";
           "PyObject_RichCompare";
@@ -1708,6 +1709,36 @@ module Domain =
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyNumber_Add", [v; w]) ->
+         c_to_python_boundary v man flow range >>$? (fun py_v flow ->
+         c_to_python_boundary w man flow range >>$? fun py_w flow ->
+         Python.Utils.try_eval_expr man ~route:(Semantic "Python")
+           (mk_binop py_v O_plus py_w ~etyp:(T_py None) range) flow
+           ~on_empty:(fun exc_exp exc_str exc_msg flow ->
+             man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+             let exc_addr, exc_oe = object_of_expr exc_typ in
+             let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+             let setstring msg =
+               man.exec
+                 (mk_c_call_stmt
+                    (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                    [
+                      mk_addr exc_addr range;
+                      msg
+                    ]
+                    range) flow
+               >>%
+                 man.eval (mk_c_null range) in
+             Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+               (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+             |> OptionExt.return
+           )
+           ~on_result:(fun py_add_res flow ->
+             let addr_py_add, oe_py_add = object_of_expr py_add_res in
+             let c_addr, flow = python_to_c_boundary addr_py_add None oe_py_add range man flow in
+             man.eval c_addr flow
+           )
+        )
 
       | E_c_builtin_call ("PyObject_CallFunction", callable::fmt::refs) ->
          c_to_python_boundary callable man flow range >>$?
