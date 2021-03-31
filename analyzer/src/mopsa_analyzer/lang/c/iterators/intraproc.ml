@@ -196,7 +196,8 @@ struct
               | E_binop(op,_,_) when is_comparison_op op || is_logic_op op ->
                 negate_expr e, e
               | _ ->
-                eq e zero ~etyp:s32 exp.erange, ne e zero ~etyp:s32 exp.erange
+                let z = mk_zero ~typ:e.etyp exp.erange in
+                eq e z ~etyp:s32 exp.erange, ne e z ~etyp:s32 exp.erange
             in
             aux e
           in
