@@ -925,6 +925,28 @@ PySequence_GetItem(PyObject *s, Py_ssize_t i)
     return type_error("'%.200s' object does not support indexing", s);
 }
 
+/* PyObject * */
+/* PySequence_GetSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2) */
+/* { */
+/*     PyMappingMethods *mp; */
+
+/*     if (!s) { */
+/*         return null_error(); */
+/*     } */
+
+/*     mp = s->ob_type->tp_as_mapping; */
+/*     if (mp && mp->mp_subscript) { */
+/*         PyObject *res; */
+/*         PyObject *slice = _PySlice_FromIndices(i1, i2); */
+/*         if (!slice) */
+/*             return NULL; */
+/*         res = mp->mp_subscript(s, slice); */
+/*         Py_DECREF(slice); */
+/*         return res; */
+/*     } */
+
+/*     return type_error("'%.200s' object is unsliceable", s); */
+/* } */
 
 PyObject *
 PySequence_Fast(PyObject *v, const char *m)

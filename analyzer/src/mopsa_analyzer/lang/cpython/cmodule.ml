@@ -265,6 +265,7 @@ module Domain =
           "PyObject_Size";
           "PyObject_Length";
           "PyObject_IsTrue";
+          "PySequence_GetSlice";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
           "PyLong_FromSsize_t";
@@ -2039,6 +2040,19 @@ module Domain =
                  man.eval c_addr flow
            )
          |> OptionExt.return
+
+
+      | E_c_builtin_call ("PySequence_GetSlice", [s; i1; i2]) ->
+         let pylong_fromssize_t = C.Ast.find_c_fundec_by_name "PyLong_FromSsize_t" flow in
+         c_to_python_boundary s man flow range >>$ (fun py_s flow ->
+         man.eval (mk_c_call pylong_fromssize_t [i1] range) flow >>$ fun c_i1 flow ->
+         c_to_python_boundary c_i1 man flow range >>$ fun py_i1 flow ->
+         man.eval (mk_c_call pylong_fromssize_t [i2] range) flow >>$ fun c_i2 flow ->
+         c_to_python_boundary c_i2 man flow range >>$ fun py_i2 flow ->
+         man.eval (mk_expr ~etyp:(T_py None) (Python.Ast.E_py_slice_subscript (py_s, py_i1, py_i2, Python.Ast.mk_py_none range)) range) flow >>$ fun py_res flow ->
+         let c_addr, flow = python_to_c_boundary (fst @@ object_of_expr py_res) None (snd @@ object_of_expr py_res) range man flow in
+         Eval.singleton c_addr flow
+         ) |> OptionExt.return
 
       | E_c_builtin_call ("PyList_GetItem", [o; key])
       | E_c_builtin_call ("PyTuple_GetItem", [o; key])
