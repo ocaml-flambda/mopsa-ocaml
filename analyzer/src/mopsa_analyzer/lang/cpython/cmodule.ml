@@ -151,6 +151,7 @@ let () =
       match ak with
       (* FIXME: other container addresses *)
       | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Py_set.A_py_set
       | Python.Objects.Tuple.A_py_tuple _
       | Python.Objects.Dict.A_py_dict
       | A_py_instance _
@@ -293,7 +294,10 @@ module Domain =
           "PyList_SetItem";
           "_PyRange_GetItem";
           "PyDict_Size";
+          "PySet_New";
           "PySet_Size";
+          "PySet_Add";
+          "PySet_Clear";
           "PyWeakref_NewRef";
           "PyWeakref_GetObject";
         ];
@@ -712,6 +716,8 @@ module Domain =
       match akind addr with
       (* FIXME: other container addresses *)
       | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Py_list.A_py_iterator _
+      | Python.Objects.Py_set.A_py_set
       | Python.Objects.Tuple.A_py_tuple _
       | Python.Objects.Dict.A_py_dict
       | A_py_instance _
@@ -757,6 +763,7 @@ module Domain =
       let type_addr = match akind addr with
         | A_py_instance a -> a
         | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
+        | Python.Objects.Py_set.A_py_set -> fst @@ find_builtin "set"
         | Python.Objects.Dict.A_py_dict -> fst @@ find_builtin "dict"
         | Python.Objects.Tuple.A_py_tuple _ -> fst @@ find_builtin "tuple"
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
@@ -2102,21 +2109,60 @@ module Domain =
                  Eval.singleton (mk_int 0 range) flow)
            )
 
-      | E_c_builtin_call ("_PyRange_GetItem", [rrange; pos]) ->
-         resolve_c_pointer_into_addr rrange man flow >>$
-           (fun oaddr flow ->
+      | E_c_builtin_call ("PySet_New", [iterable]) ->
+         (* FIXME: refactor with c_to_python_boundary boundary and on_null... *)
+         assume (eq iterable (mk_c_null range) range) man flow
+           ~fthen:(fun flow ->
+             man.eval (Python.Ast.mk_py_call
+                         (Python.Ast.mk_py_object (find_builtin "set") range)
+                         [] range) flow >>$ fun earg flow ->
+             let addr_earg = fst @@ object_of_expr earg in
+             let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+             Eval.singleton c_addr flow
+           )
+           ~felse:(fun flow ->
+             resolve_c_pointer_into_addr iterable man flow >>$ fun oaddr flow ->
              let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
-             let py_range = Python.Ast.mk_py_object (addr, None) (tag_range range "range") in
-             c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
-             (* FIXME: ootb error handling *)
-             man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "range.__getitem__") range) [py_range; py_obj] range) flow >>$
-               fun py_elem flow ->
-               let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-               strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
-               let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
-               man.eval c_addr flow
+             (* FIXME: try_eval_expr *)
+             man.eval (Python.Ast.mk_py_call
+                         (Python.Ast.mk_py_object (find_builtin "set") range)
+                         [Python.Ast.mk_py_object (addr, None) range] range) flow >>$ fun earg flow ->
+             let addr_earg = fst @@ object_of_expr earg in
+             let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+             Eval.singleton c_addr flow
            )
          |> OptionExt.return
+
+      | E_c_builtin_call ("PySet_Add", [anyset; key]) ->
+         resolve_c_pointer_into_addr anyset man flow >>$? fun oaddr flow ->
+          let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+          c_to_python_boundary key man flow range >>$? fun py_key flow ->
+          (* FIXME: try_eval_expr *)
+          man.eval (Python.Ast.mk_py_call
+                     (Python.Ast.mk_py_attr (Python.Ast.mk_py_object (addr, None) range) "add" range)
+                       [py_key] range) flow >>$? fun _ flow ->
+           (* let addr_earg = fst @@ object_of_expr earg in
+            * let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in *)
+           (* FIXME: we want an integer here *)
+           Eval.singleton (mk_zero range) flow
+            |> OptionExt.return
+
+      | E_c_builtin_call ("PySet_Clear", [set]) ->
+         resolve_c_pointer_into_addr set man flow >>$ (fun oaddr flow ->
+         let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+         if compare_addr_kind (akind addr) (akind @@ addr_of_object @@ find_builtin "set") = 0 then
+           man.eval (Python.Ast.mk_py_call
+                       (Python.Ast.mk_py_attr (Python.Ast.mk_py_object (addr, None) range) "__clear__" range)
+                       [] range) flow >>$ (fun _ flow ->
+           (* let addr_earg = fst @@ object_of_expr earg in
+            * let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in *)
+           Eval.singleton (mk_zero range) flow
+         )
+         else
+           let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+           man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+             Eval.singleton (mk_c_null range)
+        ) |> OptionExt.return
 
       | E_c_builtin_call ("PyWeakref_NewRef", [refto; callback]) ->
          assume (eq callback (mk_c_null range) range)
