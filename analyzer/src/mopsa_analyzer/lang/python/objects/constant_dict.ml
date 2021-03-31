@@ -8,6 +8,25 @@ open Universal.Ast
 open Data_container_utils
 
 
+type ('a, _) query += Q_py_dict_items : expr -> ('a, (expr * expr) list) query
+
+let () = register_query {
+    join = (let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_py_dict_items _ -> (a @ b)
+                | _ -> next.pool_join query a b in
+            f
+           );
+    meet = (let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
+              fun next query a b ->
+                match query with
+                | Q_py_dict_items _ -> assert false
+                | _ -> next.pool_meet query a b in
+            f)
+  }
+
+
 let compare_py_object (obj1: py_object) (obj2: py_object) : int =
   Compare.compose
     [
@@ -98,6 +117,10 @@ struct
        )
        |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, []) ->
+      Utils.new_wrapper man range flow "dict" cls
+        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([],[])) range))
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__getitem__" as f, _))}, _)}, args, []) ->
        Utils.check_instances ~arguments_after_check:1 f man flow range args ["dict"]
@@ -129,6 +152,42 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__iter__" as f, _))}, _)}, args, []) ->
+         Utils.check_instances f man flow range args ["dict"]
+        (fun args flow ->
+           let dict = List.hd args in
+           let a = mk_alloc_addr (Py_list.A_py_iterator ("dict_keyiterator", None)) range in
+           man.eval   a flow >>$
+ (fun addr_it flow ->
+                 let addr_it = Addr.from_expr addr_it in
+                 man.exec   (mk_assign (mk_var (Py_list.Domain.itseq_of_addr addr_it) range) dict range) flow >>%
+                   Eval.singleton (mk_py_object (addr_it, None) range)
+             )
+        )
+      |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__next__" as f, _))}, _)}, args, []) ->
+       (* we return everything at once. For more precision we may want to have a counter related to the iterator *)
+       (* FIXME: in its current state, this should be handled by the reduced product with the smashing dictionnary *)
+      Utils.check_instances f man flow range args ["dict_keyiterator"]
+        (fun args flow ->
+          man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
+            (fun dict_eobj flow ->
+              let dict_addr = addr_of_object @@ object_of_expr dict_eobj in
+              let cur = get_env T_cur man flow in
+              let ds = find dict_addr cur in
+              (* ok as ds should have <= 1 element. Otherwise need to fold *)
+              let dict = Dicts.choose ds in
+
+              let els =
+                let flow = Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow in
+                List.map (fun (_, obj) -> Eval.singleton (mk_py_object obj range) flow) dict in
+
+              let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
+              Eval.join_list ~empty:(fun () -> Eval.empty flow) (stopiteration :: els)
+            )
+        )
+      |> OptionExt.return
 
     | E_py_annot {ekind = E_py_index_subscript ({ekind = E_py_object ({addr_kind = A_py_class (C_annot c, _)}, _)}, i) } when get_orig_vname c.py_cls_a_var = "Dict" ->
       let addr_dict = mk_alloc_addr Dict.A_py_dict range in
@@ -186,7 +245,20 @@ struct
     pprint ~path:[Key "Constant dictionaries"] printer (pbox DictMap.print a.dict)
 
   let merge _ _ _ = assert false
-  let ask _ _ _ = None
+
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+    fun query man flow ->
+    match query with
+    | Q_py_dict_items dict ->
+       let range = erange dict in
+       let dict_addr = addr_of_object @@ object_of_expr dict in
+       let cur = get_env T_cur man flow in
+       let ds = find dict_addr cur in
+       (* ok as ds should have <= 1 element. Otherwise need to fold *)
+       let dict = Dicts.choose ds in
+       OptionExt.return @@ List.map (fun (k, v) -> mk_py_object k range, mk_py_object v range) dict
+
+    | _ -> None
 end
 
 let () = register_standard_domain(module Domain)
