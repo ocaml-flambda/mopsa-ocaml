@@ -101,7 +101,7 @@ struct
         let l = ref [] in
         let cons = Apron.Lincons1.array_get earray i in
         Apron.Lincons1.iter (fun c v ->
-            l := (c, Binding.apron_to_var bnd v) :: !l
+            l := (c, Binding.apron_to_mopsa_var v bnd) :: !l
           ) cons
         ;
         (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
@@ -180,9 +180,9 @@ struct
     | T_float F_REAL -> Apron.Texpr1.Real
     | t -> panic ~loc:__LOC__ "typ_to_apron: unsupported type %a" pp_typ t
 
-  let is_env_var v abs =
+  let is_env_var v (abs,bnd) =
     let env = Apron.Abstract1.env abs in
-    Apron.Environment.mem_var env (Binding.mk_apron_var v)
+    Apron.Environment.mem_var env (Binding.mopsa_to_apron_var v bnd |> fst)
 
   let is_env_var_apron v abs =
     let env = Apron.Abstract1.env abs in
@@ -228,13 +228,13 @@ struct
       abs, bnd, l
 
     | E_var (x, mode) when var_mode x mode = STRONG ->
-      let xx, bnd = Binding.var_to_apron bnd x in
+      let xx, bnd = Binding.mopsa_to_apron_var x bnd in
       Apron.Texpr1.Var(xx), abs, bnd, l
 
     | E_var (x, mode) when var_mode x mode = WEAK ->
       let x' = mktmp ~typ:exp.etyp () in
-      let x_apr, bnd = Binding.var_to_apron bnd x in
-      let x_apr', bnd = Binding.var_to_apron bnd x' in
+      let x_apr, bnd = Binding.mopsa_to_apron_var x bnd in
+      let x_apr', _ = Binding.mopsa_to_apron_var x' bnd in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
       (Apron.Texpr1.Var x_apr, abs, bnd, x_apr' :: l)
 

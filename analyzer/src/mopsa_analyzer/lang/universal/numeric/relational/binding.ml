@@ -30,25 +30,28 @@ type t = Equiv.t
 
 let empty : t = Equiv.empty
 
-let mk_apron_var v =
-  Apron.Var.of_string v.vname
-
-
-let var_to_apron (bindings:t) (v:var) : Apron.Var.t * t =
-  try Equiv.find_l v bindings, bindings
+let mopsa_to_apron_var (v:var) (b:t) : Apron.Var.t * t =
+  try Equiv.find_l v b, b
   with Not_found ->
-    let vv = mk_apron_var v in
-    vv, Equiv.add (v,vv) bindings
+    let vv = Apron.Var.of_string v.vname in
+    vv, Equiv.add (v,vv) b
 
-let vars_to_apron  bindings (l:var list) =
+let mopsa_to_apron_vars (l:var list) (b:t) : Apron.Var.t list * t =
   List.fold_left (fun (accv,accb) v ->
-      let vv, accb = var_to_apron accb v in
+      let vv, accb = mopsa_to_apron_var v accb in
       (vv::accv),accb
-    ) ([],bindings) l
+    ) ([],b) l
 
-let apron_to_var bindings v =
-  try Equiv.find_r v bindings
+let apron_to_mopsa_var (v:Apron.Var.t) (b:t) : var =
+  try Equiv.find_r v b
   with Not_found -> panic "Apron variable %s not bound" (Apron.Var.to_string v)
 
 
-let concat b1 b2 = Equiv.concat b1 b2
+let concat b1 b2 =
+  Equiv.concat b1 b2
+
+let remove_apron_var v b =
+  Equiv.remove_r v b
+
+let remove_apron_vars vl b =
+  List.fold_left (fun acc v -> remove_apron_var v acc) b vl
