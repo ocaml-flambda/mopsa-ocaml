@@ -22,7 +22,10 @@
 import mopsa
 
 def randrange(c):
-    return mopsa.random_int(0, c+1)
+    return mopsa.random_int(0, c)
+
+def randint(a, b):
+    return mopsa.random_int(a, b)
 
 def seed(v): pass
 
