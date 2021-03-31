@@ -91,7 +91,9 @@ module Domain =
                               match akind a1, akind a2 with
                               | A_py_class(C_user cls1, _),
                                 A_py_class(C_user cls2, _) ->
-                                 compare_var cls1.py_cls_var cls2.py_cls_var
+                                 Compare.compose
+                                   [(fun () -> compare_range cls1.py_cls_range cls2.py_cls_range);
+                                    (fun () -> compare_var cls1.py_cls_var cls2.py_cls_var)]
                               | _ -> assert false)
        in
        debug "|tests classes| = %d" (List.length test_cases);
