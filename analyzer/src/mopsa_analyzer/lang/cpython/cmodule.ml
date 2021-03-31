@@ -1371,8 +1371,13 @@ module Domain =
                    ("PyUnicode_Type", "str");
                    ("PyBytes_Type", "bytes");
                    ("PyList_Type", "list");
+                   ("PyListIter_Type", "list_iterator");
+                   ("PySet_Type", "set");
+                   ("PySetIter_Type", "set_iterator");
                    ("PyRange_Type", "range");
+                   ("PyRangeIter_Type", "range_iterator");
                    ("PyTuple_Type", "tuple");
+                   ("PyTupleIter_Type", "tuple_iterator");
                    ("PyDict_Type", "dict");
                    ("_PyNone_Type", "NoneType");
                    ("_PyNotImplemented_Type", "NotImplementedType");
