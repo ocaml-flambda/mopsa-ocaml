@@ -258,6 +258,7 @@ module Domain =
           "PyObject_CallObject";
           "PyObject_CallMethod";
           "PyObject_GetAttrString";
+          "PyObject_GetItem";
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
           "PyObject_IsTrue";
@@ -2026,6 +2027,41 @@ module Domain =
                  man.eval c_addr flow
            )
          |> OptionExt.return
+
+      | E_c_builtin_call ("PyList_GetItem", [o; key])
+      | E_c_builtin_call ("PyTuple_GetItem", [o; key])
+      | E_c_builtin_call ("PyObject_GetItem", [o; key]) ->
+         resolve_c_pointer_into_addr o man flow >>$? fun oaddr flow ->
+         let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+         let py_o = Python.Ast.mk_py_object (addr, None) (tag_range range "%a" pp_addr_kind (akind addr)) in
+         c_int_to_python key man flow (tag_range range "key") >>$? fun py_key flow ->
+         Python.Utils.try_eval_expr man ~route:(Semantic "Python")
+           (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_o "__getitem__" range) [py_key] range) flow
+           ~on_empty:(fun exc_exp exc_name exc_msg flow ->
+             man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+             let exc_addr, exc_oe = object_of_expr exc_typ in
+             let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+             let setstring msg =
+               man.exec
+                 (mk_c_call_stmt
+                    (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                    [
+                      mk_addr exc_addr range;
+                      msg
+                    ]
+                    range) flow
+               >>%
+                 man.eval (mk_c_null range) in
+             Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+               (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+             |> OptionExt.return
+           )
+           ~on_result:(fun py_elem flow ->
+             let addr_py_elem, oe_py_elem = object_of_expr py_elem in
+             strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
+             let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
+             man.eval c_addr flow
+           )
 
       | E_c_builtin_call ("PyList_SetItem", [list;pos;item]) ->
          resolve_c_pointer_into_addr list man flow >>$?
