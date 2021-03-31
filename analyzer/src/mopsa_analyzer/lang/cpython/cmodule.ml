@@ -1914,8 +1914,17 @@ module Domain =
         ) |> OptionExt.return
 
       | E_c_builtin_call ("PyObject_RichCompareBool", [left; right; op]) ->
-         c_to_python_boundary left man flow range >>$ (fun py_left flow ->
-         c_to_python_boundary right man flow range >>$ fun py_right flow ->
+         let check_null flow =
+           assume (eq (mk_c_arrow_access_by_name (mk_var (search_c_globals_for flow "exc") range) "exc_state" range) (mk_c_null range) range) man flow
+             ~fthen:(man.exec (mk_c_call_stmt (find_c_fundec_by_name "PyErr_BadInternalCall" flow) [] range))
+             ~felse:(Post.return)
+           >>% man.eval (mk_c_null range) in
+         c_to_python_boundary ~on_null:check_null left man flow range >>$ (fun py_left flow ->
+         if compare_expr  py_left (mk_c_null range) = 0 then Eval.singleton (mk_int (-1) range) flow
+         else
+         c_to_python_boundary ~on_null:check_null right man flow range >>$ fun py_right flow ->
+         if compare_expr  py_right (mk_c_null range) = 0 then Eval.singleton (mk_int (-1) range) flow
+         else
          man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
          let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
            | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
@@ -1928,6 +1937,7 @@ module Domain =
          | 4 -> O_gt
          | 5 -> O_ge
          | _ -> assert false in
+         debug "py_left = %a, py_op = %a, py_right = %a" pp_expr py_left pp_operator py_op pp_expr py_right;
          assume ~route:(Semantic "Python") (mk_binop ~etyp:(T_py None) py_left py_op py_right range) man flow
            ~fthen:(Eval.singleton (mk_one range))
            ~felse:(Eval.singleton (mk_zero range))
@@ -1935,8 +1945,17 @@ module Domain =
         ) |> OptionExt.return
 
       | E_c_builtin_call ("PyObject_RichCompare", [left; right; op]) ->
-         c_to_python_boundary left man flow range >>$ (fun py_left flow ->
-         c_to_python_boundary right man flow range >>$ fun py_right flow ->
+         let check_null flow =
+           assume (eq (mk_c_arrow_access_by_name (mk_var (search_c_globals_for flow "exc") range) "exc_state" range) (mk_c_null range) range) man flow
+             ~fthen:(man.exec (mk_c_call_stmt (find_c_fundec_by_name "PyErr_BadInternalCall" flow) [] range))
+               ~felse:(Post.return) >>%
+             man.eval (mk_c_null range) in
+         c_to_python_boundary ~on_null:check_null left man flow range >>$ (fun py_left flow ->
+         if compare_expr  py_left (mk_c_null range) = 0 then Eval.singleton py_left flow
+         else
+         c_to_python_boundary ~on_null:check_null right man flow range >>$ fun py_right flow ->
+         if compare_expr  py_right (mk_c_null range) = 0 then Eval.singleton py_right flow
+         else
          man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
          let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
            | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
