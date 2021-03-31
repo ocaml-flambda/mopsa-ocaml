@@ -1211,6 +1211,24 @@ module Domain =
               let () = debug "not a float..." in
               c_set_exception "PyExc_TypeError" "a float is required (got type ???)" range man flow >>% Cases.return 0
 
+         | 'h' ->
+            if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
+              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+              (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
+              debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
+              assume (mk_c_call
+                        (C.Ast.find_c_fundec_by_name "PyParseTuple_shortint_helper" flow)
+                        [c_addr; mk_c_address_of c range]
+                        range)
+                man flow
+                ~fthen:(Cases.return 1)
+                ~felse:(Cases.return 0)
+            else
+              let () = debug "wrong type for convert_single integer" in
+              (* set error *)
+              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+
          | 'i' ->
             (* FIXME: this sould be a boundary between python and C.
                                  As such, it should handle integer translation.
@@ -1249,6 +1267,19 @@ module Domain =
             let c_addr, flow = python_to_c_boundary addr None oe range man flow in
             man.exec (mk_assign c c_addr range) flow >>%
               fun flow -> Cases.return 1 flow
+
+         | 'p' ->
+            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+            let c_addr, flow = python_to_c_boundary addr None oe range man flow in
+            man.eval (mk_c_call (find_c_fundec_by_name "PyObject_IsTrue" flow) [c_addr] range) flow >>$ (fun c_val flow ->
+              assume (gt c_val (mk_zero range) range) man flow
+                ~fthen:(fun flow -> man.exec (mk_assign c (mk_one range) range) flow >>% Cases.return 1)
+                ~felse:(fun flow ->
+                  assume (eq c_val (mk_zero range) range) man flow
+                    ~fthen:(fun flow -> man.exec (mk_assign c (mk_zero range) range) flow >>% Cases.return 1)
+                    ~felse:(Cases.return 0)
+                )
+            )
 
          | 's' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
