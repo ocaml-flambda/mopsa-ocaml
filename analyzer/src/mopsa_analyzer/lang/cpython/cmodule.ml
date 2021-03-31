@@ -261,6 +261,8 @@ module Domain =
           "PyObject_GetItem";
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
+          "PyObject_Size";
+          "PyObject_Length";
           "PyObject_IsTrue";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
@@ -289,8 +291,9 @@ module Domain =
           "PyList_Size";
           "PyList_GetItem";
           "PyList_SetItem";
-          "_PyRange_Size";
           "_PyRange_GetItem";
+          "PyDict_Size";
+          "PySet_Size";
           "PyWeakref_NewRef";
           "PyWeakref_GetObject";
         ];
@@ -1925,10 +1928,12 @@ module Domain =
          else
            Eval.singleton (mk_int (-1) range) flow) |> OptionExt.return
 
-
-      | E_c_builtin_call ("_PyRange_Size", [arg])
+      | E_c_builtin_call ("PyObject_Size", [arg])
+      | E_c_builtin_call ("PyObject_Length", [arg])
+      | E_c_builtin_call ("PySet_Size", [arg])
       | E_c_builtin_call ("PyList_Size", [arg])
-      | E_c_builtin_call ("PyTuple_Size", [arg]) ->
+      | E_c_builtin_call ("PyTuple_Size", [arg])
+      | E_c_builtin_call ("PyDict_Size", [arg]) ->
          (* FIXME: check the type *)
          resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
