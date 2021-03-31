@@ -505,6 +505,9 @@ struct
       Utils.new_wrapper man range flow "list" cls
         ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_list []) range))
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__", _))}, _)}, args, []) when List.length args = 1 ->
+         man.eval (mk_py_none range) flow |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.extend" as f, _))}, _)}, args, []) ->
       Utils.check_instances f ~arguments_after_check:1 man flow range args
