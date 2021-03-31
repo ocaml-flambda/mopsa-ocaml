@@ -19,6 +19,7 @@
 #define PyTuple_GET_SIZE PyTuple_Size
 #define PyTuple_GET_ITEM PyTuple_GetItem
 #undef PyUnicode_AS_UNICODE
+#define PyUnicode_AS_UNICODE PyUnicode_AsUnicode
 #undef Py_UNICODE_IS_SURROGATE
 #undef Py_UNICODE_IS_LOW_SURROGATE
 #undef Py_UNICODE_IS_HIGH_SURROGATE
@@ -27,6 +28,7 @@
 #undef PyBytes_GET_SIZE
 #define PyBytes_GET_SIZE PyBytes_Size
 #undef PyBytes_AS_STRING
+#define PyBytes_AS_STRING PyBytes_AsString
 
 #undef PyList_GET_SIZE
 #define PyList_GET_SIZE PyList_Size
@@ -37,6 +39,8 @@
 
 #undef PyFloat_AS_DOUBLE
 #define PyFloat_AS_DOUBLE PyFloat_AsDouble
+
+#define _PyObject_GC_New _PyObject_New
 
 /* // stubs used by the analysis */
 typedef struct exc_data {
@@ -116,6 +120,14 @@ int PyErr_BadArgument(void)
                     "bad argument type for built-in operation");
     return 0;
 }
+
+#undef PyErr_BadInternalCall
+void PyErr_BadInternalCall(void)
+{
+    PyErr_SetString(PyExc_SystemError,
+                    "bad argument to internal function");
+}
+
 
 int
 PyErr_ExceptionMatches(PyObject *lexc)
@@ -396,6 +408,21 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
         return PyBool_FromLong(res);
 }
 
+static PyObject *
+wrap_objobjargproc(PyObject *self, PyObject *args, void *wrapped)
+{
+    objobjargproc func = (objobjargproc)wrapped;
+    int res;
+    PyObject *key, *value;
+
+    if (!PyArg_UnpackTuple(args, "", 2, 2, &key, &value))
+        return NULL;
+    res = (*func)(self, key, value);
+    if (res == -1 && PyErr_Occurred())
+        return NULL;
+    Py_RETURN_NONE;
+}
+
 
 static PyObject *
 wrap_sq_setitem(PyObject *self, PyObject *args, void *wrapped)
@@ -502,6 +529,30 @@ wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
         return NULL;
     other = PyTuple_GET_ITEM(args, 0);
     return (*func)(self, other);
+}
+
+static PyObject *
+wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
+{
+    binaryfunc func = (binaryfunc)wrapped;
+    PyObject *other;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    other = PyTuple_GET_ITEM(args, 0);
+    return (*func)(self, other);
+}
+
+static PyObject *
+wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
+{
+    binaryfunc func = (binaryfunc)wrapped;
+    PyObject *other;
+
+    if (!check_num_args(args, 1))
+        return NULL;
+    other = PyTuple_GET_ITEM(args, 0);
+    return (*func)(other, self);
 }
 
 static PyObject *
@@ -770,6 +821,17 @@ init_flags()
     PyDict_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_READY;
 }
 
+struct _longobject _Py_FalseStruct = {
+    PyVarObject_HEAD_INIT(&PyBool_Type, 0)
+    { 0 }
+};
+
+struct _longobject _Py_TrueStruct = {
+    PyVarObject_HEAD_INIT(&PyBool_Type, 1)
+    { 1 }
+};
+
+
 PyObject _Py_NoneStruct = {
   _PyObject_EXTRA_INIT
   1, &_PyNone_Type
@@ -820,6 +882,7 @@ Py_UCS4* PyUnicode_AsUCS4Copy(PyObject *unicode)
 
 int PyParseTuple_int_helper(PyObject *obj, int *result)
 {
+    /* small adaption of case 'i' in convertsimple in getargs.c */
     long ival = PyLong_AsLong(obj);
     if(ival == -1 && PyErr_Occurred()) {
         return 0;
@@ -840,6 +903,31 @@ int PyParseTuple_int_helper(PyObject *obj, int *result)
     }
 }
 
+int PyParseTuple_shortint_helper(PyObject *obj, short *result)
+{
+    /* small adaption of case 'h' in convertsimple in getargs.c */
+    long ival;
+    /* if (float_argument_error(arg)) */
+    /*     RETURN_ERR_OCCURRED; */
+    ival = PyLong_AsLong(obj);
+    if (ival == -1 && PyErr_Occurred())
+        return 0;
+    else if (ival < SHRT_MIN) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "signed short integer is less than minimum");
+        return 0;
+    }
+    else if (ival > SHRT_MAX) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "signed short integer is greater than maximum");
+        return 0;
+    }
+    else {
+        *result = (short) ival;
+        return 1;
+    }
+}
+
 
 PyObject *PyBool_FromLong(long ok)
 {
@@ -854,13 +942,17 @@ PyObject *PyBool_FromLong(long ok)
 }
 
 
+
 int
 PySequence_Check(PyObject *s)
 {
     if (PyDict_Check(s))
         return 0;
-    return s->ob_type->tp_as_sequence &&
-        s->ob_type->tp_as_sequence->sq_item != NULL;
+    // Force disjonction this way (if multiple values for s), while waiting for partitioning
+    if(s->ob_type->tp_as_sequence) return s->ob_type->tp_as_sequence->sq_item != NULL;
+    else return 0;
+    /* return s->ob_type->tp_as_sequence && */
+    /*     s->ob_type->tp_as_sequence->sq_item != NULL; */
 }
 
 static PyObject *
@@ -976,17 +1068,18 @@ PySequence_Fast(PyObject *v, const char *m)
 }
 
 
-PyObject *
-PyIter_Next(PyObject *iter)
-{
-    PyObject *result;
-    result = (*iter->ob_type->tp_iternext)(iter);
-    if (result == NULL &&
-        PyErr_Occurred() &&
-        PyErr_ExceptionMatches(PyExc_StopIteration))
-        PyErr_Clear();
-    return result;
-}
+/* PyObject * */
+/* PyIter_Next(PyObject *iter) */
+/* { */
+/*     PyObject *result; */
+/*     result = (*iter->ob_type->tp_iternext)(iter); */
+/*     if (result == NULL && */
+/*         PyErr_Occurred() && */
+/*         PyErr_ExceptionMatches(PyExc_StopIteration)) */
+/*         PyErr_Clear(); */
+/*     return result; */
+/* } */
+
 
 PyObject *
 PyObject_GetIter(PyObject *o)
@@ -1014,5 +1107,42 @@ PyObject_GetIter(PyObject *o)
     }
 }
 
+#define call_method PyObject_CallMethod
+#undef PyObject_CallMethod
+PyObject *
+PyObject_CallMethod(PyObject *obj, const char *name, const char *format, ...);
+
+static PyObject *
+slot_tp_iternext(PyObject *self)
+{
+    _Py_IDENTIFIER(__next__);
+    const char* name = PyId___next__.string;
+    return PyObject_CallMethod(self, name, NULL, 0);
+}
+
+PyObject *
+_PyObject_NextNotImplemented(PyObject *self)
+{
+    PyErr_Format(PyExc_TypeError,
+                 "'%.200s' object is not iterable",
+                 Py_TYPE(self)->tp_name);
+    return NULL;
+}
+
+
+PyObject *
+PyLong_FromVoidPtr(void *p)
+{
+//#if SIZEOF_VOID_P <= SIZEOF_LONG
+    return PyLong_FromUnsignedLong((unsigned long)(uintptr_t)p);
+/* #else */
+
+/* #if SIZEOF_LONG_LONG < SIZEOF_VOID_P */
+/* #   error "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*)" */
+/* #endif */
+/*     return PyLong_FromUnsignedLongLong((unsigned long long)(uintptr_t)p); */
+/* #endif /\* SIZEOF_VOID_P <= SIZEOF_LONG *\/ */
+
+}
 
 #endif
