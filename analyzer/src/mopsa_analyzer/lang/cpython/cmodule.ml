@@ -659,6 +659,9 @@ module Domain =
           bind_function_in "__init__"
             (mk_c_arrow_access_by_name ecls "tp_init" range)
             cls_addr (Wrapper_descriptor (Some "wrap_init")) man >>%
+          bind_function_in "__repr__"
+            (mk_c_arrow_access_by_name ecls "tp_repr" range)
+            cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man >>%
           bind_function_in "__iter__"
             (mk_c_arrow_access_by_name ecls "tp_iter" range)
             cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man >>%
@@ -683,46 +686,99 @@ module Domain =
             cls_addr (Wrapper_descriptor (Some "richcmp_gt")) man >>%
           bind_function_in "__ge__"
             (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
-            cls_addr (Wrapper_descriptor (Some "richcmp_ge")) man >>%
-            fun flow ->
-              assume
-                (ne
-                   (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
-                   (mk_c_null range)
-                   ~etyp:T_bool range)
-                man flow
-                ~fthen:(fun flow ->
-                  let as_sequence s =  mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) s range in
-                  Post.return flow >>%
-                  bind_function_in "__len__" (as_sequence "sq_length")
-                    cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man >>%
-                  bind_function_in "__contains__" (as_sequence "sq_contains")
-                    cls_addr (Wrapper_descriptor (Some "wrap_objobjproc")) man >>%
-                  bind_function_in "__add__" (as_sequence "sq_concat")
-                    cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
-                  bind_function_in "__mul__" (as_sequence "sq_repeat")
-                    cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
-                  bind_function_in "__rmul__" (as_sequence "sq_repeat")
-                    cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
-                  bind_function_in "__getitem__" (as_sequence "sq_item")
-                    cls_addr (Wrapper_descriptor (Some "wrap_sq_item")) man >>%
-                  bind_function_in "__setitem__" (as_sequence "sq_ass_item")
-                    cls_addr (Wrapper_descriptor (Some "wrap_sq_setitem")) man >>%
-                  bind_function_in "__delitem__" (as_sequence "sq_ass_item")
-                    cls_addr (Wrapper_descriptor (Some "wrap_sq_delitem")) man
-                )
-                ~felse:(fun flow ->
-                  debug "tp_as_sequence is NULL, skipping";
-                  Post.return flow)
-              >>%
-                fun flow ->
-                (* FIXME: *)
-                debug "add_pymethoddef";
-                add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow >>%
-                  add_pymemberdef cls_addr ecls man >>%
-                  fun flow ->
-                  let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
-                  Cases.singleton cls_addr flow
+            cls_addr (Wrapper_descriptor (Some "richcmp_ge")) man >>% fun flow ->
+          assume
+            (ne
+               (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
+               (mk_c_null range)
+               ~etyp:T_bool range)
+            man flow
+            ~fthen:(fun flow ->
+              let as_sequence s =  mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_sequence" range) s range in
+              Post.return flow >>%
+              bind_function_in "__len__" (as_sequence "sq_length")
+                cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man >>%
+              bind_function_in "__contains__" (as_sequence "sq_contains")
+                cls_addr (Wrapper_descriptor (Some "wrap_objobjproc")) man >>%
+              bind_function_in "__add__" (as_sequence "sq_concat")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+              bind_function_in "__mul__" (as_sequence "sq_repeat")
+                cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
+              bind_function_in "__rmul__" (as_sequence "sq_repeat")
+                cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man >>%
+              bind_function_in "__getitem__" (as_sequence "sq_item")
+                cls_addr (Wrapper_descriptor (Some "wrap_sq_item")) man >>%
+              bind_function_in "__setitem__" (as_sequence "sq_ass_item")
+                cls_addr (Wrapper_descriptor (Some "wrap_sq_setitem")) man >>%
+              bind_function_in "__delitem__" (as_sequence "sq_ass_item")
+                cls_addr (Wrapper_descriptor (Some "wrap_sq_delitem")) man >>%
+              bind_function_in "__iadd__" (as_sequence "sq_inplace_concat")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+              bind_function_in "__im__" (as_sequence "sq_inplace_repeat")
+                cls_addr (Wrapper_descriptor (Some "wrap_indexargfunc")) man
+            )
+            ~felse:(fun flow ->
+              debug "tp_as_sequence is NULL, skipping";
+              Post.return flow) >>% fun flow ->
+          assume
+            (ne
+               (mk_c_arrow_access_by_name ecls "tp_as_number" range)
+               (mk_c_null range)
+               ~etyp:T_bool range)
+            man flow
+            ~fthen:(fun flow ->
+              let as_number s =  mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_number" range) s range in
+              Post.return flow >>%
+              bind_function_in "__invert__" (as_number "nb_invert")
+                cls_addr (Wrapper_descriptor (Some "wrap_unaryfunc")) man >>%
+              bind_function_in "__and__" (as_number "nb_and")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_l")) man >>%
+              bind_function_in "__xor__" (as_number "nb_xor")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_l")) man >>%
+              bind_function_in "__or__" (as_number "nb_or")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_l")) man >>%
+              bind_function_in "__rand__" (as_number "nb_and")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_r")) man >>%
+              bind_function_in "__rxor__" (as_number "nb_xor")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_r")) man >>%
+              bind_function_in "__ror__" (as_number "nb_or")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc_r")) man >>%
+              bind_function_in "__iand__" (as_number "nb_inplace_and")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+              bind_function_in "__ixor__" (as_number "nb_inplace_xor")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+              bind_function_in "__ior__" (as_number "nb_inplace_or")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man
+            )
+            ~felse:(fun flow ->
+              debug "tp_as_sequence is NULL, skipping";
+              Post.return flow) >>% fun flow ->
+          assume
+            (ne
+               (mk_c_arrow_access_by_name ecls "tp_as_mapping" range)
+               (mk_c_null range)
+               ~etyp:T_bool range)
+            man flow
+            ~fthen:(fun flow ->
+              let as_mapping s =  mk_c_arrow_access_by_name (mk_c_arrow_access_by_name ecls "tp_as_mapping" range) s range in
+              Post.return flow >>%
+                (* NB: if ecls already had a tp_as_seuqence->sq_length, __len__ is overriden by this one. Similar to CPython's behavior where the first slotdef entry wins (so here as we override we declare slots in reverse order) *)
+              bind_function_in "__len__" (as_mapping "mp_length")
+                cls_addr (Wrapper_descriptor (Some "wrap_lenfunc")) man >>%
+              bind_function_in "__getitem__" (as_mapping "mp_subscript")
+                cls_addr (Wrapper_descriptor (Some "wrap_binaryfunc")) man >>%
+              bind_function_in "__setitem__" (as_mapping "mp_ass_subscript")
+                cls_addr (Wrapper_descriptor (Some "wrap_objobjargproc")) man
+            )
+            ~felse:(fun flow ->
+              debug "tp_as_mapping is NULL, skipping";
+              Post.return flow) >>% fun flow ->
+            (* FIXME: *)
+            debug "add_pymethoddef";
+            add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow >>%
+            add_pymemberdef cls_addr ecls man >>% fun flow ->
+            let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
+            Cases.singleton cls_addr flow
 
     let is_py_addr addr =
       match akind addr with
