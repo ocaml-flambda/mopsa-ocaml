@@ -151,6 +151,9 @@ module Domain =
         process_simple f man flow range args in_args out_type
         |> OptionExt.return
 
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__new__", _))}, _)}), [cls], []) ->
+         man.eval (mk_string ~etyp:(T_py None) "" range) flow |> OptionExt.return
+
       | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("str.__new__", _))}, _)}), [cls; obj], []) ->
         (* from unicode_new in unicodeobject.c
            1) if type is not str then call unicode_subtype_new (not handled but asserts that type is subtype of str)
@@ -184,6 +187,10 @@ module Domain =
           )
         |> OptionExt.return
         (* man.eval   (mk_py_top T_string range) flow |> OptionExt.return *)
+
+      | E_py_call(({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bytes.__new__", _))}, _)}), [cls; obj], []) ->
+         (* FIXME: check it's a list of integers *)
+         Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, Some (mk_top T_string range)) range) flow |> OptionExt.return
 
       (* 𝔼⟦ str.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
