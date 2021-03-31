@@ -1670,6 +1670,22 @@ module Domain =
           man.eval c_addr flow
         ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyUnicode_AsUnicode", [unicode]) ->
+         c_to_python_boundary unicode man flow range >>$ (fun py_unicode flow ->
+          let addr_unicode, oe_unicode = object_of_expr py_unicode in
+          if compare_addr_kind (akind addr_unicode) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
+            let open Universal.Strings.Powerset in
+            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            Eval.join_list ~empty:(fun () -> assert false)
+              (StringPower.fold (fun s acc ->
+                   Eval.singleton (mk_c_string ~kind:C_char_wide s range) flow :: acc
+                 ) strp [])
+          else
+            let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+            man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+              Eval.singleton (mk_c_null range)
+        ) |> OptionExt.return
+
       | E_c_builtin_call ("PyUnicode_AsUTF8AndSize", [unicode; size]) ->
          c_to_python_boundary unicode man flow range >>$ (fun py_unicode flow ->
           let addr_unicode, oe_unicode = object_of_expr py_unicode in
