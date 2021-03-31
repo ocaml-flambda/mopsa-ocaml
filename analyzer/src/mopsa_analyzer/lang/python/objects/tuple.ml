@@ -256,6 +256,8 @@ struct
                  in
                  let rec compare l1 l2 flow =
                    match l1, l2 with
+                   | [], [] ->
+                      man.eval (mk_py_bool (List.mem op ["__eq__"; "__le__"; "__ge__"]) range) flow
                    | [hd1], [hd2] ->
                       man.eval (py_compare op hd1 hd2 range) flow
                    | hd1::tl1, hd2::tl2 ->
