@@ -2415,7 +2415,8 @@ module Domain =
          (match (fst self).addr_kind with
           | A_py_c_class v -> Eval.singleton (C.Ast.mk_c_address_of (mk_var v range) range) flow
           | _ ->
-             strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
+             if List.length args = 0 then Eval.singleton (mk_c_null range) flow
+             else strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
              let c_addr, flow = python_to_c_boundary addr_self (Some (List.hd args_types)) (snd self) range man flow in
              Eval.singleton c_addr flow) >>$ (fun self flow ->
          (match kind with
@@ -2456,15 +2457,16 @@ module Domain =
          man.eval py_args flow >>$ (fun py_args flow ->
            man.eval py_kwds flow >>$ fun py_kwds flow ->
            let cfunc_args =
-               match List.length cfunc.c_func_parameters with
-               | 1 -> [self]
-               | 2 ->
-                  self ::
-                        {py_args with etyp = (List.nth args_types 1)} :: []
-               | 3 -> self ::
-                        {py_args with etyp = (List.nth args_types 1)}
-                        :: py_kwds :: []
-               | _ -> assert false in
+             match List.length cfunc.c_func_parameters with
+             | 0 -> []
+             | 1 -> [self]
+             | 2 ->
+                self ::
+                  {py_args with etyp = (List.nth args_types 1)} :: []
+             | 3 -> self ::
+                      {py_args with etyp = (List.nth args_types 1)}
+                      :: py_kwds :: []
+             | _ -> assert false in
              let call = match kind with
                | Wrapper_descriptor (Some wrapper_name) ->
                   (* wrapperdescr_call in descrobject.c *)
@@ -2522,6 +2524,7 @@ module Domain =
          )
          )
          )
+        )
          |> OptionExt.return
 
       (** member descriptors: attr get/set on descriptors defined in C classes *)
