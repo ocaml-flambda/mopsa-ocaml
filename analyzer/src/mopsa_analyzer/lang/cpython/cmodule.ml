@@ -151,6 +151,7 @@ let () =
       match ak with
       (* FIXME: other container addresses *)
       | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Py_list.A_py_iterator _
       | Python.Objects.Py_set.A_py_set
       | Python.Objects.Tuple.A_py_tuple _
       | Python.Objects.Dict.A_py_dict
@@ -260,11 +261,13 @@ module Domain =
           "PyObject_CallMethod";
           "PyObject_GetAttrString";
           "PyObject_GetItem";
+          "PyObject_GetIter";
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
           "PyObject_Size";
           "PyObject_Length";
           "PyObject_IsTrue";
+          "PyIter_Next";
           "PySequence_GetSlice";
           "PyLong_FromLong";
           "PyLong_FromUnsignedLong";
@@ -293,8 +296,8 @@ module Domain =
           "PyList_Size";
           "PyList_GetItem";
           "PyList_SetItem";
-          "_PyRange_GetItem";
           "PyDict_Size";
+          "PyDict_Next";
           "PySet_New";
           "PySet_Size";
           "PySet_Add";
@@ -764,12 +767,14 @@ module Domain =
       let type_addr = match akind addr with
         | A_py_instance a -> a
         | Python.Objects.Py_list.A_py_list -> fst @@ find_builtin "list"
+        | Python.Objects.Py_list.A_py_iterator (s, _) -> fst @@ find_builtin s
         | Python.Objects.Py_set.A_py_set -> fst @@ find_builtin "set"
         | Python.Objects.Dict.A_py_dict -> fst @@ find_builtin "dict"
         | Python.Objects.Tuple.A_py_tuple _ -> fst @@ find_builtin "tuple"
         | A_py_c_class _ | A_py_class _ -> fst @@ find_builtin "type"
         | A_py_module _ | A_py_c_module _ -> fst @@ find_builtin "module"
         | A_py_function _ -> fst @@ find_builtin "function"
+        | A_py_method _ -> fst @@ find_builtin "method"
         | _ -> panic_at range "parent addr of %a?" pp_addr addr in
       let c_addr, post =
         let inverse = Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow) in
@@ -1960,27 +1965,6 @@ module Domain =
            )
          |> OptionExt.return
 
-      | E_c_builtin_call ("PyTuple_GetItem", [tuple; pos]) ->
-         debug "PyTuple_GetItem";
-         resolve_c_pointer_into_addr tuple man flow >>$
-           (fun oaddr flow ->
-             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
-             let py_tuple = Python.Ast.mk_py_object (addr, None) range in
-             (* NB: alternative to c_int_to_python would be to make a query directly? *)
-             c_int_to_python pos man flow range >>$ fun py_obj flow ->
-               debug "PyTuple_GetItem, py_pos = %a" pp_expr py_obj;
-               (* FIXME: if an IndexError is raised? *)
-               man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "tuple.__getitem__") range)
-                           [py_tuple; py_obj] range) flow >>$
-                 fun py_elem flow ->
-                 let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-                 strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
-                 let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
-                 debug "PyTuple_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
-                 man.eval c_addr flow
-           )
-         |> OptionExt.return
-
       | E_c_builtin_call ("PyTuple_GetSlice", [tuple; start; stop]) ->
          (
            debug "%a" pp_expr exp;
@@ -2021,26 +2005,58 @@ module Domain =
         )
          |> OptionExt.return
 
-      | E_c_builtin_call ("PyList_GetItem", [list; pos]) ->
-         resolve_c_pointer_into_addr list man flow >>$
+      | E_c_builtin_call ("PyObject_GetIter", [arg]) ->
+         (* FIXME: this is used as tp_iter field for tuple, list, set, range... we should check the type *)
+         resolve_c_pointer_into_addr arg man flow >>$
            (fun oaddr flow ->
              let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
-             let py_list = Python.Ast.mk_py_object (addr, None) (tag_range range "list") in
-             (* NB: alternative to c_int_to_python would be to make a query directly? *)
-             c_int_to_python pos man flow (tag_range range "pos") >>$ fun py_obj flow ->
-               debug "PyList_GetItem, py_pos = %a" pp_expr py_obj;
-               (* FIXME: if an IndexError is raised? *)
-               man.eval (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "list.__getitem__") range)
-                           [py_list; py_obj] range) flow >>$
-                 fun py_elem flow ->
-                 let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-                 strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elemn flow ->
-                 let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
-                 debug "PyList_GetItem: %a %a" pp_expr c_addr pp_typ c_addr.etyp;
-                 man.eval c_addr flow
+             man.eval (Python.Ast.mk_py_call
+                         (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "iter") range)
+                         [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
+               (
+                 fun earg flow ->
+                 let addr_earg = fst @@ object_of_expr earg in
+                 let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+                 Eval.singleton c_addr flow
+               )
            )
          |> OptionExt.return
 
+      | E_c_builtin_call ("PyIter_Next", [arg]) ->
+         (* FIXME: this is used as tp_iter field for tuple, list, set, range... we should check the type *)
+         (* FIXME: stopiteration ~> returns null? *)
+         resolve_c_pointer_into_addr arg man flow >>$? fun oaddr flow ->
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+             Python.Utils.try_eval_expr man
+               (Python.Ast.mk_py_call
+                  (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "next") range)
+                  [Python.Ast.mk_py_object (addr, None) range] range) flow
+               ~on_empty:(fun exc_exp exc_name exc_msg flow ->
+                 if exc_name = "StopIteration" then Eval.singleton (mk_c_null range) flow |> OptionExt.return
+                 else
+                   man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+                   let exc_addr, exc_oe = object_of_expr exc_typ in
+                   let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+                   let setstring msg =
+                     man.exec
+                       (mk_c_call_stmt
+                          (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                          [
+                            mk_addr exc_addr range;
+                            msg
+                          ]
+                          range) flow
+                     >>%
+                       man.eval (mk_c_null range) in
+                   Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+                     (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+                   |> OptionExt.return
+               )
+             ~on_result:(fun earg flow ->
+                 let addr_earg = fst @@ object_of_expr earg in
+                 let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+                 Eval.singleton c_addr flow
+             )
 
       | E_c_builtin_call ("PySequence_GetSlice", [s; i1; i2]) ->
          let pylong_fromssize_t = C.Ast.find_c_fundec_by_name "PyLong_FromSsize_t" flow in
@@ -2205,6 +2221,26 @@ module Domain =
            )
            ~felse:(fun flow -> assert false)
          |> OptionExt.return
+
+      | E_c_builtin_call ("PyDict_Next", [p; ppos; pkey; pvalue]) ->
+         (* arf, the ppos is exposed as the position in the internal data structure *)
+         (* for now we cheat and just ask the dictionary abstraction to return everything at once *)
+         (* FIXME: cheating on py_ssize_t *)
+         let py_ssize_t = C.Ast.ul in
+         man.exec (mk_assign (mk_c_deref ppos range) (mk_top py_ssize_t range) range) flow >>% (fun flow ->
+         c_to_python_boundary p man flow range >>$ fun py_p flow ->
+          let els = man.ask (Python.Objects.Constant_dict.Q_py_dict_items py_p) flow in
+          let assigns = List.map (fun (k, v) ->
+              let ok = object_of_expr k and ov = object_of_expr v in
+              let c_k, flow = python_to_c_boundary (fst ok) None (snd ok) range man flow in
+              let c_v, flow = python_to_c_boundary (fst ov) None (snd ov) range man flow in
+              man.exec (mk_block
+                          [mk_assign (mk_c_deref pkey range) c_k range;
+                           mk_assign (mk_c_deref pvalue range) c_v range]
+                          range) flow >>% Eval.singleton (mk_one range)) els in
+          Eval.join_list ~empty:(fun () -> assert false)
+            (Eval.singleton (mk_zero range) flow :: assigns)
+        ) |> OptionExt.return
 
       | E_c_builtin_call ("PyWeakref_GetObject", [wkref]) ->
          c_to_python_boundary wkref man flow range >>$ (fun py_wkref flow ->
