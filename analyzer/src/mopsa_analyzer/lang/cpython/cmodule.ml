@@ -526,12 +526,20 @@ module Domain =
                   Cases.empty
                | _ -> assert false
                end
-            | _ -> panic_at expr.erange "resolve_c_pointer_into_addr %a" pp_points_to points_to;
+            | _ ->
+               if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+                 Cases.empty flow
+               else
+                 panic_at expr.erange "resolve_c_pointer_into_addr %a" pp_points_to points_to;
           else
             assert false
         )
 
-    let c_to_python_boundary ?(safe_check = None) ?(on_null = fun flow -> assert false) ?(on_top = fun flow -> assert false) expr man flow range =
+    let c_to_python_boundary
+          ?(safe_check = None)
+          ?(on_null = fun flow -> debug "null!"; assert false)
+          ?(on_top = fun flow -> debug "top!"; assert false)
+          expr man flow range =
       resolve_c_pointer_into_addr expr man flow >>$
         fun oaddr flow ->
         match oaddr with
@@ -818,6 +826,7 @@ module Domain =
               let flow =
                 if is_cls then
                   (* if cls: should call set_default_flags *)
+                  let cls_obj = mk_addr ~mode:(Some STRONG) ~etyp:(T_c_pointer pytypeobject_typ) addr range in
                   post_to_flow man
                     (
                       (* FIXME:
@@ -827,6 +836,7 @@ module Domain =
                       let flow =
                         match akind addr with
                         | A_py_class (_, m) ->
+                           (* if it has __next__ or something, we need to add the tp_iternext field and call slot_tp_iternext *)
                            let base_addr, _ = List.hd @@ List.tl m in
                            let base_obj = py_addr_to_c_expr base_addr pytypeobject_typ range man flow in
                            post_to_flow man
@@ -834,17 +844,25 @@ module Domain =
                              (mk_expr_stmt
                                 (mk_c_call
                                    set_tp_alloc_py_class
-                                   [obj; base_obj]
+                                   [cls_obj; base_obj]
                                    range)
                                 range) flow)
                         | _ -> flow in
+                      (match akind addr with
+                       | A_py_class _ ->
+                          assume ~route:(Semantic "Python")
+                            (Python.Objects.Py_object.mk_py_ll_hasattr (mk_py_object (addr, oe) range) (mk_string "__next__" range) range)
+                            man flow
+                            ~fthen:(man.exec (mk_assign (mk_c_arrow_access_by_name cls_obj "tp_iternext" range) (mk_expr (E_c_function (find_c_fundec_by_name "slot_tp_iternext" flow)) range) range))
+                            ~felse:Post.return
+                       | _ -> (* we don't want to do that for A_py_c_classes. FIXME: but I guess this init never happens for A_py_c_classes? *) Post.return flow )>>%
                       man.exec
                         (mk_expr_stmt
                            (mk_c_call
                               set_default_flags_func
-                              [obj]
+                              [cls_obj]
                               range)
-                           range) flow >>%
+                           range) >>%
                         Post.return
                     )
                 else flow in
