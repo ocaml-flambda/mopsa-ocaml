@@ -549,7 +549,7 @@ module Domain =
                | None -> flow
                | Some c -> Flow.add_safe_check c range flow in
              match akind addr with
-             | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+             | A_py_instance {addr_kind = A_py_class (C_builtin ("int" | "bool"), _)} ->
                 man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
                   fun int_value flow ->
                   Eval.singleton (mk_py_object (addr, Some int_value) range) flow
@@ -878,7 +878,7 @@ module Domain =
       in
       let post =
         match akind type_addr with
-        | A_py_class (C_builtin "int", _) ->
+        | A_py_class (C_builtin ("int" | "bool"), _) ->
            debug "boundary @ %a, assigning %a.value = %a" pp_range range pp_addr addr (OptionExt.print pp_expr) oe;
            post >>% man.exec (mk_assign
                        (mk_avalue_from_pyaddr addr T_int range)
@@ -943,7 +943,7 @@ module Domain =
              match oaddr with
              | Some (Nt addr) ->
                 begin match akind addr with
-                | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+                | A_py_instance {addr_kind = A_py_class (C_builtin ("int" | "bool"), _)} ->
                    man.eval (mk_avalue_from_pyaddr addr T_int range) flow >>$
                      fun int_value flow ->
                      let max_value = mk_z type_max_value ~typ:T_int range in
@@ -2547,7 +2547,7 @@ module Domain =
               | S_fold _ -> mk_fold dst [src]
               | _ -> assert false in
             match akind src with
-            | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
+            | A_py_instance {addr_kind = A_py_class (C_builtin ("int" | "bool"), _)} ->
                post >>% man.exec (exec_value (mk_avalue_from_pyaddr src T_int range) (mk_avalue_from_pyaddr dst T_int range) range)
             | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
                post >>% man.exec (exec_value (mk_avalue_from_pyaddr src (T_float F_DOUBLE) range) (mk_avalue_from_pyaddr dst (T_float F_DOUBLE) range) range)
