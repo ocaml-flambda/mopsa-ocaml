@@ -992,6 +992,14 @@ module Domain =
         else
           let range = tag_range range "process[%d]" pos in
           begin match fmt_str.[pos] with
+          | 'b' | 'B' | 'h' | 'i' ->
+             let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
+             (* FIXME: cast to long *)
+             (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
+             man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.nth refs ref_pos) sl range] range) flow >>$
+               fun res_pos flow ->
+               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
+
           | 'c' ->
              let pyunicode_fromwidechar = C.Ast.find_c_fundec_by_name "PyBytes_FromStringAndSize" flow in
              man.eval (mk_c_call pyunicode_fromwidechar
@@ -1005,14 +1013,6 @@ module Domain =
           | 'd' | 'f' ->
              let pyfloat_fromdouble = C.Ast.find_c_fundec_by_name "PyFloat_FromDouble" flow in
              man.eval (mk_c_call pyfloat_fromdouble [mk_c_cast (List.nth refs ref_pos) (T_c_float C_double) range] range) flow >>$
-               fun res_pos flow ->
-               process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
-
-          | 'i' ->
-             let pylong_fromlong = C.Ast.find_c_fundec_by_name "PyLong_FromLong" flow in
-             (* FIXME: cast to long *)
-             (* FIXME: in Cbox_getcounter, if we change self->counter by self->contents, the error is currently really unclear. The translation to Universal fails silently in PyLong_FromLong. How to change that? *)
-             man.eval (mk_c_call pylong_fromlong [mk_c_cast (List.nth refs ref_pos) sl range] range) flow >>$
                fun res_pos flow ->
                process (pos+1) (ref_pos+1) until (res_pos :: acc) flow
 
@@ -1130,9 +1130,11 @@ module Domain =
                  else search count (pos+1) in
                search 0 (pos+1) in
              let tuple_subfmt = String.sub fmt_str pos (closing_par_pos - pos - 1) in
-             process (pos+1) (ref_pos+1) closing_par_pos [] flow >>$ fun tuple_values flow ->
+             debug "starting to process tuple";
+             process (pos+1) ref_pos closing_par_pos [] flow >>$ fun tuple_values flow ->
+             debug "tuple processing done!";
              fold_c_to_python_boundary man range tuple_values flow >>$ fun tuple_values flow ->
-             man.eval (mk_expr (Python.Ast.E_py_tuple tuple_values) range) flow >>$ fun py_tuple flow ->
+             man.eval ~route:(Semantic "Python") (mk_expr ~etyp:(T_py None) (Python.Ast.E_py_tuple tuple_values) range) flow >>$ fun py_tuple flow ->
              let addr_py_tuple, oe_py_tuple = object_of_expr py_tuple in
              let c_addr, flow = python_to_c_boundary addr_py_tuple None oe_py_tuple range man flow in
              (* FIXME: # in count *)
