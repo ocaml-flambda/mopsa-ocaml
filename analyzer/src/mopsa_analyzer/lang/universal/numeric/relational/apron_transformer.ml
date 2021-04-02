@@ -95,19 +95,16 @@ struct
   (** Construct a list of linear constraints from an abstract value. *)
   let to_constraints (a,bnd) =
     let earray = Apron.Abstract1.to_lincons_array ApronManager.man a in
-    let rec iter i =
-      if i = Apron.Lincons1.array_length earray then []
-      else
-        let l = ref [] in
-        let cons = Apron.Lincons1.array_get earray i in
-        Apron.Lincons1.iter (fun c v ->
-            l := (c, Binding.apron_to_mopsa_var v bnd) :: !l
-          ) cons
-        ;
-        (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) :: (iter (i + 1))
-    in
-    iter 0
-
+    let ll = ref [] in
+    for i = 0 to Apron.Lincons1.array_length earray -1 do
+      let l = ref [] in
+      let cons = Apron.Lincons1.array_get earray i in
+      Apron.Lincons1.iter (fun c v ->
+          l := (c, Binding.apron_to_mopsa_var v bnd) :: !l
+        ) cons;
+      ll := (!l, Apron.Lincons1.get_cst cons, Apron.Lincons1.get_typ cons) ::  !ll
+    done;
+    !ll
 
   (** Restrict linear constraints involving variable [v] *)
   let constraints_of_var v constraints =
@@ -197,9 +194,8 @@ struct
     Apron.Abstract1.change_environment ApronManager.man abs env true
 
 
-
-
   let rec exp_to_apron exp (abs,bnd) l =
+    if not (is_numeric_type (etyp exp)) then raise UnsupportedExpression else
     match ekind exp with
     | E_constant (C_int_interval (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi)) when Z.(lo = hi) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string lo)),
@@ -275,8 +271,7 @@ struct
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
 
     | _ ->
-      Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
-      raise UnsupportedExpression
+      raise ImpreciseExpression
 
 
   and bexp_to_apron exp (abs,bnd) l =
