@@ -15,7 +15,7 @@
 	    // Numeric abstraction
             {
                 "product": [
-                    "universal.numeric.relational.polyhedra",
+                    "universal.numeric.relational",
                     {
                         "nonrel": {
 		            "union": [
@@ -25,9 +25,11 @@
 		            ]
 		        }
                     }
+                ],
+                "reductions": [
+                    "universal.numeric.reductions.intervals_rel"
                 ]
             }
-	}
-    ]
-}
+        ]
+    }
 }
