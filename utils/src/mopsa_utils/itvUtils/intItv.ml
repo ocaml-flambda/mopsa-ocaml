@@ -2,7 +2,7 @@
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
-(* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Copyright (C) 2017-2021 The MOPSA Project.                               *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -210,6 +210,7 @@ let contains_nonzero ((a,b):t) : bool =
 (** [a,b] contains a non-zero value. *)
 
 let is_zero (ab:t) : bool = ab = zero
+let is_one (ab:t) : bool = ab = one
 let is_positive ((a,b):t) : bool = B.is_positive a
 let is_negative ((a,b):t) : bool = B.is_negative b
 let is_positive_strict ((a,b):t) : bool = B.is_positive_strict a
@@ -440,14 +441,16 @@ let wrap ((a,b):t) (lo:Z.t) (up:Z.t) : t =
   match a,b with
   | B.MINF,_ | _,B.PINF -> B.Finite lo, B.Finite up
   | B.Finite aa, B.Finite bb ->
-     let w = Z.succ (Z.sub up lo) in
-     let (aq,ar), (bq,br) = Z.ediv_rem (Z.sub aa lo) w, Z.ediv_rem (Z.sub bb lo) w in
-     if aq = bq then
-        (* included in some [lo,up]+kw *)
-       B.Finite (Z.add ar lo), B.Finite (Z.add br lo)
+     if aa >= lo && bb <= up then a,b (* no wrap-around case *)
      else
-       (* crosses interval boundaries *)
-       B.Finite lo, B.Finite up
+       let w = Z.succ (Z.sub up lo) in
+       let (aq,ar), (bq,br) = Z.ediv_rem (Z.sub aa lo) w, Z.ediv_rem (Z.sub bb lo) w in
+       if aq = bq then
+         (* included in some [lo,up]+kw *)
+         B.Finite (Z.add ar lo), B.Finite (Z.add br lo)
+       else
+         (* crosses interval boundaries *)
+         B.Finite lo, B.Finite up
   | _ -> invalid_arg (Printf.sprintf "IntItv.wrap %s in [%s,%s]" (to_string (a,b)) (Z.to_string lo) (Z.to_string up))
 (** Put back the interval inside [lo,up] by modular arithmetics.
     Useful to model the effect of arithmetic or conversion overflow. *)
@@ -502,6 +505,7 @@ let is_log_neq (ab:t) (ab':t) : bool = not (equal ab ab' && is_singleton ab)
 (** C comparison tests. Returns a boolean if the test may succeed *)
 
 
+(** {2 Bit operations} *)
 
 let shift_left (ab:t) (ab':t) : t_with_bot =
   match positive ab' with
@@ -527,98 +531,225 @@ let bit_not (ab:t) : t =
 (** Bitwise negation: ~x = -x-1 *)
 
 
-(**
-  Note:
-  The following bitwise operations are only precise for simple cases:
-  singletons and booleans.
-  They could be improved.
-  See Hacker's Delight by Henry S. Warren Jr., 2nd ed., Sect. 4.3.
+(** Internal functions *)
+
+(* minimum value of [a,b] | [c,d]
+   Hacker's delight, Sec. 4.3, Fig. 4-3
+   slightly changed to make bit masking more explicit
+   assumes that neither argument contains both positive and strictly negative values
  *)
+let min_or (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t =
+  let rec doit i =
+    if i < 0 then Z.logor a c else
+      let ai, ci = Z.shift_right a i, Z.shift_right c i in
+      match Z.is_even ai, Z.is_even ci with
+      | true, false ->
+         let a' = Z.shift_left (Z.logor ai Z.one) i in
+         if a' <= b then Z.logor a' c
+         else doit (i-1)
+      | false, true ->
+         let c' = Z.shift_left (Z.logor ci Z.one) i in
+         if c' <= d then Z.logor a c'
+         else doit (i-1)
+      | _ ->
+         doit (i-1)
+  in
+  let mag =
+    if (a >= Z.zero) = (c >= Z.zero) then
+      (* start the search at the leftmost bit that differ between a and c *)
+      Z.numbits (Z.logxor a c) - 1
+    else
+      (* if infinitely many differ, fallback to operator magnitude *)
+      max (max (Z.numbits a) (Z.numbits b)) (max (Z.numbits c) (Z.numbits d))
+  in
+  doit mag
+
+
+(* maximum value of [a,b] | [c,d]
+   Hacker's delight, Sec. 4.3, Fig. 4-4
+   assumes that neither argument contains both positive and strictly negative values
+*)
+let max_or (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t =
+  let rec doit i =
+    if i < 0 then Z.logor b d else
+      let bi, di = Z.shift_right b i, Z.shift_right d i in
+      if Z.is_odd bi && Z.is_odd di then
+        let b' = Z.pred (Z.shift_left bi i) in
+        if a <= b' then Z.logor b' d else
+        let d' = Z.pred (Z.shift_left di i) in
+        if c <= d' then Z.logor b d' else
+        doit (i-1)
+      else doit (i-1)
+  in
+  let mag =
+    if (a >= Z.zero) || (c >= Z.zero) then
+      (* start the search at the leftmost bit set in both a and c *)
+      Z.numbits (Z.logand b d) - 1
+    else
+      (* if infinitely many, fallback to operator magnitude *)
+      max (max (Z.numbits a) (Z.numbits b)) (max (Z.numbits c) (Z.numbits d))
+  in
+  doit mag
+
+(* handles the cases of intervals crossing zero for [a,b] | [c,d]
+   Hacker's delight, Sec. 4.3, Table 4.1
+*)
+let bounds_or (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t * Z.t =
+  match a >= Z.zero || b < Z.zero, c >= Z.zero || d < Z.zero with
+  | true, true ->
+     min_or a b c d, max_or a b c d
+  | false, true ->
+     if c >= Z.zero then min_or a Z.minus_one c d, max_or Z.zero b c d
+     else c, Z.minus_one
+  | true, false ->
+     if a >= Z.zero then min_or a b c Z.minus_one, max_or a b Z.zero d
+     else a, Z.minus_one
+  | false, false ->
+     Z.min a c, max_or Z.zero b Z.zero d
+
+(* [a,b] & [c,d]
+    Hacker's delight, Sec. 4.3, algebraic method
+    because: x & y = ~(~x | y)
+    and: (a <= x <= b) <=> (~b <= ~x <= ~a)
+ *)
+let bounds_and (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t * Z.t =
+  let nh,nl = bounds_or (Z.lognot b) (Z.lognot a) (Z.lognot d) (Z.lognot c) in
+  Z.lognot nl, Z.lognot nh
+
+(* minimum value of [a,b] ^ [c,d]
+   Hacker's delight, Sec. 4.3
+   assumes that neither argument contains both positive and strictly negative values
+ *)
+let min_xor (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t =
+  let rec doit a c i =
+    if i < 0 then Z.logxor a c else
+      let ai, ci = Z.shift_right a i, Z.shift_right c i in
+      match Z.is_even ai, Z.is_even ci with
+      | true, false ->
+         let a' = Z.shift_left (Z.logor ai Z.one) i in
+         doit (if a' <= b then a' else a) c (i-1)
+      | false, true ->
+         let c' = Z.shift_left (Z.logor ci Z.one) i in
+         doit a (if c' <= d then c' else c) (i-1)
+      | _ ->
+         doit a c (i-1)
+  in
+  let mag =
+    if (a >= Z.zero) = (c >= Z.zero) then Z.numbits (Z.logxor a c) - 1
+    else max (max (Z.numbits a) (Z.numbits b)) (max (Z.numbits c) (Z.numbits d))
+  in
+  doit a c mag
+
+(* maximum value of [a,b] ^ [c,d]
+   Hacker's delight, Sec. 4.3
+   assumes that neither argument contains both positive and strictly negative values
+*)
+let max_xor (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t =
+  let rec doit b d i =
+    if i < 0 then Z.logxor b d else
+      let bi, di = Z.shift_right b i, Z.shift_right d i in
+      if Z.is_odd bi && Z.is_odd di then
+        let b' = Z.pred (Z.shift_left bi i) in
+        if a <= b' then doit b' d (i-1)
+        else
+          let d' = Z.pred (Z.shift_left di i) in
+          if c <= d' then doit b d' (i-1)
+          else doit b d (i-1)
+      else
+        doit b d (i-1)
+  in
+  let mag =
+    if (a >= Z.zero) || (c >= Z.zero) then Z.numbits (Z.logand b d) - 1
+    else max (max (Z.numbits a) (Z.numbits b)) (max (Z.numbits c) (Z.numbits d))
+  in
+  doit b d mag
+
+(* handles the cases of intervals crossing zero for [a,b] ^ [c,d] *)
+let bounds_xor (a:Z.t) (b:Z.t) (c:Z.t) (d:Z.t) : Z.t * Z.t =
+  let combine2 a1 b1 c1 d1 a2 b2 c2 d2 =
+    (* join two cases *)
+    let l1,h1 = min_xor a1 b1 c1 d1, max_xor a1 b1 c1 d1
+    and l2,h2 = min_xor a2 b2 c2 d2, max_xor a2 b2 c2 d2 in
+    Z.min l1 l2, Z.max h1 h2
+  in
+  match a >= Z.zero || b < Z.zero, c >= Z.zero || d < Z.zero with
+  | true,true -> min_xor a b c d, max_xor a b c d
+  | false,true ->
+     (* 2-way split *)
+     combine2 a Z.minus_one c d   Z.zero b c d
+  | true,false ->
+     (* 2-way split *)
+     combine2 a b c Z.minus_one   a b Z.zero d
+  | false,false ->
+     (* 4-way split *)
+     let l1,h1 = combine2 a Z.minus_one c Z.minus_one Z.zero b c Z.minus_one
+     and l2,h2 = combine2 a Z.minus_one Z.zero d Z.zero b Z.zero d in
+     Z.min l1 l2, Z.max h1 h2
+
+(** Interval functions, based on the previous ones *)
 
 let bit_or (ab:t) (ab':t) : t =
-  if included ab zero_one && included ab' zero_one then
-    (* boolean case *)
-    log_or ab ab'
-  else
-    match ab, ab' with
-    | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
-       (* finite cases *)
-       if al=ah && bl=bh then
-         (* singleton case *)
-         cst (Z.logor al bl)
-       else if is_positive ab && is_positive ab' then
-         (* positive case *)
-         B.Finite (Z.max al bl), B.Finite (Z.add ah bh)
-       else
-         (* general case *)
-         minf_inf
-    | _ ->
-       (* infinite cases *)
-       if is_positive ab && is_positive ab' then
-         (* positive case *)
-         zero_inf
-       else
-         (* general case *)
-         minf_inf
-(** Bitwise or (to be improved). *)
+  match ab, ab' with
+  | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
+     (* finite case *)
+     if al=ah && bl=bh then
+       (* singleton case *)
+       cst (Z.logor al bl)
+     else
+       (* general case *)
+       let l,h = bounds_or al ah bl bh in
+       B.Finite l, B.Finite h
+  | _ ->
+     (* infinite cases (might be improvable) *)
+     if is_positive ab && is_positive ab' then
+       (* positive case *)
+       zero_inf
+     else
+       (* general case *)
+       minf_inf
+(** Bitwise or. *)
 
 let bit_and (ab:t) (ab':t) : t =
-  if included ab zero_one && included ab' zero_one then
-    (* boolean case *)
-    log_and ab ab'
-  else
-    match ab, ab' with
-    | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
-       (* finite cases *)
-       if al=ah && bl=bh then
-         (* singleton case *)
-         cst (Z.logand al bl)
-       else if is_positive ab && is_positive ab' then
-         (* positive cases *)
-         B.Finite Z.zero, B.Finite (Z.min ah bh)
-       else if is_positive ab then
-         B.Finite Z.zero, B.Finite ah
-       else if is_positive ab' then
-         B.Finite Z.zero, B.Finite bh
-       else
-         (* general case *)
-         minf_inf
-    | _ ->
-       (* infinite cases *)
-       if is_positive ab || is_positive ab' then
-         (* positive case *)
-         zero_inf
-       else
-         (* general case *)
-         minf_inf
-(** Bitwise and (to be improved). *)
+  match ab, ab' with
+  | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
+     (* finite cases *)
+     if al=ah && bl=bh then
+       (* singleton case *)
+       cst (Z.logand al bl)
+     else
+       (* general case *)
+       let l,h = bounds_and al ah bl bh in
+       B.Finite l, B.Finite h
+  | _ ->
+     (* infinite cases (might be improvable) *)
+     if is_positive ab || is_positive ab' then
+       (* positive case *)
+       zero_inf
+     else
+       (* general case *)
+       minf_inf
+(** Bitwise and. *)
 
 let bit_xor (ab:t) (ab':t) : t =
-  if included ab zero_one && included ab' zero_one then
-    (* boolean case *)
-    log_xor ab ab'
-  else
-    match ab, ab' with
-    | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
-       (* finite cases *)
-       if al=ah && bl=bh then
-         (* singleton case *)
-         cst (Z.logxor al bl)
-       else if is_positive ab && is_positive ab' then
-         (* positive case *)
-         B.Finite Z.zero, B.Finite (Z.add ah bh)
-       else
-         (* general case *)
-         minf_inf
-    | _ ->
-       (* infinite cases *)
-       if is_positive ab && is_positive ab' then
-         (* positive case *)
-         zero_inf
-       else
-         (* general case *)
-         minf_inf
-(** Bitwise exclusive or (to be improved). *)
+  match ab, ab' with
+  | (B.Finite al, B.Finite ah), (B.Finite bl, B.Finite bh) ->
+     (* finite cases *)
+     if al=ah && bl=bh then
+       (* singleton case *)
+       cst (Z.logxor al bl)
+     else
+       (* general case *)
+       let l,h = bounds_xor al ah bl bh in
+       B.Finite l, B.Finite h
+  | _ ->
+     (* infinite cases (might be improvable) *)
+     if is_positive ab && is_positive ab' then
+       (* positive case *)
+       zero_inf
+     else
+       (* general case *)
+       minf_inf
+(** Bitwise exclusive or. *)
 
 
 
@@ -730,8 +861,6 @@ let bwd_ediv ((a,a'):t) ((b,b'):t) (r:t) : (t*t) with_bot =
   in
   bot_merge2 aa bb
 
-let bwd_pow = bwd_default_binary
-
 let bwd_bit_not (a:t) (r:t) : t_with_bot =
   meet a (bit_not r)
 
@@ -739,23 +868,67 @@ let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
   bot_merge2 (meet a r) (meet b r)
 (** Backward join: both arguments are intersected with the result. *)
 
-let bwd_bit_xor (a:t) (b:t) (r:t) : (t*t) with_bot =
-  bot_merge2 (meet a (bit_xor b r)) (meet b (bit_xor a r))
-(** r = a xor b ⇒ a = r xor b ∧ b = r xor a. *)
+let bwd_shift_left (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a << b ⇒ a = r >> b *)
+  match shift_right r b with
+  | Nb aa ->  bot_merge2 (meet a aa) (Nb b)
+  | BOT -> Nb (a,b)
 
+let bwd_shift_right (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a >> b ⇒  r << b <= a < (r << b) + (1 << b) *)
+  match shift_left r b with
+  | Nb (l, h) ->
+     let aa = l, B.add h (B.pred (B.shift_left B.one (snd b))) in
+     bot_merge2 (meet a aa) (Nb b)
+  | BOT -> Nb (a,b)
+
+let bwd_shift_right_trunc (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a >>> b ⇒  (r << b) - (1 << b) < a < (r << b) + (1 << b) *)
+  match shift_left r b with
+  | Nb (l, h) ->
+     let m = B.pred (B.shift_left B.one (snd b)) in
+     let l = if B.is_negative_strict (fst a) then B.sub l m else l
+     and h = if B.is_positive_strict (snd a) then B.add h m else h in
+     bot_merge2 (meet a (l,h)) (Nb b)
+  | BOT -> Nb (a,b)
+
+let bwd_bit_or (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a | b ⇒ a = a & r ∧ b = b & r, might be improved *)
+  let aa = meet a (bit_and r a)
+  and bb = meet b (bit_and r b) in
+  bot_merge2 aa bb
+
+let bwd_bit_and (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a & b ⇒ a = ~(~a & ~r) ∧ b = ~(~b & ~r), might be improved *)
+  let aa = meet a (bit_not( bit_and (bit_not a) (bit_not r)))
+  and bb = meet b (bit_not (bit_and (bit_not b) (bit_not r))) in
+  bot_merge2 aa bb
+
+let bwd_bit_xor (a:t) (b:t) (r:t) : (t*t) with_bot =
+  (* r = a xor b ⇒ a = r xor b ∧ b = r xor a *)
+  bot_merge2 (meet a (bit_xor b r)) (meet b (bit_xor a r))
+
+(* utility for bwd_log_xxx *)
+let bwd_log_gen if_one if_zero (a:t) (b:t) (r:t) : (t*t) with_bot =
+  match contains_zero r, contains_one r with
+  | true, true   -> Nb (a,b)
+  | true, false  -> if_zero a b
+  | false, true  -> if_one a b
+  | false, false -> BOT
+
+let bwd_log_eq  = bwd_log_gen filter_eq filter_neq
+let bwd_log_neq = bwd_log_gen filter_neq filter_eq
+let bwd_log_lt  = bwd_log_gen filter_lt filter_geq
+let bwd_log_gt  = bwd_log_gen filter_gt filter_leq
+let bwd_log_leq = bwd_log_gen filter_leq filter_gt
+let bwd_log_geq = bwd_log_gen filter_geq filter_lt
+
+let bwd_wrap (a:t) range (r:t) : t_with_bot =
+  if included a (of_z (fst range) (snd range))
+  then meet a r (* no overflow *)
+  else Nb a (* might be improved *)
 
 let bwd_rem : t -> t -> t -> (t*t) with_bot= bwd_default_binary
 let bwd_erem : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_wrap (ab :t) range (r:t) : t_with_bot = bwd_default_unary ab r
-let bwd_shift_left : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_shift_right : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_shift_right_trunc : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_bit_or : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_bit_and : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_eq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_neq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_lt : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_leq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_gt : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-let bwd_log_geq : t -> t -> t -> (t*t) with_bot = bwd_default_binary
-(* TODO: more precise backward and, or, rem, shift, wrap *)
+let bwd_pow = bwd_default_binary
+(* TODO: more precise backward functions *)
