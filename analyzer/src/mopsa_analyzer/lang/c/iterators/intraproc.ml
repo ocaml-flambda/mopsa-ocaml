@@ -180,34 +180,18 @@ struct
         man flow |>
       OptionExt.return
 
-    | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
+    | E_unop(O_log_not, e) when is_c_int_type exp.etyp &&
+                                is_c_num_type e.etyp ->
       begin
-        man.eval e flow >>$ fun e flow ->
+        man.eval e ~translate:"Universal" flow >>$ fun e flow ->
         match c_expr_to_z e with
-        | Some n when Z.(n = zero) -> Eval.singleton one flow
-        | Some n                   -> Eval.singleton zero flow
+        | Some n ->
+          if Z.(n = zero) then Eval.singleton one flow
+                          else Eval.singleton zero flow
         | None ->
-          let cond,neg_cond =
-            let rec aux e =
-              match ekind e with
-              | E_unop(O_log_not,ee) ->
-                let c1,c2 = aux ee in
-                c2,c1
-              | E_binop(op,_,_) when is_comparison_op op || is_logic_op op ->
-                negate_expr e, e
-              | _ ->
-                let z = mk_zero ~typ:e.etyp exp.erange in
-                eq e z ~etyp:s32 exp.erange, ne e z ~etyp:s32 exp.erange
-            in
-            aux e
-          in
-          switch [
-            [cond],
-            (fun flow -> Eval.singleton one flow);
-
-            [neg_cond],
-            (fun flow -> Eval.singleton zero flow)
-          ] man flow
+          assume e man flow
+            ~fthen:(fun flow -> Eval.singleton zero flow)
+            ~felse:(fun flow -> Eval.singleton one flow)
       end |>
       OptionExt.return
 
