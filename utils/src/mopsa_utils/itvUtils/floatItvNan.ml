@@ -757,8 +757,16 @@ let rec filter_neq (prec:prec) (x:t) (y:t) : t * t =
     let yy,xx = filter_neq prec y x in xx, yy (* symmetric case *)
   else x, y (* no singleton -> no refinement *)
 
-(** Refine both arguments assuming that the test is true. *)
+let filter_nonzero (prec:prec) (x:t) : t =
+  match bot_absorb2 (FI.filter_neq (fix_prec prec)) x.itv (Nb FI.zero) with
+  | BOT -> { x with itv = BOT; }
+  | Nb (xx,_) -> {x with itv = Nb xx; }
 
+let filter_zero (prec:prec) (x:t) : t =
+  let r = meet x zero in
+  { r with nan = false; }
+
+(** Refine both arguments assuming that the test is true. *)
   
 let filter_leq_false (prec:prec) (x:t) (y:t) : t * t =
   if x.nan || y.nan then x, y else filter_gt prec x y
@@ -774,7 +782,9 @@ let filter_gt_false (prec:prec) (x:t) (y:t) : t * t =
 
 let filter_eq_false  = filter_neq
 let filter_neq_false = filter_eq
-                                         
+let filter_zero_false  = filter_nonzero
+let filter_nonzero_false = filter_zero
+
 (** Refine both arguments assuming that the test is false. *)
 
 
