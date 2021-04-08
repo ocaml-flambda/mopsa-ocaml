@@ -369,23 +369,7 @@ let () = register_builtin_option {
     key = "-hash-heap-address";
     category = "Heap";
     doc = "  format heap addresses with their hash";
-    spec = ArgExt.Set Core.Ast.Addr.opt_hash_addr;
-    default = "false";
-  }
-
-let () = register_builtin_option {
-    key = "-heap-use-hash-format";
-    category = "Heap";
-    doc = "  (deprecated, use -hash-heap-address instead)";
-    spec = ArgExt.Set Core.Ast.Addr.opt_hash_addr;
-    default = "false";
-  }
-
-let () = register_builtin_option {
-    key = "-no-hash-heap-address";
-    category = "Heap";
-    doc = "  format heap addresses with their full allocation site";
-    spec = ArgExt.Clear Core.Ast.Addr.opt_hash_addr;
+    spec = ArgExt.Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
     default = "false";
   }
 

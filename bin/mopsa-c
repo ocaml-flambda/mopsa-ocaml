@@ -3,4 +3,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=c/default.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG} -clean-cur-only -hash-heap-address -loop-unrolling=0 $@
+${MOPSADIR}/bin/mopsa -config=${CONFIG} -clean-cur-only -hash-heap-address=true -loop-unrolling=0 $@
