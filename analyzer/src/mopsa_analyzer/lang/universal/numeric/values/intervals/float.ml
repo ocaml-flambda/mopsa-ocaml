@@ -146,7 +146,10 @@ struct
     | O_mod   -> I.fmod (prec p) (round ()) a1 a2
     | _       -> top_of_prec p
 
-  let filter = default_filter
+  let filter b t a =
+    let p = prec_of_type t in
+    if b then I.filter_nonzero (prec p) a
+    else I.filter_nonzero_false (prec p) a
 
   let backward_unop op t a tr r =
     let p = prec_of_type tr in
