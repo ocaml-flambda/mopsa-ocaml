@@ -499,7 +499,7 @@ struct
        let () = debug "answer to query is %s %a@\n" exc (format Universal.Strings.Powerset.StringPower.print) message in
        Some (exc, message)
 
-    | Universal.Ast.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
+    | Framework.Engines.Interactive.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
        let open Framework.Engines.Interactive in
        let cur = get_env T_cur man flow in
        let attrset = AMap.find addr cur in
