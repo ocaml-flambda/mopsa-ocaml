@@ -87,7 +87,7 @@ struct
       Post.return flow |>
       OptionExt.return
 
-    | S_assign(x,e) when is_universal_type (etyp e) ->
+    | S_assign(x,e) when is_universal_type (etyp x) ->
       man.eval e flow >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
