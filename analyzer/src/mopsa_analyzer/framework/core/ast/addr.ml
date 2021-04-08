@@ -118,10 +118,14 @@ type addr = {
 let akind addr = addr.addr_kind
 
 let pp_addr fmt a =
-  Format.fprintf fmt "@@%a:%a:%s"
+  Format.fprintf fmt "@@%a%a:%s"
     pp_addr_kind a.addr_kind
-    pp_addr_partitioning a.addr_partitioning
+    (fun fmt -> function
+       | G_all -> ()
+       | p     -> Format.fprintf fmt ":%a" pp_addr_partitioning p )
+    a.addr_partitioning
     (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
+
 
 let compare_addr a b =
   if a == b then 0
