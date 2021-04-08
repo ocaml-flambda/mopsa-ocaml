@@ -60,7 +60,7 @@ struct
     | E_unop(op,_) when is_predicate_op op -> e
     | E_binop(op,_,_) when is_comparison_op op -> e
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
-    | _ -> ne e zero e.erange
+    | _ -> assert false
 
   let rec eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
     let ee =
@@ -109,10 +109,8 @@ struct
       OptionExt.return
 
     | S_assume e when is_universal_type (etyp e) ->
-      eval_bool_expr e stmt.srange man flow
-        ~ftrue:(fun flow -> Post.return flow)
-        ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
-        ~fboth:(fun flow -> Post.return flow) |>
+      man.eval e flow >>$? fun e' flow ->
+      man.exec (mk_assume e' stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
     | S_block(block,local_vars) ->
