@@ -105,18 +105,6 @@ struct
     | C_float_interval (lo,up) ->
       I.of_float_prec (prec p) (round ()) lo up
 
-    | C_int_interval (lo,up) ->
-      I.of_int_itv (prec p) (round ()) (II.of_bound lo up)
-
-    | C_int i ->
-      I.of_z (prec p) (round ()) i i
-
-    | C_bool false ->
-      I.zero
-
-    | C_bool true ->
-      I.one
-
     | C_avalue(V_float_interval _, itv) -> (itv:t)
 
     | C_top (T_float p) ->
