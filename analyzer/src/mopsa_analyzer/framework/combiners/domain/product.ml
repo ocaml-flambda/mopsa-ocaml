@@ -201,6 +201,7 @@ struct
 
   let checks = List.flatten Pool.checks
 
+  let debug fmt = Debug.debug ~channel:"framework.combiners.domain.product" fmt
 
   (** {2 Merging functions} *)
   (** ********************* *)
@@ -209,25 +210,41 @@ struct
   let merge_report checks1 checks2 report1 report2 =
     map2zo_report
       (fun diag1 ->
-         (* Check performed only in the left flow.
-            Verify if it's part of the checks that the right flow should
-            perform also *)
-         if not (List.mem diag1.diag_check checks2) then
-           (* This is fine! The second domain is not responsible for this
-              check, so add it to the result *)
-           diag1
-         else
-           (* The analysis is unsound! *)
-           Exceptions.panic "%a: check %a is unsound" pp_relative_range diag1.diag_range pp_check diag1.diag_check
+         (* Check performed only by the left domain. Here, we are in trouble if the
+            right domain is responsible for this check and did nothing! *)
+         if List.mem diag1.diag_check checks2 then
+           Exceptions.panic "%a: check %a is unsound"
+             pp_relative_range diag1.diag_range
+             pp_check diag1.diag_check
+             (* Otherwise, this is fine! The second domain is not responsible for
+                 this check, so add it to the result *)
+         else diag1
       )
       (fun diag2 ->
-         if not (List.mem diag2.diag_check checks1) then
-           diag2
-         else
-           Exceptions.panic "%a: check %a is unsound" pp_relative_range diag2.diag_range pp_check diag2.diag_check
+         (* Same dual reasoning here *)
+         if List.mem diag2.diag_check checks1 then
+           Exceptions.panic "%a: check %a is unsound"
+             pp_relative_range diag2.diag_range
+             pp_check diag2.diag_check
+         else diag2
       )
-      (fun diag1 diag2 -> meet_diagnostic diag1 diag2)
-      report1 report2
+      (fun diag1 diag2 ->
+         (* Check domains responsibility *)
+         match List.mem diag2.diag_check checks1, List.mem diag1.diag_check checks2 with
+         (* Both domains handle the check => both diagnostics are up-to-date *)
+         | true, true   -> meet_diagnostic diag1 diag2
+         (* Only left domain handles it => return its diagnostic *)
+         | true, false  -> diag1
+         (* Only right domain handles it => return its diagnostic *)
+         | false, true  -> diag2
+         (* None of the domains handle the check, however the check changed!
+            This happens when a computation (exec/eval) is performed by one domain only.
+            The computation triggered the check and updated the diagnostic.
+            One easy and sound solution is to join the diagnostics. *)
+         (* XXX Maybe we can be more precise by keeping the newest diagnostic,
+            which can be done by comparing with the pre-state report? *)
+         | false, false -> join_diagnostic diag1 diag2
+      ) report1 report2
 
 
   (** Merge the conflicts between distinct domains.
@@ -303,6 +320,8 @@ struct
                 Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
               else
                 (* Next domains returned no answer, so no merging *)
+                let report = merge_report hdchecks (List.flatten tlchecks) (Flow.get_report flow) (Flow.get_report after_flow) in
+                let flow = Flow.set_report report flow in
                 Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
 
             | _ -> assert false
