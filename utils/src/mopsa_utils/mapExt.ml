@@ -737,6 +737,9 @@ module Make(Ord: OrderedType) =
         (fun () e -> Buffer.add_string b (elem e)) () l;
       Buffer.contents b
 
+    (* Translation to polymorphic maps *)
+    let to_poly_map m =
+      MapExtPoly.of_list Ord.compare (bindings m)
 
 end
 

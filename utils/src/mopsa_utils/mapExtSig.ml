@@ -488,5 +488,10 @@ module type S =
     val bprint: map_printer -> (Buffer.t -> key -> unit) -> (Buffer.t -> 'a -> unit) -> Buffer.t -> 'a t -> unit
     (** Prints to a string buffer (for Printf.bprintf). *)
 
+
+    (** {2 Translation to polymorphic maps} *)
+
+    val to_poly_map : 'a t -> (key,'a) MapExtPoly.t
+
   end
 (** Output signature of the functor {!MapExt.Make}. *)

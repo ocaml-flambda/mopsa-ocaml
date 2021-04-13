@@ -222,7 +222,7 @@ let concat_or_join_ compare t1 v d t2 =
   | None -> concat_ compare t1 t2
 
 
-let of_list compare l =
+let of_list_ compare l =
   List.fold_left (fun acc (k,x) -> add_ compare k x acc) empty_ l
 
 let rec cut_ compare k = function
@@ -318,6 +318,33 @@ let rec fold2o_ compare f1 f2 f m1 m2 acc =
     in
     fold2o_ compare f1 f2 f r1 r2 acc
 
+let rec iter_ f = function
+    Empty -> ()
+  | Node(l, v, d, r, _) ->
+    iter_ f l; f v d; iter_ f r
+
+let rec iter2zo_ compare f1 f2 f m1 m2 =
+  if m1 == m2 then () else
+    match m1 with
+    | Empty -> iter_ f2 m2
+    | Node (l1,k,d1,r1,h1) ->
+      let l2, d2, r2 = cut_ compare k m2 in
+      iter2zo_ compare f1 f2 f l1 l2;
+      (match d2 with
+       | None -> f1 k d1
+       | Some d2 -> if d1 != d2 then f k d1 d2);
+      iter2zo_ compare f1 f2 f r1 r2
+
+let compare_ compare cmp m1 m2 =
+  let r = ref 0 in
+  try
+    iter2zo_ compare
+      (fun _ _ -> r :=  1; raise Exit)
+      (fun _ _ -> r := -1; raise Exit)
+      (fun _ x y -> r := cmp x y; if !r <> 0 then raise Exit)
+      m1 m2;
+    !r
+  with Exit -> !r
 
 (** {2 Exported functions} *)
 (** ********************** *)
@@ -391,3 +418,7 @@ let fold2zo f1 f2 f m1 m2 acc =
 
 let fold2o f1 f2 f m1 m2 acc =
   fold2o_ m1.compare f1 f2 f m1.map m2.map acc
+
+let compare cmp m1 m2 = compare_ m1.compare cmp m1.map m2.map
+
+let of_list compare l = {map = of_list_ compare l; compare}

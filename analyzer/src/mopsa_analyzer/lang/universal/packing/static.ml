@@ -432,10 +432,8 @@ struct
       | BOT -> Domain.print_state printer Domain.bottom
       | _ ->
         Map.bindings a |>
-        List.map (fun (pack,aa) -> Format.asprintf "pack(%a)" (format Strategy.print) pack,aa) |>
-        pp_smap
-          Domain.print_state
-          printer
+        pp_map
+          Strategy.print Domain.print_state printer
           ~mopen:"" ~mclose:"" ~msep:"" ~mbind:":"
 
     (** Pretty printer *)
