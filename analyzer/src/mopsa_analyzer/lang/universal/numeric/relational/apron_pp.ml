@@ -21,7 +21,7 @@
 
 (**  Pretty-printer of Apron environments *)
 
-open Mopsa.Core.Print
+open Mopsa
 open Apron
 
 let coeff_eq_1 (c: Coeff.t) = match c with
@@ -53,15 +53,16 @@ let linexpr_to_list_pair env (x: Linexpr1.t) =
         | Some x -> pos, (c, var)::neg
     ) ([], []) envi
 
-let pp_coef_var_list fmt l =
+let pp_coef_var_list bnd fmt l =
   match l with
   | [] -> Format.fprintf fmt "0"
   | _ -> Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " + ")
            (fun fmt (c, v) ->
               if coeff_eq_1 c then
-                Format.fprintf fmt "%s" (Var.to_string v)
+                Format.fprintf fmt "%a" pp_var (Binding.apron_to_mopsa_var v bnd)
               else
-               Format.fprintf fmt "%a%s" Coeff.print c (Var.to_string v)) fmt l
+                Format.fprintf fmt "%a%a" Coeff.print c pp_var (Binding.apron_to_mopsa_var v bnd)
+           ) fmt l
 
 let pp_typ fmt (x, b) = match x, b with
   | Lincons1.DISEQ, _ -> Format.fprintf fmt "!="
@@ -75,30 +76,30 @@ let pp_typ fmt (x, b) = match x, b with
 let neg_list l =
   List.map (fun (c, v) -> Coeff.neg c, v) l
 
-let pp_lincons fmt lc =
+let pp_lincons bnd fmt lc =
   let cst = Lincons1.get_cst lc in
   let typ = Lincons1.get_typ lc in
   let pos, neg = linexpr_to_list_pair (Lincons1.get_env lc) (Lincons1.get_linexpr1 lc) in
   if coeff_eq_0 (cst) then
-    Format.fprintf fmt "%a %a %a" pp_coef_var_list pos pp_typ (typ, false) pp_coef_var_list (neg_list neg)
+    Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) (pp_coef_var_list bnd) (neg_list neg)
   else
     match coeff_cmp_0 (cst) with
     | Some x when x > 0 ->
       if pos = [] then
-        Format.fprintf fmt "%a %a %a" pp_coef_var_list (neg_list neg) pp_typ (typ, true) Coeff.print cst
+        Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) Coeff.print cst
       else if neg = [] then
-        Format.fprintf fmt "%a %a %a" pp_coef_var_list pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
+        Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
       else 
-        Format.fprintf fmt "%a %a %a + %a" pp_coef_var_list (neg_list neg) pp_typ (typ, true) pp_coef_var_list pos Coeff.print cst
+        Format.fprintf fmt "%a %a %a + %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) (pp_coef_var_list bnd) pos Coeff.print cst
     | _ ->
       if neg = [] then
-        Format.fprintf fmt "%a %a %a" pp_coef_var_list pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
+        Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
       else if pos = [] then
-        Format.fprintf fmt "%a %a %a" pp_coef_var_list (neg_list neg) pp_typ (typ, true) Coeff.print (cst)
+        Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) Coeff.print (cst)
       else 
-        Format.fprintf fmt "%a %a %a + %a" pp_coef_var_list pos pp_typ (typ, false) pp_coef_var_list (neg_list neg) Coeff.print (Coeff.neg cst)
+        Format.fprintf fmt "%a %a %a + %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) (pp_coef_var_list bnd) (neg_list neg) Coeff.print (Coeff.neg cst)
 
-let pp_lincons_earray pr ea =
+let pp_lincons_earray bnd pr ea =
   let rec read n =
     if n < 0 then []
     else
@@ -108,11 +109,13 @@ let pp_lincons_earray pr ea =
   let l = read (Lincons1.array_length ea -1) in
   match l with
   | [] -> pp_string pr "⊤"
-  | _  -> pp_list (unformat pp_lincons) pr l
+  | _  ->
+    let sl = List.map (fun c -> Format.asprintf "%a" (pp_lincons bnd) c) l in
+    pp_set pp_string pr (SetExtPoly.of_list String.compare sl)
 
-let pp_env man pr x =
+let pp_env man pr (x,bnd) =
   if Abstract1.is_bottom man x then
     pp_string pr "⊥"
   else
     let ea = Abstract1.to_lincons_array man x in
-    pp_lincons_earray pr ea
+    pp_lincons_earray bnd pr ea
