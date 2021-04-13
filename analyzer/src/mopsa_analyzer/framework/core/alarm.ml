@@ -267,7 +267,16 @@ let meet_diagnostic d1 d2 =
   else (
     assert(compare_range d1.diag_range d2.diag_range = 0);
     assert(compare_check d1.diag_check d2.diag_check = 0);
-    assert(CallstackSet.equal d1.diag_callstacks d2.diag_callstacks);
+    (* It is currently unsound for one domain to remove alarms raised by
+       another domain during reduction, because a "safe" check in a domain
+       may correspond to a previous instance of the check at the same range
+       and there is actually no information for the current instance in
+       the domain.
+       The current fix is to perform a union instead of an intersection of
+       alarms during reduction. It is sound but imprecise.
+       See MR!51 for more details.
+       FIXME: implement a better fix, performing intersections when sound
+     *)
     { diag_range = d1.diag_range;
       diag_check = d1.diag_check;
       diag_kind = meet_diagnostic_kind d1.diag_kind d2.diag_kind;
