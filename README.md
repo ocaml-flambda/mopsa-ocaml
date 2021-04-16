@@ -20,18 +20,18 @@ The documentation and example files of the MOPSA software are distributed under 
 
 Before compiling MOPSA, ensure that you have the following dependencies:
 
-* apron
+* Apron
 * autoconf
-* camlidl
-* gmp
-* llvm + clang (version >= 5.x)
+* CamlIDL
+* GMP
+* LLVM + Clang (version >= 6.x)
 * make
-* menhir
-* mpfr
-* ocaml (version >= 4.08.0)
+* Menhir
+* MPFR
+* OCaml (version >= 4.08.0)
 * opam (version >= 2)
-* yojson
-* zarith
+* Yojson
+* Zarith
 * zlib
 
 For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):

@@ -70,7 +70,7 @@ AC_PROG_SED
 
 # Minimal versions
 MIN_OCAML_VERSION="4.08.0"
-MIN_LLVM_VERSION="5.0"
+MIN_LLVM_VERSION="6.0"
 
 
 # Checking for the OCaml toolchain (ocamlc, ocamlopt, ocamlfind, ...)

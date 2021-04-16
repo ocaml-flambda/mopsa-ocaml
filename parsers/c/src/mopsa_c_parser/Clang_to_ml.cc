@@ -2620,7 +2620,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 
       GENERATE_NODE_INDIRECT(CXXUnresolvedConstructExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateQualType(x->getTypeAsWritten()));
+#if CLANG_VERSION_MAJOR >= 12
+          Store_field_array(ret, 1, x->getNumArgs(), TranslateExpr(x->getArg(i)));
+#else
           Store_field_array(ret, 1, x->arg_size(), TranslateExpr(x->getArg(i)));
+#endif
         });
 
       GENERATE_NODE_INDIRECT(DependentScopeDeclRefExpr, ret, node, 3, {
@@ -2959,13 +2963,13 @@ CAMLprim value MLTreeBuilderVisitor::TranslateCXXConstructExpr(const CXXConstruc
 }
 
 
-/* Expr -> Z.t option (if constan) */
+/* Expr -> Z.t option (if constant) */
 CAMLprim value MLTreeBuilderVisitor::TranslateConstantIntegerExpr(const Expr * node) {
   CAMLparam0();
   CAMLlocal1(ret);
   llvm::APSInt i;
   check_null(node, "TranslateConstantIntegerExpr");
-  if (node->isIntegerConstantExpr(i, *Context)) {
+  if (node->isIntegerConstantExpr(*Context)) {
     ret = caml_alloc_tuple(1);
     Store_field(ret, 0, TranslateAPSInt(i));
   }
