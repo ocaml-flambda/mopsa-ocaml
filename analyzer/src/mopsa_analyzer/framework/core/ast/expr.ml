@@ -210,7 +210,7 @@ let weaken_addr_expr e =
   | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = WEAK}, om)}
   | _ -> assert false
 
-let strongigy_addr_expr e =
+let strongify_addr_expr e =
   match ekind e with
   | E_addr ({addr_mode = STRONG}, _) -> e
   | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = STRONG}, om)}

@@ -184,7 +184,7 @@ val mk_alloc_addr : ?mode:mode -> addr_kind -> range -> expr
 val weaken_addr_expr : expr -> expr
 (** Change the access mode of an address expression to [WEAK] *)
 
-val strongigy_addr_expr : expr -> expr
+val strongify_addr_expr : expr -> expr
 (** Change the access mode of an address expression to [STRONG] *)
 
 
