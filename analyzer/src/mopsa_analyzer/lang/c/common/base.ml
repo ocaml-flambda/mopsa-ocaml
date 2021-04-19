@@ -83,9 +83,7 @@ let mk_string_base ?(kind=C_char_ascii) ?(typ=(T_c_integer C_unsigned_char)) s =
 let base_kind_uniq_name b =
   match b with
   | Var v -> v.vname
-  | Addr a ->
-    let () = pp_addr Format.str_formatter a in
-    Format.flush_str_formatter ()
+  | Addr a -> addr_uniq_name a
   | String (s,_,_) -> s
 
 

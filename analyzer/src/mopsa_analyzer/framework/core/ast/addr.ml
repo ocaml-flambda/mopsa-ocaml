@@ -92,13 +92,19 @@ let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   let base64 = digest_to_base64 md5 in
   Format.pp_print_string fmt base64
 
-let pp_addr_partitioning fmt ak =
+(** Print a partitioning policy. Flag [full] overloads the option
+    [opt_hash_addr] and displays the full partitioning string (not its hash,
+    which is useful for creating unique names of addresses) *)
+let pp_addr_partitioning ?(full=false) fmt ak =
   match ak with
   | G_all -> !addr_partitioning_pp_chain fmt ak
   | _ ->
-    if !opt_hash_addr
+    if !opt_hash_addr && not full
     then pp_addr_partitioning_hash fmt ak
     else !addr_partitioning_pp_chain fmt ak
+
+let pp_addr_partitioning_full fmt ak =
+  !addr_partitioning_pp_chain fmt ak
 
 let compare_addr_partitioning a1 a2 =
   if a1 == a2 then 0 else !addr_partitioning_compare_chain a1 a2
@@ -122,10 +128,20 @@ let pp_addr fmt a =
     pp_addr_kind a.addr_kind
     (fun fmt -> function
        | G_all -> ()
-       | p     -> Format.fprintf fmt ":%a" pp_addr_partitioning p )
+       | p     -> Format.fprintf fmt ":%a" (pp_addr_partitioning ~full:false) p )
     a.addr_partitioning
     (match a.addr_mode with WEAK -> ":w" | STRONG -> "")
 
+(** Get the unique name of an address. This is safer and faster than calling
+    [Format.asprintf "%s" pp_addr a] when [opt_hash_addr] is set. *)
+let addr_uniq_name a =
+  Format.asprintf "@@%a%a%s"
+    pp_addr_kind a.addr_kind
+    (fun fmt -> function
+       | G_all -> ()
+       | p     -> Format.fprintf fmt ":%a" (pp_addr_partitioning ~full:true) p )
+    a.addr_partitioning
+    (match a.addr_mode with WEAK -> ":w" | STRONG -> "")
 
 let compare_addr a b =
   if a == b then 0
@@ -164,5 +180,5 @@ let () =
   }
 
 let mk_addr_attr addr attr typ =
-  let name = Format.asprintf "%a.%s" pp_addr addr attr in
+  let name = Format.asprintf "%s.%s" (addr_uniq_name addr) attr in
   mkv name (V_addr_attr (addr,attr)) ~mode:addr.addr_mode typ
