@@ -4,6 +4,20 @@
 #include <Python.h>
 #include <structmember.h>
 
+
+static inline void _noop(PyObject *op) {}
+
+#undef Py_INCREF
+#undef Py_DECREF
+#undef Py_XINCREF
+#undef Py_XDECREF
+#undef Py_CLEAR
+#define Py_INCREF(op) _noop(_PyObject_CAST(op))
+#define Py_DECREF(op) _noop(_PyObject_CAST(op))
+#define Py_XINCREF(op) _noop(_PyObject_CAST(op))
+#define Py_XDECREF(op) _noop(_PyObject_CAST(op))
+#define Py_CLEAR(op) _noop(_PyObject_CAST(op))
+
 #undef PyArg_ParseTuple
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
@@ -14,10 +28,12 @@
 #undef PyUnicode_GET_SIZE
 #undef PyTuple_GET_SIZE
 #undef PyTuple_GET_ITEM
+#undef PyTuple_SET_ITEM
 #define PyUnicode_GET_LENGTH PyUnicode_GetLength
 #define PyUnicode_GET_SIZE PyUnicode_GetLength
 #define PyTuple_GET_SIZE PyTuple_Size
 #define PyTuple_GET_ITEM PyTuple_GetItem
+#define PyTuple_SET_ITEM PyTuple_SetItem
 #undef PyUnicode_AS_UNICODE
 #define PyUnicode_AS_UNICODE PyUnicode_AsUnicode
 #undef Py_UNICODE_IS_SURROGATE
@@ -34,13 +50,15 @@
 #define PyList_GET_SIZE PyList_Size
 #undef PyList_GET_ITEM
 #define PyList_GET_ITEM PyList_GetItem
-
+#undef PyList_SET_ITEM
+#define PyList_SET_ITEM PyList_SetItem
 
 
 #undef PyFloat_AS_DOUBLE
 #define PyFloat_AS_DOUBLE PyFloat_AsDouble
 
 #define _PyObject_GC_New _PyObject_New
+
 
 /* // stubs used by the analysis */
 typedef struct exc_data {
@@ -718,14 +736,14 @@ static PySequenceMethods tuple_as_sequence =
 static PySequenceMethods range_as_sequence =
 {
     .sq_length=(lenfunc)PyObject_Size,
-    .sq_item=(ssizeargfunc)PyObject_GetItem,
+    .sq_item=(ssizeargfunc)PyList_GetItem,
 // these two functions are not defined in the C api
 };
 
 static PySequenceMethods set_as_sequence =
 {
     .sq_length=(lenfunc)PySet_Size,
-    .sq_item=(ssizeargfunc)PyObject_GetItem,
+    .sq_item=(ssizeargfunc)PyList_GetItem,
 // these two functions are not defined in the C api
 };
 
@@ -1080,6 +1098,12 @@ PySequence_Fast(PyObject *v, const char *m)
 /*     return result; */
 /* } */
 
+PyObject *
+PyObject_SelfIter(PyObject *obj)
+{
+    Py_INCREF(obj);
+    return obj;
+}
 
 PyObject *
 PyObject_GetIter(PyObject *o)
