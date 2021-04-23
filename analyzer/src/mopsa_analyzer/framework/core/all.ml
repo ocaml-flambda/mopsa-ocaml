@@ -27,6 +27,7 @@ include Ast.Program
 include Ast.Frontend
 include Ast.Operator
 include Ast.Var
+include Ast.Addr
 include Ast.Visitor
 
 module Var =

@@ -65,8 +65,33 @@ and var_sub_value =
 type ('a,_) query += Q_debug_variables : ('a,var list) query
 
 
-(** Query to retrieve the value of a given variable *)
-type ('a,_) query += Q_debug_variable_value : var -> ('a,var_value) query
+(** Query to retrieve the value of a given variable/address *)
+type ('a,_) query +=
+  | Q_debug_variable_value : var -> ('a,var_value) query
+  | Q_debug_addr_value : addr -> ('a,var_value) query
+
+let () =
+  register_query {
+      join = (let doit : type a r. query_pool -> (a,r) query -> r -> r -> r =
+          fun next query a b ->
+          match query with
+          | Q_debug_addr_value _  ->
+             assert (a.var_value = None && b.var_value = None);
+             let var_sub_value =
+               match a.var_sub_value, b.var_sub_value with
+               | None, Some sb -> Some sb
+               | Some sa, None -> Some sa
+               | Some Indexed_sub_value la, Some Indexed_sub_value lb -> Some (Indexed_sub_value (la @ lb))
+               | Some Named_sub_value ma, Some Named_sub_value mb -> Some (Named_sub_value (ma @ mb))
+               | _, _ -> assert false
+             in
+             {var_value=None; var_value_type = T_any; var_sub_value}
+
+          | _ -> next.pool_join query a b
+        in doit
+      );
+      meet = (fun next q a b -> next.pool_meet q a b);
+    }
 
 
 (** Compare two var values *)
