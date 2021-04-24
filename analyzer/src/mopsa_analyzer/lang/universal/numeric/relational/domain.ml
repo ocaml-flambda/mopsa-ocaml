@@ -364,12 +364,29 @@ struct
       | _ -> None
 
 
-  let print_state printer (a,_) =
+  let print_state printer a =
     pprint printer
       (pbox (Apron_pp.pp_env ApronManager.man) a)
       ~path:[Key "numeric-relations"]
 
   let print_expr man ctx a printer exp =
-    print_state printer a
+    if exists_expr
+        (fun e -> not (is_numeric_type e.etyp))
+        (fun s -> false)
+        exp
+    then ()
+    else
+      let vars = expr_vars exp |> VarSet.of_list in
+      let vars' = VarSet.fold (fun v acc ->
+          related_vars v a |>
+          VarSet.of_list |>
+          VarSet.union acc
+        ) vars vars in
+      match VarSet.elements vars' with
+      | [] -> ()
+      | l  ->
+        match exec (mk_project_vars l exp.erange) man ctx a with
+        | None -> ()
+        | Some a -> print_state printer a
 
 end

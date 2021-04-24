@@ -33,7 +33,7 @@ mopsa_analyzer.lang.universal.numeric.values = intervals congruences zero powers
 mopsa_analyzer.lang.universal.numeric.values.intervals = integer float
 mopsa_analyzer.lang.universal.numeric.packing = strategy functor
 mopsa_analyzer.lang.universal.numeric.relational = apron_manager binding apron_transformer \
-                                    apron_pp domain instances
+                                                   apron_pp domain instances
 mopsa_analyzer.lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
 mopsa_analyzer.lang.universal.packing = static
 mopsa_analyzer.lang.universal.partitioning = merge_after_stmt
