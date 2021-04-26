@@ -4,8 +4,6 @@
         "compose": [
             {
                 "switch": [
-	            "universal.partitioning.merge_after_stmt",
-
                     "python.program",
 
                     "python.desugar.bool",

@@ -2,9 +2,6 @@
     "language": "repl",
     "domain": {
 	"switch": [
-	    // Partitioning
-	    "universal.partitioning.merge_after_stmt",
-
 	    // Iterators
 	    "universal.repl",
 	    "universal.iterators.intraproc",
