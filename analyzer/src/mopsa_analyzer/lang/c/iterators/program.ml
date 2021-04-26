@@ -354,7 +354,7 @@ struct
     if Z.(lo' > hi') || Z.(hi' > int_max - one) then
       panic "incorrect argc value [%a,%a]" Z.pp_print lo' Z.pp_print hi'
     ;
-    man.exec (mk_assign argc (mk_z_interval lo' hi' range) range) flow >>% fun flow ->
+    man.exec (mk_assume (mk_in argc (mk_z lo' range) (mk_z hi' range) range) range) flow >>% fun flow ->
 
 
     (* Create the memory block pointed by argv. *)
@@ -384,8 +384,28 @@ struct
     (* Ensure that the argument is a valid string with at least one character *)
     let first_arg_cell = mk_c_subscript_access arg (mk_zero range) range in
     man.exec (mk_assign first_arg_cell (mk_z_interval Z.one (rangeof s8 |> snd) range) range) flow >>% fun flow ->
-    let some_arg_cell = mk_c_subscript_access arg (mk_z_interval Z.one (rangeof s32 |> snd |> Z.pred) range) range in
-    man.exec (mk_assign some_arg_cell (mk_zero range) range) flow >>% fun flow ->
+    (* Create a quantifier variable *)
+    (* FIXME: When using the packing domain, relations on this variable can't be
+       represented because it's not a local variable of any function (`main`
+       hasn't been called yet). So, for the moment, we consider it as a local
+       variable of `main`. *)
+    let i = mkv "#i" (V_cvar {
+        cvar_scope = Variable_local main;
+        cvar_range = range;
+        cvar_uid = 0;
+        cvar_orig_name = "#i";
+        cvar_uniq_name = "#i";
+      }) s32 in
+    let ii = mk_var i range in
+    let l = mk_one range in
+    let u = mk_z (rangeof s32 |> snd |> Z.pred) range in
+    man.exec (mk_add ii range) flow >>% fun flow ->
+    man.exec (mk_assume (mk_in ii l u range) range) flow >>% fun flow ->
+    let some_arg_cell = mk_c_subscript_access arg ii range in
+    man.exec (mk_assume (mk_stub_quantified_formula
+                           [EXISTS,i,S_interval(l,u)]
+                           (mk_binop some_arg_cell O_eq (mk_zero range) ~etyp:u8 range) range) range) flow >>%fun flow ->
+    man.exec (mk_remove_var i range) flow >>%fun flow ->
 
     (* Make the address weak *)
     let arg_weak = weaken_addr_expr arg in
@@ -396,12 +416,10 @@ struct
     man.exec (mk_assign first arg_weak range) flow >>% fun flow ->
 
     (* Put the symbolic argument in argv[1 : argc-1] *)
-    let i = mktmp ~typ:s32 () in
-    let ii = mk_var i range in
     let l = mk_one range in
     let u = sub argc (mk_one range) range in
     man.exec (mk_add ii range) flow >>% fun flow ->
-    man.exec (mk_assign ii (mk_c_builtin_call "_mopsa_range_s32" [l;u] s32 range) range) flow >>% fun flow ->
+    man.exec (mk_assume (mk_in ii l u range) range) flow >>% fun flow ->
     man.exec (mk_assume (mk_stub_quantified_formula
                            [FORALL,i,S_interval(l,u)]
                            (mk_binop (mk_c_subscript_access argv (mk_var i range) range) O_eq arg_weak ~etyp:u8 range) range) range) flow
