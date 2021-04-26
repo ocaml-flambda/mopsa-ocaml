@@ -558,10 +558,43 @@ struct
       (* for wide characters, we only know that offset < len(str) *)
       man.exec (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
 
-
-  let assume_ne base boffset mode etype n range man flow =
+  let assume_string_literal_char_ne str t boffset mode n range man flow =
     (* FIXME TODO *)
     Post.return flow
+
+  (** 𝕊⟦ *(p + i) != n ⟧ *)
+  let assume_ne base boffset mode etype n range man flow =
+    match base.base_kind, c_expr_to_z n with
+    | String (str,_,t), Some c when sizeof_type t = sizeof_type etype ->
+      assume_string_literal_char_ne str t boffset mode c range man flow
+
+    | String _, _ ->
+      Post.return flow
+
+    | _ when sizeof_type etype = Z.of_int elem_size ->
+      let length = mk_length_var base elem_size ~mode range in
+      let offset = elem_of_offset boffset elem_size range in
+      switch [
+        (*         offset    length
+                   |---------x---------0----->
+        *)
+        [ le offset (pred length range) range ],
+        (fun flow -> man.exec (mk_assume (eq n zero range) range) flow);
+
+        (*          offset/length
+                    |--------------0----------->
+        *)
+        [ eq offset length range],
+        (fun flow -> man.exec (mk_assume (ne n zero range) range) flow);
+
+        (*          length   offset
+                    |----------0--------x----->
+        *)
+        [ ge offset (succ length range) range ],
+        (fun flow -> Post.return flow);
+      ] man flow
+    |_ ->
+      Post.return flow
 
   (** 𝕊⟦ *(p + i) == n ⟧ *)
   let assume_eq base boffset mode etype n range man flow =
@@ -802,6 +835,18 @@ struct
           (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
           (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
+  let eval_ne lval n range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
+    man.eval n flow >>$ fun n flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        Eval.join
+          (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+          (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
   let eval_exists_eq i a b lval n range man flow =
@@ -885,6 +930,16 @@ struct
            is_c_int_type n.etyp
       ->
       eval_eq (remove_casts lval) n exp.erange man flow |>
+      OptionExt.return
+
+    (* 𝔼⟦ *(p + i) != n ⟧ *)
+    | E_binop(O_ne, lval, n)
+    | E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)})
+      when is_c_int_type lval.etyp &&
+           is_c_lval (remove_casts lval) &&
+           is_c_int_type n.etyp
+      ->
+      eval_ne (remove_casts lval) n exp.erange man flow |>
       OptionExt.return
 
     (* 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
