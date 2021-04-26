@@ -229,17 +229,17 @@ struct
   (** {2 Creation of argc and argv} *)
   (** ***************************** *)
 
-  let argv_resource = ":argv:"
-  let arg_single_resource i = ":arg:"^(string_of_int i)
-  let arg_smash_resource i = ":args:+"^(string_of_int i)
+  let argv_resource = "args"
+  let arg_single_resource i = "arg:"^(string_of_int i)
+  let arg_smash_resource i = "arg:+"^(string_of_int i)
 
   let is_argv_resource r = (r=argv_resource)
 
   let is_arg_single_resource r =
-    Str.string_match (Str.regexp ":arg:[0-9]+") r 0
+    Str.string_match (Str.regexp "arg:[0-9]+") r 0
 
   let is_arg_smash_resource r =
-    Str.string_match (Str.regexp ":args:\\+[0-9]+") r 0
+    Str.string_match (Str.regexp "arg:\\+[0-9]+") r 0
 
   let is_arg_resource r =
     is_arg_single_resource r ||
