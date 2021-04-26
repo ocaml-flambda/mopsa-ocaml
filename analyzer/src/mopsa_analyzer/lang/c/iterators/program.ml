@@ -226,22 +226,48 @@ struct
       man.exec stmt flow
 
 
+  (** {2 Creation of argc and argv} *)
+  (** ***************************** *)
+
+  let argv_resource = ":argv:"
+  let arg_single_resource i = ":arg:"^(string_of_int i)
+  let arg_smash_resource i = ":args:+"^(string_of_int i)
+
+  let is_argv_resource r = (r=argv_resource)
+
+  let is_arg_single_resource r =
+    Str.string_match (Str.regexp ":arg:[0-9]+") r 0
+
+  let is_arg_smash_resource r =
+    Str.string_match (Str.regexp ":args:\\+[0-9]+") r 0
+
+  let is_arg_resource r =
+    is_arg_single_resource r ||
+    is_arg_smash_resource r
+
+  let () =
+    Universal.Heap.Policies.register_mk_addr
+      (fun next a ->
+         match a with
+         | A_stub_resource r
+           when is_argv_resource r
+             || is_arg_resource r ->
+           Universal.Heap.Policies.mk_addr_all a
+         | a -> next a )
+
   (** Allocate the argv array *)
   let alloc_argv range man flow =
-    let arange = tag_range range "argv" in
-    man.eval (mk_stub_alloc_resource "argv" arange) flow >>$ fun addr flow ->
+    let arange = tag_range range "%s" argv_resource in
+    man.eval (mk_stub_alloc_resource argv_resource arange) flow >>$ fun addr flow ->
     Eval.singleton { addr with etyp = T_c_pointer (T_c_pointer s8) } flow
 
 
   (** Allocate an address for a concrete argument *)
   let alloc_concrete_arg i range man flow =
-    let irange = tag_range range "argv[%d]" i in
-    man.eval (mk_stub_alloc_resource "arg" irange) flow >>$ fun addr flow ->
+    let resource = arg_single_resource i in
+    let irange = tag_range range "%s" resource in
+    man.eval (mk_stub_alloc_resource resource irange) flow >>$ fun addr flow ->
     Eval.singleton { addr with etyp =  T_c_pointer s8 } flow
-
-
-  (** Set the minimal size of the argument block *)
-  (* let set_arg_min_size arg min range man flow = *)
 
 
   (** Initialize an argument with a concrete string *)
@@ -333,8 +359,9 @@ struct
     if lo = hi then
       Cases.singleton (args,None) flow
     else
-      let arange = tag_range range "argv[%d-%d]" lo (hi-1) in
-      man.eval (mk_stub_alloc_resource "arg" ~mode:WEAK arange) flow >>$ fun addr flow ->
+      let resource = arg_smash_resource lo in
+      let arange = tag_range range "%s" resource in
+      man.eval (mk_stub_alloc_resource resource ~mode:WEAK arange) flow >>$ fun addr flow ->
       let smashed = { addr with etyp =  T_c_pointer s8 } in
       Cases.singleton (args, Some smashed) flow
 
