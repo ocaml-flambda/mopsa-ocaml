@@ -481,7 +481,7 @@ struct
         cvar_uid = 0;
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
-      }) s32 in
+      }) size_type in
     List.fold_left
       (fun acc arg -> acc >>% assume_valid_string arg qi range man)
       (Post.return flow) args
