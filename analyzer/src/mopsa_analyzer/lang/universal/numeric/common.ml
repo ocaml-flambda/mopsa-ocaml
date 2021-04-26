@@ -107,23 +107,34 @@ let interval_of_num_expr e man flow : int_itv =
 
 (** Evaluate a numeric condition *)
 let eval_num_cond cond man flow : bool option =
-  match interval_of_num_expr cond man flow with
-  | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
-  | _ -> None
+  if exists_expr (fun e -> not (is_universal_type e.etyp)) (fun s -> true) cond then
+    None
+  else
+    match interval_of_num_expr cond man flow with
+    | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
+    | _ -> None
 
 
 (** Optimized assume function that uses intervals to check a
     condition or falls back to classic assume *)
 let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
-  ( if for_all_expr (fun e -> is_universal_type e.etyp) (fun s -> false) cond then
-      Eval.singleton cond flow
+  let r1 =
+    if for_all_expr (fun e -> is_universal_type e.etyp) (fun s -> false) cond then
+      match eval_num_cond cond man flow with
+      | Some true  -> Some (fthen flow)
+      | Some false -> Some (felse flow)
+      | None       -> None
     else
-      man.eval cond flow )
-  >>$ fun cond flow ->
-  match eval_num_cond cond man flow with
-  | Some true  -> fthen flow
-  | Some false -> felse flow
-  | None       -> assume cond ~fthen ~felse ~eval:false man flow
+      None
+  in
+  match r1 with
+  | Some r -> r
+  | None ->
+      man.eval cond flow ~translate:"Universal" >>$ fun ncond flow ->
+      match eval_num_cond ncond man flow with
+      | Some true  -> fthen flow
+      | Some false -> felse flow
+      | None       -> assume ncond ~fthen ~felse ~eval:false man flow
 
 
 (** {2 Widening thresholds} *)
