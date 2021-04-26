@@ -4,8 +4,6 @@
         "compose": [
             {
                 "switch": [
-                    // Partitioning
-                    "universal.partitioning.merge_after_stmt",
                     // C iterators
                     "c.iterators.program",
                     "c.iterators.interproc",
@@ -57,7 +55,7 @@
                 ]
             },
             {
-                "semantic": "universal",
+                "semantic": "Universal",
                 "switch": [
                     // Universal iterators
                     "universal.iterators.intraproc",

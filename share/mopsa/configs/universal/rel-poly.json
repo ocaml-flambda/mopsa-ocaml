@@ -2,9 +2,6 @@
     "language": "universal",
     "domain": {
 	"switch": [
-	    // Partitioning
-	    "universal.partitioning.merge_after_stmt",
-
 	    // Iterators
 	    "universal.iterators.program",
 	    "universal.iterators.intraproc",

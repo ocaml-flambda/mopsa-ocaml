@@ -2,9 +2,6 @@
     "language": "python",
     "domain": {
         "switch": [
-	    // Partitioning
-	    "universal.partitioning.merge_after_stmt",
-
             "python.program",
 
             "python.desugar.bool",
