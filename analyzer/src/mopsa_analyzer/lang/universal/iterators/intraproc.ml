@@ -24,6 +24,8 @@
 open Mopsa
 open Sig.Abstraction.Stateless
 open Ast
+open Numeric.Common
+
 
 
 module Domain =
@@ -167,7 +169,7 @@ struct
     match ekind exp with
     | E_binop (O_log_and, e1, e2)
       when is_universal_type exp.etyp ->
-      assume e1 man flow
+      assume_num e1 man flow
         ~fthen:(fun flow ->
             (* Since we didn't check the type of the sub-expression [e1], we
                need to translate to Universal (if this isn't the case already).
@@ -182,7 +184,7 @@ struct
 
     | E_binop (O_log_or, e1, e2)
       when is_universal_type exp.etyp ->
-      assume e1 man flow
+      assume_num e1 man flow
         ~fthen:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       |> OptionExt.return
@@ -190,17 +192,18 @@ struct
     | E_binop (O_log_xor, e1, e2)
       when is_universal_type exp.etyp ->
       let s1 =
-        assume e1 man flow
+        assume_num e1 man flow
           ~fthen:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
           ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       in
       let s2 =
-        assume (mk_not e1 exp.erange) man flow
+        assume_num (mk_not e1 exp.erange) man flow
           ~fthen:(fun flow -> man.eval e2 flow ~translate:"Universal")
           ~felse:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
       in
       Eval.join s1 s2 |>
       OptionExt.return
+
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) })
       when is_universal_type exp.etyp ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>
