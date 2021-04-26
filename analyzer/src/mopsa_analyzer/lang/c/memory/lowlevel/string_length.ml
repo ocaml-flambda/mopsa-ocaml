@@ -157,8 +157,8 @@ struct
 
 
   let is_interesting_resource = function
-    | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" | "arg" -> true
-    | _ -> false
+    | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" -> true
+    | r -> Iterators.Program.Domain.is_arg_resource r
 
   let rec is_scalar_base base =
     match base with
