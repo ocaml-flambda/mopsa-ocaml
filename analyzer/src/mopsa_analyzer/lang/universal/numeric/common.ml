@@ -115,11 +115,15 @@ let eval_num_cond cond man flow : bool option =
 (** Optimized assume function that uses intervals to check a
     condition or falls back to classic assume *)
 let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
-  man.eval cond flow >>$ fun cond flow ->
+  ( if for_all_expr (fun e -> is_universal_type e.etyp) (fun s -> false) cond then
+      Eval.singleton cond flow
+    else
+      man.eval cond flow )
+  >>$ fun cond flow ->
   match eval_num_cond cond man flow with
   | Some true  -> fthen flow
   | Some false -> felse flow
-  | None       -> assume cond ~fthen ~felse man ~route flow
+  | None       -> assume cond ~fthen ~felse ~eval:false man flow
 
 
 (** {2 Widening thresholds} *)
