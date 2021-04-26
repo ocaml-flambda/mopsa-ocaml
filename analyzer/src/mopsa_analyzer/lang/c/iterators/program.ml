@@ -241,9 +241,7 @@ struct
 
 
   (** Set the minimal size of the argument block *)
-  let set_arg_min_size arg min range man flow =
-    let max = snd (rangeof ul) in
-    man.exec (mk_assume (mk_in (mk_stub_builtin_call BYTES [arg] ~etyp:ul range) min (mk_z max range ) range) range) flow
+  (* let set_arg_min_size arg min range man flow = *)
 
 
   (** Initialize an argument with a concrete string *)
@@ -258,6 +256,8 @@ struct
     in
     aux 0 flow
 
+  let eval_bytes obj range man flow =
+    man.eval (mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [obj])) range) flow
 
   (** Initialize argc and argv with concrete values and execute the body of main *)
   let call_main_with_concrete_args main args man flow =
@@ -269,18 +269,19 @@ struct
 
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
-    man.exec (mk_add argv range) flow >>% fun flow ->
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
-    let bytes = mk_stub_builtin_call BYTES [argv] ~etyp:size_type range in
+    eval_bytes argv range man flow >>$ fun argv_bytes flow ->
     let n = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in
-    man.exec (mk_assign bytes (mk_z n range) range) flow >>% fun flow ->
+    man.exec (mk_assign argv_bytes (mk_z n range) range) flow >>% fun flow ->
 
     (* Initialize argv[0] with the name of the program *)
     alloc_concrete_arg 0 range man flow >>$ fun arg flow ->
+    eval_bytes arg range man flow >>$ fun arg0_bytes flow ->
     let program_name = "a.out" in
-    set_arg_min_size arg (mk_int (String.length program_name + 1) range) range man flow >>% fun flow ->
-    man.exec (mk_add arg range) flow >>% fun flow ->
+    let min = mk_int (String.length program_name + 1) range in
+    let max = mk_z (snd (rangeof size_type)) range in
+    man.exec (mk_assume (mk_in arg0_bytes min max range) range) flow >>% fun flow ->
     init_concrete_arg arg program_name range man flow >>% fun flow ->
     let argv0 = mk_c_subscript_access argv (mk_zero range) range in
     man.exec (mk_assign argv0 arg range) flow >>% fun flow ->
@@ -292,8 +293,9 @@ struct
       else
         let str = List.nth args (i-1) in
         alloc_concrete_arg i range man flow >>$ fun arg flow ->
-        set_arg_min_size arg (mk_int (String.length str + 1) range) range man flow >>% fun flow ->
-        man.exec (mk_add arg range) flow >>% fun flow ->
+        eval_bytes arg range man flow >>$ fun argi_bytes flow ->
+        let min = mk_int (String.length str + 1) range in
+        man.exec (mk_assume (mk_in argi_bytes min max range) range) flow >>% fun flow ->
         init_concrete_arg arg str range man flow >>% fun flow ->
         let argvi = mk_c_subscript_access argv (mk_int i range) range in
         man.exec (mk_assign argvi arg range) flow >>% fun flow ->
@@ -310,16 +312,18 @@ struct
       | [v1;v2] -> mk_var v1 range, mk_var v2 range
       | _ -> assert false
     in
+    man.exec (mk_add argcv range) flow >>% fun flow ->
     man.exec (mk_assign argcv argc range) flow >>% fun flow ->
+    man.exec (mk_add argvv range) flow >>% fun flow ->
     man.exec (mk_assign argvv argv range) flow >>% fun flow ->
     exec_entry_body main man flow
 
 
   (** Allocate addresses for symbolic arguments *)
   let alloc_symbolic_args lo hi range man flow =
-    (* Allocate concrete args for indices in [1,lo] *)
+    (* Allocate concrete args for indices in [0,lo-1] *)
     let rec iter args i flow =
-      if i > lo then Cases.singleton (List.rev args) flow
+      if i >= lo then Cases.singleton (List.rev args) flow
       else
         alloc_concrete_arg i range man flow >>$ fun arg flow ->
         iter (arg::args) (i+1) flow in
@@ -329,18 +333,48 @@ struct
     if lo = hi then
       Cases.singleton (args,None) flow
     else
-      let arange = tag_range range "argv[%d-%d]" (lo+1) hi in
+      let arange = tag_range range "argv[%d-%d]" lo (hi-1) in
       man.eval (mk_stub_alloc_resource "arg" ~mode:WEAK arange) flow >>$ fun addr flow ->
       let smashed = { addr with etyp =  T_c_pointer s8 } in
       Cases.singleton (args, Some smashed) flow
 
 
-  (** Initialize argc and argv with symbolic arguments *)
-  let call_main_with_symbolic_args main (lo:int) (hi:int option) functions man flow =
-    (* FIXME: functions call_main_* may generate false alarms. Since
-       we are sure they are safe, we can remove these alarms *)
-    let report = Flow.get_report flow in
+  let assume_valid_string arg ivar range man flow =
+    let i = mk_var ivar range in
+    (* ∃ i∈[0, sizeof(arg)-1]: arg[i] == 0 *)
+    let l = mk_zero range in
+    eval_bytes arg range man flow >>$ fun bytes flow ->
+    let u = mk_pred bytes range in
+    man.exec (mk_add i range) flow >>% fun flow ->
+    man.exec (mk_assume (mk_in i l u range) range) flow >>% fun flow ->
+    let some_arg_cell = mk_c_subscript_access arg i range in
+    man.exec (mk_assume (mk_stub_quantified_formula
+                           [EXISTS,ivar,S_interval(l,u)]
+                           (eq some_arg_cell (mk_zero range) range) range) range) flow >>% fun flow ->
+    man.exec (mk_remove i range) flow
 
+  let memset_argv_with_smash argc argv smash l ivar range man flow =
+    let l = mk_int l range in
+    let u = sub argc (mk_one range) range in
+    let i = mk_var ivar range in
+    let argvi = mk_c_subscript_access argv i range in
+    assume (gt l u range) man flow
+      ~fthen:(fun flow -> Post.return flow)
+      ~felse:(fun flow ->
+          man.exec (mk_add i range) flow >>% fun flow ->
+          man.exec (mk_assume (mk_in i l u range) range) flow >>% fun flow ->
+          man.exec (mk_assume (mk_stub_quantified_formula
+                                 [FORALL,ivar,S_interval(l,u)]
+                                 (eq argvi smash range ~etyp:s32) range) range) flow >>% fun flow ->
+          man.exec (mk_remove i range) flow
+        ) |>
+    Post.remove_duplicates man.lattice
+
+  (** Initialize argc and argv with symbolic arguments *)
+  let call_main_with_symbolic_args main (lo:int) (hi:int option) man flow =
+    (* FIXME: we may generate here false alarms. Since we are sure everything is
+       safe, we can remove these alarms. *)
+    let report = Flow.get_report flow in
     let range = main.c_func_name_range in
 
     let argc_var, argv_var = match main.c_func_parameters with
@@ -354,7 +388,6 @@ struct
        the argument argv[argc + 1] contains terminating NULL pointer
        (i.e. to avoid integer overflow).
     *)
-
     let argc = mk_var argc_var range in
     man.exec (mk_add argc range) flow >>% fun flow ->
     let lo' = lo + 1 in
@@ -368,7 +401,6 @@ struct
     ;
     man.exec (mk_assume (mk_in argc (mk_int lo' range) (mk_int hi' range) range) range) flow >>% fun flow ->
 
-
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
     let argvv = mk_var argv_var range in
@@ -376,27 +408,26 @@ struct
     man.exec (mk_assign argvv argv range) flow >>% fun flow ->
 
     (* Initialize its size to argc + 1 *)
-    let bytes = mk_expr (Stubs.Ast.E_stub_builtin_call (BYTES, [argv])) range ~etyp:size_type in
+    eval_bytes argv range man flow >>$ fun argv_bytes flow ->
     let n =
       mul (add argc (mk_one range) range)
           (mk_z (sizeof_type (T_c_pointer s8)) range)
           range
     in
-    man.exec (mk_assume (eq bytes n range) range) flow >>% fun flow ->
+    man.exec (mk_assume (eq argv_bytes n range) range) flow >>% fun flow ->
 
     (* Create a symbolic argument *)
     alloc_symbolic_args lo' hi' range man flow >>$ fun (args,smash_arg) flow ->
 
     (* Initialize the size of arguments *)
-    (* FIXME The size is assumed to be a constant to avoid false out-of-bound alarms! *)
-    let max_int = rangeof s32 |> snd in
-    let emax_int = mk_z max_int range in
-    let init_size arg n flow =
-      let bytes = mk_expr (E_stub_builtin_call (BYTES, [arg])) range ~etyp:size_type in
-      man.exec (mk_assume (eq bytes n range) range) flow
+    let min_size = mk_one range in
+    let max_size = mk_z (rangeof size_type |> snd) range in
+    let init_size arg flow =
+      eval_bytes arg range man flow >>$ fun bytes flow ->
+      man.exec (mk_assume (mk_in bytes min_size max_size range) range) flow
     in
     List.fold_left
-      (fun acc arg -> acc >>% init_size arg emax_int
+      (fun acc arg -> acc >>% init_size arg
       ) (Post.return flow) args
     >>% fun flow ->
     (* We need to strongify the address to apply the constraints on all concrete arguments *)
@@ -408,7 +439,7 @@ struct
     in
     ( match strong_smash_arg with
       | None     -> Post.return flow
-      | Some arg -> init_size arg emax_int flow
+      | Some arg -> init_size arg flow
     ) >>% fun flow ->
 
     (* Ensure that arguments are valid string with at least one character *)
@@ -424,30 +455,13 @@ struct
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
       }) s32 in
-    let qii = mk_var qi range in
-    let assume_valid_string arg flow =
-      (* arg[0] = [1,255]; *)
-      let first_arg_cell = mk_c_subscript_access arg (mk_zero range) range in
-      let not_zero = mk_z_interval Z.one (rangeof s8 |> snd) range in
-      man.exec (mk_assign first_arg_cell not_zero range) flow >>% fun flow ->
-      (* ∃ i∈[1, sizeof(arg)-1]: arg[i] == 0 *)
-      let l = mk_one range in
-      let u = mk_z (Z.pred max_int) range in
-      man.exec (mk_add qii range) flow >>% fun flow ->
-      man.exec (mk_assume (mk_in qii l u range) range) flow >>% fun flow ->
-      let some_arg_cell = mk_c_subscript_access arg qii range in
-      man.exec (mk_assume (mk_stub_quantified_formula
-                             [EXISTS,qi,S_interval(l,u)]
-                             (eq some_arg_cell (mk_zero range) range) range) range) flow >>% fun flow ->
-      man.exec (mk_remove_var qi range) flow
-    in
     List.fold_left
-      (fun acc arg -> acc >>% assume_valid_string arg)
+      (fun acc arg -> acc >>% assume_valid_string arg qi range man)
       (Post.return flow) args
     >>% fun flow ->
     ( match strong_smash_arg with
       | None -> Post.return flow
-      | Some arg -> assume_valid_string arg flow
+      | Some arg -> assume_valid_string arg qi range man flow
     ) >>% fun flow ->
 
     (* Initialize argv[0] = program_name *)
@@ -466,23 +480,12 @@ struct
     in
     ( match smash_arg with
       | None -> post
-      | Some arg ->
-        let l = mk_int n range in
-        let u = sub argc (mk_one range) range in
-        let argvi = mk_c_subscript_access argv qii range in
-        post >>%
-        man.exec (mk_add qii range) >>% fun flow ->
-        man.exec (mk_assume (mk_in qii l u range) range) flow >>% fun flow ->
-        man.exec (mk_assume (mk_stub_quantified_formula
-                               [FORALL,qi,S_interval(l,u)]
-                               (eq argvi arg range ~etyp:s32) range) range) flow >>% fun flow ->
-        man.exec (mk_remove qii range) flow
+      | Some smash -> post >>% memset_argv_with_smash argc argv smash n qi range man
     ) >>% fun flow ->
 
     (* Put the terminating NULL pointer in argv[argc] *)
     let last = mk_c_subscript_access argv argc range in
     man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
-
     (* Put the initial alarms report *)
     let flow = Flow.set_report report flow in
 
@@ -493,9 +496,11 @@ struct
   let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
-      | None, None      -> call_main_with_concrete_args main [] man flow
-      | None, Some args -> call_main_with_concrete_args main args man flow
-      | Some(lo,hi), None       -> call_main_with_symbolic_args main lo hi functions man flow
+      | None, Some args   -> call_main_with_concrete_args main args man flow
+      | Some(lo,hi), None -> call_main_with_symbolic_args main lo hi man flow
+      | None, None        ->
+        let hi = rangeof s16 |> snd |> Z.to_int in
+        call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
       exec_entry_body main man flow >>% fun flow ->
