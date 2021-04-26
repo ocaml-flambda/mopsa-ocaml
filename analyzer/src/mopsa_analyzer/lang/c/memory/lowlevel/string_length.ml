@@ -831,9 +831,12 @@ struct
       if not (is_interesting_base base) then
         Eval.singleton (mk_top T_bool range) flow
       else
+        let true_post = assume_eq base offset mode lval.etyp n range man flow in
+        (* Propagate context to the false branch before executing [assume_ne] *)
+        let false_post = assume_ne base offset mode lval.etyp n range man (Flow.set_ctx (Cases.get_ctx true_post) flow) in
         Eval.join
-          (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-          (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+          (true_post >>% Eval.singleton (mk_true range))
+          (false_post >>% Eval.singleton (mk_false range))
 
   let eval_ne lval n range man flow =
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
@@ -844,9 +847,11 @@ struct
       if not (is_interesting_base base) then
         Eval.singleton (mk_top T_bool range) flow
       else
+        let true_post = assume_ne base offset mode lval.etyp n range man flow in
+        let false_post = assume_eq base offset mode lval.etyp n range man (Flow.set_ctx (Cases.get_ctx true_post) flow) in
         Eval.join
-          (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-          (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+          (true_post >>% Eval.singleton (mk_true range))
+          (false_post >>% Eval.singleton (mk_false range))
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
   let eval_exists_eq i a b lval n range man flow =
