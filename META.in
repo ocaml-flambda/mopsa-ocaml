@@ -3,7 +3,7 @@ version = "@version@"
 
 package "utils" (
         description = "MOPSA utilities"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads"
         version = "@version@"
         archive(byte) = "MopsaUtils.cma"
         archive(native) = "MopsaUtils.cmxa"
@@ -11,7 +11,7 @@ package "utils" (
 
 package "universal_parser" (
         description = "Parser for MOPSA's Universal toy-language"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith mopsa.utils"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
         archive(byte) = "MopsaUniversalParser.cma"
         archive(native) = "MopsaUniversalParser.cmxa"
@@ -19,7 +19,7 @@ package "universal_parser" (
 
 package "clang_parser" (
         description = "Clang-based C parser"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith mopsa.utils"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
         archive(byte) = "MopsaClangParser.cma"
         archive(native) = "MopsaClangParser.cmxa"
@@ -27,7 +27,7 @@ package "clang_parser" (
 
 package "cstub_parser" (
         description = "Parser for MOPSA's language for C stubs"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith mopsa.utils"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
         archive(byte) = "MopsaCStubsParser.cma"
         archive(native) = "MopsaCStubsParser.cmxa"
@@ -35,7 +35,7 @@ package "cstub_parser" (
 
 package "python_parser" (
         description = "Parser for Python 3.x"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith mopsa.utils"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads mopsa.utils"
         version = "@version@"
         archive(byte) = "MopsaPythonParser.cma"
         archive(native) = "MopsaPythonParser.cmxa"
@@ -43,7 +43,7 @@ package "python_parser" (
 
 package "analyzer" (
         description = "MOPSA analyzer engine"
-        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith @meta_analyzer_requires@"
+        requires = "str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads @meta_analyzer_requires@"
         version = "@version@"
         archive(byte) = "MopsaAnalyzer.cma"
         archive(native) = "MopsaAnalyzer.cmxa"

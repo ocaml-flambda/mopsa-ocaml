@@ -53,7 +53,7 @@ mopsa_analyzer.framework.config.abstraction = syntax visitor parser builder
 
 
 # Packages
-PKGS += str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith
+PKGS += str yojson gmp apron apron.boxMPQ apron.octMPQ apron.polkaMPQ zarith threads
 
 
 # MOPSA libraries
