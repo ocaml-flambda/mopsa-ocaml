@@ -139,18 +139,18 @@ let switch
       else
         one tl acc' f
   in
-  let rec aux cases =
+  let rec aux ctx cases =
     match cases with
     | [] -> assert false
 
-    | [(cond, t)] -> one cond flow t
+    | [(cond, t)] -> one cond (Flow.set_ctx ctx flow) t
 
     | (cond, t) :: q ->
-      let r = one cond flow t in
-      let rr = aux q in
-      Cases.join r rr
+      let r = one cond (Flow.set_ctx ctx flow) t in
+      let rr = aux (Cases.get_ctx r) q in
+      Cases.join (Cases.copy_ctx rr r) rr
   in
-  aux cases
+  aux (Flow.get_ctx flow) cases
 
 let set_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
