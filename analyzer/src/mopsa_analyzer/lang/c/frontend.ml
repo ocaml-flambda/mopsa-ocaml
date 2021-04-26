@@ -427,6 +427,8 @@ and from_scope_update ctx (upd:C_AST.scope_update) : Ast.c_scope_update =
 
 and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
   let srange = from_range range in
+  let start_range = set_range_end srange (get_range_start srange) in
+  let end_range = set_range_start srange (get_range_end srange) in
   let skind = match skind with
     | C_AST.S_local_declaration v ->
       let vv = from_var ctx v in
@@ -434,26 +436,26 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
       Ast.S_c_declaration (vv, init, from_var_scope ctx v.var_kind)
     | C_AST.S_expression e -> Universal.Ast.S_expression (from_expr ctx e)
     | C_AST.S_block block -> from_block ctx srange block |> Framework.Core.Ast.Stmt.skind
-    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx srange body, from_block ctx srange orelse)
-    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx srange body)
-    | C_AST.S_do_while (body, cond) -> S_c_do_while (from_block ctx srange body, from_expr ctx cond)
-    | C_AST.S_for (init, test, increm, body) -> S_c_for(from_block ctx srange init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx srange body)
+    | C_AST.S_if (cond, body, orelse) -> Universal.Ast.S_if (from_expr ctx cond, from_block ctx end_range body, from_block ctx end_range orelse)
+    | C_AST.S_while (cond, body) -> Universal.Ast.S_while (from_expr ctx cond, from_block ctx end_range body)
+    | C_AST.S_do_while (body, cond) -> S_c_do_while (from_block ctx end_range body, from_expr ctx cond)
+    | C_AST.S_for (init, test, increm, body) -> S_c_for(from_block ctx start_range init, from_expr_option ctx test, from_expr_option ctx increm, from_block ctx end_range body)
     | C_AST.S_jump (C_AST.S_goto (label, upd)) -> S_c_goto (label,from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_break upd) -> S_c_break (from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_continue upd) -> S_c_continue (from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
-    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx srange body)
+    | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx end_range body)
     | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
   in
   {skind; srange}
 
-and from_block ctx range (block: C_AST.block) : stmt =
+and from_block ctx empty_range (block: C_AST.block) : stmt =
   let block_range =
     match block.blk_stmts with
-    | [] -> set_range_start range (get_range_end range)
+    | [] -> empty_range
     | l ->
       let _,first = ListExt.hd l in
       let _,last = ListExt.last l in
@@ -464,15 +466,10 @@ and from_block ctx range (block: C_AST.block) : stmt =
     ~vars:(List.map (from_var ctx) block.blk_local_vars)
     block_range
 
-and from_block_option ctx (range: Location.range) (block: C_AST.block option) : stmt =
-  match block with
-  | None -> mk_nop range
-  | Some stmtl -> from_block ctx range stmtl
-
-and from_body_option (ctx) (range: Location.range) (block: C_AST.block option) : stmt option =
+and from_body_option (ctx) empty_range (block: C_AST.block option) : stmt option =
   match block with
   | None -> None
-  | Some stmtl -> Some (from_block ctx range stmtl)
+  | Some stmtl -> Some (from_block ctx empty_range stmtl)
 
 
 
