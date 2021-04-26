@@ -59,10 +59,9 @@ let mk_bytes_var addr =
   let name = Format.asprintf "bytes⦃%s⦄" (addr_uniq_name addr) in
   mkv name (V_c_bytes addr) (T_c_integer C_unsigned_long)
 
-let mk_bytes addr mode range =
+let mk_bytes addr ?(mode=None) range =
   let v = mk_bytes_var addr in
   mk_var v ~mode range
-
 
 
 

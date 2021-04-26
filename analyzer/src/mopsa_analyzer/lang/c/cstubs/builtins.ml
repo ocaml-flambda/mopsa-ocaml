@@ -69,7 +69,7 @@ struct
     let open Common.Base in
     match base.base_kind with
     | Addr addr ->
-      man.eval (mk_bytes addr mode range) flow
+      man.eval (mk_bytes addr ~mode range) flow
 
     | _ ->
       eval_base_size ~route:(Below name) base range man flow
