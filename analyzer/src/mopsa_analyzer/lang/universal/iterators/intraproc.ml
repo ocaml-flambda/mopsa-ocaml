@@ -88,7 +88,7 @@ struct
       OptionExt.return
 
     | S_assign(x,e) when is_universal_type (etyp x) ->
-      man.eval e flow >>$? fun e flow ->
+      man.eval e flow ~translate:"Universal" >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
