@@ -135,6 +135,10 @@ struct
       man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
       OptionExt.return
 
+    | S_expression { ekind = E_c_assign(lval, rval) } ->
+      man.exec (mk_assign lval rval stmt.srange) flow |>
+      OptionExt.return
+
     | _ -> None
 
 
