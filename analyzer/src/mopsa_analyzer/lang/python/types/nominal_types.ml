@@ -87,13 +87,18 @@ struct
              man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
           | A_py_c_class v, A_py_c_class v' ->
              warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
-             man.eval (mk_py_bool (compare_var v v' = 0) range) flow
+             man.eval (mk_py_bool (compare v v' = 0) range) flow
           | A_py_c_class v, A_py_class (C_builtin s, _) ->
              warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
              man.eval (mk_py_bool (s = "object") range) flow
-          | A_py_class (C_builtin s, _), A_py_c_class _ ->
+          | A_py_c_class v, A_py_class (C_user _, _) ->
              warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
              man.eval (mk_py_false range) flow
+          | A_py_class (C_builtin _, _), A_py_c_class v' ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_false range) flow
+          | A_py_class (C_user _, mro), A_py_c_class v' ->
+             man.eval (mk_py_bool (List.exists (fun (addr, _) -> compare_addr addr addr_cls' = 0) mro) range) flow
           | _ -> panic_at range "%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
@@ -157,12 +162,12 @@ struct
              begin match akind cls with
              | A_py_class (_, imro) ->
                 let res = List.exists (fun x -> match akind @@ fst x with
-                                                | A_py_c_class x -> compare_var x c = 0
+                                                | A_py_c_class x -> compare x c = 0
                                                 | _ -> false) imro in
                 man.eval (mk_py_bool res range) flow
 
              | A_py_c_class c' ->
-                man.eval (mk_py_bool (compare_var c c' = 0) range) flow
+                man.eval (mk_py_bool (compare c c' = 0) range) flow
 
              | _ -> assert false
              end

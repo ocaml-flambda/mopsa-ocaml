@@ -152,76 +152,76 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertEqual", _))}, _)}, [test; arg1; arg2; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertEqual", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_eq arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotEqual", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ne arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_ne arg2 range) range flow
          |> OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreater", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_gt arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_gt arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertGreaterEqual", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_ge arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_ge arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertLess", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_lt arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_lt arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertLessEqual", _))}, _)}, test :: arg1 :: arg2 :: _, []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_le arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_le arg2 range) range flow
          |> OptionExt.return
 
 
       (* FIXME: handle message *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertTrue", _))}, _)}, [test; cond;_], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertTrue", _))}, _)}, [test; cond], []) ->
-        Py_mopsa.check man (Utils.mk_builtin_call "bool" [cond] range) range flow
+        Utils.check man (Utils.mk_builtin_call "bool" [cond] range) range flow
         |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.fail", _))}, _)}, [test; cond], []) ->
-        Py_mopsa.check man (mk_false range) range flow
+        Utils.check man (mk_false range) range flow
         |> OptionExt.return
 
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertFalse", _))}, _)}, [test; cond; _], [])
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertFalse", _))}, _)}, [test; cond], []) ->
-         Py_mopsa.check man (mk_py_not cond range) range flow
+         Utils.check man (mk_py_not cond range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIs", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsNot", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is_not arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is_not arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_in arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_binop ~etyp:(T_py None) arg1 O_py_not_in arg2 range) range flow
+         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_not_in arg2 range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsInstance", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
+         Utils.check man (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotIsInstance", _))}, _)}, [test; arg1; arg2], []) ->
-         Py_mopsa.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
+         Utils.check man (mk_not (Utils.mk_builtin_call "isinstance" [arg1; arg2] range) range) range flow
          |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)} as caller, test :: exn :: f :: args, []) ->
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)} as caller, test :: exn :: f :: args, kwargs) ->
          (* rewriting into: with exn: f(args) *)
          let stmt = mk_stmt (S_py_with ({exp with ekind = E_py_call(caller, [test;exn], [])}, None,
-                      mk_stmt (S_expression (mk_py_call f args range)) range)) range
+                      mk_stmt (S_expression (mk_py_kall f args kwargs range)) range)) range
          in
          man.exec stmt flow >>%
          Eval.singleton (mk_py_none range)
@@ -235,12 +235,12 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          let r = man.eval exn flow >>$ (fun exn flow ->
-          debug "ExceptionContext: self = %a, exn = %a" pp_expr self pp_expr exn;
+          debug "ExceptionContext@@%a self = %a, exn = %a" pp_range range pp_expr self pp_expr exn;
          assume
            (mk_binop ~etyp:(T_py None) exn O_eq (mk_py_none range) range)
            ~fthen:(fun flow ->
              (* No exception raised => assertion failed *)
-             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+             Utils.check man (mk_py_false range) range flow >>$ fun _ flow ->
              man.eval (mk_py_false range) flow
            )
            ~felse:(fun flow ->
@@ -254,18 +254,19 @@ module Domain =
                    assume (eq ~etyp:(T_py None) reg (mk_py_none range) range)
                      man flow
                      ~fthen:(fun flow ->
-                       Py_mopsa.check man (mk_py_true range) range flow >>$
+                       Utils.check man (mk_py_true range) range flow >>$
                          fun _ flow ->
                          man.eval (mk_py_true range) flow
                      )
                      ~felse:(fun flow ->
+                       (* FIXME: handle all cases, don't choose *)
                        let regex = Universal.Strings.Powerset.StringPower.choose @@
                                      man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
                        man.eval (mk_py_index_subscript (mk_py_attr exn "args" range) (mk_zero ~typ:(T_py None) range) range) flow >>$
                          fun exc_msg flow ->
                          let exc_powerset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
                          if Universal.Strings.Powerset.StringPower.is_top exc_powerset then
-                             Py_mopsa.check man (mk_py_top T_bool range) range flow >>$
+                             Utils.check man (mk_py_top T_bool range) range flow >>$
                                fun _ flow ->
                                man.eval (mk_py_true range) flow
                          else
@@ -279,11 +280,11 @@ module Domain =
                            let () = warn_at range "assertRaisesRegex hackish implementation, only .* at the end is supported" in
                            let () = debug "assertRaisesRegex regex=%s exc_msg=%s" quoted_regex exc_msg in
                            if Str.string_match re exc_msg 0 then
-                             Py_mopsa.check man (mk_py_true range) range flow >>$
+                             Utils.check man (mk_py_true range) range flow >>$
                                fun _ flow ->
                                man.eval (mk_py_true range) flow
                            else
-                             Py_mopsa.check man (mk_py_false range) range flow >>$ fun _ flow ->
+                             Utils.check man (mk_py_false range) range flow >>$ fun _ flow ->
                              man.eval (mk_py_false range) flow
 
                      )

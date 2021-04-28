@@ -223,3 +223,7 @@ let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~
          Eval.join_list ~empty:(fun () -> Eval.empty flow_ok) results
       | NotHandled -> assert false
     )
+
+let check man cond range flow =
+  man.exec (Universal.Ast.mk_assert cond range) flow >>%
+  man.eval (mk_py_none range)

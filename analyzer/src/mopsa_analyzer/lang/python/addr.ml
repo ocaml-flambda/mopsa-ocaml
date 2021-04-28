@@ -302,7 +302,7 @@ type addr_kind +=
        py_c_function_kind *
        int option (* ml_flags *) *
        py_object (** self *)
-   | A_py_c_class of var (** static variable used in the C stack to define the class *)
+   | A_py_c_class of string (** name *)
 
 
 exception C3_lin_failure
@@ -406,9 +406,9 @@ let () =
       print =
         (fun default fmt a ->
            match a with
-           | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
-           | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
-           | A_py_class(C_annot c, _) -> fprintf fmt "ua{%a}" pp_var c.py_cls_a_var;
+           | A_py_class(C_user c, _) -> fprintf fmt "%a" pp_var c.py_cls_var
+           | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "%s" c
+           | A_py_class(C_annot c, _) -> fprintf fmt "%a" pp_var c.py_cls_a_var;
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
            | A_py_function(F_annot f) -> fprintf fmt "f-annot %a" pp_var f.py_funca_var (* Ast.pp_py_func_annot f*)
            | A_py_function(F_builtin (f, t)) -> fprintf fmt "%s %s" t f
@@ -513,7 +513,7 @@ let () =
             match a with
             | A_py_c_module(c(*, p*)) -> fprintf fmt "c module %s" c
             | A_py_c_function (f, _, _, _, _) -> fprintf fmt "c function %s" f
-            | A_py_c_class v -> fprintf fmt "c class %a" pp_var v
+            | A_py_c_class v -> fprintf fmt "c class %s" v
             | _ -> default fmt a);
         compare =
           (fun default a1 a2 ->
@@ -546,6 +546,7 @@ let () =
 
 let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
+                              | A_py_c_module _ -> Universal.Heap.Policies.mk_addr_all ak
                               | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
                               (* FIXME: only if cpython analysis. A bit expensive too... *)
                               | A_py_instance {addr_kind = A_py_c_class _} -> Universal.Heap.Policies.mk_addr_stack_range ak

@@ -274,13 +274,13 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("repr", _))}, _)}, [v], [])  ->
-      man.eval   (mk_py_type v range) flow >>$
+      man.eval (mk_py_type v range) flow >>$
       (fun etype flow ->
           assume
             (mk_py_hasattr etype "__repr__" range)
             man flow
             ~fthen:(fun flow ->
-                man.eval   (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow >>$
+                man.eval (mk_py_call (mk_py_attr etype "__repr__" range) [v] range) flow >>$
                   (fun repro flow ->
                     assume (mk_py_isinstance_builtin repro "str" range) man flow
                       ~fthen:(fun flow ->
@@ -416,6 +416,8 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("id", _))}, _)}, [x], []) ->
+       man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
     | _ ->
       None
