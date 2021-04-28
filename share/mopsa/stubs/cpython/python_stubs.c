@@ -183,7 +183,7 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 
     /* somehow PyObject_INIT? */
     Py_TYPE(obj) = type; // FIXME now done by the boundary. Maybe the refcnt should be too?
-    obj->ob_refcnt = 1;
+//    obj->ob_refcnt = 1;
 
     return obj;
 }
@@ -207,7 +207,7 @@ _PyObject_New(PyTypeObject *type)
         return PyErr_NoMemory();
 
     Py_TYPE(obj) = type;
-    obj->ob_refcnt = 1;
+//    obj->ob_refcnt = 1;
 
     return obj;
 }
@@ -489,6 +489,14 @@ wrap_unaryfunc(PyObject *self, PyObject *args, void *wrapped)
     /* if (!check_num_args(args, 0)) */
     /*     return NULL; */
     return (*func)(self);
+}
+
+static PyObject *
+wrap_call(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
+{
+    ternaryfunc func = (ternaryfunc)wrapped;
+
+    return (*func)(self, args, kwds);
 }
 
 
@@ -876,6 +884,8 @@ void set_default_flags(PyTypeObject *t)
     // 9, 10, 12, 14, 18
     t->tp_flags = Py_TPFLAGS_HEAPTYPE | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_READY | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_VERSION_TAG;
     t->tp_as_sequence = 0; // FIXME: more complicated, if a class has a __getitem__
+    t->tp_as_number = 0;
+    t->tp_as_mapping = 0;
 }
 
 

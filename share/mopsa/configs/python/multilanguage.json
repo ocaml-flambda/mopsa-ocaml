@@ -7,7 +7,6 @@
                     // Partitioning
 	            "universal.partitioning.merge_after_stmt",
                     "cpython.cmodule",
-                    "cpython.callstack_tracking",
                     {
                         "semantic": "Python",
                         "switch": [
@@ -71,6 +70,8 @@
                             "c.iterators.switch",
                             "c.iterators.loops",
                             "c.iterators.intraproc",
+                            // CPython
+                            "cpython.callstack_tracking",
                             // Stubs
                             "stubs.iterators.body",
                             // C Libraries
