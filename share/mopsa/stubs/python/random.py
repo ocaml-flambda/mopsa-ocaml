@@ -31,3 +31,6 @@ def seed(v): pass
 
 def random():
     return mopsa.random_float(0, 1)
+
+def choice(s):
+    return s[mopsa.random_int(0, len(s))]

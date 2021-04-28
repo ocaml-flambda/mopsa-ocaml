@@ -2,9 +2,9 @@ class repeat:
     def __init__(self, val, count=None):
         self.val = val
         self.count = count
+        self.pos = 0
 
     def __iter__(self):
-        self.pos = 0
         return self
 
     def __next__(self):

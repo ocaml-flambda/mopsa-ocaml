@@ -26,6 +26,8 @@ environ : Dict[str, str]
 sep: str
 name: str
 
+def urandom(__size: int) -> bytes: ...
+
 class PathLike(Protocol[AnyStr]):
     def __fspath__(self) -> AnyStr: ...
 
