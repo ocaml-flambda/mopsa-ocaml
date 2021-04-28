@@ -33,8 +33,6 @@ open Common
 let opt_show_callstacks = ref false
 
 
-(** Command-line option to show safe checks *)
-let opt_show_safe_checks = ref false
 
 let print out fmt =
   let formatter =

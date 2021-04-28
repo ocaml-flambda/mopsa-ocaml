@@ -24,6 +24,8 @@
 open Mopsa_utils
 open Core.All
 
+(** Command-line option to show safe checks *)
+let opt_show_safe_checks = ref false
 
 (* Signature of an output engine *)
 (* ----------------------------- *)
@@ -55,4 +57,3 @@ let opt_format = ref F_text
 let opt_file : string option ref = ref None
 let opt_display_lastflow = ref false
 let opt_silent = ref false
-
