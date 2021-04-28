@@ -232,11 +232,11 @@ struct
           assume (mk_py_isinstance_builtin set "set" range) man flow
             ~fthen:(fun flow ->
                 let var = var_of_eobj set in
-                Libs.Py_mopsa.check man
+                Utils.check man
                   (mk_py_isinstance (mk_var ~mode:(Some WEAK) var range) set_v range)
                   range flow
               )
-            ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
+            ~felse:(Utils.check man (mk_py_false range) range)
         )
       |> OptionExt.return
 

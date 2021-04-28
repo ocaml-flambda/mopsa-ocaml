@@ -27,12 +27,6 @@ let () = register_query {
   }
 
 
-let compare_py_object (obj1: py_object) (obj2: py_object) : int =
-  Compare.compose
-    [
-      (fun () -> compare_addr (fst obj1) (fst obj2));
-      (fun () -> (OptionExt.compare compare_expr) (snd obj1) (snd obj2));
-    ]
 
 module Domain =
 struct
@@ -121,6 +115,12 @@ struct
       Utils.new_wrapper man range flow "dict" cls
         ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([],[])) range))
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__contains__" as f, _))}, _)}, args, []) ->
+       Utils.check_instances ~arguments_after_check:1 f man flow range args ["dict"]
+         (fun _ flow ->
+           man.eval (mk_py_top T_bool range) flow
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__getitem__" as f, _))}, _)}, args, []) ->
        Utils.check_instances ~arguments_after_check:1 f man flow range args ["dict"]
@@ -132,10 +132,43 @@ struct
            let ds = find dict_addr cur in
            (* ok as ds should have <= 1 element. Otherwise need to fold *)
            let dict = Dicts.choose ds in
+           (* debug "searching for %a, dict = %a, result = %b" Pp.pp_py_object key_obj (format Dicts.print ds (List.exists (fun (ko, _) -> compare_py_object_lax key_obj ko = 0) dict); *)
+           let is_builtin_value o = match akind (addr_of_object o) with
+             | A_py_instance {addr_kind = A_py_class (C_builtin ("int" | "bool" | "float" | "str" | "bytes"), _)} -> true
+             | _ -> false  in
+           (* FIXME: still an issue with weak addrs *)
+           let found = List.fold_left (fun acc (ko, vo) ->
+                           if is_builtin_value ko && is_builtin_value key_obj then
+                             if compare_addr_kind (akind @@ fst ko) (akind @@ fst key_obj) = 0 then
+                               let flow_eq =
+                                 man.exec (mk_assume (eq (OptionExt.none_to_exn @@ snd ko) (OptionExt.none_to_exn @@ snd key_obj) range) range) flow |> post_to_flow man in
+                               let flow_ne =
+                                 man.exec (mk_assume (ne (OptionExt.none_to_exn @@ snd ko) (OptionExt.none_to_exn @@ snd key_obj) range) range) flow |> post_to_flow man in
+                               match man.lattice.is_bottom (Flow.get T_cur man.lattice flow_eq), man.lattice.is_bottom (Flow.get T_cur man.lattice flow_ne) with
+                               | true, _ -> acc
+                               | false, true ->
+                                  (* precise *)
+                                  (true, Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow_eq |> Cases.singleton (mk_py_object vo range)) :: acc
+                               | false, false ->
+                                  (* unprecise *)
+                                  (false, Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow_eq |> Cases.singleton (mk_py_object vo range)) :: acc
+                             else
+                               acc
+                           else
+                             if compare_addr (fst ko) (fst key_obj) == 0 then
+                               ((fst ko).addr_mode = STRONG, Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |>
+                                 Cases.singleton (mk_py_object vo range)) :: acc
+                             else acc
+                         ) [] dict in
+           if found = [] then man.exec (Utils.mk_builtin_raise "KeyError" range) flow >>% Eval.empty
+           else
+             let precise_list, found = List.split found in
+             let exists_precise = List.exists (fun x -> x) precise_list in
+             if exists_precise then
+               Eval.join_list ~empty:(fun () -> assert false) found
+             else
+               Eval.join_list ~empty:(fun () -> assert false) ((man.exec (Utils.mk_builtin_raise "KeyError" range) flow >>% Eval.empty)::found)
 
-           match List.find_opt (fun (ko, _) -> compare_py_object key_obj ko = 0) dict with
-           | None -> man.exec (Utils.mk_builtin_raise "KeyError" range) flow >>% Eval.empty
-           | Some (_, obj) -> Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |> Eval.singleton (mk_py_object obj range)
          )
        |> OptionExt.return
 

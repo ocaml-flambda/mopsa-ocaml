@@ -376,7 +376,7 @@ struct
           assume (mk_py_isinstance_builtin dict "dict" range) man flow
             ~fthen:(fun flow ->
                 let var_k, var_v = extract_vars dict in
-                Libs.Py_mopsa.check man
+                Utils.check man
                   (Utils.mk_builtin_call "bool" [
                       (mk_binop ~etyp:(T_py None)
                          (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_k range) type_k range)
@@ -386,7 +386,7 @@ struct
                     ] range)
                   range flow
               )
-            ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
+            ~felse:(Utils.check man (mk_py_false range) range)
         )
       |> OptionExt.return
 

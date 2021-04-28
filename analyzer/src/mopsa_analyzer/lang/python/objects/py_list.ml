@@ -502,6 +502,7 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__new__", _))}, _)}, cls::args, []) ->
+       (* FIXME: set length to 0? *)
       Utils.new_wrapper man range flow "list" cls
         ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_list []) range))
 
@@ -1089,11 +1090,11 @@ struct
           assume (mk_py_isinstance_builtin list "list" range) man flow
             ~fthen:(fun flow ->
                 let var = var_of_eobj list in
-                Libs.Py_mopsa.check man
+                Utils.check man
                   (mk_py_isinstance (mk_var var range) type_v range)
                   range flow
               )
-            ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
+            ~felse:(Utils.check man (mk_py_false range) range)
         )
       |> OptionExt.return
 
