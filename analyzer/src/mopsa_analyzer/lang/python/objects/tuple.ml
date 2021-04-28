@@ -357,6 +357,26 @@ struct
         (Post.return flow) vas vas'
       |> OptionExt.return
 
+    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_tuple tl}, _)} as tupleobj), body, {skind = S_block ([], _)}) when tl <= 3 -> (* let's just unroll *)
+       List.fold_left (fun post t ->
+           post >>%
+             man.exec (mk_assign target (mk_var t range) range) >>%
+             man.exec body) (Post.return flow) (var_of_eobj tupleobj)
+       |> OptionExt.return
+
+    | S_py_for (target, ({ekind = E_py_object ({addr_kind = A_py_tuple tl}, _)} as tupleobj), body, {skind = S_block ([], _)}) ->
+       let weak_target = match ekind target with
+         | E_var (v, _) -> {target with ekind = E_var(v, Some WEAK)}
+         | _ -> assert false in
+       let fst, others = match var_of_eobj tupleobj with [] -> assert false | hd::tl -> hd, tl in
+       let post =
+         List.fold_left (fun post t ->
+             post >>%
+               man.exec (mk_assign weak_target (mk_var t range) range)) (man.exec (mk_assign target (mk_var fst range) range) flow) others in
+       post >>%
+       man.exec (mk_while (mk_top T_bool range) body range) |>
+         OptionExt.return
+
     | _ -> None
 
 
