@@ -552,6 +552,7 @@ module Domain =
         fun oaddr flow ->
         match oaddr with
         | Some (Nt addr) ->
+           debug "c_to_python boundary %a" pp_addr addr;
            begin
              let flow = match safe_check with
                | None -> flow
@@ -2614,7 +2615,7 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, oflags, self)}, _)}, args, kwargs) ->
-         debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
+         debug "%s, kind = %s, self = %a: oflags = %a" name (str_of_py_c_function_kind kind) Python.Pp.pp_py_object self (OptionExt.print Format.pp_print_int) oflags;
          (if not @@ List.for_all (fun e -> match ekind e with | E_py_object _ -> true | _ -> false) args then bind_list args man.eval flow else bind_list args Eval.singleton flow) >>$ (fun args flow ->
           (* cf cfunction_call_varargs + _Py_CheckFunctionResult in call.c *)
           (* FIXME: refactor this code *)
@@ -2631,8 +2632,21 @@ module Domain =
          let subst_addr_eobj a' e = match ekind e with
            | E_py_object(a, oe) -> {e with ekind = E_py_object(a', oe)}
            | _ -> assert false in
+         (if kind = Builtin_function_or_method then
+            let () = debug "builtin, nothing to do" in
+            Cases.singleton () flow
+          else
+            assume (mk_py_isinstance (List.hd args) (mk_py_object self range) range) man flow
+              ~fthen:(fun flow ->
+                Flow.add_safe_check Python.Alarms.CHK_PY_TYPEERROR range flow |> Cases.singleton ())
+              ~felse:(fun flow ->
+                man.exec (Python.Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%s requires a %a object" name Python.Pp.pp_py_object self) range) flow >>%
+                  Cases.empty
+              )
+         ) >>$ fun _ flow ->
          (match (fst self).addr_kind with
           | A_py_c_class v ->
+             (* specific case for tp_new_wrapper? *)
              let pyobject_typ, pytypeobject_typ =
                let assign_helper = C.Ast.find_c_fundec_by_name "_PyType_Assign_Helper" flow in
                under_pointer_type @@ vtyp @@ List.hd assign_helper.c_func_parameters,
@@ -2640,9 +2654,11 @@ module Domain =
              Eval.singleton (py_addr_to_c_expr (fst self) pytypeobject_typ range man flow ) flow
           | _ ->
              if List.length args = 0 then Eval.singleton (mk_c_null range) flow
-             else strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
-             let c_addr, flow = python_to_c_boundary addr_self (Some (List.hd args_types)) (snd self) range man flow in
-             Eval.singleton c_addr flow) >>$ (fun self flow ->
+             else
+               strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
+               let c_addr, flow = python_to_c_boundary addr_self (Some (List.hd args_types)) (snd self) range man flow in
+               Eval.singleton c_addr flow
+         ) >>$ (fun self flow ->
          (match kind with
            | Builtin_function_or_method ->
              Cases.return (self, args) flow
@@ -2751,8 +2767,20 @@ module Domain =
                let r = c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call_res man flow range
                          ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range) in
                (* FIXME: need to check that if PyErr_Occurred then NULL was one of the potentiel results before calling Clear *)
+               let clear = C.Ast.find_c_fundec_by_name "PyErr_Clear" flow in
                r >>$ fun r flow ->
-               man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>% Eval.singleton r
+               assume (eq (mk_c_arrow_access_by_name (mk_var (search_c_globals_for flow "exc") range) "exc_state" range) (mk_c_null range) range) man flow
+                 ~fthen:(fun flow ->
+                   debug "alles gut";
+                   Flow.add_safe_check Python.Alarms.CHK_PY_SYSTEMERROR range flow |>
+                   man.exec (mk_expr_stmt (mk_c_call clear [] range) range) >>%
+                   Eval.singleton r)
+                 ~felse:(fun flow ->
+                   debug "woopsie";
+                   man.exec (mk_expr_stmt (mk_c_call clear [] range) range) flow >>%
+                     man.exec (Python.Utils.mk_builtin_raise_msg "SystemError" (Format.asprintf "%s returned a result with an error set" name) range) >>%
+                     Eval.empty
+                 )
          )
          )
          )
