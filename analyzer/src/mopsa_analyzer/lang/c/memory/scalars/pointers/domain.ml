@@ -179,8 +179,9 @@ struct
     | Top ->
       PointerSet.top, None, None
 
-    | Fun _ ->
-      panic ~loc:__LOC__ "symbolic_to_value: function pointers not supported"
+    | Fun f ->
+       PointerSet.cfun f, None, None
+      (* panic ~loc:__LOC__ "symbolic_to_value: function pointers not supported" *)
 
 
   (** Set value of an optional pointer *)
