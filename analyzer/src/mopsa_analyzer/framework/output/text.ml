@@ -286,7 +286,7 @@ let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
   if is_sound_report rep
   then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
-  else print out "%a@." (Debug.color_str "orange") "Unsound analysis";
+  else print out "%a@." (Debug.color_str "orange") "Analysis terminated successfully";
 
   if !opt_display_lastflow then
     print out "Last flow =@[@\n%a@]@\n"

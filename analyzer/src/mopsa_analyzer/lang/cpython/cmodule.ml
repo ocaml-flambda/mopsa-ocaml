@@ -24,7 +24,7 @@ let () =
   register_assumption {
       print = (fun next fmt -> function
                 | A_cpython_unsupported_fields f ->
-                   Format.fprintf fmt "in C/Python analysis, ignoring fields: %a"
+                   Format.fprintf fmt "in C/Python analysis, unsupported fields: %a"
                      (Debug.bold Format.pp_print_string) f
                 | a -> next fmt a);
       compare = (fun next a1 a2 ->
@@ -971,7 +971,7 @@ module Domain =
             debug "add_pymethoddef";
             add_pymethoddef "tp_methods" cls_addr Method_descriptor ecls man flow >>%
             add_pymemberdef cls_addr ecls man >>% fun flow ->
-            let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_numbers, ...") range flow in
+            let flow = Flow.add_local_assumption (A_cpython_unsupported_fields "tp_as_async, tp_hash, tp_clear ...") range flow in
             Cases.singleton cls_addr flow
 
 
