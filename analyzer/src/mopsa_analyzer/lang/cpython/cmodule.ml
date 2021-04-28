@@ -297,8 +297,12 @@ module Domain =
           "PyList_Size";
           "PyList_GetItem";
           "PyList_SetItem";
+          "PyList_Append";
           "PyDict_Size";
           "PyDict_Next";
+          "PyDict_New";
+          "PyDict_GetItem";
+          "PyDict_SetItem";
           "PySet_New";
           "PySet_Size";
           "PySet_Add";
@@ -2281,13 +2285,51 @@ module Domain =
          Eval.singleton c_addr flow
          ) |> OptionExt.return
 
+
       | E_c_builtin_call ("PyList_GetItem", [o; key])
-      | E_c_builtin_call ("PyTuple_GetItem", [o; key])
-      | E_c_builtin_call ("PyObject_GetItem", [o; key]) ->
+      | E_c_builtin_call ("PyTuple_GetItem", [o; key]) ->
          resolve_c_pointer_into_addr o man flow >>$? fun oaddr flow ->
          let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
          let py_o = Python.Ast.mk_py_object (addr, None) (tag_range range "%a" pp_addr_kind (akind addr)) in
          c_int_to_python key man flow (tag_range range "key") >>$? fun py_key flow ->
+         Python.Utils.try_eval_expr man ~route:(Semantic "Python")
+           (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_o "__getitem__" range) [py_key] range) flow
+           ~on_empty:(fun exc_exp exc_name exc_msg flow ->
+             man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+             let exc_addr, exc_oe = object_of_expr exc_typ in
+             let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+             let setstring msg =
+               man.exec
+                 (mk_c_call_stmt
+                    (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                    [
+                      mk_addr exc_addr range;
+                      msg
+                    ]
+                    range) flow
+               >>%
+                 man.eval (mk_c_null range) in
+             Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+               (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+             |> OptionExt.return
+           )
+           ~on_result:(fun py_elem flow ->
+             if ekind py_elem = E_constant (C_top (T_py None)) then
+               let c = C.Ast.find_c_fundec_by_name "PyTuple_GetItem" flow in
+               man.eval (mk_top c.c_func_return range) flow
+             else
+             let addr_py_elem, oe_py_elem = object_of_expr py_elem in
+             strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
+             let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
+             man.eval c_addr flow
+           )
+
+      | E_c_builtin_call ("PyDict_GetItem", [o; key])
+      | E_c_builtin_call ("PyObject_GetItem", [o; key]) ->
+         resolve_c_pointer_into_addr o man flow >>$? fun oaddr flow ->
+         let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+         let py_o = Python.Ast.mk_py_object (addr, None) (tag_range range "%a" pp_addr_kind (akind addr)) in
+         c_to_python_boundary key man flow (tag_range range "key") >>$? fun py_key flow ->
          Python.Utils.try_eval_expr man ~route:(Semantic "Python")
            (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_o "__getitem__" range) [py_key] range) flow
            ~on_empty:(fun exc_exp exc_name exc_msg flow ->
@@ -2316,6 +2358,8 @@ module Domain =
              man.eval c_addr flow
            )
 
+      (* FIXME: refactor into PyObject_SetItem, except for PyTuple_SetItem *)
+      | E_c_builtin_call ("PyDict_SetItem", [list; pos; item])
       | E_c_builtin_call ("PyList_SetItem", [list;pos;item]) ->
          resolve_c_pointer_into_addr list man flow >>$?
            (fun oaddr flow ->
@@ -2324,8 +2368,8 @@ module Domain =
              c_int_to_python pos man flow (tag_range range "pos") >>$? fun py_obj flow ->
              c_to_python_boundary item man flow range >>$? fun py_item flow ->
              Python.Utils.try_eval_expr man ~route:(Semantic "Python")
-               (Python.Ast.mk_py_call (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "list.__setitem__") range)
-                  [py_list; py_obj; py_item] range)
+               (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_list "__setitem__" range)
+                  [py_obj; py_item] range)
                flow
                ~on_empty:(fun exc_exp exc_name exc_msg flow ->
                  man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
@@ -2349,6 +2393,29 @@ module Domain =
                ~on_result:(fun res flow ->
                  Eval.singleton (mk_int 0 range) flow)
            )
+
+      | E_c_builtin_call ("PyList_Append", [op;newitem]) ->
+         resolve_c_pointer_into_addr op man flow >>$? fun oaddr flow ->
+          let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+          c_to_python_boundary newitem man flow range
+          ~on_top:(fun flow -> Eval.singleton (mk_top (T_py None) range) flow)
+          >>$? fun py_newitem flow ->
+          (* FIXME: try_eval_expr *)
+          man.eval (Python.Ast.mk_py_call
+                     (Python.Ast.mk_py_attr (Python.Ast.mk_py_object (addr, None) range) "append" range)
+                       [py_newitem] range) flow >>$? fun _ flow ->
+           Eval.singleton (mk_zero range) flow
+            |> OptionExt.return
+
+      | E_c_builtin_call ("PyDict_New", []) ->
+         (* FIXME: refactor with c_to_python_boundary boundary and on_null... *)
+         man.eval (Python.Ast.mk_py_call
+                     (Python.Ast.mk_py_object (find_builtin "dict") range)
+                     [] range) flow >>$ (fun earg flow ->
+         let addr_earg = fst @@ object_of_expr earg in
+         let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+         Eval.singleton c_addr flow)
+         |> OptionExt.return
 
       | E_c_builtin_call ("PySet_New", [iterable]) ->
          (* FIXME: refactor with c_to_python_boundary boundary and on_null... *)
