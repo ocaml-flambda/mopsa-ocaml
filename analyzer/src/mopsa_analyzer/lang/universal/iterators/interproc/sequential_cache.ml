@@ -32,7 +32,7 @@ open MapExt
 
 let name = "universal.iterators.interproc.sequential_cache"
 
-let opt_universal_modular_interproc_cache_size : int ref = ref 10
+let opt_universal_modular_interproc_cache_size : int ref = ref 3
 
 let () =
   register_domain_option name {

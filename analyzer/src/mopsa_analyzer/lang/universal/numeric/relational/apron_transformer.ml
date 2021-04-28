@@ -197,6 +197,8 @@ struct
 
 
   let rec exp_to_apron exp (abs,bnd) l =
+    if not (is_numeric_type (etyp exp)) then raise UnsupportedExpression
+    else
     match ekind exp with
     | E_constant (C_int_interval (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi)) when Z.(lo = hi) ->
       Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string lo)),
@@ -272,8 +274,7 @@ struct
       Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
 
     | _ ->
-      Exceptions.warn "exp_to_apron: failed to transform %a of type %a" pp_expr exp pp_typ (etyp exp);
-      raise UnsupportedExpression
+       raise ImpreciseExpression
 
 
   and bexp_to_apron exp (abs,bnd) l =
