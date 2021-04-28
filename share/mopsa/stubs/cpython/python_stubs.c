@@ -69,6 +69,7 @@ typedef struct exc_data {
 int _mopsa_pyerr_bind_cs_to(exc_data*);
 
 exc_data *exc;
+exc_data no_exc = {NULL, NULL};
 
 PyObject*
 PyErr_NoMemory()
@@ -97,11 +98,13 @@ PyErr_NoMemory()
 void
 PyErr_Clear()
 {
-    free(exc);
-    exc = malloc(sizeof(exc_data));
-    _mopsa_assume(exc != NULL);
-    exc->exc_state = NULL;
-    exc->exc_msg = NULL;
+    if(exc != &no_exc)
+        free(exc);
+    exc = &no_exc;
+    /* exc = malloc(sizeof(exc_data)); */
+    /* _mopsa_assume(exc != NULL); */
+    /* exc->exc_state = NULL; */
+    /* exc->exc_msg = NULL; */
 }
 
 void PyErr_SetNone(PyObject* o) {
@@ -436,8 +439,11 @@ wrap_objobjargproc(PyObject *self, PyObject *args, void *wrapped)
     if (!PyArg_UnpackTuple(args, "", 2, 2, &key, &value))
         return NULL;
     res = (*func)(self, key, value);
-    if (res == -1 && PyErr_Occurred())
+    if (res == -1) {
+        if (!PyErr_Occurred())
+            PyErr_SetString(PyExc_SystemError, "error return without exception set");
         return NULL;
+    }
     Py_RETURN_NONE;
 }
 
@@ -825,6 +831,8 @@ init_flags()
     _PyNone_Type.tp_iter = 0;
     _PyNotImplemented_Type.tp_iter = 0;
 
+
+    PyFloat_Type.tp_as_number = 0;
 
     // all flags are in the object declaration except Ready, which is
     // added upon completion of PyType_Ready
