@@ -163,7 +163,18 @@ let () =
       | A_py_function _
       | A_py_method _
       | A_py_module _ -> true
-      | _ -> next ak);
+      | _ -> next ak)
+
+let () =
+  C.Common.Base.register_addr_opaque (fun next ->
+      function
+      | Python.Objects.Py_list.A_py_list
+      | Python.Objects.Py_list.A_py_iterator _
+      | Python.Objects.Py_set.A_py_set
+      | Python.Objects.Tuple.A_py_tuple _
+      | Python.Objects.Dict.A_py_dict
+      | A_py_instance {addr_kind = A_py_class (C_builtin _, _)} -> OpaqueFrom 8
+      | ak -> next ak)
 
 
 

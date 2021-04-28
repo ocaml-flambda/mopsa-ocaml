@@ -58,11 +58,12 @@ let compare_base_kind b b' = match b, b' with
   | _ -> compare b b'
 
 let compare_base b b' =
-  Compare.compose [
-    (fun () -> compare_base_kind b.base_kind b'.base_kind);
-    (fun () -> compare b.base_valid b'.base_valid);
-    (fun () -> Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range);
-  ]
+  let r0 = compare_base_kind b.base_kind b'.base_kind in
+  if r0 <> 0 then r0 else
+  let r1 = compare b.base_valid b'.base_valid in
+  if r1 <> 0 then r1 else
+  Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range
+
 
 let mk_base ?(valid=true) ?(invalidation_range=None) kind =
   { base_kind = kind;
@@ -106,6 +107,15 @@ let base_mode b =
   | Addr a -> a.addr_mode
   | String _ -> STRONG
 
+
+type addr_opacity =
+  | NotOpaque
+  | OpaqueFrom of int (* offset *)
+
+let addr_opaque_chain : (addr_kind -> addr_opacity) ref =
+  ref (fun ak -> NotOpaque)
+let addr_opaque a = !addr_opaque_chain a
+let register_addr_opaque f = addr_opaque_chain := f !addr_opaque_chain
 
 let is_base_readonly b =
   match b.base_kind with

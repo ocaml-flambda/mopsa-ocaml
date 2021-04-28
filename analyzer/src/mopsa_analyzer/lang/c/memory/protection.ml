@@ -68,19 +68,32 @@ struct
 
   let check_offset_access base offset mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
+    (match base.base_kind with
+     | Addr a -> begin match addr_opaque (akind a) with
+                 | NotOpaque ->
+                    Post.return flow
+                 | OpaqueFrom i ->
+                    assume (mk_in offset zero (mk_int i range) range) man flow
+                      ~fthen:Post.return
+                      ~felse:(fun eflow ->
+                        raise_c_opaque_access base i offset typ range man flow eflow |> Cases.empty)
+                 end
+     | _ -> Post.return flow) >>% fun flow ->
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
     man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
+    let safe flow =
+      safe_c_memory_access_check range man flow |>
+        Cases.singleton (Some (mk_lval base offset typ mode range)) in
+    let ootb_alarm flow eflow =
+      raise_c_out_bound_alarm base size offset typ range man flow flow |>
+        Cases.empty in
     match eval_num_cond cond man flow with
-    | Some true  -> safe_c_memory_access_check range man flow |>
-                    Cases.singleton (Some (mk_lval base offset typ mode range))
-    | Some false -> raise_c_out_bound_alarm base size offset typ range man flow flow |>
-                    Cases.empty
+    | Some true  -> safe flow
+    | Some false -> ootb_alarm flow flow
     | None ->
       assume cond
-        ~fthen:(fun tflow -> safe_c_memory_access_check range man flow |>
-                             Cases.singleton (Some (mk_lval base offset typ mode range)))
-        ~felse:(fun eflow -> raise_c_out_bound_alarm base size offset typ range man flow eflow |>
-                             Cases.empty)
+        ~fthen:safe
+        ~felse:(ootb_alarm flow)
         man flow
 
   let check_write_access lval man flow =
