@@ -351,7 +351,7 @@ let () =
     key = "-show-safe-checks";
     category = "Alarms";
     doc = " show safe checks when reporting alarms in text format";
-    spec = ArgExt.Set Output.Text.opt_show_safe_checks;
+    spec = ArgExt.Set Output.Common.opt_show_safe_checks;
     default = "false";
   }
 
