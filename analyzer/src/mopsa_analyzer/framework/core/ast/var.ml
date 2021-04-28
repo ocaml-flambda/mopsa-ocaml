@@ -73,8 +73,10 @@ let pp_var fmt v = TypeExt.print var_pp_chain fmt v
 let compare_mode (m1:mode) (m2:mode) = compare m1 m2
 
 let compare_var v1 v2 =
-  if v1 == v2 then 0
-  else Compare.compose [
+  if v1 == v2 then 0 else
+    let r = Stdlib.compare v1.vname v2.vname in
+    if r <> 0 then r
+    else Compare.compose [
       (fun () -> TypeExt.compare var_compare_chain v1 v2);
       (fun () -> Stdlib.compare v1.vname v2.vname);
       (fun () -> compare_typ v1.vtyp v2.vtyp);
