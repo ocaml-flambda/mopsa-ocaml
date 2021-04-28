@@ -1,24 +1,14 @@
+(* FIXME: PyObject_GetItem, PyIter_Next: need to try lowlevel field access if instance of a_py_c_class *)
+(* FIXME: stronger types for each boundary. Resolve_c_pointer_into addr sometimes used while c_to_python boundary should be called *)
 (* FIXME: alloc_py_addr of some addresses should be done only if the thing is not already converted. See fix for A_py_c_function in new_method_from_def already written *)
 (*
   FIXME:
+  - domain should track joint addresses + equiv C var bases <-> Py addrs
   - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
     + if a builtin int/str abstract value's can be changed, it needs to be update
-  - handle rename_addr, fold_addr for recency allocation (in future, also handle what is used by the AGC?)
   - triggering S_add(addr) should be sent to the correct domains...
-  - support PyBuild_Value
   - assert offset = [0, 0] for Points_to
-
  *)
-(* Truc commun au multilangage: addr du tas/variable/fonction
-   Côté C: manipuler des addr plutôt que des bases (il y aura des addr de fonctions/variables/...)
-           Var -> Valeur ~> Addr -> Valeur
- *)
-(*
-  TODO:
-   - parameter conversion Python~>C isn't done in all cases
-   - support more things in PyParse_Tuple
-   - prendre les range d'allocation du python plutôt... (ou avoir range+cs pour les kinds d'addr concernés)
-*)
 open Mopsa
 open Sig.Abstraction.Domain
 open Universal.Ast
@@ -638,24 +628,26 @@ module Domain =
                       man.ask (Callstack_tracking.Q_cpython_attached_callstack a) flow
                    | _ -> assert false in
                  (* clean C exception state for next times *)
+                 let old_cs = Flow.get_callstack flow in
+                 let flow = Flow.set_callstack exc_cs flow in
                  man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>% fun flow ->
-                   let old_cs = Flow.get_callstack flow in
-                   let flow = Flow.set_callstack exc_cs flow in
-                   man.exec (Python.Ast.mk_raise
-                               (Python.Ast.mk_py_call
-                                  (Python.Ast.mk_py_object (exc_addr, None) range)
-                                  args range)
-                               range) flow >>% fun flow ->
-                   let flow = Flow.set_callstack old_cs flow in
-                   Eval.empty flow
+                 man.exec (Python.Ast.mk_raise
+                             (Python.Ast.mk_py_call
+                                (Python.Ast.mk_py_object (exc_addr, None) range)
+                                args range)
+                             range) flow >>% fun flow ->
+                                             let flow = Flow.set_callstack old_cs flow in
+                                             Eval.empty flow
             | Some TOP -> assert false
             | None ->
                debug "%s: NULL found" function_name;
+               man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>% fun flow ->
                man.exec (Python.Ast.mk_raise
                            (Python.Ast.mk_py_call
                               (Python.Ast.mk_py_object (fst @@ find_builtin "SystemError", None) range)
                               [{(Universal.Ast.mk_string (Format.asprintf "%s returned NULL without setting an error" function_name) range) with etyp=(T_py None)}] range)
                            range) flow >>% Eval.empty
+
 
 
     let is_py_addr addr =
@@ -1605,6 +1597,7 @@ module Domain =
            )
          |> OptionExt.return
 
+
       | E_c_builtin_call ("PyLong_FromSsize_t", args)
       | E_c_builtin_call ("PyLong_FromLong", args)
       | E_c_builtin_call ("PyLong_FromUnsignedLong", args) ->
@@ -1787,6 +1780,7 @@ module Domain =
             man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
               Eval.singleton (mk_c_null range)
         ) |> OptionExt.return
+
 
       | E_c_builtin_call ("PyUnicode_AsUTF8AndSize", [unicode; size]) ->
          c_to_python_boundary unicode man flow range >>$ (fun py_unicode flow ->
@@ -2415,7 +2409,42 @@ module Domain =
            )
 
       (* FIXME: refactor into PyObject_SetItem, except for PyTuple_SetItem *)
-      | E_c_builtin_call ("PyDict_SetItem", [list; pos; item])
+      | E_c_builtin_call ("PyDict_SetItem", [list; pos; item]) ->
+         resolve_c_pointer_into_addr list man flow >>$?
+           (fun oaddr flow ->
+             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+             let py_list = Python.Ast.mk_py_object (addr, None) (tag_range range "list") in
+             debug "boundary pos";
+             c_to_python_boundary pos man flow range ~on_top:(man.eval (mk_top (T_py None) range)) >>$? fun py_obj flow ->
+             debug "boundary item";
+             c_to_python_boundary item man flow range  ~on_top:(man.eval (mk_top (T_py None) range)) >>$? fun py_item flow ->
+             Python.Utils.try_eval_expr man ~route:(Semantic "Python")
+               (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_list "__setitem__" range)
+                  [py_obj; py_item] range)
+               flow
+               ~on_empty:(fun exc_exp exc_name exc_msg flow ->
+                 man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+                 let exc_addr, exc_oe = object_of_expr exc_typ in
+                 let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+                 let setstring msg =
+                   man.exec
+                     (mk_c_call_stmt
+                        (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                        [
+                          mk_addr exc_addr range;
+                          msg
+                        ]
+                        range) flow
+                   >>%
+                     man.eval (mk_int (-1) range) in
+                 Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+                   (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+                 |> OptionExt.return
+               )
+               ~on_result:(fun res flow ->
+                 Eval.singleton (mk_int 0 range) flow)
+           )
+
       | E_c_builtin_call ("PyList_SetItem", [list;pos;item]) ->
          resolve_c_pointer_into_addr list man flow >>$?
            (fun oaddr flow ->
@@ -2719,12 +2748,15 @@ module Domain =
              man.eval ~route:(Semantic "C") call flow >>$
                fun call_res flow ->
                debug "call result %s %a" name pp_expr call_res;
-               c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call_res man flow range
-                 ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range)
+               let r = c_to_python_boundary ~safe_check:(Some Python.Alarms.CHK_PY_SYSTEMERROR) call_res man flow range
+                         ~on_null:(fun flow -> check_consistent_null cfunc.c_func_org_name man flow range) in
+               (* FIXME: need to check that if PyErr_Occurred then NULL was one of the potentiel results before calling Clear *)
+               r >>$ fun r flow ->
+               man.exec (mk_c_call_stmt (C.Ast.find_c_fundec_by_name "PyErr_Clear" flow) [] range) flow >>% Eval.singleton r
          )
          )
          )
-        )
+         )
          |> OptionExt.return
 
       (** member descriptors: attr get/set on descriptors defined in C classes *)
