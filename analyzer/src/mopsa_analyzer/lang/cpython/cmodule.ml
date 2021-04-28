@@ -281,6 +281,7 @@ module Domain =
           "PyBytes_FromStringAndSize";
           "PyBytes_Size";
           "PyBytes_AsString";
+          "PyUnicode_Concat";
           "PyUnicode_GetLength";
           "PyUnicode_InternFromString";
           "PyUnicode_FromString";
@@ -1681,6 +1682,19 @@ module Domain =
               Eval.singleton (mk_int (-1) ~typ:T_int range)
         ) |> OptionExt.return
 
+      | E_c_builtin_call ("PyUnicode_Concat", [left; right]) ->
+         c_to_python_boundary left man flow range >>$ (fun py_left flow ->
+         c_to_python_boundary right man flow range >>$ fun py_right flow ->
+          (* FIXME: maybe we should do an isinstance check? *)
+         if compare_addr_kind (akind @@ fst @@ object_of_expr py_left) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 && compare_addr_kind (akind @@ fst @@ object_of_expr py_right) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
+           man.eval (mk_binop py_left O_plus py_right ~etyp:(T_py None) range) flow >>$ fun py_res flow ->
+           let c_addr, flow = python_to_c_boundary (addr_of_object @@ object_of_expr py_res) None (snd @@ object_of_expr py_res) range man flow in
+           Eval.singleton c_addr flow
+          else
+            let pyerr_badarg = C.Ast.find_c_fundec_by_name "PyErr_BadArgument" flow in
+               man.exec (mk_c_call_stmt pyerr_badarg [] range) flow >>%
+                 Eval.singleton (mk_int (-1) ~typ:T_int range)
+        ) |> OptionExt.return
 
 
       | E_c_builtin_call ("PyUnicode_GetLength", args) ->
