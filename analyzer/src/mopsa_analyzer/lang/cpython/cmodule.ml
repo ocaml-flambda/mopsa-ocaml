@@ -266,6 +266,7 @@ module Domain =
           "PyObject_RichCompare";
           "PyObject_RichCompareBool";
           "PyObject_Size";
+          "PyObject_Repr";
           "PyObject_Length";
           "PyObject_IsTrue";
           "PyIter_Next";
@@ -2155,6 +2156,20 @@ module Domain =
              Eval.singleton (mk_zero range)
          else
            Eval.singleton (mk_int (-1) range) flow) |> OptionExt.return
+
+      | E_c_builtin_call ("PyObject_Repr", [arg]) ->
+         c_to_python_boundary arg man flow range >>$ (fun arg_obj flow ->
+          man.eval (Python.Ast.mk_py_call
+                      (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "repr") range)
+                      [arg_obj] range) flow >>$
+            (
+              fun earg flow ->
+              let addr_earg = fst @@ object_of_expr earg in
+              let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
+              Eval.singleton c_addr flow
+            )
+        )
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyObject_Size", [arg])
       | E_c_builtin_call ("PyObject_Length", [arg])
