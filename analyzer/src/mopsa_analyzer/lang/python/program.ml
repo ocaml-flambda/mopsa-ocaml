@@ -158,6 +158,19 @@ struct
          collect_uncaught_exceptions man prog_range
          end
 
+    | S_unit_tests(tests) ->
+       Debug.debug ~channel:"universal.iterators.unittests+py.program" "Starting tests";
+       let flow1 = Universal.Iterators.Unittest.Domain.execute_test_functions
+                     ~flow_cleaner:(fun man flow ->
+                  collect_uncaught_exceptions man (srange stmt) flow |>
+                        post_to_flow man |>
+                        Flow.bottom_from
+                    )
+                    tests man flow in
+       Post.return flow1 |>
+         OptionExt.return
+
+
     | S_program ({ prog_kind = Py_program(_, globals, body); prog_range }, _) ->
       (* Initialize global variables *)
       init_globals man globals (srange stmt) flow >>%
