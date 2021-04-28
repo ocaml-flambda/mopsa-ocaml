@@ -154,6 +154,7 @@ struct
     | None ->
        Post.return flow
     | Some aset ->
+       if ASet.is_top aset then Post.return flow else
        let check_baddr a = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
        let intb = check_baddr addr_integers || check_baddr addr_true || check_baddr addr_false || check_baddr addr_bool_top || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind a) = 0 | _ -> false) aset in
        let float = check_baddr addr_float || ASet.exists (function | Def a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_float) (akind a) = 0 | _ -> false) aset in
@@ -569,6 +570,9 @@ struct
       let cur = get_env T_cur man flow in
       if AMap.mem v cur then
         let aset = AMap.find v cur in
+        if ASet.is_top aset then
+          Eval.singleton (mk_top (T_py None) range) flow |> OptionExt.return
+        else
         let evals, annot = ASet.fold (fun a (acc, annots) ->
             let flow = if v.vmode = WEAK then flow else set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
             let flow = Flow.set_ctx annots flow in
@@ -660,7 +664,7 @@ struct
         let () = debug "cur to bottom, empty singleton" in
         Eval.empty flow |> OptionExt.return
       else
-        let () = debug "not a builtin..." in
+        let () = debug "%a %a not a builtin..." pp_range range pp_expr exp in
         Eval.empty flow |>
         OptionExt.return
 
