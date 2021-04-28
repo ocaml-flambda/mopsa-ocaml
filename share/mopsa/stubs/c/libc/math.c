@@ -729,10 +729,10 @@ double fmod(double __x, double __y);
  * requires: valid_float(__x) and valid_float(__y);
  * requires: __y != 0;
  * ensures:  valid_float(return);
- * ensures:  (__x >= 0. and __y >= 0. implies return >= 0. and return <   __y) and
- *           (__x >= 0. and __y <= 0. implies return >= 0. and return <  -__y) and
- *           (__x <= 0. and __y >= 0. implies return <= 0. and return >= -__y) and
- *           (__x <= 0. and __y <= 0. implies return <= 0. and return >=  __y);
+ * ensures:  if __x >= 0. and __y >= 0. then return >= 0. and return <   __y
+ *           else if __x >= 0. and __y <= 0. then return >= 0. and return <  -__y
+ *           else if __x <= 0. and __y >= 0. then return <= 0. and return >= -__y
+ *           else return <= 0. and return >=  __y end end end;
  */
 float fmodf(float __x, float __y);
 
