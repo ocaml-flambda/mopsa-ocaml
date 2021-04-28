@@ -516,7 +516,7 @@ module Domain =
       resolve_pointer expr man flow >>$
         (fun points_to flow ->
           debug "[resolve_c_pointer %a:%a] searching for %a" pp_expr expr pp_typ (etyp expr) pp_points_to points_to;
-          if points_to = P_null then Cases.singleton None flow
+          if points_to = P_null then let () = debug "that's NULL" in Cases.singleton None flow
           else if points_to = P_top then Cases.singleton (Some Top.TOP) flow
           else
           let aset = Top.detop @@ find points_to (get_env T_cur man flow) in
@@ -872,7 +872,11 @@ module Domain =
             cls_addr (Wrapper_descriptor (Some "richcmp_gt")) man >>%
           bind_function_in "__ge__"
             (mk_c_arrow_access_by_name ecls "tp_richcompare" range)
-            cls_addr (Wrapper_descriptor (Some "richcmp_ge")) man >>% fun flow ->
+            cls_addr (Wrapper_descriptor (Some "richcmp_ge")) man >>%
+          bind_function_in "__call__"
+            (mk_c_arrow_access_by_name ecls "tp_call" range)
+            cls_addr (Wrapper_descriptor (Some "wrap_call")) man >>%
+            fun flow ->
           assume
             (ne
                (mk_c_arrow_access_by_name ecls "tp_as_sequence" range)
@@ -1057,6 +1061,7 @@ module Domain =
     let build_value man flow range fmt_str refs =
       let fmt_length = String.length fmt_str in
       let rec process pos ref_pos until acc flow =
+        debug "process %d %d %d %c |acc|=%d" pos ref_pos until (if pos < until then fmt_str.[pos] else ' ') (List.length acc);
         if pos >= until then Cases.singleton (List.rev acc) flow
         else
           let range = tag_range range "process[%d]" pos in
@@ -1413,6 +1418,8 @@ module Domain =
                let ni_var = search_c_globals_for flow "_Py_NotImplementedStruct" in
                let true_var = search_c_globals_for flow "_Py_TrueStruct" in
                let false_var = search_c_globals_for flow "_Py_FalseStruct" in
+               let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr true_addr T_int range) (mk_one range) range) flow in
+               let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr false_addr T_int range) (mk_zero range) range) flow in
                let flow = set_singleton
                             (mk_c_points_to_bloc (C.Common.Base.mk_var_base none_var) (mk_zero (Location.mk_program_range [])) None)
                             none_addr
@@ -1726,7 +1733,8 @@ module Domain =
                fun str_addr flow ->
                let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_string s range)) range man flow in
                Eval.singleton c_addr flow
-          | P_top ->
+          | P_top | P_block _ ->
+             (* FIXME: unsound? check what happens in CPython *)
              alloc_py_addr man (A_py_instance (fst @@ find_builtin "str")) range flow >>$
                fun str_addr flow ->
                let c_addr, flow = python_to_c_boundary (Addr.from_expr str_addr) None (Some (mk_top T_string range)) range man flow in
@@ -2149,9 +2157,13 @@ module Domain =
        *)
       | E_c_builtin_call ("PyTuple_New", [size]) ->
          (* FIXME: the allocation can also fail *)
-         let size = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z size in
+         man.eval ~translate:"Universal" size flow >>$ (fun size flow ->
+          let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+          let size = match size_itv with
+            | Nb (Finite l, Finite u) when Z.equal l u -> Z.to_int l
+            | _ -> panic_at range "PyTuple_New, got %a" ItvUtils.IntItv.fprint_bot size_itv in
          (* FIXME: what happens in the abstract if you py-getitem over pytuple_new? *)
-         alloc_py_addr man (Python.Objects.Tuple.A_py_tuple size) range flow >>$ (fun tuple_eaddr flow ->
+         alloc_py_addr man (Python.Objects.Tuple.A_py_tuple size) range flow >>$ fun tuple_eaddr flow ->
           let c_addr, flow = python_to_c_boundary (Addr.from_expr tuple_eaddr) None None range man flow in
           let els_var = Python.Objects.Tuple.Domain.var_of_addr (Addr.from_expr tuple_eaddr) in
           let post = List.fold_left (fun post vari ->
@@ -2164,7 +2176,11 @@ module Domain =
          let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos in
          c_to_python_boundary tuple man flow range >>$ (fun tuple_obj flow ->
          let tuple_vars = Python.Objects.Tuple.Domain.var_of_eobj tuple_obj in
-         c_to_python_boundary item man flow range >>$ fun item_obj flow ->
+         c_to_python_boundary item man flow range
+           ~on_top:(fun flow ->
+             Eval.singleton (mk_top (T_py None) range) flow
+           )
+         >>$ fun item_obj flow ->
          if (pos >= 0 && pos < List.length tuple_vars) then
            man.exec ~route:(Semantic "Python") (mk_assign (mk_var ~mode:(Some STRONG) (List.nth tuple_vars pos) range) item_obj range) flow >>%
              Eval.singleton (mk_zero range)
@@ -2558,8 +2574,11 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call ({ekind = E_py_object ({addr_kind = A_py_c_function(name, uid, kind, oflags, self)}, _)}, args, kwargs) ->
-         (* cf cfunction_call_varargs + _Py_CheckFunctionResult in call.c *)
          debug "%s: oflags = %a" name (OptionExt.print Format.pp_print_int) oflags;
+         (if not @@ List.for_all (fun e -> match ekind e with | E_py_object _ -> true | _ -> false) args then bind_list args man.eval flow else bind_list args Eval.singleton flow) >>$ (fun args flow ->
+          (* cf cfunction_call_varargs + _Py_CheckFunctionResult in call.c *)
+          (* FIXME: refactor this code *)
+          (* FIXME: check the type of self if needed *)
          let ometh_varargs = Some 1 in
          let ometh_varargs_keywords = Some 3 in
          let ometh_o = Some 8 in
@@ -2573,7 +2592,12 @@ module Domain =
            | E_py_object(a, oe) -> {e with ekind = E_py_object(a', oe)}
            | _ -> assert false in
          (match (fst self).addr_kind with
-          | A_py_c_class v -> Eval.singleton (C.Ast.mk_c_address_of (mk_var v range) range) flow
+          | A_py_c_class v ->
+             let pyobject_typ, pytypeobject_typ =
+               let assign_helper = C.Ast.find_c_fundec_by_name "_PyType_Assign_Helper" flow in
+               under_pointer_type @@ vtyp @@ List.hd assign_helper.c_func_parameters,
+               under_pointer_type @@ vtyp @@ List.hd @@ List.tl assign_helper.c_func_parameters in
+             Eval.singleton (py_addr_to_c_expr (fst self) pytypeobject_typ range man flow ) flow
           | _ ->
              if List.length args = 0 then Eval.singleton (mk_c_null range) flow
              else strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
@@ -2583,9 +2607,14 @@ module Domain =
            | Builtin_function_or_method ->
              Cases.return (self, args) flow
            | Wrapper_descriptor _ | Method_descriptor ->
-              strongify_int_addr_hack (fst @@ object_of_expr @@ List.hd args) man (tag_range range "_descr") flow >>$ fun fst_arg flow ->
-              let c_addr, flow = python_to_c_boundary fst_arg None (snd @@ object_of_expr @@ List.hd args) range man flow in
-              Cases.return (subst_addr_eobj (Addr.from_expr c_addr)  (List.hd args), List.tl args) flow) >>$ fun (self, args) flow ->
+              if List.length args > 0 then
+                strongify_int_addr_hack (fst @@ object_of_expr @@ List.hd args) man (tag_range range "_descr") flow >>$ fun fst_arg flow ->
+                let c_addr, flow = python_to_c_boundary fst_arg None (snd @@ object_of_expr @@ List.hd args) range man flow in
+                Cases.return (subst_addr_eobj (Addr.from_expr c_addr)  (List.hd args), List.tl args) flow
+              else
+                Cases.return (mk_c_null range, []) flow
+         )
+         >>$ fun (self, args) flow ->
          (if oflags = None || Stdlib.compare ometh_varargs oflags = 0 || Stdlib.compare ometh_varargs_keywords oflags = 0 then
            Eval.singleton (mk_expr ~etyp:(T_py None) (E_py_tuple args) (tag_range range "args assignment" )) flow
          else if Stdlib.compare ometh_o oflags = 0 then
@@ -2606,7 +2635,7 @@ module Domain =
          ) >>$ (fun py_args flow ->
          debug "%s, self is %a, args: %a" name pp_expr self pp_expr py_args;
          let py_kwds =
-           if Stdlib.compare ometh_varargs_keywords oflags = 0 then
+           if name = "tp_new_wrapper" || name = "wrap_init" || Stdlib.compare ometh_varargs_keywords oflags = 0 then
              let keys, values = List.map (fun (so, e) -> mk_string ~etyp:(T_py None) (OptionExt.none_to_exn so) range, e) kwargs |> List.split in
              mk_expr ~etyp:(T_py None) (E_py_dict (keys, values)) (tag_range range "kwargs assignment")
            else
