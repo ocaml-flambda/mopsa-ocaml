@@ -1,3 +1,4 @@
+// FIXME: sq_ass_item for __setitem__ and __delitem__ methods
 #include <Python.h>
 #include <structmember.h>
 
@@ -292,6 +293,7 @@ Counter_iterate(PyObject* self) {
     return (PyObject *) it;
 }
 
+
 static PySequenceMethods counter_as_sequence = {
     (lenfunc)Counter_len,                 /* sq_length */
     0,                                  /* sq_concat */
@@ -502,17 +504,32 @@ basic_compare(PyObject* self, PyObject* args)
     return ro;
 }
 
+static PyObject*
+basic_doubleexc(PyObject* self)
+{
+    if(rand())
+    {
+        PyErr_SetString(PyExc_ValueError, "bla");
+        return NULL;
+    }
+    else
+    {
+        PyErr_SetString(PyExc_ValueError, "bli");
+        return NULL;
+    }
+}
 
 
 static PyObject*
 basic_kwds(PyObject* self, PyObject* args, PyObject *kwds)
 {
     static char *kwlist[] = {"a", "b", "c", NULL};
-    int a = 1, b = 1, c = 1;
+    int a = 1, b = 10, c = 100;
     if(!PyArg_ParseTupleAndKeywords(args, kwds, "|iii", kwlist, &a, &b, &c))
         return NULL;
 
-    return Py_BuildValue("i", a*b*c);
+    PyObject *res = Py_BuildValue("i(iii)", a*b*c, a, b, c);
+    return res;
 }
 
 static PyObject*
@@ -524,8 +541,32 @@ basic_parsebuild_float(PyObject* self, PyObject* args)
     return Py_BuildValue("f", a+1);
 }
 
+static PyObject*
+basic_clear(PyObject* self, PyObject* args)
+{
+    PyErr_Clear();
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+basic_boom(PyObject* self, PyObject* args)
+{
+    PyObject* a;
+    if(!PyArg_ParseTuple(args, "O", &a)) return NULL;
+
+    return PyObject_CallObject((PyObject*)&CboxType, a);
+
+/*     a->ob_type = 43; */
+/* //    printf("%c\n", ((char*)a)[24]); */
+/* //    PyTuple_GET_ITEM(a, 1); */
+/*     ((char*) ((PyLongObject*) a))[9] = 43; */
+/* //    Py_DECREF(a); */
+/*     Py_RETURN_NONE; */
+}
+
 
 static PyMethodDef module_methods[] = {
+    {"boom", (PyCFunction) basic_boom, METH_VARARGS, ""},
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},
     {"raise_exc", (PyCFunction) basic_raise_exc, METH_VARARGS, ""},
@@ -543,8 +584,10 @@ static PyMethodDef module_methods[] = {
     {"twistedcbox", (PyCFunction) basic_twistedcbox, METH_VARARGS, ""},
     {"sequence_tail", (PyCFunction) basic_sequence_tail, METH_VARARGS, ""},
     {"compare", (PyCFunction) basic_compare, METH_VARARGS, ""},
+    {"doubleexc", (PyCFunction) basic_doubleexc, METH_NOARGS, ""},
     {"kwds", (PyCFunction) basic_kwds, METH_VARARGS | METH_KEYWORDS, ""},
     {"pb_float", (PyCFunction) basic_parsebuild_float, METH_VARARGS, ""},
+    {"clear", (PyCFunction) basic_clear, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 

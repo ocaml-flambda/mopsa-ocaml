@@ -518,7 +518,8 @@ struct
     let doit ss aa acc =
       Cells.fold
         (fun c acc ->
-           sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
+          debug "unification on %a" pp_cell c;
+          sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
         ss acc
     in
     CellSet.fold2zo
@@ -560,7 +561,9 @@ struct
     (true, s, s')
 
   let join man sman ctx (a,s) (a',s') =
+    debug "joining";(* (format CellSet.print) a.cells (format CellSet.print) a'.cells;*)
     let s, s' = unify man sman ctx (a,s) (a',s') in
+    debug "unification done";
     let a = {
       cells = CellSet.join a.cells a'.cells;
       bases = BaseSet.join a.bases a'.bases;
@@ -695,6 +698,7 @@ struct
     || not (is_interesting_base base)
     || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
     then
+      let () = debug "%a: expansion %a not worth smashing, results in T" pp_range range pp_expansion (Region (base,lo,hi,step)) in
       top
     else
       (* In order to smash a region in something useful, we ensure
@@ -840,8 +844,6 @@ struct
     set_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow
 
 
-
-
   (** {2 Abstract evaluations} *)
   (** ************************ *)
 
@@ -850,7 +852,6 @@ struct
     (* Expand *p into cells *)
     let t = under_type p.etyp in
     expand p range man flow >>$ fun expansion flow ->
-    debug "expansion = %a" pp_expansion expansion;
     match expansion with
     | Top ->
       man.eval (mk_top (void_to_char t) range) flow
@@ -882,7 +883,6 @@ struct
     man.eval v flow ~route:scalar
 
   let assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctyp2 range man flow =
-    debug "assume_exists_ne2 TODO";
     Post.return flow
 
   let assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow =
@@ -893,31 +893,31 @@ struct
     | Nb (_, itv_amax), Nb (itv_bmin, _) ->
        let safe_itv = ItvUtils.IntItv.of_bound itv_amax itv_bmin in
        let cur = get_env T_cur man flow in
-       let cell_find base offset =
-         OffCells.find offset (CellSet.find base cur.cells) in
-       let instantiate_i_with offset =
-         Visitor.map_expr
-           (fun expr -> match ekind expr with
-                        | E_var ({vkind = Scalars.Machine_numbers.Domain.V_c_num v}, _) when compare_var v i = 0 ->
-                           Keep (mk_z offset ~typ:v.vtyp range)
-                        | _ -> VisitParts expr)
-           (fun stmt -> VisitParts stmt)
+       let cells1 = CellSet.find base1 cur.cells in
+       let cells2 = cell_set_find_base base2 cur.cells in
+       let () = debug "assume_forall_eq2 (%a, %a, %a) (%a, %a, %a), safe_itv = %a"
+                  pp_base base1 pp_expr offset1 (OptionExt.print pp_mode) mode1
+                  pp_base base2 pp_expr offset2 (OptionExt.print pp_mode) mode2
+              ItvUtils.IntItv.fprint safe_itv
        in
-       List.fold_left (fun post offset ->
-           let cells1 = cell_find base1 offset in
-           let cells2 = cell_find base2 offset in
-           if Cells.is_empty cells1 && Cells.is_empty cells2 then
-             let () = debug "empty cells at offset %a" Z.pp_print offset in post
-           else
-             let () = debug "cells1 = %a, cells2 = %a" (format Cells.print) cells1 (format Cells.print) cells2 in
-             let o1 = instantiate_i_with offset offset1 in
-             let o2 = instantiate_i_with offset offset2 in
-             let x1 = mk_lval base1 o1 ctype1 mode1 range in
-             let x2 = mk_lval base2 o2 ctype2 mode2 range in
-             debug "forcing %a = %a, types = %a, %a" pp_expr x1 pp_expr x2 pp_typ ctype1 pp_typ ctype2;
-             post >>% man.exec (mk_assume (eq x1 x2 range) range)
-         ) (Post.return flow) (ItvUtils.IntItv.to_list safe_itv)
-
+       (* let's handle the case appearing most in stubs: copying the contents to a newly allocated memory without any cells *)
+       if OffCells.is_empty cells1 || OffCells.for_all2 (fun _ cs1 cs2 -> Cells.cardinal cs1 = 1 && Cells.cardinal cs2 = 1 && compare_cell_typ (Cells.choose cs1).typ (Cells.choose cs2).typ = 0) cells1 (CellSet.find base2 cur.cells) then
+         let () = debug "trying expansion to copy cells from %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_cell) cells2 in
+         let post =
+         List.fold_left (fun acc c2 ->
+             if ItvUtils.IntItv.contains c2.offset safe_itv then
+             (* Create the corresponding expanded cells *)
+               let c1 = {c2 with base = base1} in
+               (* FIXME: what happens if c1 exists already? *)
+               Post.bind (expand_cell c2 [c1] range man) acc
+             else
+               acc
+           ) (Post.return flow) cells2 in
+         let () = debug "copy finished" in
+         post
+       else
+         let () = debug "cells1 = %a, transfer function not implemented" (format OffCells.print) cells1 (* (format @@ man.lattice.print) (Flow.get T_cur man.lattice flow)  *) in
+         Post.return flow
 
   let eval_forall_eq2 i a b lval1 lval2 range man flow =
     let ctype1 = (remove_casts lval1).etyp
@@ -937,9 +937,11 @@ struct
         | Some (base2,offset2,mode2) ->
           if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
           else
-            Eval.join
-              (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-              (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+            let r = Eval.join
+              (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% Eval.singleton (mk_false range))
+              (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% Eval.singleton (mk_true range)) in
+            let () = debug "joining" in
+            r
 
 
 
@@ -959,9 +961,12 @@ struct
     (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
     | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)})
     | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
-      when is_c_scalar_type lval1.etyp && is_c_scalar_type lval2.etyp && is_var_in_expr i lval1 && is_var_in_expr i lval2
+         when is_c_scalar_type lval1.etyp && is_c_scalar_type lval2.etyp && is_var_in_expr i lval1 && is_var_in_expr i lval2
+      (* FIXME: this transfer function is sound only when the offset is an
+         affine function with coefficient 1, i.e. of the form ∀i + a *)
       ->
-       eval_forall_eq2 i a b (remove_casts lval1) (remove_casts lval2) exp.erange man flow |>
+       debug "quantified formula: calling eval_forall_eq2 @ %a" pp_range exp.erange;
+        eval_forall_eq2 i a b (remove_casts lval1) (remove_casts lval2) exp.erange man flow |>
        OptionExt.return
 
     | _ -> None

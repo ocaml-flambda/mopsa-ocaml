@@ -117,7 +117,7 @@ struct
     if depth = cur_depth then () else
     if depth = cur_depth + 1 then call_detected (callstack_top cs) else
     if depth = cur_depth - 1 then return_detected ()
-    else warn_at range "unsupported call stack configuration: current = %d, previous = %d@.current = %a@.previous = %a@." cur_depth depth (Format.pp_print_list Format.pp_print_string) !cur.callstack Callstack.pp_callstack cs
+    else debug "unsupported call stack configuration: current = %d, previous = %d@.current = %a@.previous = %a@." cur_depth depth (Format.pp_print_list Format.pp_print_string) !cur.callstack Callstack.pp_callstack cs
 
 
   (** {2 Statistics} *)

@@ -99,24 +99,29 @@ struct
     | Universal.Ast.S_expression {ekind = E_py_call({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user _)}, _)}, _, _)} -> ()
     | _ ->
       let range = srange stmt in
-      let file = get_range_file range in
-      let entry = Hashtbl.find table file in
-      if StmtSet.mem stmt entry.never_analyzed_stmts then
-        let () = entry.never_analyzed_stmts <- StmtSet.remove stmt entry.never_analyzed_stmts in
-        if is_cur_bottom man flow then
-          entry.always_bottom_stmts <- StmtSet.add stmt entry.always_bottom_stmts
-        else
-          entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
-      else if StmtSet.mem stmt entry.always_bottom_stmts && not @@ is_cur_bottom man flow then
+      try
+        let file = get_range_file range in
+        let entry = Hashtbl.find table file in
+        if StmtSet.mem stmt entry.never_analyzed_stmts then
+          let () = entry.never_analyzed_stmts <- StmtSet.remove stmt entry.never_analyzed_stmts in
+          if is_cur_bottom man flow then
+            entry.always_bottom_stmts <- StmtSet.add stmt entry.always_bottom_stmts
+          else
+            entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
+        else if StmtSet.mem stmt entry.always_bottom_stmts && not @@ is_cur_bottom man flow then
           let () = entry.always_bottom_stmts <- StmtSet.remove stmt entry.always_bottom_stmts in
           entry.reachable_stmts <- StmtSet.add stmt entry.reachable_stmts
+      with
+      | Not_found -> ()
+      | Failure _ -> ()
 
   let on_after_exec route stmt man flow post = ()
 
   let on_before_eval route semantic exp man flow =
     let range = erange exp in
-    let file = get_range_file range in
-    let entry = Hashtbl.find table file in
+    try
+      let file = get_range_file range in
+      let entry = Hashtbl.find table file in
     if ExprSet.mem exp entry.never_analyzed_exprs then
       let () = entry.never_analyzed_exprs <- ExprSet.remove exp entry.never_analyzed_exprs in
       if is_cur_bottom man flow then
@@ -126,6 +131,9 @@ struct
     else if ExprSet.mem exp entry.always_bottom_exprs && not @@ is_cur_bottom man flow then
       let () = entry.always_bottom_exprs <- ExprSet.remove exp entry.always_bottom_exprs in
       entry.reachable_exprs <- ExprSet.add exp entry.reachable_exprs
+    with
+    | Not_found -> ()
+    | Failure _ -> ()
 
   let on_after_eval route semantic exp man flow evl =
     match ekind exp with

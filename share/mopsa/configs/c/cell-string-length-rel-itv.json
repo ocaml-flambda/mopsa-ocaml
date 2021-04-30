@@ -1,6 +1,7 @@
 {
     "language": "c",
     "domain": {
+        "semantic": "C",
         "compose": [
             {
                 "switch": [
@@ -57,7 +58,7 @@
                 ]
             },
             {
-                "semantic": "universal",
+                "semantic": "Universal",
                 "switch": [
                     // Universal iterators
                     "universal.iterators.intraproc",

@@ -58,19 +58,17 @@ struct
 
   module Fctx = GenContextKey(
     struct
-      type 'a t = ('a flow * expr option * 'a flow * stmt list) list StringMap.t
+      type 'a t = ('a flow * ('a, expr) cases) list StringMap.t
       let print p fmt ctx = Format.fprintf fmt "Function cache context (py): %a@\n"
           (StringMap.fprint
              MapExt.printer_default
              (fun fmt s -> Format.fprintf fmt "%s" s)
              (fun fmt list ->
                 Format.pp_print_list
-                  (fun fmt (in_flow, oexpr, out_flow, cleaners) ->
-                     Format.fprintf fmt "in_flow = %a@\nout_flow = %a@\noexpr = %a@\ncleaners = %a@\n"
+                  (fun fmt (in_flow, cases) ->
+                     Format.fprintf fmt "in_flow = %a@\ncases = %a@\n"
                        (format (Flow.print p)) in_flow
-                       (format (Flow.print p)) out_flow
-                       (OptionExt.print pp_expr) oexpr
-                       (Format.pp_print_list pp_stmt) cleaners
+                       Eval.print cases
                   )
                   fmt list
              )
@@ -82,20 +80,20 @@ struct
     try
       let cache = find_ctx Fctx.key (Flow.get_ctx in_flow) in
       let flows = StringMap.find funname cache in
-      Some (List.find (fun (flow_in, _, _, _) ->
+      Some (List.find (fun (flow_in, _) ->
           Flow.subset man.lattice in_flow flow_in
         ) flows)
     with Not_found -> None
 
 
-  let store_signature funname in_flow eval_res out_flow cleaners =
-    let old_ctx = try find_ctx Fctx.key (Flow.get_ctx out_flow) with Not_found -> StringMap.empty in
-    let old_sig = try StringMap.find funname old_ctx with Not_found -> [] in
+  let store_signature funname in_flow cases old_ctx =
+    let old_local_ctx = try Context.find_ctx Fctx.key old_ctx with Not_found -> StringMap.empty in
+    let old_sig = try StringMap.find funname old_local_ctx with Not_found -> [] in
     let new_sig =
-      if List.length old_sig < !opt_universal_modular_interproc_cache_size then (in_flow, eval_res, out_flow, cleaners)::old_sig
-      else (in_flow, eval_res, out_flow, cleaners) :: (List.rev @@ List.tl @@ List.rev old_sig) in
-    let new_ctx = StringMap.add funname new_sig old_ctx in
-    Flow.set_ctx (add_ctx Fctx.key new_ctx (Flow.get_ctx out_flow)) out_flow
+      if List.length old_sig < !opt_universal_modular_interproc_cache_size then (in_flow, cases)::old_sig
+      else (in_flow, cases) :: (List.rev @@ List.tl @@ List.rev old_sig) in
+    let new_ctx = StringMap.add funname new_sig old_local_ctx in
+    add_ctx Fctx.key new_ctx old_ctx
 
 
   let init prog flow =
@@ -127,45 +125,13 @@ struct
              | Some _ -> Some exp
            in
                        (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
-          inline func params locals body call_oexp range man in_flow_cur |>
-          bind (fun oeval_case out_flow ->
-              debug "in bind@\n";
-              match oeval_case with
-              | NotHandled -> assert false
+           let res = inline func params locals body call_oexp range man in_flow_cur in
+           Cases.set_ctx (store_signature func.fun_uniq_name in_flow_cur res (Cases.get_ctx res)) res >>$ fun r flow ->
+           Eval.singleton r (Flow.join man.lattice in_flow_other flow)
 
-              | Empty ->
-                let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
-                (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
-                let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                let flow = store_signature func.fun_uniq_name in_flow_cur None out_flow [] in
-                Cases.case oeval_case (Flow.join man.lattice in_flow_other flow)
-
-              | Result(eval_res,log,cleaners) ->
-                (* we have to perform a full bind in order to add
-                   in_flow_other to the flow even in the case of an
-                   empty eval *)
-                man.eval eval_res out_flow |>
-                Cases.bind (fun oeval_case out_flow ->
-                    match oeval_case with
-                    | NotHandled -> assert false
-
-                    | Empty ->
-                      Eval.empty (Flow.join man.lattice in_flow_other out_flow)
-
-                    | Result(eval_res,_,_) ->
-                      let out_flow_cur, out_flow_other = split_cur_from_others man out_flow in
-                      (* let out_flow_cur = exec_block_on_all_flows cleaners man out_flow_cur in *)
-                      let out_flow = Flow.join man.lattice out_flow_cur out_flow_other in
-                      let flow = store_signature func.fun_uniq_name in_flow_cur (Some eval_res) out_flow (StmtSet.elements cleaners) in
-                      Cases.return eval_res (Flow.join man.lattice in_flow_other flow)
-                  )
-            )
-
-        | Some (_, oout_expr, out_flow, cleaners) ->
-          Debug.debug ~channel:"profiling" "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
-          match oout_expr with
-          | None -> Cases.empty (Flow.join man.lattice in_flow_other out_flow)
-          | Some e -> Cases.singleton e (Flow.join man.lattice in_flow_other out_flow) ~cleaners:cleaners
+        | Some (_, cases) ->
+           debug "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;
+           cases >>$ fun r flow -> Eval.singleton r (Flow.join man.lattice in_flow_other flow)
       end
       |> OptionExt.return
 

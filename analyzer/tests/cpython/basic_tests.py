@@ -31,6 +31,9 @@ class Test(unittest.TestCase):
     def test_type_cclass(self):
         self.assertEqual(basic.typ(basic.Cbox(1, 0)), basic.Cbox)
         self.assertEqual(basic.typ(basic.Cbox), type)
+        # FIXME
+        # self.assertEqual(basic.typ(TypeError), type)
+        # self.assertEqual(basic.typ(TypeError()), TypeError)
 
     def test_c_exn(self):
         with self.assertRaises(AttributeError):
@@ -44,7 +47,8 @@ class Test(unittest.TestCase):
         a = A(1)
         c = basic.Cbox(a, 3)
         self.assertIsInstance(c, basic.Cbox)
-        self.assertEqual(c.getcontents(), a)
+        r = c.getcontents()
+        self.assertEqual(r, a)
         self.assertEqual(c.contents, a)
         a.x = 3
         self.assertEqual(c.contents.x, a.x)
@@ -342,13 +346,13 @@ class Test(unittest.TestCase):
         self.assertFalse(basic.compare(c1, c1, 4))
         self.assertTrue(basic.compare(c1, c1, 5))
 
-    def test_kwds(self):
+    def test_kwds_and_tuple(self):
         # FIXME: do this we chars and concatenate, or build a tuple, to be sure arguments are not swapped
         kwds = basic.kwds
-        self.assertEqual(kwds(), 1)
-        self.assertEqual(kwds(3), 3)
-        self.assertEqual(kwds(3, b = 2), 6)
-        self.assertEqual(kwds(2, 3, 5), 30)
+        self.assertEqual(kwds(), (1000, (1, 10, 100)))
+        self.assertEqual(kwds(3), (3000, (3, 10, 100)))
+        self.assertEqual(kwds(3, b = 2), (600, (3, 2, 100)))
+        self.assertEqual(kwds(2, 3, 5), (30, (2, 3, 5)))
         with self.assertRaises(TypeError):
             kwds(3, a = 2)
         with self.assertRaises(TypeError):

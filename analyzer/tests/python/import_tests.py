@@ -28,5 +28,9 @@ class A(unittest.TestCase):
         self.assertEqual(type(subdir), type(unittest))
         self.assertEqual(subdir.x, 2)
 
+    def test4(self):
+        import import_test
+        self.assertEqual(type(import_test.blua), type(unittest))
+
 if __name__ == "__main__":
     unittest.main()

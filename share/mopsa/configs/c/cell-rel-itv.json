@@ -1,8 +1,10 @@
 {
     "language": "c",
+
     "domain": {
         "compose": [
             {
+                "semantic": "C",
                 "switch": [
                     // Partitioning
                     "universal.partitioning.merge_after_stmt",
