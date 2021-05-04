@@ -139,6 +139,7 @@ let check_nested_calls f cs =
 let init_fun_params f args range man flow =
   (* Update the call stack *)
   let flow = Flow.push_callstack f.fun_orig_name ~uniq:f.fun_uniq_name range flow in
+  let init_range = tag_range f.fun_range "init" in
 
   if f.fun_parameters = [] then
     [], f.fun_locvars, f.fun_body, Post.return flow
@@ -166,11 +167,11 @@ let init_fun_params f args range man flow =
          in the callee body. We need a way to rewrite the ranges in
          arg! *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
-          mk_assign (mk_var param f.fun_range) arg f.fun_range ::
-          mk_add_var param f.fun_range :: acc
+          mk_assign (mk_var param init_range) arg init_range ::
+          mk_add_var param init_range :: acc
         ) [] (List.combine fun_parameters args) in
 
-      let init_block = mk_block parameters_assign f.fun_range in
+      let init_block = mk_block parameters_assign init_range in
 
 
       (* Execute body *)
@@ -185,11 +186,11 @@ let init_fun_params f args range man flow =
          in the callee body. We need a way to rewrite the ranges in
          arg! *)
       let parameters_assign = List.rev @@ List.fold_left (fun acc (param, arg) ->
-          mk_assign (mk_var param f.fun_range) arg f.fun_range ::
-          mk_add_var param f.fun_range :: acc
+          mk_assign (mk_var param init_range) arg init_range ::
+          mk_add_var param init_range :: acc
         ) [] (List.combine f.fun_parameters args) in
 
-      let init_block = mk_block parameters_assign f.fun_range in
+      let init_block = mk_block parameters_assign init_range in
 
       (* Execute body *)
       f.fun_parameters, f.fun_locvars, f.fun_body, man.exec init_block flow
