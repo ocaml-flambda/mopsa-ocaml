@@ -1,4 +1,4 @@
-# Docker image to test Mospa on Ubuntu
+# Docker image to compile MOPSA on Ubuntu
 # Build with: docker build -t mopsa-build .
 #
 ###############################################

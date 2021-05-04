@@ -1,41 +1,25 @@
 # Contents
 
-Continuous integration framework:
-- [Dockerfile](Dockerfile) to create docker image able to build Mopsa
-- CI script [run.sh](run.sh) to build mopsa
-- TODO: CI script to test mopsa
+The image has a minimal environment based on `ubuntu` with OCaml, Opam, and all the dependencies required to _compile_ MOPSA installed.
+However, it _does not_ have MOPSA already installed.
+
+The image has a `mopsa` user, under which all commands are run.
 
 
-# Workflow
+# Getting the image
 
-For each push, gitlab will run perform a CI job, which will:
-- create a container based on the `mopsa-build` docker image
-- check out the latest repository into `/home/mopsa`
-- run the [run.sh](run.sh) script as user `mopsa`
+The image is available on Docker Hub at https://hub.docker.com/r/mopsa/mopsa-build
+```
+docker pull mopsa/mopsa-build
+```
 
-
-# Docker image
-
-The image has a minimal environment based on `ubuntu:latest` with OCaml, Opam, and all the dependencies required to compile Mopsa installed.
-The image also has a `mopas` user, under which all commands are run.
-The image is already installed on the GitLab server.
-
-If the dependencies change, you should update the image:
-- edit the [Dockerfile](Dockerfile)
-- log on the GitLab server
-- recreate the image by launching, in this directory:
-
+You can also rebuild the image locally with:
 ```
 docker build -t mopsa-build .
 ```
 
-Note: (re)creating the image is slow.
+# CI
 
-
-# Scripts
-
-The overall CI configuration script is in [../.gitlab-ci.yml](../.gitlab-ci.yml).
-
-For now, it only launches [run.sh](run.sh).
-
-
+The image (from Docked Hub) is used in our GitLab CI to check that MOPSA builds and passes basic unit tests.
+See the `.gitlab-ci.yml` file at the root of the GitLab project.
+A MOPSA fork on GitLab will be able to run the CI, as long as you have GitLab Runners configured.
