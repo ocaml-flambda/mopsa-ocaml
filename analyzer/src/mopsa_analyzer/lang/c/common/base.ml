@@ -136,6 +136,11 @@ let expr_to_base e =
   | E_constant (C_c_string (s,_)) -> mk_string_base s
   | _ -> assert false
 
+let base_to_expr b range =
+  match b.base_kind with
+  | Var v          -> mk_var v range
+  | Addr a         -> mk_addr a range ~etyp:(T_c_pointer void)
+  | String (s,c,_) -> mk_c_string s ~kind:c range
 
 (** Evaluate the size of a base in bytes *)
 let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =

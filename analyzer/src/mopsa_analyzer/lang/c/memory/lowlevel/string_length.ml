@@ -947,28 +947,32 @@ struct
 
   let print_expr man flow printer exp  =
     let exp = remove_casts exp in
-    (* Process only integer C lvalues *)
-    if not (is_c_type exp.etyp && is_c_lval exp) then () else
-    (* Iterate over bases and offsets *)
-    resolve_pointer (mk_c_address_of exp exp.erange) man flow |>
-    Cases.iter_result
-      (fun pt _ ->
-         match pt with
-         | P_block(base,offset,_) when base.base_valid
-                                    && is_interesting_base base ->
-           let len = mk_length_var base elem_size exp.erange in
-           pprint ~path:[Key "string-length"; Tail] printer
-             (fbox
-                "∀ i < %a: %a[i] ≠ 0 ∧ %a[%a] = 0"
-                pp_expr len
-                pp_base base
-                pp_base base
-                pp_expr len);
-           man.print_expr flow printer len ~route:universal
-         | _ -> ()
-      )
-
-
+    (* Fix the type of heap addresses *)
+    let typ = match ekind exp with
+      | E_addr _ -> pointer_type s8
+      | _        -> exp.etyp in
+    (* Process only C lvalues or heap addresses *)
+    if not ((is_c_type typ && is_c_lval exp) || is_addr_base_expr exp) then ()
+    else
+      let pp printer base =
+        if is_interesting_base base then
+          let len = mk_length_var base elem_size exp.erange in
+          man.print_expr flow printer len
+        else
+          ()
+      in
+      if is_base_expr exp then pp printer (expr_to_base exp)
+      else
+      (* Iterate over bases and offsets *)
+      let ptr = mk_c_address_of exp exp.erange in
+      resolve_pointer ptr man flow |>
+      Cases.iter_result
+        (fun pt _ ->
+           match pt with
+           | P_block(base,offset,_) when base.base_valid ->
+             pp printer base
+           | _ -> ()
+        )
 end
 
 let () =

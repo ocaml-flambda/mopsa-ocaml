@@ -69,7 +69,7 @@ struct
     let open Common.Base in
     match base.base_kind with
     | Addr addr ->
-      man.eval (mk_bytes addr mode range) flow
+      man.eval (mk_bytes addr ~mode range) flow
 
     | _ ->
       eval_base_size ~route:(Below name) base range man flow
@@ -210,7 +210,13 @@ struct
 
   let ask _ _ _ = None
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow pr exp =
+    match ekind exp with
+    | E_addr ({addr_kind = A_stub_resource res} as addr, _) ->
+      let bytes = mk_bytes addr exp.erange in
+      man.print_expr flow pr bytes
+
+    | _ -> ()
 
 end
 
