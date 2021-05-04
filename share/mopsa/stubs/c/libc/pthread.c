@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.27-r6
 
-  We have no multi-thread support in Mospa.
+  We have no multi-thread support in MOPSA.
 
   Nevertheless, we currenty implement pthread_once to ensure that the
   init_routine function is correctly called in sequential analyses.

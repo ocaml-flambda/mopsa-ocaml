@@ -67,7 +67,7 @@ let gcd_ext (a:Z.t) (b:Z.t) : Z.t * Z.t * Z.t * Z.t =
   let gcd, u, v = Z.gcdext a b in
   gcd, Z.div (Z.mul a b) gcd, u, v  
 (** Returns the gcd, lcm and cofactors u, v such that ua+vb=gcd. 
-    Undefined if a or  is 0. 
+    Undefined if a or b is 0. 
 *)
   
 let divides (a:Z.t) (b:Z.t) : bool =
@@ -89,7 +89,7 @@ let of_z (a:Z.t) (b:Z.t) : t =
   else
     let a = Z.abs a in
     a, Z.erem b a
-(** Returns  aℤ + b. *)
+(** Returns aℤ + b. *)
 
 let of_int (a:int) (b:int) : t =
   of_z (Z.of_int a) (Z.of_int b)
@@ -98,7 +98,7 @@ let of_int64 (a:int64) (b:int64) : t =
   of_z (Z.of_int64 a) (Z.of_int64 b)
 
 let cst (b:Z.t) : t = Z.zero, b
-(** Returns  0ℤ + b *)
+(** Returns 0ℤ + b *)
 
 let cst_int (b:int) : t = cst (Z.of_int b)
 
@@ -111,10 +111,10 @@ let one  : t = cst_int 1
 (** 0ℤ+1 *)
              
 let mone : t = cst_int (-1)
-(** 0ℤ - 1 *)
+(** 0ℤ-1 *)
              
 let minf_inf : t = of_int 1 0
-(** 1ℤ + 0 *)
+(** 1ℤ+0 *)
 
 let of_range (lo:Z.t) (hi:Z.t) : t =
   if lo = hi then cst lo else minf_inf
