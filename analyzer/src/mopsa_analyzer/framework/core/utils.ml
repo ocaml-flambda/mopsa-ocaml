@@ -111,7 +111,10 @@ let assume
                   exec_cleaners man |>
                   Post.remove_duplicates man.lattice
   in
-  then_post >>% fun then_flow ->
+  (* Re-propagate the context to the first branch *)
+  let then_post' = Cases.copy_ctx else_post then_post in
+  (* Apply transfer functions depending on condition satisfiability *)
+  then_post' >>% fun then_flow ->
   else_post >>% fun else_flow ->
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
