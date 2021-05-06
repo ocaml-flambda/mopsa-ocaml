@@ -96,9 +96,9 @@ struct
       in
       let w = match placeholder.ip_width with
         | None -> mk_top ul range
-        | Some n -> mk_int (n-1) ~typ:ul range
+        | Some n -> mk_int (n+1) ~typ:ul range (* n characters + NUL byte *)
       in
-      memrand arg (mk_zero range) w range man flow
+      strnrand arg w range man flow
 
     | WideString ->
       assert false
