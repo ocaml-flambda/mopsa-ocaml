@@ -574,25 +574,10 @@ struct
     | _ when sizeof_type etype = Z.of_int elem_size ->
       let length = mk_length_var base elem_size ~mode range in
       let offset = elem_of_offset boffset elem_size range in
-      switch [
-        (*         offset    length
-                   |---------x---------0----->
-        *)
-        [ le offset (pred length range) range ],
-        (fun flow -> man.exec (mk_assume (eq n zero range) range) flow);
+      assume (eq n zero range) man flow
+        ~fthen:(man.exec (mk_assume (ne offset length range) range))
+        ~felse:(Post.return)
 
-        (*          offset/length
-                    |--------------0----------->
-        *)
-        [ eq offset length range],
-        (fun flow -> man.exec (mk_assume (ne n zero range) range) flow);
-
-        (*          length   offset
-                    |----------0--------x----->
-        *)
-        [ ge offset (succ length range) range ],
-        (fun flow -> Post.return flow);
-      ] man flow
     |_ ->
       Post.return flow
 
