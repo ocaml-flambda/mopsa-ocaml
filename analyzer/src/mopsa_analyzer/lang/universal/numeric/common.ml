@@ -105,11 +105,13 @@ let interval_of_num_expr e man flow : int_itv =
   | Some n -> I.of_range_bot n n
   | None -> man.ask (mk_int_interval_query ~fast:true e) flow
 
-(** Evaluate a numeric condition *)
+(** Evaluate a numeric condition using intervals *)
 let eval_num_cond cond man flow : bool option =
+  (* Skip expressions that contain non-universal sub-expressions or statements *)
   if exists_expr (fun e -> not (is_universal_type e.etyp)) (fun s -> true) cond then
     None
   else
+    (* Evaluate the interval of the condition *)
     match interval_of_num_expr cond man flow with
     | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
     | _ -> None
@@ -119,6 +121,8 @@ let eval_num_cond cond man flow : bool option =
     condition or falls back to classic assume *)
 let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
   let r1 =
+    (* Use [eval_num_cond] directly without evaluation if the expression
+       contains only pure universal sub-expressions (no statement) *)
     if for_all_expr (fun e -> is_universal_type e.etyp) (fun s -> false) cond then
       match eval_num_cond cond man flow with
       | Some true  -> Some (fthen flow)
@@ -130,11 +134,13 @@ let assume_num cond ~fthen ~felse ?(route=toplevel) man flow =
   match r1 with
   | Some r -> r
   | None ->
-      man.eval cond flow ~translate:"Universal" >>$ fun ncond flow ->
-      match eval_num_cond ncond man flow with
-      | Some true  -> fthen flow
-      | Some false -> felse flow
-      | None       -> assume ncond ~fthen ~felse ~eval:false man flow
+    (* Evaluate the expression if it is not a pure universal expression, or when
+       [eval_num_cond] failed *)
+    man.eval cond flow ~translate:"Universal" >>$ fun ncond flow ->
+    match eval_num_cond ncond man flow with
+    | Some true  -> fthen flow
+    | Some false -> felse flow
+    | None       -> assume ncond ~fthen ~felse ~eval:false man flow
 
 
 (** {2 Widening thresholds} *)
