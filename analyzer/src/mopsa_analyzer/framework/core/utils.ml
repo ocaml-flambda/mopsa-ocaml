@@ -93,10 +93,11 @@ let assume
     ?(fnone=(fun flow ->
         Cases.empty flow
       ))
+    ?(eval=true)
     man flow
   =
   (* First, evaluate the condition *)
-  let evl = man.eval cond flow ~route ~translate in
+  let evl = if eval then man.eval cond flow ~route ~translate else Eval.singleton cond flow in
   (* Filter flows that satisfy the condition *)
   let then_post = ( evl >>$ fun cond flow -> man.exec (mk_assume cond cond.erange) flow ~route ) |>
                   (* Execute the cleaners of the evaluation here *)

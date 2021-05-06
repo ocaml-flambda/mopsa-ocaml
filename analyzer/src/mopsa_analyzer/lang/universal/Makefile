@@ -23,8 +23,8 @@
 
 # Universal
 mopsa_analyzer.lang += universal
-mopsa_analyzer.lang.universal = ast frontend soundness iterators heap numeric packing \
-	                            hooks strings
+mopsa_analyzer.lang.universal = ast frontend soundness heap numeric iterators \
+                                packing hooks strings
 mopsa_analyzer.lang.universal.iterators = unittest program intraproc interproc loops
 mopsa_analyzer.lang.universal.iterators.interproc = common inlining sequential_cache # join_based_cache
 mopsa_analyzer.lang.universal.heap = policies recency
