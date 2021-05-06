@@ -113,7 +113,12 @@ let eval_num_cond cond man flow : bool option =
   else
     (* Evaluate the interval of the condition *)
     match interval_of_num_expr cond man flow with
-    | Bot.Nb(I.B.Finite a, I.B.Finite b) when Z.equal a b -> Some Z.(equal a one)
+    | Bot.Nb itv ->
+      begin match I.contains_zero itv, I.contains_nonzero itv with
+        | true, false -> Some false
+        | false, true -> Some true
+        | _           -> None
+      end
     | _ -> None
 
 
