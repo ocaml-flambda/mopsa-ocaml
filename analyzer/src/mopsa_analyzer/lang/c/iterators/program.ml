@@ -102,7 +102,7 @@ struct
 
 
   (** Initialize global variables *)
-  let init_globals globals range man flow =
+  let init_globals globals man flow =
     globals |>
     List.fold_left (fun acc (v, init) ->
         let cvar =
@@ -118,7 +118,7 @@ struct
 
 
   (** Execute stub directives *)
-  let exec_stub_directives directives range man flow =
+  let exec_stub_directives directives man flow =
     directives |>
     List.fold_left (fun acc directive ->
         let stmt = mk_stub_directive directive directive.stub_directive_range in
@@ -539,10 +539,10 @@ struct
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      init_globals c_globals (srange stmt) man flow >>%? fun flow ->
+      init_globals c_globals man flow >>%? fun flow ->
 
       (* Execute stub directives *)
-      exec_stub_directives c_stub_directives (srange stmt) man flow >>%? fun flow ->
+      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
 
       (* Find entry function *)
       let entry =
@@ -567,10 +567,10 @@ struct
     | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      init_globals c_globals (srange stmt) man flow >>%? fun flow1 ->
+      init_globals c_globals man flow >>%? fun flow1 ->
 
       (* Execute stub directives *)
-      exec_stub_directives c_stub_directives (srange stmt) man flow1 >>%? fun flow1 ->
+      exec_stub_directives c_stub_directives man flow1 >>%? fun flow1 ->
 
       let is_test fundec =
         let name = fundec.c_func_org_name in
