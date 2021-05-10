@@ -267,12 +267,13 @@ struct
     Eval.singleton (mk_unit range)
 
   (** Evaluate calls to va_copy *)
-  let va_copy src dst range man flow =
-    resolve_va_list src range man flow >>$ fun src_ap flow ->
+  let va_copy dst src range man flow =
     resolve_va_list dst range man flow >>$ fun dst_ap flow ->
-    let src_valc = mk_valc_var src_ap range in
+    resolve_va_list src range man flow >>$ fun src_ap flow ->
     let dst_valc = mk_valc_var dst_ap range in
-    man.exec (mk_assign dst_valc src_valc range) flow >>%
+    let src_valc = mk_valc_var src_ap range in
+    man.exec (mk_add dst_valc range) ~route:universal flow >>%
+    man.exec (mk_assign dst_valc src_valc range) ~route:universal >>%
     Eval.singleton (mk_unit range)
 
 
@@ -303,8 +304,8 @@ struct
       OptionExt.return
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)
-    | E_c_builtin_call("__builtin_va_copy", [src; dst]) ->
-      va_copy src dst exp.erange man flow |>
+    | E_c_builtin_call("__builtin_va_copy", [dst; src]) ->
+      va_copy dst src exp.erange man flow |>
       OptionExt.return
 
     | _ -> None

@@ -119,7 +119,7 @@ int g1(int x, ...) {
   va_list ap1, ap2;
   va_start(ap1, x);
   int y = va_arg(ap1, int);
-  va_copy(ap1, ap2);
+  va_copy(ap2, ap1);
   va_end(ap1);
   int z = va_arg(ap2, int);
   va_end(ap2);
