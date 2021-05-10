@@ -72,7 +72,7 @@ module K = GenContextKey(struct
       Format.fprintf fmt "variables contexts:@, @[<v>%a@]"
         (Format.pp_print_list
            ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-           (fun fmt (v,c) -> Format.fprintf fmt "%a: %a" pp_var v (pp_ctx pp) c)
+           (fun fmt (v,c) -> Format.fprintf fmt "%a:@, @[<v>%a@]" pp_var v (pp_ctx pp) c)
         ) (VarMap.bindings m)
   end)
 
@@ -115,7 +115,7 @@ let remove_var_ctx var k ctx =
 module VarBoundsKey = GenContextKey(struct
     type 'a t = constant
     let print pp fmt c =
-      Format.fprintf fmt "bounds: %a" pp_constant c
+      Format.fprintf fmt "@[<h>bounds: %a@]" pp_constant c
   end)
 
 (** Context for saving the bounds of a variable *)
