@@ -102,7 +102,7 @@ struct
 
 
   (** Initialize global variables *)
-  let init_globals globals range man flow =
+  let init_globals globals man flow =
     globals |>
     List.fold_left (fun acc (v, init) ->
         let cvar =
@@ -118,7 +118,7 @@ struct
 
 
   (** Execute stub directives *)
-  let exec_stub_directives directives range man flow =
+  let exec_stub_directives directives man flow =
     directives |>
     List.fold_left (fun acc directive ->
         let stmt = mk_stub_directive directive directive.stub_directive_range in
@@ -217,12 +217,12 @@ struct
     with Not_found -> Post.return flow
 
 
-  let exec_entry_body f range man flow =
+  let exec_entry_body f man flow =
     match f.c_func_body with
     | None -> panic "entry function %s is not defined" f.c_func_org_name
     | Some stmt ->
       let f' = { f with c_func_parameters = [] } in
-      let stmt = mk_c_call_stmt f' [] range in
+      let stmt = mk_c_call_stmt f' [] f.c_func_name_range in
       man.exec stmt flow
 
 
@@ -342,7 +342,7 @@ struct
     man.exec (mk_assign argcv argc range) flow >>% fun flow ->
     man.exec (mk_add argvv range) flow >>% fun flow ->
     man.exec (mk_assign argvv argv range) flow >>% fun flow ->
-    exec_entry_body main range man flow
+    exec_entry_body main man flow
 
 
   (** Allocate addresses for symbolic arguments *)
@@ -516,11 +516,11 @@ struct
     (* Put the initial alarms report *)
     let flow = Flow.set_report report flow in
 
-    exec_entry_body main range man flow
+    exec_entry_body main man flow
 
 
 
-  let call_main main args functions range man flow =
+  let call_main main args functions man flow =
     if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
       | None, Some args   -> call_main_with_concrete_args main args man flow
@@ -530,7 +530,7 @@ struct
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main range man flow >>% fun flow ->
+      exec_entry_body main man flow >>% fun flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
@@ -539,10 +539,10 @@ struct
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      init_globals c_globals (srange stmt) man flow >>%? fun flow ->
+      init_globals c_globals man flow >>%? fun flow ->
 
       (* Execute stub directives *)
-      exec_stub_directives c_stub_directives (srange stmt) man flow >>%? fun flow ->
+      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
 
       (* Find entry function *)
       let entry =
@@ -553,12 +553,12 @@ struct
 
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
-        call_main entry args c_functions (srange stmt) man flow |>
+        call_main entry args c_functions man flow |>
         OptionExt.return
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
-        exec_entry_body entry (srange stmt) man flow |>
+        exec_entry_body entry man flow |>
         OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name
@@ -567,10 +567,10 @@ struct
     | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
-      init_globals c_globals (srange stmt) man flow >>%? fun flow1 ->
+      init_globals c_globals man flow >>%? fun flow1 ->
 
       (* Execute stub directives *)
-      exec_stub_directives c_stub_directives (srange stmt) man flow1 >>%? fun flow1 ->
+      exec_stub_directives c_stub_directives man flow1 >>%? fun flow1 ->
 
       let is_test fundec =
         let name = fundec.c_func_org_name in
