@@ -266,6 +266,14 @@ struct
     man.exec (mk_remove valc range) ~route:universal flow >>%
     Eval.singleton (mk_unit range)
 
+  (** Evaluate calls to va_copy *)
+  let va_copy src dst range man flow =
+    resolve_va_list src range man flow >>$ fun src_ap flow ->
+    resolve_va_list dst range man flow >>$ fun dst_ap flow ->
+    let src_valc = mk_valc_var src_ap range in
+    let dst_valc = mk_valc_var dst_ap range in
+    man.exec (mk_assign dst_valc src_valc range) flow >>%
+    Eval.singleton (mk_unit range)
 
 
   (** {2 Evaluation entry point} *)
@@ -296,7 +304,8 @@ struct
 
     (* 𝔼⟦ va_copy(src, dst) ⟧ *)
     | E_c_builtin_call("__builtin_va_copy", [src; dst]) ->
-      panic_at exp.erange "__builtin_va_copy not supported"
+      va_copy src dst exp.erange man flow |>
+      OptionExt.return
 
     | _ -> None
 

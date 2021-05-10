@@ -15,7 +15,7 @@ int _last = 0;
    integer, it adds its two arguments and stores the result in the
    first argument. If the first argument is NULL, it returns the
    result of the last computation */
-add(int* p, ...) {
+int add(int* p, ...) {
   if (p == NULL) {
     return _last;
   }
@@ -109,4 +109,23 @@ int f1(int x, ...) {
 
 void test_cascading_calls_to_variadic_functions() {
   _mopsa_assert(f1(10, 20) == 300);
+}
+
+/*******************/
+/* Test of va_copy */
+/*******************/
+
+int g1(int x, ...) {
+  va_list ap1, ap2;
+  va_start(ap1, x);
+  int y = va_arg(ap1, int);
+  va_copy(ap1, ap2);
+  va_end(ap1);
+  int z = va_arg(ap2, int);
+  va_end(ap2);
+  return x + y + z;
+}
+
+void test_va_copy() {
+  _mopsa_assert(g1(1,2,3) == 6);
 }
