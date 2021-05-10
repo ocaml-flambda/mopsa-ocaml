@@ -135,6 +135,10 @@ struct
       man.exec (mk_assume (mk_binop (mk_not e1 e1.erange) O_c_and (mk_not e2 e2.erange) ~etyp erange) stmt.srange) flow |>
       OptionExt.return
 
+    | S_expression { ekind = E_c_assign(lval, rval) } ->
+      man.exec (mk_assign lval rval stmt.srange) flow |>
+      OptionExt.return
+
     | _ -> None
 
 
@@ -180,33 +184,18 @@ struct
         man flow |>
       OptionExt.return
 
-    | E_unop(O_log_not, e) when is_c_int_type exp.etyp ->
+    | E_unop(O_log_not, e) when is_c_int_type exp.etyp &&
+                                is_c_num_type e.etyp ->
       begin
-        man.eval e flow >>$ fun e flow ->
+        man.eval e ~translate:"Universal" flow >>$ fun e flow ->
         match c_expr_to_z e with
-        | Some n when Z.(n = zero) -> Eval.singleton one flow
-        | Some n                   -> Eval.singleton zero flow
+        | Some n ->
+          if Z.(n = zero) then Eval.singleton one flow
+                          else Eval.singleton zero flow
         | None ->
-          let cond,neg_cond =
-            let rec aux e =
-              match ekind e with
-              | E_unop(O_log_not,ee) ->
-                let c1,c2 = aux ee in
-                c2,c1
-              | E_binop(op,_,_) when is_comparison_op op || is_logic_op op ->
-                negate_expr e, e
-              | _ ->
-                eq e zero ~etyp:s32 exp.erange, ne e zero ~etyp:s32 exp.erange
-            in
-            aux e
-          in
-          switch [
-            [cond],
-            (fun flow -> Eval.singleton one flow);
-
-            [neg_cond],
-            (fun flow -> Eval.singleton zero flow)
-          ] man flow
+          assume e man flow
+            ~fthen:(fun flow -> Eval.singleton zero flow)
+            ~felse:(fun flow -> Eval.singleton one flow)
       end |>
       OptionExt.return
 
@@ -222,9 +211,10 @@ struct
         | {skind = S_expression e}::q ->
           let q' = List.rev q in
           let stmt' = mk_block q' (erange exp) in
+          let end_range = set_range_start exp.erange (get_range_end exp.erange) in
           man.exec stmt' flow >>%? fun flow ->
           man.eval e flow |>
-          Cases.add_cleaners (List.map (fun v -> mk_remove_var v exp.erange) local_vars) |>
+          Cases.add_cleaners (List.map (fun v -> mk_remove_var v end_range) local_vars) |>
           OptionExt.return
 
         | _ -> panic "E_c_statement %a not supported" pp_expr exp

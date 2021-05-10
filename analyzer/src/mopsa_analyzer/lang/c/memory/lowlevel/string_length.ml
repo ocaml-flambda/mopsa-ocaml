@@ -157,8 +157,8 @@ struct
 
 
   let is_interesting_resource = function
-    | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" | "arg" -> true
-    | _ -> false
+    | "Memory" | "alloca" | "ReadOnlyMemory" | "String" | "ReadOnlyString" -> true
+    | r -> Iterators.Program.Domain.is_arg_resource r
 
   let rec is_scalar_base base =
     match base with
@@ -558,10 +558,28 @@ struct
       (* for wide characters, we only know that offset < len(str) *)
       man.exec (mk_assume (mk_binop boffset O_le (mk_int (blen-char_size) range) range) range) flow
 
-
-  let assume_ne base boffset mode etype n range man flow =
+  let assume_string_literal_char_ne str t boffset mode n range man flow =
     (* FIXME TODO *)
     Post.return flow
+
+  (** 𝕊⟦ *(p + i) != n ⟧ *)
+  let assume_ne base boffset mode etype n range man flow =
+    match base.base_kind, c_expr_to_z n with
+    | String (str,_,t), Some c when sizeof_type t = sizeof_type etype ->
+      assume_string_literal_char_ne str t boffset mode c range man flow
+
+    | String _, _ ->
+      Post.return flow
+
+    | _ when sizeof_type etype = Z.of_int elem_size ->
+      let length = mk_length_var base elem_size ~mode range in
+      let offset = elem_of_offset boffset elem_size range in
+      assume (eq n zero range) man flow
+        ~fthen:(man.exec (mk_assume (ne offset length range) range))
+        ~felse:(Post.return)
+
+    |_ ->
+      Post.return flow
 
   (** 𝕊⟦ *(p + i) == n ⟧ *)
   let assume_eq base boffset mode etype n range man flow =
@@ -798,10 +816,27 @@ struct
       if not (is_interesting_base base) then
         Eval.singleton (mk_top T_bool range) flow
       else
+        let true_post = assume_eq base offset mode lval.etyp n range man flow in
+        (* Propagate context to the false branch before executing [assume_ne] *)
+        let false_post = assume_ne base offset mode lval.etyp n range man (Flow.set_ctx (Cases.get_ctx true_post) flow) in
         Eval.join
-          (assume_eq base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
-          (assume_ne base offset mode lval.etyp n range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
+          (true_post >>% Eval.singleton (mk_true range))
+          (false_post >>% Eval.singleton (mk_false range))
 
+  let eval_ne lval n range man flow =
+    eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun bo flow ->
+    man.eval n flow >>$ fun n flow ->
+    match bo with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base,offset,mode) ->
+      if not (is_interesting_base base) then
+        Eval.singleton (mk_top T_bool range) flow
+      else
+        let true_post = assume_ne base offset mode lval.etyp n range man flow in
+        let false_post = assume_eq base offset mode lval.etyp n range man (Flow.set_ctx (Cases.get_ctx true_post) flow) in
+        Eval.join
+          (true_post >>% Eval.singleton (mk_true range))
+          (false_post >>% Eval.singleton (mk_false range))
 
   (** 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
   let eval_exists_eq i a b lval n range man flow =
@@ -887,6 +922,16 @@ struct
       eval_eq (remove_casts lval) n exp.erange man flow |>
       OptionExt.return
 
+    (* 𝔼⟦ *(p + i) != n ⟧ *)
+    | E_binop(O_ne, lval, n)
+    | E_unop(O_log_not, { ekind = E_binop(O_eq, lval, n)})
+      when is_c_int_type lval.etyp &&
+           is_c_lval (remove_casts lval) &&
+           is_c_int_type n.etyp
+      ->
+      eval_ne (remove_casts lval) n exp.erange man flow |>
+      OptionExt.return
+
     (* 𝔼⟦ ∃i ∈ [a,b]: *(p + i) == n ⟧ *)
     | E_stub_quantified_formula([EXISTS,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval, n) })
     | E_stub_quantified_formula([EXISTS,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval, n)}) })
@@ -947,28 +992,32 @@ struct
 
   let print_expr man flow printer exp  =
     let exp = remove_casts exp in
-    (* Process only integer C lvalues *)
-    if not (is_c_type exp.etyp && is_c_lval exp) then () else
-    (* Iterate over bases and offsets *)
-    resolve_pointer (mk_c_address_of exp exp.erange) man flow |>
-    Cases.iter_result
-      (fun pt _ ->
-         match pt with
-         | P_block(base,offset,_) when base.base_valid
-                                    && is_interesting_base base ->
-           let len = mk_length_var base elem_size exp.erange in
-           pprint ~path:[Key "string-length"; Tail] printer
-             (fbox
-                "∀ i < %a: %a[i] ≠ 0 ∧ %a[%a] = 0"
-                pp_expr len
-                pp_base base
-                pp_base base
-                pp_expr len);
-           man.print_expr flow printer len ~route:universal
-         | _ -> ()
-      )
-
-
+    (* Fix the type of heap addresses *)
+    let typ = match ekind exp with
+      | E_addr _ -> pointer_type s8
+      | _        -> exp.etyp in
+    (* Process only C lvalues or heap addresses *)
+    if not ((is_c_type typ && is_c_lval exp) || is_addr_base_expr exp) then ()
+    else
+      let pp printer base =
+        if is_interesting_base base then
+          let len = mk_length_var base elem_size exp.erange in
+          man.print_expr flow printer len
+        else
+          ()
+      in
+      if is_base_expr exp then pp printer (expr_to_base exp)
+      else
+      (* Iterate over bases and offsets *)
+      let ptr = mk_c_address_of exp exp.erange in
+      resolve_pointer ptr man flow |>
+      Cases.iter_result
+        (fun pt _ ->
+           match pt with
+           | P_block(base,offset,_) when base.base_valid ->
+             pp printer base
+           | _ -> ()
+        )
 end
 
 let () =

@@ -24,11 +24,18 @@
     The heuristic is simple: the hook tracks all comparisons between a
     numeric variable and a constant. It then adds the constant to the
     context of thresholds associated to the variable.
+
+    For better precision, a simple constant folding pass is performed on
+    expressions. It replaces variables evaluated to singleton intervals with
+    constants.
+
+    For better performances, only comparisons in loops are considered.
 *)
 
 open Mopsa
 open Hook
 open Ast
+open Numeric.Common
 
 
 module Hook =
@@ -45,19 +52,91 @@ struct
   (** {2 Utility functions} *)
   (** ********************* *)
 
-  let is_var_comparison_expr e =
+  (** A condition is interesting if it is a comparison between numeric
+     expressions *)
+  let is_interesting_condition e =
     is_numeric_type e.etyp &&
-    Visitor.exists_expr
-      (fun ee ->
-         match ekind ee with
-         | E_binop(op, {ekind = E_var _; etyp = T_int}, {ekind = E_constant (C_int _)})
-         | E_binop(op, {ekind = E_constant (C_int _)}, {ekind = E_var _; etyp = T_int})
-           when is_comparison_op op ->
-           true
-         | _ -> false
-      )
-      (fun s -> false)
-      e
+    match ekind e with
+    | E_binop(op, e1, e2) ->
+      is_comparison_op op &&
+      is_numeric_type e1.etyp &&
+      is_numeric_type e2.etyp
+
+    | _ -> false
+
+  (** Simple constant folding transformation. Variables that evaluate to
+      singleton intervals are replaced with their value. Also, operations between
+      constants are simplified. *)
+  let rec constant_folding e man flow =
+    match ekind e with
+    | E_var (v,_) when is_int_type v.vtyp ->
+      let itv = man.ask (mk_int_interval_query e) flow in
+      ( match itv with
+        | Bot.Nb(I.B.Finite lo, I.B.Finite hi) when Z.(lo = hi) ->
+          (* Note that we return both the variable and its value. *)
+          ExprSet.of_list [e; mk_z lo e.erange]
+        | _ -> ExprSet.singleton e )
+    | _ ->
+      match expr_to_const e with
+      | Some c -> ExprSet.singleton { e with ekind = E_constant c }
+      | None ->
+        match ekind e with
+        | E_binop(O_plus, e1, e2) ->
+          let s1 = constant_folding e1 man flow in
+          let s2 = constant_folding e2 man flow in
+          ExprSet.fold (fun e1' acc ->
+              match ekind e1' with
+              | E_constant (C_int n) when Z.(n = zero) ->
+                ExprSet.union acc s2
+              | _ ->
+                ExprSet.fold (fun e2' acc ->
+                    match ekind e2' with
+                    | E_constant (C_int n) when Z.(n = zero) ->
+                      ExprSet.add e1' acc
+                    | _ ->
+                      let e' = { e with ekind = E_binop(O_plus, e1', e2') } in
+                      match expr_to_const e' with
+                      | Some c -> ExprSet.add { e with ekind = E_constant c } acc
+                      | _      -> ExprSet.add e' acc
+                ) s2 acc
+            ) s1 ExprSet.empty
+
+        | E_binop(O_minus, e1, e2) ->
+          let s1 = constant_folding e1 man flow in
+          let s2 = constant_folding e2 man flow in
+          ExprSet.fold (fun e2' acc ->
+              match ekind e2' with
+              | E_constant (C_int n) when Z.(n = zero) ->
+                ExprSet.union acc s1
+              | _ ->
+                ExprSet.fold (fun e1' acc ->
+                    match ekind e1' with
+                    | E_constant (C_int n) when Z.(n = zero) ->
+                      ExprSet.add { e with ekind = E_unop(O_minus, e2') } acc
+                    | _ ->
+                      let e' = { e with ekind = E_binop(O_plus, e1', e2') } in
+                      match expr_to_const e' with
+                      | Some c -> ExprSet.add { e with ekind = E_constant c } acc
+                      | _      -> ExprSet.add e' acc
+                  ) s1 acc
+            ) s2 ExprSet.empty
+
+        | E_binop(op, e1, e2) when is_comparison_op op ->
+          let s1 = constant_folding e1 man flow in
+          let s2 = constant_folding e2 man flow in
+          ExprSet.fold (fun e1' acc ->
+            ExprSet.fold (fun e2' acc ->
+                  ExprSet.add { e with ekind = E_binop(op, e1', e2') } acc
+                ) s2 acc
+            ) s1 ExprSet.empty
+
+        | _ -> ExprSet.singleton e
+
+  module ThresholdSet =
+    SetExt.Make(struct
+      type t = var * Z.t
+      let compare x1 x2 = Compare.pair compare_var Z.compare x1 x2
+    end)
 
   let find_vars_comparisons_in_expr e =
     Visitor.fold_expr
@@ -66,28 +145,46 @@ struct
          | E_binop(op, {ekind = E_var (v,_); etyp = T_int}, {ekind = E_constant (C_int n)})
          | E_binop(op, {ekind = E_constant (C_int n)}, {ekind = E_var (v,_); etyp = T_int})
            when is_comparison_op op ->
-           Keep ((v,n) :: acc)
+           Keep (ThresholdSet.add (v,n) acc)
          | _ -> VisitParts acc
       )
       (fun acc s -> VisitParts acc)
-      [] e
+      ThresholdSet.empty e
 
   (** {2 Events handlers} *)
   (** ******************* *)
 
   let init ctx = ctx
 
-  let on_before_exec route stmt man flow = None
+  let loops = ref 0
+
+  let on_before_exec route stmt man flow =
+    match skind stmt with
+    | S_while(cond,body) ->
+      ( incr loops;
+        None )
+    | _ -> None
 
   let on_after_exec route stmt man flow post =
     match skind stmt with
-    | S_assume e when is_var_comparison_expr e ->
-      let cmps = find_vars_comparisons_in_expr e in
+    | S_while(cond,body) ->
+      ( decr loops;
+        None )
+
+    | S_assume e when !loops > 0 &&
+                      is_interesting_condition e ->
+      (* Simplify e by replacing performing a simple constant folding pass *)
+      let s = constant_folding e man flow in
+      (* Search for comparisons between variables and constants in set [s] *)
+      let cmps = ExprSet.fold (fun e' acc ->
+          ThresholdSet.union acc (find_vars_comparisons_in_expr e')
+        ) s ThresholdSet.empty in
+      (* Add compared constants to the context of widening thresholds *)
       let ctx =
-        List.fold_left
-          (fun acc (v,n) ->
+        ThresholdSet.fold
+          (fun (v,n) acc ->
              Numeric.Common.add_widening_threshold v n acc
-          ) (Cases.get_ctx post) cmps in
+          ) cmps (Cases.get_ctx post) in
       Some ctx
 
     | S_remove {ekind = E_var(v,_); etyp = T_int} ->

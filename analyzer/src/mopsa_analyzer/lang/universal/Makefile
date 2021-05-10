@@ -23,8 +23,8 @@
 
 # Universal
 mopsa_analyzer.lang += universal
-mopsa_analyzer.lang.universal = ast frontend soundness iterators heap numeric packing \
-	         partitioning hooks strings
+mopsa_analyzer.lang.universal = ast frontend soundness heap numeric iterators \
+                                packing hooks strings
 mopsa_analyzer.lang.universal.iterators = unittest program intraproc interproc loops
 mopsa_analyzer.lang.universal.iterators.interproc = common inlining sequential_cache # join_based_cache
 mopsa_analyzer.lang.universal.heap = policies recency
@@ -33,10 +33,9 @@ mopsa_analyzer.lang.universal.numeric.values = intervals congruences zero powers
 mopsa_analyzer.lang.universal.numeric.values.intervals = integer float
 mopsa_analyzer.lang.universal.numeric.packing = strategy functor
 mopsa_analyzer.lang.universal.numeric.relational = apron_manager binding apron_transformer \
-                                    domain instances
+                                                   apron_pp domain instances
 mopsa_analyzer.lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
 mopsa_analyzer.lang.universal.packing = static
-mopsa_analyzer.lang.universal.partitioning = merge_after_stmt
 mopsa_analyzer.lang.universal.hooks = logs progress function_profiler loop_profiler gctest constant_widening_thresholds
 
 

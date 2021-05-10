@@ -2,4 +2,4 @@
 
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 
-PATH=${MOPSADIR}/bin/mospa-wrappers:${PATH} MOPSADB=/tmp/mopsa.db ./configure $@
+PATH=${MOPSADIR}/bin/mopsa-wrappers:${PATH} MOPSADB=/tmp/mopsa.db ./configure $@

@@ -93,10 +93,11 @@ let assume
     ?(fnone=(fun flow ->
         Cases.empty flow
       ))
+    ?(eval=true)
     man flow
   =
   (* First, evaluate the condition *)
-  let evl = man.eval cond flow ~route ~translate in
+  let evl = if eval then man.eval cond flow ~route ~translate else Eval.singleton cond flow in
   (* Filter flows that satisfy the condition *)
   let then_post = ( evl >>$ fun cond flow -> man.exec (mk_assume cond cond.erange) flow ~route ) |>
                   (* Execute the cleaners of the evaluation here *)
@@ -111,7 +112,10 @@ let assume
                   exec_cleaners man |>
                   Post.remove_duplicates man.lattice
   in
-  then_post >>% fun then_flow ->
+  (* Re-propagate the context to the first branch *)
+  let then_post' = Cases.copy_ctx else_post then_post in
+  (* Apply transfer functions depending on condition satisfiability *)
+  then_post' >>% fun then_flow ->
   else_post >>% fun else_flow ->
   match man.lattice.is_bottom (Flow.get T_cur man.lattice then_flow),
         man.lattice.is_bottom (Flow.get T_cur man.lattice else_flow)
@@ -139,18 +143,18 @@ let switch
       else
         one tl acc' f
   in
-  let rec aux cases =
+  let rec aux ctx cases =
     match cases with
     | [] -> assert false
 
-    | [(cond, t)] -> one cond flow t
+    | [(cond, t)] -> one cond (Flow.set_ctx ctx flow) t
 
     | (cond, t) :: q ->
-      let r = one cond flow t in
-      let rr = aux q in
-      Cases.join r rr
+      let r = one cond (Flow.set_ctx ctx flow) t in
+      let rr = aux (Cases.get_ctx r) q in
+      Cases.join (Cases.copy_ctx rr r) rr
   in
-  aux cases
+  aux (Flow.get_ctx flow) cases
 
 let set_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
   Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow

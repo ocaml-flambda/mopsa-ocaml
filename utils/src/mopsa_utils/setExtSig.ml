@@ -394,6 +394,10 @@ module type S =
 
     val bprint: set_printer -> (Buffer.t -> elt -> unit) -> Buffer.t -> t -> unit
     (** Prints to a string buffer (for Printf.bprintf). *)                     
-      
+
+
+    (** {2 Translation to polymorphic sets} *)
+
+    val to_poly_set : t -> elt SetExtPoly.t
   end
 (** Output signature of the functor {!SetExt.Make}. *)

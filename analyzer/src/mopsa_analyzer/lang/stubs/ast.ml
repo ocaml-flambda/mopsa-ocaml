@@ -210,7 +210,7 @@ type expr_kind +=
   | E_stub_attribute of expr * string
   (** Access to an attribute of a resource *)
 
-  | E_stub_alloc of string
+  | E_stub_alloc of string (** resource *) * mode (** strong or weak *)
   (** Allocate a resource and translate it into an address *)
 
   | E_stub_resource_mem of expr * resource
@@ -412,8 +412,8 @@ and visit_set visitor s =
 and visit_expr visitor e =
   Visitor.map_expr visitor (fun stmt -> Keep stmt) e
 
-let mk_stub_alloc_resource res range =
-  mk_expr (E_stub_alloc res) range
+let mk_stub_alloc_resource ?(mode=STRONG) res range =
+  mk_expr (E_stub_alloc (res,mode)) range
 
 
 let negate_log_binop : log_binop -> log_binop = function
@@ -564,8 +564,8 @@ let () =
             (fun () -> compare f1 f2)
           ]
 
-        | E_stub_alloc r1, E_stub_alloc r2 ->
-          compare r1 r2
+        | E_stub_alloc (r1,m1), E_stub_alloc (r2,m2) ->
+          Compare.pair compare compare_mode (r1,m1) (r2,m2)
 
         | E_stub_resource_mem(x1, res1), E_stub_resource_mem(x2, res2) ->
           Compare.compose [
@@ -615,7 +615,7 @@ let () =
           { exprs = [o]; stmts = [] },
           (function { exprs = [o] } -> { e with ekind = E_stub_attribute(o, f) } | _ -> assert false)
 
-        | E_stub_alloc r -> leaf e
+        | E_stub_alloc _ -> leaf e
 
         | E_stub_resource_mem(x, res) ->
           { exprs = [x]; stmts = []},
@@ -674,7 +674,8 @@ let () =
         | E_stub_return -> pp_print_string fmt "return"
         | E_stub_builtin_call(f, args) -> fprintf fmt "%a(%a)" pp_builtin f (pp_list pp_expr ", ") args
         | E_stub_attribute(o, f) -> fprintf fmt "%a:%s" pp_expr o f
-        | E_stub_alloc r -> fprintf fmt "alloc res(%s)" r
+        | E_stub_alloc (r,STRONG) -> fprintf fmt "alloc res(%s)" r
+        | E_stub_alloc (r,WEAK) -> fprintf fmt "alloc res(%s):weak" r
         | E_stub_resource_mem(x, res) -> fprintf fmt "%a ∈ %a" pp_expr x pp_resource res
         | E_stub_primed(ee) -> fprintf fmt "%a'" pp_expr ee
         | E_stub_quantified_formula(quants,cond) ->

@@ -84,9 +84,7 @@ let mk_string_base ?(kind=C_char_ascii) ?(typ=(T_c_integer C_unsigned_char)) s =
 let base_kind_uniq_name b =
   match b with
   | Var v -> v.vname
-  | Addr a ->
-    let () = pp_addr Format.str_formatter a in
-    Format.flush_str_formatter ()
+  | Addr a -> addr_uniq_name a
   | String (s,_,_) -> s
 
 
@@ -148,6 +146,11 @@ let expr_to_base e =
   | E_constant (C_c_string (s,_)) -> mk_string_base s
   | _ -> assert false
 
+let base_to_expr b range =
+  match b.base_kind with
+  | Var v          -> mk_var v range
+  | Addr a         -> mk_addr a range ~etyp:(T_c_pointer void)
+  | String (s,c,_) -> mk_c_string s ~kind:c range
 
 (** Evaluate the size of a base in bytes *)
 let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =

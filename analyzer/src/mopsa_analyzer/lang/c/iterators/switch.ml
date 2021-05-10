@@ -112,12 +112,13 @@ struct
 
     (* Iterate over cases, filter the input environments with the case
        condition and jump to case body *)
+    let switch_range = tag_range range "switch" in
     let rec iter cases flow =
       match cases with
       | [] -> Post.return flow
       | (e',r) :: tl ->
         (* Filter the environments *)
-        let cond = mk_binop e O_eq e' ~etyp:u8 e.erange in
+        let cond = mk_binop e O_eq e' ~etyp:u8 switch_range in
         assume cond
           ~fthen:(fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)

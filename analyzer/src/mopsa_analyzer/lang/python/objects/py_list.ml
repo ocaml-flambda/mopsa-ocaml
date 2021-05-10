@@ -1291,7 +1291,7 @@ struct
          VarSet.add content_var |>
          OptionExt.return
 
-    | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
+    | Framework.Engines.Interactive.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
        let open Framework.Engines.Interactive in
        let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
        let length_list =

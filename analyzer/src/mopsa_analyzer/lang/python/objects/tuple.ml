@@ -391,7 +391,7 @@ struct
              VarSet.union (VarSet.add var vset) (man.ask (Q_variables_linked_to (mk_var var range)) flow)
            ) VarSet.empty (var_of_addr addr)
 
-    | Universal.Ast.Q_debug_addr_value ({addr_kind = A_py_tuple _} as addr) ->
+    | Framework.Engines.Interactive.Q_debug_addr_value ({addr_kind = A_py_tuple _} as addr) ->
        let open Framework.Engines.Interactive in
        let vars_tuple = var_of_addr addr in
        let contents = List.map (fun var ->

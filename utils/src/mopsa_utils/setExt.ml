@@ -672,7 +672,10 @@ module Make(Ord: OrderedType) =
       print_gen (fun () s -> Buffer.add_string b s) printer
                 (fun () k ->  Buffer.add_string b (key k)) () l;
       Buffer.contents b
-                      
+
+    (* Translation to polymorphic sets *)
+    let to_poly_set s =
+      SetExtPoly.of_list Ord.compare (elements s)
 
   end
 

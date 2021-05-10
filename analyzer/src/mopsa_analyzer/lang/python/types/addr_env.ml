@@ -52,7 +52,7 @@ struct
 
   let print printer =
     function
-    | Def a -> unformat Universal.Ast.pp_addr printer a
+    | Def a -> unformat pp_addr printer a
     | Undef_local -> pp_string printer "UndefLocal"
     | Undef_global -> pp_string printer "UndefGlobal"
 end
@@ -820,7 +820,7 @@ struct
                           var_sub_value = None} in
                        (s, str_info) :: acc
                      else
-                       let addr_info = man.ask (Universal.Ast.Q_debug_addr_value addr) flow in
+                       let addr_info = man.ask (Q_debug_addr_value addr) flow in
                        (s, addr_info) :: acc
                   | _ -> acc
                 ) aset []

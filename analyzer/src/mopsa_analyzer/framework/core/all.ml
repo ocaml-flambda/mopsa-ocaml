@@ -27,14 +27,8 @@ include Ast.Program
 include Ast.Frontend
 include Ast.Operator
 include Ast.Var
+include Ast.Addr
 include Ast.Visitor
-
-module Var =
-struct
-  type t = var
-  let compare = compare_var
-  let print = Print.unformat pp_var
-end
 
 include Alarm
 module Alarm = Alarm
@@ -99,3 +93,10 @@ module Print = Print
 include Avalue
 
 include Utils
+
+module Var =
+struct
+  type t = var
+  let compare = compare_var
+  let print prt v = pp_variable prt v
+end

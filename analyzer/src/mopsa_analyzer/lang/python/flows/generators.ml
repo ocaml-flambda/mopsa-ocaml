@@ -74,7 +74,7 @@ let () = register_token {
 
 
 let mk_framed_var v obj =
-  mk_attr_var v (Format.asprintf "%a" Universal.Ast.pp_addr (fst obj)) v.vtyp
+  mk_attr_var v (addr_uniq_name (fst obj)) v.vtyp
 
 (** The current generator being analyzed is stored in the context. *)
 module GenKey =

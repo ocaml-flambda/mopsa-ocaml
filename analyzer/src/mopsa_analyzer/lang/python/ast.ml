@@ -56,11 +56,11 @@ let is_py_exp e =
 (*==========================================================================*)
 
 (** Python objects *)
-type py_object = Universal.Ast.addr (** uid + type *) * expr option (** optional value representation *)
+type py_object = addr (** uid + type *) * expr option (** optional value representation *)
 
 let compare_py_object (obj1: py_object) (obj2: py_object) : int =
   let addr1 = fst obj1 and addr2 = fst obj2 in
-  Universal.Ast.compare_addr addr1 addr2
+  compare_addr addr1 addr2
 
 type operator +=
   | O_py_and (** and *)

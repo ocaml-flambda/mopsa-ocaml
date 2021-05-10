@@ -245,16 +245,17 @@ struct
               pp_stmt stmt
               pp_route route
           ;
-            post
+          post
       in
       let clean_post = exec_cleaners man post in
+      let minimized_post = Post.remove_duplicates man.lattice clean_post in
       if inside_hook () then
-        clean_post
+        minimized_post
       else
         let () = enter_hook() in
-        let x = Hook.on_after_exec route stmt man flow clean_post in
+        let x = Hook.on_after_exec route stmt man flow minimized_post in
         let () = exit_hook () in
-        match x with None -> clean_post | Some ctx -> Cases.set_ctx ctx clean_post
+        match x with None -> minimized_post | Some ctx -> Cases.set_ctx ctx minimized_post
     with
     | Exceptions.Panic(msg, line) ->
       Printexc.raise_with_backtrace

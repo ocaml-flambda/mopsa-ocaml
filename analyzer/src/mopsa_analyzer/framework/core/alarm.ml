@@ -258,7 +258,7 @@ let meet_diagnostic_kind s1 s2 =
   | Warning, x     | x, Warning      -> x
   | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
-  | Error, Safe    | Safe, Error -> Unreachable
+  | Error, Safe    | Safe, Error     -> Exceptions.panic "unsound intersection of diagnostics"
 
 let meet_diagnostic d1 d2 =
   if d1 == d2 then d1 else
@@ -267,11 +267,21 @@ let meet_diagnostic d1 d2 =
   else (
     assert(compare_range d1.diag_range d2.diag_range = 0);
     assert(compare_check d1.diag_check d2.diag_check = 0);
+    (* It is currently unsound for one domain to remove alarms raised by
+       another domain during reduction, because a "safe" check in a domain
+       may correspond to a previous instance of the check at the same range
+       and there is actually no information for the current instance in
+       the domain.
+       The current fix is to perform a union instead of an intersection of
+       alarms during reduction. It is sound but imprecise.
+       See MR!51 for more details.
+       FIXME: implement a better fix, performing intersections when sound
+     *)
     { diag_range = d1.diag_range;
       diag_check = d1.diag_check;
       diag_kind = meet_diagnostic_kind d1.diag_kind d2.diag_kind;
-      diag_alarms = AlarmSet.inter d1.diag_alarms d2.diag_alarms;
-      diag_callstacks = CallstackSet.inter d1.diag_callstacks d2.diag_callstacks; }
+      diag_alarms = AlarmSet.union d1.diag_alarms d2.diag_alarms;
+      diag_callstacks = CallstackSet.union d1.diag_callstacks d2.diag_callstacks; }
   )
 
 let add_alarm_to_diagnostic a d =

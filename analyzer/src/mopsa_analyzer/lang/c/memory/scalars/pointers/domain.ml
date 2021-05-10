@@ -1060,6 +1060,13 @@ struct
                              fkey "%a" pp_var var ]
         (pbox PointerSet.print v)
       ;
+      if not (PointerSet.is_top v) then
+        PointerSet.iter (function
+            | Base b ->
+              let e = base_to_expr b exp.erange in
+              man.print_expr flow printer e
+            | _ -> ()
+          ) v;
       if PointerSet.is_valid v then
         let o = mk_offset var None exp.erange in
         man.print_expr flow printer o ~route:universal

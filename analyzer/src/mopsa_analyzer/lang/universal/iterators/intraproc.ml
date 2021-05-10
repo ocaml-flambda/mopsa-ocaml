@@ -24,6 +24,8 @@
 open Mopsa
 open Sig.Abstraction.Stateless
 open Ast
+open Numeric.Common
+
 
 
 module Domain =
@@ -60,7 +62,7 @@ struct
     | E_unop(op,_) when is_predicate_op op -> e
     | E_binop(op,_,_) when is_comparison_op op -> e
     | E_binop(op,e1,e2) when is_logic_op op -> mk_binop (to_bool_expr e1) op (to_bool_expr e2) e.erange ~etyp:T_bool
-    | _ -> ne e zero e.erange
+    | _ -> assert false
 
   let rec eval_bool_expr e ~ftrue ~ffalse ~fboth range man flow =
     let ee =
@@ -87,8 +89,8 @@ struct
       Post.return flow |>
       OptionExt.return
 
-    | S_assign(x,e) when is_universal_type (etyp e) ->
-      man.eval e flow >>$? fun e flow ->
+    | S_assign(x,e) when is_universal_type (etyp x) ->
+      man.eval e flow ~translate:"Universal" >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
@@ -109,16 +111,18 @@ struct
       OptionExt.return
 
     | S_assume e when is_universal_type (etyp e) ->
-      eval_bool_expr e stmt.srange man flow
-        ~ftrue:(fun flow -> Post.return flow)
-        ~ffalse:(fun flow -> Post.return (Flow.remove T_cur flow))
-        ~fboth:(fun flow -> Post.return flow) |>
+      man.eval e flow ~translate:"Universal" >>$? fun e' flow ->
+      man.exec (mk_assume e' stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
     | S_block(block,local_vars) ->
       Some (
         let post = List.fold_left (fun acc stmt -> acc >>% man.exec stmt) (Post.return flow) block in
-        let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var stmt.srange)) post local_vars in
+        let end_range =
+          if is_orig_range stmt.srange
+          then set_range_start stmt.srange (get_range_end stmt.srange)
+          else stmt.srange in
+        let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var end_range)) post local_vars in
         post
       )
 
@@ -169,7 +173,7 @@ struct
     match ekind exp with
     | E_binop (O_log_and, e1, e2)
       when is_universal_type exp.etyp ->
-      assume e1 man flow
+      assume_num e1 man flow
         ~fthen:(fun flow ->
             (* Since we didn't check the type of the sub-expression [e1], we
                need to translate to Universal (if this isn't the case already).
@@ -184,7 +188,7 @@ struct
 
     | E_binop (O_log_or, e1, e2)
       when is_universal_type exp.etyp ->
-      assume e1 man flow
+      assume_num e1 man flow
         ~fthen:(fun flow -> Eval.singleton (mk_true exp.erange) flow)
         ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       |> OptionExt.return
@@ -192,17 +196,18 @@ struct
     | E_binop (O_log_xor, e1, e2)
       when is_universal_type exp.etyp ->
       let s1 =
-        assume e1 man flow
+        assume_num e1 man flow
           ~fthen:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
           ~felse:(fun flow -> man.eval e2 flow ~translate:"Universal")
       in
       let s2 =
-        assume (mk_not e1 exp.erange) man flow
+        assume_num (mk_not e1 exp.erange) man flow
           ~fthen:(fun flow -> man.eval e2 flow ~translate:"Universal")
           ~felse:(fun flow -> man.eval (mk_not e2 exp.erange) ~translate:"Universal" flow)
       in
       Eval.join s1 s2 |>
       OptionExt.return
+
     | E_unop (O_log_not, { ekind = E_binop (O_log_and, e1, e2) })
       when is_universal_type exp.etyp ->
       man.eval (mk_log_or (mk_not e1 e1.erange) (mk_not e2 e2.erange) exp.erange) flow |>

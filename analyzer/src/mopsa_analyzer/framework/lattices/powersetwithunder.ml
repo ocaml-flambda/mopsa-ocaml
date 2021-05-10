@@ -123,6 +123,6 @@ struct
         pprint ~path:[Key "O"] printer
           (List ([ String "U";
                    pbox USet.print ud ],
-                 { lopen =""; lsep = "∪"; lclose = ""} ))
+                 { sopen =""; ssep = "∪"; sclose = ""; sbind = ""} ))
 
 end

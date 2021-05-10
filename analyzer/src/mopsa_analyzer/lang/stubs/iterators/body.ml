@@ -360,9 +360,10 @@ struct
 
     | (l,u)::tl ->
       (* Check that offsets intervals are not empty *)
+      let range = tag_range assigns.range "condition" in
       let cond = List.fold_left
-          (fun acc (l,u) -> log_and acc (le l u assigns.range) assigns.range)
-          (le l u assigns.range) tl
+          (fun acc (l,u) -> log_and acc (le l u range) assigns.range)
+          (le l u range) tl
       in
       assume cond
         ~fthen:(fun flow -> man.exec stmt flow)
@@ -472,7 +473,7 @@ struct
       (* Initialize parameters *)
       let flow = init_params args stub.stub_func_params range man flow in
       (* Prepare assignments *)
-      let flow = prepare_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
+      let flow = prepare_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "prepare") man flow in
       (* Create the return variable *)
       let flow =
         match return with
@@ -482,12 +483,13 @@ struct
       (* Evaluate the body of the stb *)
       let flow = exec_body ~stub:(Some stub) stub.stub_func_body return range man flow in
       (* Clean locals *)
-      let flow = clean_post stub.stub_func_locals stub.stub_func_range man flow in
+      let flow = clean_post stub.stub_func_locals (tag_range stub.stub_func_range "clean") man flow in
       (* Clean assignments *)
-      let flow = clean_all_assigns stub.stub_func_assigns stub.stub_func_range man flow in
+      let flow = clean_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "clean") man flow in
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
-      let cleaners = List.map (fun param -> mk_remove_var param range) stub.stub_func_params in
+      let clean_range = tag_range range "clean" in
+      let cleaners = List.map (fun param -> mk_remove_var param clean_range) stub.stub_func_params in
 
       match return with
       | None ->

@@ -24,36 +24,35 @@
 open Ast.Var
 open Ast.Expr
 open Yojson.Basic
+open Mopsa_utils
 
 
 (****************************************************************************)
 (**                          {1 Print objects}                              *)
 (****************************************************************************)
 
-(** Symbols for printing maps and lists *)
-type map_symbols = {
-  mopen : string;
-  msep  : string;
-  mbind : string;
-  mclose  : string;
-}
-
-type list_symbols = {
-  lopen : string;
-  lsep  : string;
-  lclose  : string;
+(** Symbols for printing maps, lists and sets *)
+type symbols = {
+  sopen : string;
+  ssep   : string;
+  sbind  : string;
+  sclose   : string;
 }
 
 (** Structured print objects *)
+type ('k,'v) map = ('k,'v) MapExtPoly.t
+type 'v set = 'v SetExtPoly.t
+
 type print_object =
   | Empty
   | Bool   of bool
   | Int    of Z.t
   | Float  of float
   | String of string
-  | Map    of (print_object * print_object) list * map_symbols
-  | List   of print_object list * list_symbols
-
+  | Var    of var
+  | Map    of (print_object, print_object) map * symbols
+  | List   of print_object list * symbols
+  | Set    of print_object set * symbols
 
 (****************************************************************************)
 (**                            {1 Printers}                                 *)
@@ -92,9 +91,11 @@ type print_selector =
 type print_path = print_selector list
 (** Path of a print object *)
 
-(* val find_print_object : printer -> print_path -> print_object *)
-(** [find_print_object printer path] returns the object placed at [path] in [printer] *)
+val find_print_object : print_path -> print_object -> print_object
+(** [find_print_object path obj] returns the object placed at [path] in [obj] *)
 
+val match_print_object_keys : Str.regexp -> print_object -> print_object
+(** [match_print_object_keys re obj] slices [obj] to paths containing keys that match [re] *)
 
 (****************************************************************************)
 (**                    {1 Generic print functions}                          *)
@@ -123,7 +124,7 @@ val fkey : ('a, Format.formatter, unit, print_selector) format4 -> 'a
 (** [fkey fmt] returns a key selector with a formatted string *)
 
 val pkey : (printer -> 'a -> unit) -> 'a -> print_selector
-(** [fkey fmt] returns a key selector with a printed string *)
+(** [pkey f x] returns a key selector with a printed string *)
 
 
 (****************************************************************************)
@@ -145,6 +146,9 @@ val pp_z : ?path:print_path -> (printer -> Z.t -> unit)
 val pp_float : ?path:print_path -> (printer -> float -> unit)
 (** Print a float object *)
 
+val pp_variable : ?path:print_path -> (printer -> var -> unit)
+(** Print a variable *)
+
 val pp_list :
   ?path:print_path -> ?lopen:string -> ?lsep:string -> ?lclose:string ->
   (printer -> 'a -> unit) ->
@@ -158,13 +162,6 @@ val pp_obj_list :
     Useful for printing heterogenous lists.
 *)
 
-(* val pp_smap :
- *   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
- *   (printer -> 'v -> unit) ->
- *   (printer -> (string * 'v) list -> unit) *)
-(** [pp_smap ~path:p fv printer l] prints a map from a list [l] of pairs of string keys and values.
-    Values are boxed with function [fv]. *)
-
 val pp_map :
   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
   (printer -> 'k -> unit) ->
@@ -173,16 +170,24 @@ val pp_map :
 (** [pp_smap ~path:p fk fv printer l] prints a map from a list [l] of pairs of keys and values.
     Keys are boxed with function [fk] and values with function [fv]. *)
 
-(* val pp_obj_smap :
- *   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
- *   (printer -> (string * print_object) list -> unit) *)
-(** [pp_obj_smap ~path:p printer l] prints a map from a list of pairs of string keys and value objects *)
-
 val pp_obj_map :
   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
   (printer -> (print_object * print_object) list -> unit)
-(** [pp_obj_smap ~path:p printer l] prints a map from a list of pairs of string key objects and value objects *)
+(** [pp_obj_smap ~path:p printer l] prints a map from a list of pairs of print objects *)
 
+
+val pp_obj_set :
+  ?path:print_path -> ?sopen:string -> ?ssep:string -> ?sclose:string ->
+  (printer -> print_object set -> unit)
+(** [pp_obj_set ~path:p printer l] prints a set of objects at path [p].
+    Useful for printing heterogenous sets.
+*)
+
+val pp_set :
+  ?path:print_path -> ?sopen:string -> ?ssep:string -> ?sclose:string ->
+  (printer -> 'a -> unit) ->
+  (printer -> 'a set -> unit)
+(** [pp_set ~path:p f printer l] prints a set from a list [l] at path [p] by boxing [f] on every element of [l] *)
 
 (****************************************************************************)
 (**                              {1 Format}                                 *)

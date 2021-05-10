@@ -5,8 +5,6 @@
             {
                 "semantic": "C",
                 "switch": [
-                    // Partitioning
-                    "universal.partitioning.merge_after_stmt",
                     // C iterators
                     "c.iterators.program",
                     "c.iterators.interproc",

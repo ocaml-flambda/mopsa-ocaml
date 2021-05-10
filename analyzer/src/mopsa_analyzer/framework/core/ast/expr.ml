@@ -29,6 +29,7 @@ open Program
 open Operator
 open Constant
 open Var
+open Addr
 open Format
 open Semantic
 
@@ -55,6 +56,8 @@ type expr_kind +=
   | E_constant of constant
   | E_unop of operator * expr
   | E_binop of operator * expr * expr
+  | E_addr of addr * mode option
+  | E_alloc_addr of addr_kind * mode
 
 let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
       match ekind e1, ekind e2 with
@@ -65,6 +68,19 @@ let expr_compare_chain = TypeExt.mk_compare_chain (fun e1 e2 ->
         ]
       | E_constant c1, E_constant c2 -> compare_constant c1 c2
 
+      | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
+        Compare.compose [
+          (fun () -> compare_addr_kind ak1 ak2);
+          (fun () -> compare_mode m1 m2);
+        ]
+
+      | E_addr(a1, om1), E_addr(a2, om2) ->
+        Compare.compose
+          [
+            (fun () -> compare_addr a1 a2);
+            (fun () -> Compare.option compare_mode om1 om2);
+          ]
+
       | _ -> Stdlib.compare (ekind e1) (ekind e2)
   )
 
@@ -74,6 +90,10 @@ let expr_pp_chain = TypeExt.mk_print_chain (fun fmt expr ->
     | E_var(v, None) -> pp_var fmt v
     | E_var(v, Some STRONG) -> Format.fprintf fmt "strong(%a)" pp_var v
     | E_var(v, Some WEAK) -> Format.fprintf fmt "weak(%a)" pp_var v
+    | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
+    | E_addr (addr, None) -> fprintf fmt "%a" pp_addr addr
+    | E_addr (addr, Some STRONG) -> fprintf fmt "strong(%a)" pp_addr addr
+    | E_addr (addr, Some WEAK) -> fprintf fmt "weak(%a)" pp_addr addr
     | _ -> failwith "Pp: Unknown expression"
   )
 
@@ -178,6 +198,23 @@ let var_mode (v:var) (omode: mode option) : mode =
   match omode with
   | None   -> v.vmode
   | Some m -> m
+
+let mk_addr addr ?(etyp=T_addr) ?(mode=None) range = mk_expr ~etyp (E_addr (addr, mode)) range
+
+let mk_alloc_addr ?(mode=STRONG) addr_kind range =
+  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
+
+let weaken_addr_expr e =
+  match ekind e with
+  | E_addr ({addr_mode = WEAK}, _) -> e
+  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = WEAK}, om)}
+  | _ -> assert false
+
+let strongify_addr_expr e =
+  match ekind e with
+  | E_addr ({addr_mode = STRONG}, _) -> e
+  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = STRONG}, om)}
+  | _ -> assert false
 
 let mk_binop ?(etyp = T_any) left op right erange =
   mk_expr (E_binop (op, left, right)) ~etyp erange

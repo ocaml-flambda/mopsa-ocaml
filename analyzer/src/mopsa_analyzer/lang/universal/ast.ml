@@ -39,7 +39,6 @@ type typ +=
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
-  | T_addr (** Heap addresses. *)
   | T_array of typ (** Array of [typ] *)
   | T_unit (** Unit type *)
   | T_char
@@ -207,162 +206,6 @@ let () =
       );
   }
 
-
-
-(** {2 Universal heap addresses} *)
-(*  **************************** *)
-
-(** Kind of heap addresses, used to store extra information. *)
-type addr_kind = ..
-
-let addr_kind_compare_chain : (addr_kind -> addr_kind -> int) ref =
-  ref (fun a1 a2 -> compare a1 a2)
-
-let addr_kind_pp_chain : (Format.formatter -> addr_kind -> unit) ref =
-  ref (fun fmt a -> panic "addr_kind_pp_chain: unknown address")
-
-let pp_addr_kind fmt ak =
-  !addr_kind_pp_chain fmt ak
-
-let compare_addr_kind ak1 ak2 =
-  if ak1 == ak2 then 0 else
-  !addr_kind_compare_chain ak1 ak2
-
-let register_addr_kind (info: addr_kind info) =
-  addr_kind_compare_chain := info.compare !addr_kind_compare_chain;
-  addr_kind_pp_chain := info.print !addr_kind_pp_chain;
-  ()
-
-
-(** Addresses are grouped by static criteria to make them finite *)
-type addr_partitioning = ..
-
-type addr_partitioning +=
-  | G_all (** Group all addresses into one *)
-
-let addr_partitioning_compare_chain : (addr_partitioning -> addr_partitioning -> int) ref =
-  ref (fun a1 a2 -> compare a1 a2)
-
-let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit) ref =
-  ref (fun fmt g ->
-      match g with
-      | _ -> Format.pp_print_string fmt "*"
-    )
-
-(** Command line option to use hashes as address format *)
-let opt_hash_addr = ref false
-let () = register_builtin_option {
-    key = "-heap-use-hash-format";
-    category = "Heap";
-    doc = "  format heap addresses with their hash";
-    spec = ArgExt.Set opt_hash_addr;
-    default = "false";
-  }
-
-let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
-  Format.fprintf fmt "%xd"
-    (* Using Hashtbl.hash leads to collisions. Hashtbl.hash is
-       equivalent to Hashtbl.hash_param 10 100. By increasing the
-       number of meaningful nodes to encounter, collisions are less
-       likely to happen.
-    *)
-    (Hashtbl.hash_param 50 150 (Format.asprintf "%a" !addr_partitioning_pp_chain g))
-
-let pp_addr_partitioning fmt ak =
-  if !opt_hash_addr
-  then pp_addr_partitioning_hash fmt ak
-  else !addr_partitioning_pp_chain fmt ak
-
-
-
-let compare_addr_partitioning a1 a2 =
-  if a1 == a2 then 0 else !addr_partitioning_compare_chain a1 a2
-
-let register_addr_partitioning (info: addr_partitioning info) =
-  addr_partitioning_compare_chain := info.compare !addr_partitioning_compare_chain;
-  addr_partitioning_pp_chain := info.print !addr_partitioning_pp_chain;
-  ()
-
-
-(** Heap addresses. *)
-type addr = {
-  addr_kind : addr_kind;   (** Kind of the address. *)
-  addr_partitioning : addr_partitioning; (** Group of the address *)
-  addr_mode : mode;        (** Assignment mode of address (string or weak) *)
-}
-
-
-let akind addr = addr.addr_kind
-
-let pp_addr fmt a =
-  fprintf fmt "@@%a:%a:%s"
-    pp_addr_kind a.addr_kind
-    pp_addr_partitioning a.addr_partitioning
-    (match a.addr_mode with WEAK -> "w" | STRONG -> "s")
-
-
-let compare_addr a b =
-  if a == b then 0
-  else Compare.compose [
-      (fun () -> compare_addr_kind a.addr_kind b.addr_kind);
-      (fun () -> compare_addr_partitioning a.addr_partitioning b.addr_partitioning);
-      (fun () -> compare_mode a.addr_mode b.addr_mode);
-    ]
-
-type ('a,_) query += Q_debug_addr_value : addr -> ('a,Framework.Engines.Interactive.var_value) query
-
-let () =
-  register_query {
-      join = (let doit : type a r. query_pool -> (a,r) query -> r -> r -> r =
-          fun next query a b ->
-          match query with
-          | Q_debug_addr_value addr ->
-             let open Framework.Engines.Interactive in
-             assert (a.var_value = None && b.var_value = None);
-             let var_sub_value = begin match a.var_sub_value, b.var_sub_value with
-                                 | None, Some sb -> Some sb
-                                 | Some sa, None -> Some sa
-                                 | Some Indexed_sub_value la, Some Indexed_sub_value lb -> Some (Indexed_sub_value (la @ lb))
-                                 | Some Named_sub_value ma, Some Named_sub_value mb -> Some (Named_sub_value (ma @ mb))
-                                 | _, _ -> assert false
-                                 end in
-             {var_value=None; var_value_type = T_any; var_sub_value}
-
-          | _ -> next.pool_join query a b
-        in doit
-      );
-      meet = (fun next q a b -> next.pool_meet q a b);
-    }
-
-
-(** Address variables *)
-type var_kind +=
-  | V_addr_attr of addr * string
-
-let () =
-  register_var {
-    compare = (fun next v1 v2 ->
-        match vkind v1, vkind v2 with
-        | V_addr_attr (a1,attr1), V_addr_attr (a2,attr2) ->
-          Compare.compose [
-            (fun () -> compare_addr a1 a2);
-            (fun () -> compare attr1 attr2)
-          ]
-        | _ -> next v1 v2
-      );
-    print = (fun next fmt v ->
-        match vkind v with
-        | V_addr_attr (addr, attr) -> Format.fprintf fmt "%a.%s" pp_addr addr attr
-        | _ -> next fmt v
-      )
-  }
-
-let mk_addr_attr addr attr typ =
-  let name = Format.asprintf "%a.%s" pp_addr addr attr in
-  mkv name (V_addr_attr (addr,attr)) ~mode:addr.addr_mode typ
-
-
-
 (** {2 Universal functions} *)
 (*  *********************** *)
 
@@ -453,20 +296,8 @@ type expr_kind +=
   (** Subscript access to an indexed object (arrays) *)
   | E_subscript of expr * expr
 
-  (** Allocation of an address on the heap *)
-  | E_alloc_addr of addr_kind * mode
-
-  (** Head address. *)
-  | E_addr of addr * mode option
-
   (** Length of array or string *)
   | E_len of expr
-
-
-let addr_mode (a:addr) (omode: mode option) : mode =
-  match omode with
-  | None -> a.addr_mode
-  | Some m -> m
 
 
 let () =
@@ -490,19 +321,6 @@ let () =
             (fun () -> compare_expr i1 i2);
           ]
 
-        | E_alloc_addr(ak1, m1), E_alloc_addr(ak2, m2) ->
-          Compare.compose [
-            (fun () -> compare_addr_kind ak1 ak2);
-            (fun () -> compare_mode m1 m2);
-          ]
-
-        | E_addr(a1, om1), E_addr(a2, om2) ->
-           Compare.compose
-             [
-               (fun () -> compare_addr a1 a2);
-               (fun () -> Compare.option compare_mode om1 om2);
-             ]
-
         | E_len(a1), E_len(a2) -> compare_expr a1 a2
 
         | _ -> next e1 e2
@@ -519,10 +337,6 @@ let () =
           fprintf fmt "%a(%a)"
             pp_expr f
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_expr) args
-        | E_alloc_addr(akind, mode) -> fprintf fmt "alloc(%a, %a)" pp_addr_kind akind pp_mode mode
-        | E_addr (addr, None) -> fprintf fmt "%a" pp_addr addr
-        | E_addr (addr, Some STRONG) -> fprintf fmt "strong(%a)" pp_addr addr
-        | E_addr (addr, Some WEAK) -> fprintf fmt "weak(%a)" pp_addr addr
         | E_len exp -> Format.fprintf fmt "|%a|" pp_expr exp
         | _ -> default fmt exp
       );
@@ -534,10 +348,6 @@ let () =
         | E_subscript(v, e) ->
           {exprs = [v; e]; stmts = []},
           (fun parts -> {exp with ekind = (E_subscript(List.hd parts.exprs, List.hd @@ List.tl parts.exprs))})
-
-        | E_alloc_addr _ -> leaf exp
-
-        | E_addr _ -> leaf exp
 
         | E_array(el) ->
           {exprs = el; stmts = []},
@@ -728,7 +538,7 @@ let () =
 let rec is_universal_type t =
   match t with
   | T_bool | T_int | T_float _
-  | T_string | T_addr   | T_unit | T_char ->
+  | T_string | T_addr | T_unit | T_char ->
     true
 
   | T_array tt -> is_universal_type tt
@@ -861,23 +671,6 @@ let mk_unit range = mk_constant C_unit ~etyp:T_unit range
 let mk_bool b range = mk_constant ~etyp:T_bool (C_bool b) range
 let mk_true = mk_bool true
 let mk_false = mk_bool false
-
-let mk_addr addr ?(etyp=T_addr) ?(mode=None) range = mk_expr ~etyp (E_addr (addr, mode)) range
-
-let mk_alloc_addr ?(mode=STRONG) addr_kind range =
-  mk_expr (E_alloc_addr (addr_kind, mode)) ~etyp:T_addr range
-
-let weaken_addr_expr e =
-  match ekind e with
-  | E_addr ({addr_mode = WEAK}, _) -> e
-  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = WEAK}, om)}
-  | _ -> assert false
-
-let strongigy_addr_expr e =
-  match ekind e with
-  | E_addr ({addr_mode = STRONG}, _) -> e
-  | E_addr (addr, om) -> {e with ekind = E_addr ({addr with addr_mode = STRONG}, om)}
-  | _ -> assert false
 
 let is_int_type = function
   | T_int | T_bool -> true

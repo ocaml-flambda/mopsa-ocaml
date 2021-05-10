@@ -105,18 +105,6 @@ struct
     | C_float_interval (lo,up) ->
       I.of_float_prec (prec p) (round ()) lo up
 
-    | C_int_interval (lo,up) ->
-      I.of_int_itv (prec p) (round ()) (II.of_bound lo up)
-
-    | C_int i ->
-      I.of_z (prec p) (round ()) i i
-
-    | C_bool false ->
-      I.zero
-
-    | C_bool true ->
-      I.one
-
     | C_avalue(V_float_interval _, itv) -> (itv:t)
 
     | C_top (T_float p) ->
@@ -146,7 +134,10 @@ struct
     | O_mod   -> I.fmod (prec p) (round ()) a1 a2
     | _       -> top_of_prec p
 
-  let filter = default_filter
+  let filter b t a =
+    let p = prec_of_type t in
+    if b then I.filter_nonzero (prec p) a
+    else I.filter_nonzero_false (prec p) a
 
   let backward_unop op t a tr r =
     let p = prec_of_type tr in
