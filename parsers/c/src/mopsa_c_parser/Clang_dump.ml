@@ -387,7 +387,7 @@ let lambda_capture_kind_name = function
   | LCK_VLAType -> "VLAType"
 
 
-                     let decl_kind_name d =
+let decl_kind_name d =
   match d with
   | TranslationUnitDecl _ -> "TranslationUnitDecl"
   | EmptyDecl -> "EmptyDecl"
