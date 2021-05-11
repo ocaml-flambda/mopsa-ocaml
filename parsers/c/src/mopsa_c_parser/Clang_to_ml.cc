@@ -2967,12 +2967,20 @@ CAMLprim value MLTreeBuilderVisitor::TranslateCXXConstructExpr(const CXXConstruc
 CAMLprim value MLTreeBuilderVisitor::TranslateConstantIntegerExpr(const Expr * node) {
   CAMLparam0();
   CAMLlocal1(ret);
-  llvm::APSInt i;
   check_null(node, "TranslateConstantIntegerExpr");
-  if (node->isIntegerConstantExpr(*Context)) {
+#if CLANG_VERSION_MAJOR <= 6
+  llvm::APSInt r;
+  if (node->EvaluateAsInt(r,*Context)) {
     ret = caml_alloc_tuple(1);
-    Store_field(ret, 0, TranslateAPSInt(i));
+    Store_field(ret, 0, TranslateAPSInt(r));
   }
+#else
+  Expr::EvalResult r;
+  if (node->EvaluateAsInt(r,*Context) && r.Val.isInt()) {
+    ret = caml_alloc_tuple(1);
+    Store_field(ret, 0, TranslateAPSInt(r.Val.getInt()));
+  }
+#endif
   else {
     ret = Val_false;
   }
