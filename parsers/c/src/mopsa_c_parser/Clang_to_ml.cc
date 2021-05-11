@@ -2968,7 +2968,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateConstantIntegerExpr(const Expr * n
   CAMLparam0();
   CAMLlocal1(ret);
   check_null(node, "TranslateConstantIntegerExpr");
-#if CLANG_VERSION_MAJOR <= 6
+#if CLANG_VERSION_MAJOR <= 7
   llvm::APSInt r;
   if (node->EvaluateAsInt(r,*Context)) {
     ret = caml_alloc_tuple(1);
