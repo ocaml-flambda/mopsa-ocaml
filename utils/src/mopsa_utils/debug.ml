@@ -25,18 +25,17 @@ let channels = ref []
 let print_warnings = ref true
 let print_color = ref true
 let print_all = ref false
-let colors = [
-  ("white", 1);
-  ("red", 9);
-  ("green", 0x28);
-  ("yellow", 0xbe);
-  ("blue", 4);
-  ("magenta", 5);
-  ("fushia", 177);
-  ("orange", 0xd0);
-  ("teal", 6);
-  ("gray", 8);
-]
+let white = 1
+let red = 9
+let green = 0x28
+let yellow = 0xbe
+let blue = 12
+let magenta = 5
+let fushia = 177
+let orange = 0xd0
+let teal = 6
+let gray = 8
+let pink = 162
 
 let add_channel ch =
   if ch = "all" then
@@ -67,9 +66,8 @@ let can_print channel =
 let random_color channel =
   (Hashtbl.hash channel mod 26) * 9 + 2
 
-let color c pp fmt x =
+let color code pp fmt x =
   if !print_color then
-    let code = try List.assoc c colors with Not_found -> failwith "Unknwon color" in
     Format.fprintf fmt "\027[1;38;5;%dm%a\027[0m" code pp x
   else
     Format.fprintf fmt "%a" pp x
@@ -107,7 +105,7 @@ let debug ?(channel = "debug") fmt =
 let info fmt =
     if can_print "info" then
       Format.kasprintf (fun str ->
-          Format.printf "[%a] %s@." (color_str "orange") "*" str
+          Format.printf "[%a] %s@." (color_str orange) "*" str
       ) fmt
   else
     Format.ifprintf Format.std_formatter fmt
@@ -117,19 +115,19 @@ let plurial_int fmt n = if n <= 1 then () else Format.pp_print_string fmt "s"
 
 let panic fmt =
   Format.kasprintf (fun str ->
-        Format.printf "%a: %s@." (color_str "red") "panic" str
+        Format.printf "%a: %s@." (color_str red) "panic" str
       ) fmt
 
 let panic_at range fmt =
   Format.kasprintf (fun str ->
-      Format.printf "%a: panic: %s@." (color "red" Location.pp_range) range str
+      Format.printf "%a: panic: %s@." (color red Location.pp_range) range str
     ) fmt
 
 
 let warn fmt =
   if !print_warnings then
     Format.kasprintf (fun str ->
-        Format.eprintf "%a: %s@." (color_str "orange") "warning" str
+        Format.eprintf "%a: %s@." (color_str orange) "warning" str
       ) fmt
   else
     Format.ifprintf Format.err_formatter fmt
@@ -138,7 +136,7 @@ let warn fmt =
 let warn_at range fmt =
     if !print_warnings then
       Format.kasprintf (fun str ->
-          Format.eprintf "%a: warning: %s@." (color "orange" Location.pp_range) range str
+          Format.eprintf "%a: warning: %s@." (color orange Location.pp_range) range str
         ) fmt
     else
       Format.ifprintf Format.err_formatter fmt

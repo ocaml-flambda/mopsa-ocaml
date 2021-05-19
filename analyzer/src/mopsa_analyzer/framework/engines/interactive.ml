@@ -131,7 +131,7 @@ let pp_var_with_type fmt (v,t) =
 
 (** Print the value of a variable *)
 let rec pp_var_value fmt v =
-  pp_print_option (Debug.color_str "blue") fmt v.var_value;
+  pp_print_option (Debug.color_str Debug.blue) fmt v.var_value;
   match v.var_sub_value with
   | None -> ()
   | Some sv -> fprintf fmt "@,@[<v2>  %a@]" pp_var_sub_value sv
@@ -227,25 +227,6 @@ struct
       (BreakpointSet.elements bs)
 
 
-  (** Test there is a breakpoint at a given program location *)
-  let is_range_breakpoint range breakpoints =
-    BreakpointSet.exists
-      (function B_line(file,line) -> match_range_file file range
-                                     && match_range_line line range
-              | B_function _ -> false
-      ) breakpoints
-
-
-  (** Test if there is a breakpoint at a given function *)
-  let is_function_breakpoint cs breakpoints =
-    not (is_empty_callstack cs)
-    && ( let call = callstack_top cs in
-         BreakpointSet.exists
-           (function
-             | B_function f -> f = call.call_fun_orig_name
-             | B_line _ -> false
-           ) breakpoints )
-
 
   (** Exception raised when parsing an invalid breakpoint string *)
   exception Invalid_breakpoint_syntax
@@ -299,32 +280,39 @@ struct
     | StepI
     (** Step into interpretation sub-tree  *)
 
-    | PrintVar of string
-    (** Print the value of a variable *)
+    | Print of string list
+    (** Print the current abstract state or the value of variables *)
 
-    | Print
-    (** Print the current abstract state *)
-
-    | Env
-    (** Print the current abstract environment, associated to token T_cur *)
+    | Env of string list
+    (** Print the current abstract environment, associated to token T_cur,
+        eventually projected on a list of domains *)
 
     | Where
     (** Show current program point *)
 
-    | LoadHook of string
-    (** Activate a hook *)
-
-    | UnloadHook of string
-    (** Deactivate a hook *)
+    | WhereI
+    (** Show current interpreter transfer function *)
 
     | Info of info_command
     (** Print extra information *)
 
-    | Backtrace
+    | Enable of enable_command
+    (** Enable an option *)
+
+    | Disable of enable_command
+    (** Disable an option *)
+
+    | Set of set_command * string
+    (** Set an option *)
+
+    | Unset of set_command
+    (** Unset an option *)
+
+    | BackTrace
     (** Print the callstack *)
 
-    | Debug of string
-    (** Set debug channels *)
+    | Trace
+    (** Print the analysis trace *)
 
     | Save of string
     (** Save the environment in a file *)
@@ -333,9 +321,18 @@ struct
   (** Information sub-commands *)
   and info_command =
     | Alarms
+    | Checks
     | Breakpoints
     | Tokens
     | Variables
+
+  (** Enable/Disable sub-commands *)
+  and enable_command =
+    | Hook of string
+
+  (** Set/Unset sub-commands *)
+  and set_command =
+    | Debug
 
 
   (** Print a command *)
@@ -347,19 +344,32 @@ struct
     | NextI       -> Format.pp_print_string fmt "nexti"
     | Step        -> Format.pp_print_string fmt "step"
     | StepI       -> Format.pp_print_string fmt "stepi"
-    | PrintVar v  -> Format.fprintf fmt "print %s" v
-    | Print       -> Format.pp_print_string fmt "print"
-    | Env         -> Format.pp_print_string fmt "env"
-    | Where       -> Format.pp_print_string fmt "where"
-    | LoadHook h  -> Format.fprintf fmt "hook %s" h
-    | UnloadHook h     -> Format.fprintf fmt "unload %s" h
-    | Info Alarms      -> Format.fprintf fmt "info alarms"
-    | Info Breakpoints -> Format.fprintf fmt "info breakpoints"
-    | Info Tokens      -> Format.fprintf fmt "info tokens"
-    | Info Variables   -> Format.fprintf fmt "info variables"
-    | Backtrace   -> Format.fprintf fmt "backtrace"
-    | Debug ch    -> Format.fprintf fmt "debug %s" ch
-    | Save file   -> Format.fprintf fmt "save %s" file
+    | Print []    -> Format.pp_print_string fmt "print"
+    | Print vars  -> Format.fprintf fmt "print %a"
+                       (pp_print_list
+                          ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                          pp_print_string
+                       ) vars
+    | Env []           -> Format.pp_print_string fmt "env"
+    | Env domains      -> Format.fprintf fmt "env %a"
+                            (pp_print_list
+                               ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
+                               pp_print_string
+                            ) domains
+    | Where            -> Format.pp_print_string fmt "where"
+    | WhereI           -> Format.pp_print_string fmt "wherei"
+    | Info Alarms      -> Format.pp_print_string fmt "info alarms"
+    | Info Checks      -> Format.pp_print_string fmt "info checks"
+    | Info Breakpoints -> Format.pp_print_string fmt "info breakpoints"
+    | Info Tokens      -> Format.pp_print_string fmt "info tokens"
+    | Info Variables   -> Format.pp_print_string fmt "info variables"
+    | Enable (Hook h)  -> Format.fprintf fmt "enable hook %s" h
+    | Disable (Hook h) -> Format.fprintf fmt "disable hook %s" h
+    | Set (Debug, d)   -> Format.fprintf fmt "set debug %s" d
+    | Unset Debug      -> Format.pp_print_string fmt "unset debug"
+    | BackTrace        -> Format.pp_print_string fmt "backtrace"
+    | Save file        -> Format.fprintf fmt "save %s" file
+    | Trace            -> Format.pp_print_string fmt "trace"
 
 
   (** Print help message *)
@@ -373,18 +383,23 @@ struct
     printf "  s[tep]                step into function calls@.";
     printf "  s[tep]i               step into interpretation sub-tree@.";
     printf "  f[inish]              finish current function@.";
-    printf "  p[rint] <variable>    print the value of a variable@.";
     printf "  p[rint]               print the abstract state@.";
+    printf "  p[rint] <var>,...     print the value of selected variables@.";
     printf "  e[nv]                 print the current abstract environment@.";
+    printf "  e[nv] <domain>,...    print the current abstract environment of selected domains@.";
     printf "  b[ack]t[race]         print the current call stack@.";
+    printf "  t[race]               print the analysis trace@.";
     printf "  w[here]               show current program point@.";
-    printf "  h[oo] <hook>          activate a hook@.";
-    printf "  u[nload] <hook>       deactivate a hook@.";
-    printf "  d[ebug] <channels>    set debug channels@.";
-    printf "  i[info] a[larms]      print the list of alarms@.";
-    printf "  i[info] b[reakpoints] print the list of breakpoints@.";
+    printf "  w[here]i              show current interpreter transfer function@.";
+    printf "  i[info] a[larms]      print the list of detected alarms@.";
+    printf "  i[info] c[hecks]      print the list of performed checks@.";
+    printf "  i[info] b[reakpoints] print the list of registered breakpoints@.";
     printf "  i[info] t[okens]      print the list of flow tokens@.";
     printf "  i[info] v[ariables]   print the list of variables@.";
+    printf "  e[nable] h[hook] <h>  enable a hook@.";
+    printf "  d[isable] h[hook] <h> disable a hook@.";
+    printf "  s[et] d[ebug] <d>     set debug channels@.";
+    printf "  u[nset] d[ebug]       unset debug channels@.";
     printf "  save <file>           save the abstract state in a file@.";
     printf "  help                  print this message@.";
     ()
@@ -393,8 +408,8 @@ struct
   (** Print input prompt *)
   let print_prompt () =
     printf "%a %a @?"
-      (Debug.color_str "teal") "mopsa"
-      (Debug.color_str "green") ">>"
+      Debug.(color_str teal) "mopsa"
+      Debug.(color_str green) ">>"
 
 
   (** Context of LineEdit library *)
@@ -404,12 +419,27 @@ struct
   (** The last entered command *)
   let last_command = ref None
 
+  (** Multi-command buffer *)
+  let buffer = Queue.create ()
 
   (** Read a command from user input *)
   let rec read_command () =
-    print_prompt ();
-    let l =  LineEdit.read_line linedit_ctx |> String.trim in
-    let parts = String.split_on_char ' ' l in
+    let s =
+      if Queue.is_empty buffer then
+        ( print_prompt ();
+          let input = LineEdit.read_line linedit_ctx in
+          match String.split_on_char ';' input with
+          | []     -> input
+          | hd::tl ->
+            List.iter (fun c -> Queue.add c buffer) tl;
+            hd )
+      else
+        Queue.pop buffer
+    in
+    let parts = String.trim s |>
+                String.split_on_char ' ' |>
+                List.filter (function "" -> false | _ -> true)
+    in
     let c = match parts with
       | ["continue" | "c"]   -> Continue
       | ["next"     | "n"]   -> Next
@@ -417,37 +447,61 @@ struct
       | ["finish"   | "f"]   -> Finish
       | ["nexti"    |"ni"]   -> NextI
       | ["stepi"    |"si"]   -> StepI
-      | ["print"    | "p"]   -> Print
-      | ["env"      | "e"]   -> Env
       | ["where"    | "w"]   -> Where
-      | ["backtrace"|"bt"]   -> Backtrace
-      | ["break"    | "b"; loc] -> Break loc
-      | ["print"    | "p"; var] -> PrintVar var
+      | ["wherei"   |"wi"]   -> WhereI
+      | ["backtrace"|"bt"]   -> BackTrace
+      | ["trace"    | "t"]   -> Trace
+      | ["break"    | "b"; l]-> Break l
+
+      | ("env"      | "e") :: domains ->
+        let domains =
+          List.fold_left
+            (fun acc s ->
+               let parts = String.split_on_char ',' s |>
+                           List.filter (function "" -> false | _ -> true)
+               in
+               SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
+            ) SetExt.StringSet.empty domains
+        in
+        Env (SetExt.StringSet.elements domains)
+
+      | ("print"    | "p") :: vars ->
+        let vars =
+          List.fold_left
+            (fun acc s ->
+               let parts = String.split_on_char ',' s |>
+                           List.filter (function "" -> false | _ -> true)
+               in
+               SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
+            ) SetExt.StringSet.empty vars
+        in
+        Print (SetExt.StringSet.elements vars)
 
       | ["help" | "h"]   ->
         print_usage ();
         read_command ()
 
-
       | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
       | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
       | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
-      | ["info" |"i"; "variables" | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
+      | ["info" |"i"; "checks"      | "c"] | ["ic"] -> Info Checks
+      | ["info" |"i"; "variables"   | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
 
-      | [""] ->
+      | ["enable" | "en"; "hook" | "h"; h] | ["eh"; h] -> Enable (Hook h)
+      | ["disable"|"d";   "hook" | "h"; h] | ["dh"; h] -> Disable (Hook h)
+
+      | ["set"  |"s";  "debug"| "d"; d] | ["sd"; d] -> Set (Debug, d)
+      | ["unset"|"u";  "debug"| "d"] | ["ud"] -> Unset Debug
+
+      | [] | [""] ->
         ( match !last_command with
           | None ->  read_command ()
           | Some c -> c )
 
-      | ["hook"   | "h"; hook] -> LoadHook hook
-      | ["unload" | "u"; hook] -> UnloadHook hook
-
-      | ["debug"  | "d"; channel] -> Debug channel
-
       | ["save"; file] -> Save file
 
       | _ ->
-        printf "Unknown command %s@." l;
+        printf "Unknown command %s@." s;
         print_usage ();
         read_command ()
     in
@@ -463,94 +517,14 @@ struct
     | Exec : stmt * route -> Toplevel.t post action
     | Eval : expr * route * semantic * (semantic*(expr->bool)) list -> Toplevel.t eval action
 
+  (* Actions with hidden return type *)
+  type xaction = Action : 'a action -> xaction
+
 
   (** Get the program location related to an action *)
   let action_range : type a. a action -> range = function
-    | Exec(stmt,_) -> stmt.srange
-    | Eval(exp,_,_,_)  -> exp.erange
-
-
-  (** Flag to print welcome message at the beginning *)
-  let print_welcome = ref true
-
-
-  (** Print an action *)
-  let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    if !print_welcome then (
-      print_welcome := false;
-      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
-        (Debug.bold pp_print_string) "Welcome to Mopsa v1.0!"
-        (Debug.bold pp_print_string) "help"
-    )
-    else (
-      fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
-      match action with
-      | Exec(stmt,route) ->
-        fprintf fmt "@[<v 4>S[ %a@] ]@."
-          pp_stmt stmt
-
-      | Eval(exp,route,translate,translate_when) ->
-        fprintf fmt "@[<v 4>E[ %a@] : %a ]@."
-          pp_expr exp
-          pp_typ (etyp exp)
-    )
-
-  (** Check that an action is atomic *)
-  let is_atomic_action: type a. a action -> bool = fun action ->
-    match action with
-    | Exec(stmt,_) -> is_orig_range stmt.srange && is_atomic_stmt stmt
-    | Eval _       -> false
-
-
-
-  (** {2 Function state automaton} *)
-  (** **************************** *)
-
-  (* We use an automaton to track the current position within the
-     analyzed function *)
-
-  (** Function states *)
-  type fstate =
-    | FunStartNonAtomic
-    | FunStartAtomic
-    | NonAtomic
-    | Atomic
-    | InsideAtomic of int
-
-
-  (** Print a function state *)
-  let pp_fstate fmt = function
-    | FunStartNonAtomic -> Format.pp_print_string fmt "fun-start-non-atomic"
-    | FunStartAtomic    -> Format.pp_print_string fmt "fun-start-atomic"
-    | NonAtomic         -> Format.pp_print_string fmt "non-atomic"
-    | Atomic            -> Format.pp_print_string fmt "atomic"
-    | InsideAtomic d    -> Format.fprintf fmt "inside(%d)" d
-
-
-  (** Change the state of the automaton before executing an action *)
-  let next_fstate_on_pre_action action depth = function
-    | FunStartNonAtomic ->
-      if is_atomic_action action
-      then FunStartAtomic
-      else FunStartNonAtomic
-
-    | NonAtomic ->
-      if is_atomic_action action
-      then Atomic
-      else NonAtomic
-
-    | FunStartAtomic | Atomic -> InsideAtomic depth
-
-    | InsideAtomic _ as fs -> fs
-
-
-  (** Change the state of the automaton after executing an action *)
-  let next_fstate_on_post_action action depth = function
-    | FunStartNonAtomic    -> FunStartNonAtomic
-    | NonAtomic            -> NonAtomic
-    | FunStartAtomic       -> NonAtomic
-    | Atomic               -> NonAtomic
-    | InsideAtomic d as fs -> if d = depth then NonAtomic else fs
+    | Exec(stmt,_)    -> stmt.srange
+    | Eval(exp,_,_,_) -> exp.erange
 
 
   (** {2 Global state} *)
@@ -573,11 +547,23 @@ struct
     mutable command_callstack : callstack;
     (** Callstack when the command was issued *)
 
-    mutable fstack : fstate list;
-    (** Stack of function automata *)
-
     mutable callstack : callstack;
     (** Current call-stack *)
+
+    mutable loc : range option;
+    (** Last analyzed line of code *)
+
+    mutable locstack : range option list;
+    (** Stack of lines of codes *)
+
+    mutable trace: xaction list;
+    (** Trace of executed transfer functions *)
+
+    mutable call_preamble : bool;
+    (** Flag set when calling a function and reset when reaching its first loc *)
+
+    mutable print_welcome : bool;
+    (** Flag to print welcome message at the beginning *)
   }
 
 
@@ -588,122 +574,273 @@ struct
     depth = 0;
     command_depth = 0;
     command_callstack = empty_callstack;
-    fstack = [];
     callstack = empty_callstack;
+    loc = None;
+    locstack = [];
+    trace = [];
+    call_preamble = false;
+    print_welcome = true;
   }
 
-
-  (** Print the global state *)
-  let pp_state fmt () =
-    Format.fprintf fmt "@[<v>breakpoints: @[%a@]@,\
-                        depth: %d@,\
-                        command: @[%a@]@,\
-                        command_depth: %d@,\
-                        fstack: @[<v>%a@]@,\
-                        callstack: @[%a@]@,\
-                        command_callstack: @[%a@]@]"
-      pp_breakpoint_set state.breakpoints
-      state.depth
-      pp_command state.command
-      state.command_depth
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_fstate) state.fstack
-      pp_callstack state.callstack
-      pp_callstack state.command_callstack
+  (* Copy a state *)
+  let copy_state () =
+    { breakpoints = state.breakpoints;
+      command = state.command;
+      depth = state.depth;
+      command_depth = state.command_depth;
+      command_callstack = state.command_callstack;
+      callstack = state.callstack;
+      loc = state.loc;
+      locstack = state.locstack;
+      trace = state.trace;
+      call_preamble = state.call_preamble;
+      print_welcome = state.print_welcome; }
 
 
-  (** Detect if we are in a new call *)
-  let detect_call action prev cur =
-    callstack_begins_with cur prev
+  (** {2 Interaction detection} *)
+  (** ************************* *)
+
+  (* Test if the currest state corresponds to a function call *)
+  let is_call old =
+    callstack_begins_with state.callstack old
+
+  (* Test if the currest state corresponds to a function return *)
+  let is_return old =
+    callstack_begins_with old state.callstack
+
+  (* Test if an action corresponds to a new line of code *)
+  let is_new_loc : type a. state -> a action -> bool = fun old action ->
+    match action with
+    | Eval _ -> false
+    | Exec(stmt,_) ->
+      let range = stmt.srange in
+      is_orig_range range &&
+      ( match old.loc with
+        | None        -> true
+        | Some range' ->
+          let p = get_range_start range in
+          let p' = get_range_start range' in
+          p.pos_file <> p'.pos_file ||
+          p.pos_line <> p'.pos_line )
+
+  (** Test there is a breakpoint at a given program location *)
+  let is_range_breakpoint () =
+    match state.loc with
+    | None -> false
+    | Some range ->
+      BreakpointSet.exists
+        (function
+          | B_line(file,line) -> match_range_file file range
+                                 && match_range_line line range
+          | B_function _ -> false
+        ) state.breakpoints
 
 
-  (** Detect if we returned from a call *)
-  let detect_return action prev cur =
-    callstack_begins_with prev cur
+  (** Test if there is a breakpoint at a given function *)
+  let is_function_breakpoint () =
+    not (is_empty_callstack state.callstack)
+    && ( let call = callstack_top state.callstack in
+         BreakpointSet.exists
+           (function
+             | B_function f -> f = call.call_fun_orig_name
+             | B_line _ -> false
+           ) state.breakpoints )
 
 
-  (** Change the state when an action is going to be executed *)
-  let on_pre_action action flow : unit =
-    let cs = Flow.get_callstack flow in
-    let prev_depth = state.depth in
-    let prev_cs = state.callstack in
-    state.depth <- state.depth + 1;
-    state.callstack <- cs;
-    if detect_call action prev_cs cs then
-      let fs0 = if is_atomic_action action then FunStartAtomic else FunStartNonAtomic in
-      let fs = next_fstate_on_pre_action action prev_depth fs0 in
-      state.fstack <- fs :: state.fstack
-    else
-    if detect_return action prev_cs cs then
-      let fs,tl =
-        match state.fstack with
-        | _::hd::tl -> hd,tl
-        | _         -> assert false
-      in
-      let fs' = next_fstate_on_pre_action action prev_depth fs in
-      state.fstack <- fs' :: tl
-    else
-      let fs,tl =
-        match state.fstack with
-        | hd::tl -> hd,tl
-        | []     -> NonAtomic,[]
-      in
-      let fs' = next_fstate_on_pre_action action prev_depth fs in
-      state.fstack <- fs' :: tl
-
-  (** Change the state when an action was executed *)
-  let on_post_action action : unit =
-    let fs,tl =
-      match state.fstack with
-      | hd::tl -> hd,tl
-      | _ -> assert false
-    in
-    let fs' = next_fstate_on_post_action action state.depth fs in
-    state.fstack <- fs' :: tl;
-    state.depth <- state.depth - 1
-
-
-  (** Check if we are at a breakpoint *)
-  let is_breakpoint action =
-    let fs = List.hd state.fstack in
-    ( (fs = Atomic || fs = FunStartAtomic)
-      && is_range_breakpoint (action_range action) state.breakpoints)
-    || ( fs = FunStartAtomic
-         && is_function_breakpoint state.callstack state.breakpoints )
-
-
-  (** Check if we are at an interaction point *)
-  let is_interaction_point action =
+  (* Check if the analyzer reached an interaction point *)
+  let is_interaction_point old action =
     match state.command with
+    (* Always interact with [StepI] *)
     | StepI -> true
 
+    (* [NextI] stops only if the current depth is less than
+       the depth when the user entered the [NextI] command *)
     | NextI -> state.depth <= state.command_depth
 
-    | Step | Next | Continue | Finish when not (is_atomic_action action) -> false
-
-    | Step | Next | Continue | Finish when is_breakpoint action -> true
-
+    (* [Step] stops at any new line of codes *)
     | Step ->
-      let fs = List.hd state.fstack in
-      fs = Atomic || fs = FunStartAtomic
+      is_new_loc old action
 
+    (* [Next] stops at new lines of codes that are not in inner calls (unless if
+       there is a breakpoint) *)
     | Next ->
-      let fs = List.hd state.fstack in
-      fs = Atomic
-      && not (callstack_begins_with state.callstack state.command_callstack)
+      is_new_loc old action &&
+      ( not (is_call state.command_callstack) ||
+        is_range_breakpoint () ||
+        ( state.call_preamble && is_function_breakpoint () ) )
 
-    | Continue -> false
+    (* [Continue] stops at new lines of code with attached breakpoints *)
+    | Continue ->
+      is_new_loc old action &&
+      ( is_range_breakpoint () ||
+        ( state.call_preamble && is_function_breakpoint () ) )
 
+    (* [Finish] stops at new lines of code after function return or at breakpoints *)
     | Finish ->
-      let fs = List.hd state.fstack in
-      fs = Atomic
-      && state.command_callstack <> []
-      && not (callstack_begins_with state.callstack (pop_callstack state.command_callstack |> snd))
+      is_new_loc old action &&
+      ( is_return state.command_callstack ||
+        is_range_breakpoint () ||
+        is_function_breakpoint () )
 
     | _ -> false
 
 
+  (** {2 Pretty printers} *)
+  (** ******************* *)
+
+
+  (* Get the number of digits of an integer *)
+  let nb_digits n =
+    int_of_float (log10 (float_of_int n)) + 1
+
+  (* Right align an integer *)
+  let pp_right_align_int width fmt i =
+    let digits = nb_digits i in
+    fprintf fmt "%s%d"
+      (String.init (width - digits) (fun _ -> ' '))
+      i
+
+  let pp_right_align width pp fmt x =
+    let s = asprintf "%a" pp x in
+    let len = String.length s in
+    fprintf fmt "%s%s"
+      (String.init (width - len) (fun _ -> ' '))
+      s
+
+  let pp_action : type a. ?truncate:bool -> (formatter -> a action -> unit) = fun ?(truncate=false) fmt action ->
+    (* Format has issues when identing in presence of unicode characters. So we
+       do it manually. *)
+    let fix_string_indentation s =
+      let lines = String.split_on_char '\n' s in
+      match lines with
+      | [] | [_] -> s
+      | hd::tl ->
+        let lines' = hd :: List.map (fun l -> "    " ^ l) tl in
+        String.concat "\n" lines'
+    in
+    let truncate_string s =
+      let lines = String.split_on_char '\n' s in
+      match lines with
+      | [] | [_] -> s
+      | hd::tl -> hd ^ " ..."
+    in
+    match action with
+    | Exec(stmt,route) ->
+      let s = asprintf "@[<v>%a@]" pp_stmt stmt in
+      fprintf fmt "%a %a %s %a@."
+        Debug.(color 45 pp_print_string) "𝕊"
+        Debug.(color 45 pp_print_string) "⟦"
+        (if truncate then truncate_string s else fix_string_indentation s)
+        Debug.(color 45 pp_print_string) "⟧"
+
+    | Eval(exp,route,translate,translate_when) ->
+      let s = asprintf "@[<v>%a@]" pp_expr exp in
+      fprintf fmt "%a %a %s : %a %a@."
+        Debug.(color 209 pp_print_string) "𝔼"
+        Debug.(color 209 pp_print_string) "⟦"
+        (if truncate then truncate_string s else fix_string_indentation s)
+        pp_typ exp.etyp
+        Debug.(color 209 pp_print_string) "⟧"
+
+  let pp_trace fmt trace =
+    let remove_new_lines s =
+      Bytes.of_string s |>
+      Bytes.map (function '\n' -> ' ' | x -> x) |>
+      Bytes.to_string
+    in
+    let trace',n = List.fold_left (fun (acc,i) a -> (i,a)::acc,(i+1)) ([],0) trace in
+    let max_digits = nb_digits n in
+    fprintf fmt "@[<v>%a@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+         (fun fmt (i,Action a) ->
+            let s = asprintf "@[<h>%a%a  @[%a@] at %a@]"
+                (fun fmt () -> if i = 0 then () else fprintf fmt "@,") ()
+                (pp_right_align (max_digits+1) pp_print_string) ("#" ^ (string_of_int (n-i-1)))
+                (pp_action ~truncate:true) a
+                pp_relative_range (action_range a) in
+            let s' = remove_new_lines s in
+            pp_print_string fmt s'
+         )
+      ) trace'
+
+  (** Print source code of an action *)
+  let pp_action_source_code fmt action =
+    (* Entry point *)
+    let rec doit () =
+      let range = action_range action in
+      let start = get_range_start range in
+      let file = start.pos_file in
+      let line = start.pos_line in
+      if not (Sys.file_exists file) then ()
+      else
+        let ch = open_in file in
+        let before,at,after = read_lines_around ch line in
+        let max_line = line + List.length after in
+        let max_digits = nb_digits max_line in
+        List.iter (pp_surrounding_line max_digits std_formatter) before;
+        pp_target_line max_digits std_formatter at;
+        List.iter (pp_surrounding_line max_digits std_formatter) after;
+        close_in ch
+    (* Read lines before and after a target line *)
+    and read_lines_around ch line =
+      let rec iter before at after i =
+        try
+          let l = input_line ch in
+          if i < line - 5 then iter before at after (i+1) else
+          if i > line + 5 then (before,at,after)
+          else
+            if i < line then iter ((i,l)::before) at after (i+1) else
+            if i = line then iter before (i,l) after (i+1)
+            else iter before at ((i,l)::after) (i+1)
+        with End_of_file -> (before,at,after)
+      in
+      let before,at,after = iter [] (0,"") [] 1 in
+      List.rev before, at, List.rev after
+    (* Print a surrounding line *)
+    and pp_surrounding_line max_line fmt (i,l) =
+      fprintf fmt "   %a  %s@."
+        (pp_right_align_int max_line) i
+        l
+    (* Print the target line *)
+    and pp_target_line max_line fmt (i,l) =
+      fprintf fmt " %a %a  %a@."
+        Debug.(color 78 pp_print_string) "►"
+        Debug.(color 78 (pp_right_align_int max_line)) i
+        Debug.(color 78 pp_print_string) l
+    in
+    doit ()
+
+
+  (** Print the next action of the analyzer before asking user what to do *)
+  let pp_interaction fmt action =
+    (* First interaction => print welcome message *)
+    if state.print_welcome then (
+      state.print_welcome <- false;
+      fprintf fmt "@.%a@.Type '%a' to get the list of commands.@.@."
+        (Debug.bold pp_print_string) ("Welcome to Mopsa " ^ Version.version ^ "!")
+        (Debug.bold pp_print_string) "help"
+    )
+    else (
+      (* Print the range of the next action *)
+      fprintf fmt "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      match state.command with
+      (* For source-level navigation, show a listing of the program *)
+      | Next | Step | Continue | Finish | Where ->
+        pp_action_source_code fmt action
+
+      (* For interpreter-level navigation, show next transfer function *)
+      | NextI | StepI | WhereI ->
+        pp_action fmt action
+
+      | _ -> assert false
+    )
+
+
   (** {2 Interactive engine} *)
   (** ********************** *)
+
+  (** Unique range for expressions/statements constructed by the interactive engine *)
+  let interactive_range = tag_range (mk_fresh_range ()) "interactive"
 
   (** Apply an action on a flow and return its result *)
   let rec apply_action : type a. a action -> Toplevel.t flow -> a =
@@ -737,25 +874,103 @@ struct
     | Continue | Next | NextI | Step | StepI | Finish ->
       apply_action action flow
 
-    | Backtrace ->
+    | BackTrace ->
       let cs = Flow.get_callstack flow in
       printf "%a@." pp_callstack cs;
       interact action flow
 
-    | Print ->
+    | Trace ->
+      printf "@[<v>%a@]@." pp_trace state.trace;
+      interact action flow
+
+    | Print [] ->
       printf "%a@." (format (Flow.print man.lattice.print)) flow;
       interact action flow
 
-    | Env ->
+    | Print vnames ->
+      let vars = man.ask Q_debug_variables flow in
+      let map =
+        List.fold_left
+          (fun acc v ->
+             let vname = asprintf "%a" pp_var v in
+             MapExt.StringMap.add vname v acc)
+          MapExt.StringMap.empty vars
+      in
+      let found,not_found =
+        List.fold_left
+          (fun (found,not_found) vname ->
+             match MapExt.StringMap.find_opt vname map with
+             | Some var -> var::found,not_found
+             | None     -> found,vname::not_found
+          ) ([],[]) vnames
+      in
+      let not_found' =
+        match found with
+        | [] -> []
+        | _ ->
+          let printer = empty_printer () in
+          let found,not_found =
+            List.fold_left
+              (fun (found,not_found) v ->
+                 let e = mk_var v interactive_range in
+                 try
+                   let () = man.print_expr flow printer e in
+                   true,not_found
+                 with Not_found ->
+                   let vname = asprintf "%a" pp_var v in
+                   found,vname::not_found
+              ) (false,[]) found
+          in
+          if found then printf "%a@." pflush printer;
+          not_found
+      in
+      ( match not_found@not_found' with
+        | [] -> ()
+        | l  ->
+          printf "Variable%a %a not found@."
+            Debug.plurial_list not_found
+            (pp_print_list
+               ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+               (fun fmt vname -> fprintf fmt "'%s'" vname)
+            ) l
+      );
+      interact action flow
+
+    | Env [] ->
       let env = Flow.get T_cur man.lattice flow in
       printf "%a@." (Print.format man.lattice.print) env;
       interact action flow
 
-    | Where ->
-      pp_action flow std_formatter action;
+    | Env domains ->
+      let env = Flow.get T_cur man.lattice flow in
+      let re =
+        List.map
+          (fun d ->
+             (* Replace wildcard shortcut '_' *)
+             let d' = Str.global_replace (Str.regexp_string "_") ".*" d in
+             (* Accept any domain name containing the given string *)
+             ".*" ^ d' ^ ".*"
+          ) domains |>
+        (* Add alternative operator between domains names *)
+        String.concat "\\|" |>
+        Str.regexp
+      in
+      let pobj = pbox man.lattice.print env in
+      let pobj' = match_print_object_keys re pobj in
+      printf "%a@." pp_print_object pobj';
       interact action flow
 
-    | LoadHook hook ->
+    | Where ->
+      fprintf std_formatter "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      pp_action_source_code std_formatter action;
+      interact action flow
+
+    | WhereI ->
+      fprintf std_formatter "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      pp_action std_formatter action;
+      interact action flow
+
+    | Enable (Hook hook) ->
       if not (Hook.mem_hook hook) then (
         printf "Hook '%s' not found@." hook;
         interact action flow
@@ -766,7 +981,7 @@ struct
         interact action flow
       )
 
-    | UnloadHook hook ->
+    | Disable (Hook hook) ->
       if not (Hook.mem_hook hook) then (
         printf "Hook '%s' not found@." hook;
         interact action flow
@@ -782,21 +997,17 @@ struct
 
     | Info Alarms ->
       let report = Flow.get_report flow in
-      begin
-        if Alarm.is_safe_report report then
-          printf "No alarm@."
-        else (
-          let errors,warnings = Alarm.count_alarms report in
-          let nb = errors+warnings in
-          printf "%d alarm%a found:@." nb Debug.plurial_int nb;
-          Alarm.diagnostics_of_report report |>
-          DiagnosticSet.filter (fun d -> d.diag_kind = Error || d.diag_kind = Warning) |>
-          Alarm.group_diagnostics_by_check |>
-          Alarm.CheckMap.iter (fun check ds ->
-              printf "  %a: %d@." Alarm.pp_check check (DiagnosticSet.cardinal ds)
-            )
-        )
-      end;
+      ( if is_safe_report report
+        then printf "%a No alarm@." Debug.(color_str green) "✔";
+        let _ = Output.Text.construct_checks_summary ~print:true report None in
+        ()
+      );
+      interact action flow
+
+    | Info Checks ->
+      let report = Flow.get_report flow in
+      let total, safe, error, warning, checks_map = Output.Text.construct_checks_summary report None in
+      Output.Text.print_checks_summary checks_map total safe error warning None;
       interact action flow
 
     | Info Breakpoints ->
@@ -812,25 +1023,12 @@ struct
       ;
       interact action flow
 
-    | PrintVar vname ->
-      let vars = man.ask Q_debug_variables flow in
-      begin try
-          let var = List.find
-              (fun var' ->
-                 let vname' = Format.asprintf "%a" pp_var var' in
-                 vname = vname'
-              ) vars
-          in
-          let value = man.ask (Q_debug_variable_value var) flow in
-          printf "%a = %a@." pp_var_with_type (var,value.var_value_type) pp_var_value value;
-          interact action flow
-        with Not_found ->
-          printf "Variable '%s' not found@." vname;
-          interact action flow
-      end
-
-    | Debug channel ->
+    | Set (Debug, channel) ->
       Debug.set_channels channel;
+      interact action flow
+
+    | Unset Debug ->
+      Debug.set_channels "";
       interact action flow
 
     | Save file ->
@@ -842,20 +1040,53 @@ struct
       close_out ch;
       interact action flow
 
-
   (** Interact with the user input or apply the action *)
   and interact_or_apply_action : type a. a action -> Location.range -> Toplevel.t flow -> a =
     fun action range flow ->
     try
-      on_pre_action action flow;
+      let old = copy_state () in
+      state.depth <- state.depth + 1;
+      state.callstack <- Flow.get_callstack flow;
+      let trace = state.trace in
+      state.trace <- (Action action) :: trace;
+      (* When entering a functio, we pusth the old loc to locstack, so that we
+         can retrieve it when returning from the function to check if we
+         encounter a new loc after the call. *)
+      ( if is_call old.callstack then
+          ( state.call_preamble <- true;
+            state.locstack <- old.loc :: old.locstack )
+        else
+        (* When returning from a function, we pop the loc from the stack,
+           and we consider it as the old loc *)
+        if is_return old.callstack then
+          ( state.call_preamble <- false;
+            match old.locstack with
+            | []     ->
+              old.loc <- None;
+              state.loc <- None
+            | hd::tl ->
+              old.loc <- hd;
+              state.loc <- hd;
+              state.locstack <- tl ) );
+      (* Check if we reached a new loc *)
+      let new_loc = is_new_loc old action in
+      ( if new_loc then
+          let range = action_range action in
+          state.loc <- Some range
+      );
+      (* Check if we reached an interaction point *)
+      let interaction = is_interaction_point old action in
+      (* Reset call flag if we reached a new loc *)
+      if new_loc then state.call_preamble <- false;
       let ret =
-        if is_interaction_point action then (
-          pp_action flow std_formatter action;
+        if interaction then (
+          pp_interaction std_formatter action;
           interact action flow
         ) else
           apply_action action flow
       in
-      on_post_action action;
+      state.depth <- state.depth - 1;
+      state.trace <- trace;
       ret
     with Sys.Break ->
       interact action flow

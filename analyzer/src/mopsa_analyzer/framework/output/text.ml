@@ -50,10 +50,10 @@ let print out fmt =
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
 
 let color_of_diag = function
-  | Safe        -> "green"
-  | Unreachable -> "gray"
-  | Error       -> "red"
-  | Warning     -> "orange"
+  | Safe        -> Debug.green
+  | Unreachable -> Debug.gray
+  | Error       -> Debug.red
+  | Warning     -> Debug.orange
 
 let icon_of_diag = function
   | Safe        -> "✔"
@@ -213,7 +213,7 @@ let incr_check_diag check diag checks_map =
   in
   CheckMap.add check total checks_map
 
-let print_and_count_alarms rep out =
+let construct_checks_summary ?(print=false) rep out =
   RangeMap.fold
     (fun range checks acc ->
        CheckMap.fold
@@ -224,7 +224,7 @@ let print_and_count_alarms rep out =
               i, safe, error, warning, checks_map'
 
             | Safe ->
-              if !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
+              if print && !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
               i+1, safe+1, error, warning, checks_map'
 
             | Error | Warning ->
@@ -253,20 +253,19 @@ let print_and_count_alarms rep out =
                     aa',tl'
               in
               let kinds' = iter (AlarmKindSet.elements kinds) in
-              pp_diagnostic out i diag kinds' callstacks;
+              if print then pp_diagnostic out i diag kinds' callstacks;
               let error',warning' = if diag.diag_kind = Error then error+1,warning else error,warning+1 in
               i+1, safe, error', warning', checks_map'
          ) checks acc
     ) rep.report_diagnostics (0,0,0,0,CheckMap.empty)
 
-let print_summary checks_map total safe error warning time out =
+let print_checks_summary checks_map total safe error warning out =
   let pp diag singluar plural fmt n =
     if n = 0 then () else
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v 2>Analysis summary:@,Time: %.3fs@,@[<v2>Checks: %a%a%a%a@,%a@]@]@.@."
-    time
+  print out "@[<v2>Checks summary: %a%a%a%a@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
@@ -285,8 +284,8 @@ let print_summary checks_map total safe error warning time out =
 let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
   if is_sound_report rep
-  then print out "%a@." (Debug.color_str "green") "Analysis terminated successfully"
-  else print out "%a@." (Debug.color_str "orange") "Analysis terminated successfully";
+  then print out "%a@." (Debug.color_str Debug.green) "Analysis terminated successfully"
+  else print out "%a@." (Debug.color_str Debug.orange) "Analysis terminated successfully (with assumptions)";
 
   if !opt_display_lastflow then
     print out "Last flow =@[@\n%a@]@\n"
@@ -296,10 +295,12 @@ let report man flow ~time ~files ~out =
   ;
 
   if is_safe_report rep
-  then print out "%a No alarm@." ((Debug.color "green") pp_print_string) "✔";
+  then print out "%a No alarm@." ((Debug.color Debug.green) pp_print_string) "✔";
 
-  let total, safe, error, warning, checks_map = print_and_count_alarms rep out in
-  print_summary checks_map total safe error warning time out
+  print out "Analysis time: %.3fs@." time;
+
+  let total, safe, error, warning, checks_map = construct_checks_summary ~print:true rep out in
+  print_checks_summary checks_map total safe error warning out
   ;
   if not (is_sound_report rep) then
     let nb = AssumptionSet.cardinal rep.report_assumptions in
@@ -312,7 +313,7 @@ let report man flow ~time ~files ~out =
 
 
 let panic exn ~btrace ~time ~files ~out =
-  print out "%a@." (Debug.color_str "red") "Analysis aborted";
+  print out "%a@." (Debug.color_str Debug.red) "Analysis aborted";
   let () =
     match exn with
     | Exceptions.Panic (msg, "") -> print out "panic: %s@." msg

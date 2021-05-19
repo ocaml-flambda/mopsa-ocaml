@@ -79,7 +79,7 @@ struct
   (** Print a bug *)
   let pp_bug fmt bug =
     fprintf fmt "%a %a: %a@,  Trace:@,%a"
-      (Debug.color_str "orange") "⚠"
+      Debug.(color_str orange) "⚠"
       pp_relative_range bug.bug_range
       pp_bug_kind bug.bug_kind
       pp_callstack bug.bug_callstack

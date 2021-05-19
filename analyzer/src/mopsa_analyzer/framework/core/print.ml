@@ -109,6 +109,7 @@ type print_selector =
   | Tail
 
 type print_path = print_selector list
+
 let rec find_print_object path obj =
   match path, obj with
   | [],_ -> obj

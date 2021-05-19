@@ -391,7 +391,7 @@ struct
 
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
+    fprintf fmt "%a@." Debug.(color fushia pp_range) (action_range action);
     match action with
     | Exec(stmt,route) ->
        fprintf fmt "@[<v 4>S[ %a@] ] in %a@."

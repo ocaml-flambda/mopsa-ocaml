@@ -21,7 +21,7 @@
 
 
 # Framework packs
-mopsa_analyzer.framework = core lattices sig combiners toplevel engines output config runner
+mopsa_analyzer.framework = core lattices sig combiners toplevel output engines config runner
 mopsa_analyzer.framework.core = semantic route ast print context query \
 								avalue alarm token effect lattice flow cases \
 								eval post id manager hook cache utils all
