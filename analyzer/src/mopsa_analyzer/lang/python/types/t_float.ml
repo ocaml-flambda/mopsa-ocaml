@@ -246,6 +246,17 @@ module Domain =
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
         ) |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__round__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["float"]
+        (fun e flow ->
+          let e = List.hd e in
+          man.eval (mk_binop e O_plus {(mk_float 0.5 range) with etyp=(T_py None)} ~etyp:(T_py None) range) flow >>$ fun e flow ->
+            man.eval (mk_unop O_cast ~etyp:T_int (Utils.extract_oobject e) range) flow >>$
+ (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
+        ) |> OptionExt.return
+
+
       | _ -> None
       else None
 

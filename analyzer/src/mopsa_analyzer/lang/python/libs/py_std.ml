@@ -370,8 +370,16 @@ struct
       Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round" as f, _))}, _)}, args, []) ->
-      Utils.check_instances_disj f man flow range args [["float"; "int"]] (fun _ -> man.eval (mk_py_top T_int range))
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round", _))}, _)}, args, []) ->
+       man.eval (List.hd args) flow >>$ (fun number flow ->
+       assume (mk_py_hasattr number "__round__" range) man flow
+         ~fthen:(fun flow ->
+           man.eval (mk_py_call (mk_py_attr number "__round__" ~etyp:(T_py None) range) [] range) flow
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "type %a doesn't define __round__ method" pp_expr number) range) flow >>% Eval.empty
+         )
+      )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("divmod", _))}, _)}, args, []) ->
@@ -386,7 +394,10 @@ struct
                   assume (mk_py_isinstance_builtin argr "int" range) man flow
                     ~fthen:(fun flow ->
                       Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argr.erange flow |>
-                      man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
+                        man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [
+                                                                 mk_binop ~etyp:(T_py None) argl O_py_floor_div argr range;
+                                                                 mk_binop ~etyp:(T_py None) argl O_mod argr range
+                                    ]) range))
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "float" range) man flow
                           ~fthen:(fun flow ->
