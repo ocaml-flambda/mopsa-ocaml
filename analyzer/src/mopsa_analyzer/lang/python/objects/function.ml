@@ -219,11 +219,14 @@ module Domain =
         debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
         debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (OptionExt.print Format.pp_print_string) so pp_expr e)) kwargs;
         debug "user-defined function call on %s@\n" pyfundec.py_func_var.vname;
-        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwonly_args = [] && pyfundec.py_func_kwarg = None) then
-          panic_at range "Calls using vararg, keyword-only args or kwargs are not supported";
+        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwarg = None) then
+          panic_at range "Calls using vararg or kwargs are not supported";
+        let () = debug "defaults=%a kwonly_args=%a" (Format.pp_print_list (OptionExt.print ~none:"None" pp_expr)) pyfundec.py_func_defaults (Format.pp_print_list pp_var) pyfundec.py_func_kwonly_args in
         let param_and_args = List.combine
             (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_parameters)
             pyfundec.py_func_defaults in
+        let param_and_args = param_and_args @ List.combine (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_kwonly_args) pyfundec.py_func_kwonly_defaults in
+        let () = debug "param_and_args = %a" (Format.pp_print_list (fun fmt (s, oe) -> Format.fprintf fmt "%s: %a" s (OptionExt.print pp_expr) oe)) param_and_args in
         (* Replace default_args by kwargs *)
         let py_func_defaults = List.fold_left (fun acc (oname, e) ->
             match oname with
@@ -231,9 +234,11 @@ module Domain =
             | Some name ->
               List.map (fun (n, oe) -> if n = name then (n, Some e) else (n, oe)) acc
           ) param_and_args kwargs in
+        let () = debug "py_func_defaults = %a" (Format.pp_print_list (fun fmt (s, oe) -> Format.fprintf fmt "%s: %a" s (OptionExt.print ~none:"None" ~some:"Some " pp_expr) oe)) py_func_defaults in
         let py_func_defaults = List.map snd py_func_defaults in
         (* First check the correct number of arguments *)
         let default_args, nondefault_args = List.partition (function None -> false | _ -> true) py_func_defaults in
+        let () = debug "args %d default %d non default %d" (List.length args) (List.length default_args) (List.length nondefault_args) in
         OptionExt.return @@
         if List.length args < List.length nondefault_args then
           (
@@ -258,7 +263,7 @@ module Domain =
             debug "|default| = %d (%a)" (List.length default_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) default_args;
             debug "|non-default| = %d (%a)" (List.length nondefault_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) nondefault_args;
             let args =
-              if List.length args = (List.length pyfundec.py_func_parameters) then
+              if List.length args = (List.length pyfundec.py_func_parameters + List.length pyfundec.py_func_kwonly_args) then
                 args
               else
                 (* Remove the first default parameters that are already specified *)
@@ -292,7 +297,8 @@ module Domain =
                 debug "|args'| = %d" (List.length args);
                 args
             in
-            if List.length args <> (List.length pyfundec.py_func_parameters) then
+            let () = debug "args = %a" (Format.pp_print_list pp_expr) args in
+            if List.length args <> (List.length pyfundec.py_func_parameters + List.length pyfundec.py_func_kwonly_args) then
               (
                 debug "The number of arguments is not good@\n";
                 let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
@@ -320,7 +326,7 @@ module Domain =
                 let fundec = {
                   fun_orig_name = get_orig_vname pyfundec.py_func_var;
                   fun_uniq_name = pyfundec.py_func_var.vname;
-                  fun_parameters = pyfundec.py_func_parameters;
+                  fun_parameters = pyfundec.py_func_parameters @ pyfundec.py_func_kwonly_args;
                   fun_locvars = pyfundec.py_func_locals;
                   fun_body = pyfundec.py_func_body;
                   fun_return_type = Some (T_py None);
