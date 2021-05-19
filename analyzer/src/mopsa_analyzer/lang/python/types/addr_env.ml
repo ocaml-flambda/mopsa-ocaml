@@ -161,7 +161,7 @@ struct
        let str = check_baddr addr_strings in
        let bytes = check_baddr addr_bytes in
        (if str then let () = debug "processing %a for strings" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
-       (if bytes then let () = debug "processing %a for bytes" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
+       (if bytes && not str then let () = debug "processing %a for bytes" pp_stmt (fstmt T_string) in man.exec   (fstmt T_string) flow  else Post.return flow) >>% fun flow ->
        (if intb then let () = debug "processing %a for int/bools" pp_stmt (fstmt T_int) in man.exec  (fstmt T_int) flow else Post.return flow) >>% fun flow ->
        (if float then let ()  = debug "processing %a for floats" pp_stmt (fstmt (T_float F_DOUBLE)) in man.exec  (fstmt (T_float F_DOUBLE)) flow else Post.return flow)
 
