@@ -102,6 +102,13 @@ struct
           | _ -> panic_at range "%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
+       man.eval obj flow >>$ (fun obj flow ->
+        let isinstance s = {exp with ekind = E_py_call(call, [obj; s], [])} in
+        let disj = List.fold_left (fun acc typ -> mk_binop ~etyp:(T_py None) acc O_py_or (isinstance typ) range) (isinstance @@ List.hd types) (List.tl types) in
+        man.eval disj flow
+      ) |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
       (* optim: obj may point to different things, but attr usually doesn't, so we evaluate it first *)
