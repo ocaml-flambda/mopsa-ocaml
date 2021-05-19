@@ -56,15 +56,28 @@ module Domain =
     let eval expr man flow =
       let range = erange expr in
       match ekind expr with
+      | E_py_attribute(e, ("__name__" as attr)) ->
+         man.eval e flow >>$ (fun ee flow ->
+         match ekind ee with
+         | E_py_object ({addr_kind = A_py_class (c, _)}, _) ->
+            let name = match c with
+              | C_builtin c -> c
+              | C_unsupported s -> s
+              | C_user u -> get_orig_vname u.py_cls_var
+              | C_annot a -> get_orig_vname a.py_cls_a_var in
+            man.eval (mk_string ~etyp:(T_py None) name range) flow
+         | _ ->
+            panic_at range "Access to special attribute %s not supported (%a)" attr pp_expr ee
+                             ) |> OptionExt.return
+
       (* Special attributes *)
       | E_py_attribute(obj, ("__dict__" as attr))
         | E_py_attribute(obj, ("__bases__" as attr))
-        | E_py_attribute(obj, ("__name__" as attr))
         | E_py_attribute(obj, ("__qualname__" as attr))
         | E_py_attribute(obj, ("__mro__" as attr))
         | E_py_attribute(obj, ("mro" as attr))
         | E_py_attribute(obj, ("__subclass__" as attr)) ->
-         panic_at range "Access to special attribute %s not supported" attr
+         panic_at range "Access to special attribute %s not supported (%a)" attr pp_expr obj
 
       | E_py_attribute(obj, "__class__") ->
          man.eval (mk_py_type obj range) flow |> OptionExt.return
