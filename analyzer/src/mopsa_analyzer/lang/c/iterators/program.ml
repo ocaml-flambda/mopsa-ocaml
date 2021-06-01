@@ -629,43 +629,45 @@ struct
     match query with
     (* Get the list of variables in the current scope *)
     | Q_debug_variables ->
-      let prog = get_c_program flow in
-      let cs = Flow.get_callstack flow in
-      (* Get global variables *)
-      let globals = List.map fst prog.c_globals in
-      (* Get local variables of all functions in the callstack, following the same order *)
-      let locals = List.fold_right (fun call acc ->
-                       try
-                         let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
-                         f.c_func_local_vars @ f.c_func_parameters @ acc
-                       with Not_found ->
-                         warn "Q_debug_variables: function %s not found in C definitions" call.Callstack.call_fun_orig_name;
-                         acc
-                     ) cs []
-      in
-      let all_vars = globals @ locals in
-      let records = List.fold_left (fun recmap var ->
-                        match remove_typedef_qual @@ vtyp var with
-                        | T_c_record r ->
-                           StringMap.add r.c_record_unique_name r recmap
-                        | T_c_pointer r when is_c_record_type r ->
-                           let r = match remove_typedef_qual r with
-                             | T_c_record r -> r
-                             | _ -> assert false in
-                           StringMap.add r.c_record_unique_name r recmap
-                        | _ -> recmap) StringMap.empty all_vars in
-      debug "records cheatsheet:@.%a"
-        (StringMap.fprint {print_begin="";print_arrow=": "; print_sep="\n"; print_end=""; print_empty=""} Format.pp_print_string
-           (fun fmt r ->
-             Format.fprintf fmt "%a"
-               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-                  (fun fmt rf ->
-                    Format.fprintf fmt "%d: %s" rf.c_field_offset rf.c_field_name))
-                    r.c_record_fields
-             ))
-        records;
-      Some all_vars
-
+       (try
+         let prog = get_c_program flow in
+         let cs = Flow.get_callstack flow in
+         (* Get global variables *)
+         let globals = List.map fst prog.c_globals in
+         (* Get local variables of all functions in the callstack, following the same order *)
+         let locals = List.fold_right (fun call acc ->
+                          try
+                            let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
+                            f.c_func_local_vars @ f.c_func_parameters @ acc
+                          with Not_found ->
+                            warn "Q_debug_variables: function %s not found in C definitions" call.Callstack.call_fun_orig_name;
+                            acc
+                        ) cs []
+         in
+         let all_vars = globals @ locals in
+         let records = List.fold_left (fun recmap var ->
+                           match remove_typedef_qual @@ vtyp var with
+                           | T_c_record r ->
+                              StringMap.add r.c_record_unique_name r recmap
+                           | T_c_pointer r when is_c_record_type r ->
+                              let r = match remove_typedef_qual r with
+                                | T_c_record r -> r
+                                | _ -> assert false in
+                              StringMap.add r.c_record_unique_name r recmap
+                           | _ -> recmap) StringMap.empty all_vars in
+         debug "records cheatsheet:@.%a"
+           (StringMap.fprint {print_begin="";print_arrow=": "; print_sep="\n"; print_end=""; print_empty=""} Format.pp_print_string
+              (fun fmt r ->
+                Format.fprintf fmt "%a"
+                  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+                     (fun fmt rf ->
+                       Format.fprintf fmt "%d: %s" rf.c_field_offset rf.c_field_name))
+                  r.c_record_fields
+           ))
+           records;
+         Some all_vars
+        with Not_found -> None
+       )
 
     (* Get the value of a variable *)
     | Q_debug_variable_value var when is_c_type (vtyp var) ->
