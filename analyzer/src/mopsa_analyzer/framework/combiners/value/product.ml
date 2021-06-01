@@ -49,7 +49,7 @@ struct
       pp_obj_list printer
         [ pbox V1.print v1;
           pbox V2.print v2 ]
-         ~lopen:"" ~lsep:"∧" ~lclose:""
+         ~lopen:"" ~lsep:" ∧ " ~lclose:""
 
 
   let v1_man (man:('v,t) value_man) : (('v,V1.t) value_man) = {

@@ -213,9 +213,11 @@ let rec pp_print_object fmt = function
   | String s -> Format.pp_print_string fmt s
   | Var v    -> pp_var fmt v
   | Map (m,sym) ->
+    let sopen = if sym.sopen = "" then "" else sym.sopen ^ " " in
+    let sclose = if sym.sclose = "" then "" else " " ^ sym.sclose in
     Format.(
       fprintf fmt "%s @[<v>%a@] %s"
-        sym.sopen
+        sopen
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
            (fun fmt (k,v) ->
               if is_leaf v then
@@ -228,25 +230,29 @@ let rec pp_print_object fmt = function
                   pp_print_object v
            )
         ) (Map.bindings m)
-        sym.sclose
+        sclose
     )
   | List (l,sym) ->
+    let sopen = if sym.sopen = "" then "" else sym.sopen ^ " " in
+    let sclose = if sym.sclose = "" then "" else " " ^ sym.sclose in
     Format.(
-      fprintf fmt "%s @[<v>%a@] %s"
-        sym.sopen
+      fprintf fmt "%s@[<hv>%a@]%s"
+        sopen
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
            pp_print_object
         ) l
-        sym.sclose
+        sclose
     )
   | Set (s,sym) ->
+    let sopen = if sym.sopen = "" then "" else sym.sopen ^ " " in
+    let sclose = if sym.sclose = "" then "" else " " ^ sym.sclose in
     Format.(
-      fprintf fmt "%s @[<v>%a@] %s"
-        sym.sopen
+      fprintf fmt "%s @[<hv>%a@] %s"
+        sopen
         (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
            pp_print_object
         ) (Set.elements s)
-        sym.sclose
+        sclose
     )
 
 let pflush fmt printer = pp_print_object fmt printer.body
@@ -312,7 +318,7 @@ let pp_variable ?(path=[]) printer v =
 
 let pp_obj_list ?(path=[]) ?(lopen=default_list_symbols.sopen) ?(lsep=default_list_symbols.ssep) ?(lclose=default_list_symbols.sclose) printer l =
   pprint ~path printer
-    (List (l, {default_list_symbols with sopen=lclose; ssep=lsep; sclose=lclose}))
+    (List (l, {default_list_symbols with sopen=lopen; ssep=lsep; sclose=lclose}))
 
 let pp_list ?(path=[]) ?(lopen=default_list_symbols.sopen) ?(lsep=default_list_symbols.ssep) ?(lclose=default_list_symbols.sclose) f printer l =
   pp_obj_list ~path ~lopen ~lsep ~lclose printer

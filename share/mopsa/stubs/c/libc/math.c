@@ -834,6 +834,11 @@ int __isnanl(long double __value);
 int __isnormal(double __value);
 
 /*$
+ * #alias __isnormal;
+ */
+int __builtin_isnormal(double __value);
+
+/*$
  * ensures: (not valid_float(__value) implies return == 0);
  * // TODO: distinguish normal from denormal
  */
@@ -1764,6 +1769,32 @@ float __builtin_inff();
  * ensures: float_nan(return);
  */
 float __builtin_nanf(const char* __tagb);
+
+/*$
+ * #alias __signbit;
+ */
+int __builtin_signbit(double __value);
+
+/*$
+ * #alias __finite;
+ */
+int __builtin_isfinite(double __value);
+
+/*$
+ * #alias __isnormal;
+ */
+int __builtin_isnormal(double __value);
+
+/*$
+ * #alias __isnan;
+ */
+int __builtin_isnan(double __value);
+
+/*$
+ * #alias __isinf;
+ */
+int __builtin_isinf_sign(double __value);
+
 
 /* 
    not well typed:
