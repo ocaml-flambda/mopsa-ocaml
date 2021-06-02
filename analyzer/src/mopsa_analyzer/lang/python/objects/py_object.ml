@@ -90,6 +90,8 @@ struct
       man.eval (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__getattribute__", _))}, _)}, [ptype; attribute], []) ->
+       assume (mk_py_isinstance_builtin attribute "str" range) man flow
+         ~fthen:(fun flow ->
       man.eval   (mk_py_type ptype range) flow >>$
         (fun metatype flow ->
           let lookintype o_meta_attribute o_meta_get flow =
@@ -125,7 +127,11 @@ struct
                          let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
                          Eval.singleton meta_attribute flow
                       | None, None ->
-                         let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
+                         let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype
+                                     (match ekind attribute with
+                                      | E_constant (C_string attr) -> attr
+                                      | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
+                                      | _ -> assert false) in
                         man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
                         Eval.empty
                     )
@@ -164,12 +170,18 @@ struct
             range mro_metatype flow
 
         )
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "attribute name must be string, not %a" pp_expr attribute) range) flow >>% Eval.empty
+         )
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__getattribute__", _))}, _)}, [instance; attribute], []) ->
+       assume (mk_py_isinstance_builtin attribute "str" range) man flow
+         ~fthen:(fun flow ->
       man.eval   (mk_py_type instance range) flow >>$
- (fun class_of_exp flow ->
+        (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
           let tryinstance ~fother flow =
@@ -215,6 +227,10 @@ struct
               )
             range mro flow
         )
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "attribute name must be string, not %a" pp_expr attribute) range) flow >>% Eval.empty
+         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])

@@ -87,36 +87,52 @@ module Domain =
         search_mro man range flow attr c mro |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
-        man.eval attr flow >>$
-          (fun eattr flow ->
+         man.eval attr flow >>$ (fun eattr flow ->
+          assume (mk_py_isinstance_builtin attr "str" range) man flow
+            ~fthen:(fun flow ->
             match ekind eattr with
-            | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
-              man.eval (mk_py_attr e attr range) flow
-            | _ ->
-              assume (mk_py_isinstance_builtin eattr "str" range) man flow
-                ~fthen:(fun flow -> man.eval (mk_py_top (T_py None) range) flow)
-                ~felse:(fun flow ->
-                    panic_at range "getattr with attr=%a" pp_expr eattr)
-          )
-        |> OptionExt.return
+            | E_py_object (a, oe)  ->
+               begin match oe with
+               | Some {ekind = E_constant (C_string attr)} ->
+                  man.eval (mk_py_attr e attr range) flow
+               | _ ->
+                  panic_at range "getattr with attr=%a" pp_expr eattr
+               end
+            | _ -> assert false)
+            ~felse:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "getattr(): attribute name must be string, not %a" pp_expr attr) range) flow >>% Eval.empty
+            )
+        )
+       |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, obj::attr::default::[], [])  ->
-         bind_list [obj; attr] man.eval flow >>$? (fun ee flow ->
-           let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
+         bind_list [obj; attr] man.eval flow >>$ (fun ee flow ->
+          let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
+          assume (mk_py_isinstance_builtin attr "str" range) man flow
+            ~fthen:(fun flow ->
            match ekind attr with
-           | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
-              Utils.try_eval_expr man (mk_py_attr obj attr range) flow
-                ~on_empty:(fun exc_exp exc_str _ flow ->
-                  OptionExt.return @@
-                  if exc_str = "AttributeError" then
-                    man.eval default flow
-                  else
-                    man.exec (mk_raise exc_exp range) flow >>% Eval.empty
-                )
-                ~on_result:(fun res flow -> Eval.singleton res flow)
-           | _ ->
-              panic " expected a string object, got %a" pp_expr attr
-           )
+           | E_py_object (a, oe) ->
+              begin match oe with
+              | Some {ekind = E_constant (C_string attr)} ->
+                 OptionExt.none_to_exn @@
+                 Utils.try_eval_expr man (mk_py_attr obj attr range) flow
+                   ~on_empty:(fun exc_exp exc_str _ flow ->
+                     OptionExt.return @@
+                       if exc_str = "AttributeError" then
+                         man.eval default flow
+                       else
+                         man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                   )
+                   ~on_result:(fun res flow -> Eval.singleton res flow)
+              | _ ->
+                 panic " expected a string object, got %a" pp_expr attr
+              end
+           | _ -> assert false)
+            ~felse:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "getattr(): attribute name must be string, not %a" pp_expr attr) range) flow >>% Eval.empty
+            )
+        )
+         |> OptionExt.return
 
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
@@ -181,22 +197,31 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hasattr", _))}, _)}, [obj; attr], []) ->
-         bind_list [obj; attr] man.eval flow >>$? (fun ee flow ->
-           let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
-           match ekind attr with
-           | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
-              Utils.try_eval_expr man (mk_py_attr obj attr range) flow
-                ~on_empty:(fun exc_exp exc_str _ flow ->
-                  OptionExt.return @@
-                  if exc_str = "AttributeError" then
-                    man.eval (mk_py_false range) flow
-                  else
-                    man.exec (mk_raise exc_exp range) flow >>% Eval.empty
-                )
-                ~on_result:(fun _ flow -> man.eval (mk_py_true range) flow)
-           | _ ->
-              panic " expected a string object, got %a" pp_expr attr
-           )
+         bind_list [obj; attr] man.eval flow >>$ (fun ee flow ->
+          let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
+          assume (mk_py_isinstance_builtin attr "str" range) man flow
+            ~fthen:(fun flow ->
+              match ekind attr with
+              | E_py_object (a, oe) ->
+                begin match oe with
+                | Some {ekind = E_constant (C_string attr)} ->
+                   OptionExt.none_to_exn @@
+                   Utils.try_eval_expr man (mk_py_attr obj attr range) flow
+                     ~on_empty:(fun exc_exp exc_str _ flow ->
+                       OptionExt.return @@
+                         if exc_str = "AttributeError" then
+                           man.eval (mk_py_false range) flow
+                         else
+                           man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                     )
+                     ~on_result:(fun _ flow -> man.eval (mk_py_true range) flow)
+                | _ -> panic " expected a string object, got %a" pp_expr attr
+                end
+              | _ -> assert false)
+            ~felse:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "hasattr(): attribute name must be string, not %a %a" pp_expr attr pp_addr_kind (akind @@ fst @@ object_of_expr attr)) range) flow >>% Eval.empty
+            )
+        ) |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
          man.eval lval flow >>$
