@@ -88,7 +88,7 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, e::attr::[], [])  ->
         man.eval attr flow >>$
- (fun eattr flow ->
+          (fun eattr flow ->
             match ekind eattr with
             | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
               man.eval (mk_py_attr e attr range) flow
@@ -100,12 +100,30 @@ module Domain =
           )
         |> OptionExt.return
 
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("getattr", _))}, _)}, obj::attr::default::[], [])  ->
+         bind_list [obj; attr] man.eval flow >>$? (fun ee flow ->
+           let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
+           match ekind attr with
+           | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
+              Utils.try_eval_expr man (mk_py_attr obj attr range) flow
+                ~on_empty:(fun exc_exp exc_str _ flow ->
+                  OptionExt.return @@
+                  if exc_str = "AttributeError" then
+                    man.eval default flow
+                  else
+                    man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                )
+                ~on_result:(fun res flow -> Eval.singleton res flow)
+           | _ ->
+              panic " expected a string object, got %a" pp_expr attr
+           )
+
       (* Other attributes *)
       | E_py_attribute (e, attr) ->
          debug "%a@\n" pp_expr expr;
          let c_attr = mk_constant ~etyp:(T_py (Some Str)) (C_string attr) range in
          man.eval e   flow >>$
- (fun exp flow ->
+           (fun exp flow ->
              match ekind exp with
              | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
                 search_mro man range flow attr c mro
@@ -126,106 +144,59 @@ module Domain =
                    Eval.empty flow
                else
                  man.eval   (mk_py_type exp range) flow >>$
- (fun class_of_exp flow ->
+                   (fun class_of_exp flow ->
                      let mro = mro (object_of_expr class_of_exp) in
                      debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
-                     let rec search_mro flow mro = match mro with
-                       | [] -> assert false
+                     let rec search_mro ?(empty=(fun () -> assert false)) flow attr mro = match mro with
+                       | [] -> empty ()
                        | cls::tl ->
                          assume
-                           (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (mk_py_object cls range, mk_string "__getattribute__" range)) range)
-                           ~fthen:(fun flow -> man.eval (mk_expr ~etyp:(T_py None) (E_py_ll_getattr (mk_py_object cls range, mk_string "__getattribute__" range)) range) flow)
-                           ~felse:(fun flow -> search_mro flow tl)
+                           (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (mk_py_object cls range, mk_string attr range)) range)
+                           ~fthen:(fun flow -> man.eval (mk_expr ~etyp:(T_py None) (E_py_ll_getattr (mk_py_object cls range, mk_string attr range)) range) flow)
+                           ~felse:(fun flow -> search_mro ~empty:empty flow attr tl)
                            man flow in
-                     search_mro flow mro >>$
- (fun getattribute flow ->
-                         bind_list [exp; c_attr] man.eval flow |>
-                         bind_result (fun ee flow ->
-                             let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
-                             assume (mk_py_hasattr exp "__getattr__" range) man flow
-                               ~fthen:(fun flow ->
-                                   let flow_exn_before, flow = Flow.partition (fun tk _ -> match tk with
-                                       | Alarms.T_py_exception _ -> true
-                                       | _ -> false) flow in
-                                   man.eval (mk_py_call getattribute [exp; c_attr] range) flow |>
-                                   bind_opt (fun case flow ->
-                                       Some
-                                         (match case with
-                                          | Empty ->
-                                             (* exn, let's call
-                                                getattr, and change
-                                                exn flow into cur *)
-                                            let flow = Flow.fold (fun acc tk env ->
-                                                match tk with
-                                                | Alarms.T_py_exception _ ->
-                                                  warn_at range "call to __getattribute__ failed with token %a now trying __getattr__" pp_token tk;
-                                                  Flow.add T_cur env man.lattice acc
-                                                | _ -> Flow.add tk env man.lattice acc) (Flow.bottom_from flow) flow in
-                                            let flow = Flow.join man.lattice flow_exn_before flow in
-                                            man.eval   (mk_py_call (mk_py_attr class_of_exp "__getattr__" range) [exp; c_attr] range) flow
-                                          | Result (attr,_,_) -> Eval.singleton attr (Flow.join man.lattice flow_exn_before flow)
-                                          | NotHandled -> assert false
-                                         )
-                                     )
-                                   |> OptionExt.none_to_exn
-                                 )
-                               ~felse:(fun flow ->
-                                 man.eval (mk_py_call getattribute [exp; c_attr] range) flow
-                               )
-                           )
+                     search_mro flow "__getattribute__" mro >>$
+                       (fun getattribute flow ->
+                         bind_list [exp; c_attr] man.eval flow >>$ (fun ee flow ->
+                          let exp, c_attr = match ee with [e1;e2] -> e1, e2 | _ -> assert false in
+                          OptionExt.none_to_exn @@
+                          Utils.try_eval_expr man (mk_py_call getattribute [exp; c_attr] range) flow
+                            ~on_empty:(fun exc_exp exc_str exc_msg flow ->
+                              OptionExt.return @@
+                              if exc_str = "AttributeError" then
+                                search_mro ~empty:(fun () ->
+                                    man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                                  ) flow "__getattr__" mro >>$ fun getattr flow ->
+                                  man.eval (mk_py_call getattr [exp; c_attr] range) flow
+                              else
+                                man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                            )
+                            ~on_result:(fun res flow ->
+                              Eval.singleton res flow
+                            )
+                        )
                        )
                    )
            )
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("hasattr", _))}, _)}, [obj; attr], []) ->
-         man.eval   obj flow >>$
- (fun eobj flow ->
-             match ekind eobj with
-             | E_py_object ({addr_kind = A_py_class (C_builtin c, mro)}, _) ->
-               let attr = match ekind attr with
-                 | E_constant (C_string s) -> s
-                 | _ -> assert false in
-               let rec search_mro mro = match mro with
-                 | [] ->
-                   man.eval (mk_py_false range) flow
-                 | cls::tl ->
-                   if is_builtin_attribute cls attr then
-                     man.eval (mk_py_true range) flow
-                   else
-                     search_mro tl in
-               search_mro mro
-             | _ ->
-               assume (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (eobj, attr)) range)
-                 ~fthen:(fun flow -> man.eval (mk_py_true range) flow)
-                 ~felse:(fun flow ->
-                   (* test with ll_hasattr and search in the MRO otherwise *)
-                   let rec search_mro flow mro = match mro with
-                     | [] -> man.eval (mk_py_false range) flow
-                     | cls::tl ->
-                        assume
-                          (mk_expr ~etyp:(T_py None) (E_py_ll_hasattr (mk_py_object cls range, attr)) range)
-                          ~fthen:(fun flow ->
-                            man.eval (mk_py_true range) flow)
-                          ~felse:(fun flow -> search_mro flow tl)
-                          man flow
-                   in
-                   assume
-                     (mk_py_isinstance_builtin eobj "type" range)
-                     ~fthen:(fun flow ->
-                       let mro = mro (object_of_expr eobj) in
-                       search_mro flow mro)
-                     ~felse:(fun flow ->
-                       man.eval   (mk_py_type eobj range) flow >>$
- (fun class_of_exp flow ->
-                             let mro = mro (object_of_expr class_of_exp) in
-                             search_mro flow mro)
-                     )
-                     man flow
-                 )
-                 man flow
-             )
-         |> OptionExt.return
+         bind_list [obj; attr] man.eval flow >>$? (fun ee flow ->
+           let obj, attr = match ee with [e1; e2] -> e1, e2 | _ -> assert false in
+           match ekind attr with
+           | E_py_object (_, Some {ekind = E_constant (C_string attr)}) ->
+              Utils.try_eval_expr man (mk_py_attr obj attr range) flow
+                ~on_empty:(fun exc_exp exc_str _ flow ->
+                  OptionExt.return @@
+                  if exc_str = "AttributeError" then
+                    man.eval (mk_py_false range) flow
+                  else
+                    man.exec (mk_raise exc_exp range) flow >>% Eval.empty
+                )
+                ~on_result:(fun _ flow -> man.eval (mk_py_true range) flow)
+           | _ ->
+              panic " expected a string object, got %a" pp_expr attr
+           )
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("setattr", _))}, _)}, [lval; attr; rval], []) ->
          man.eval lval flow >>$

@@ -47,7 +47,7 @@ let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
 let mk_hasattr obj attr range =
-  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string attr range] range
+  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string ~etyp:(T_py None) attr range] range
 
 let mk_object_hasattr obj attr range =
   mk_hasattr (mk_py_object obj range) attr range

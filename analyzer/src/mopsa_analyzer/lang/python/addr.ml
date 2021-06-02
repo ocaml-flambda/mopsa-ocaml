@@ -269,7 +269,7 @@ let mk_py_issubclass_builtin2 blt1 blt2 range =
   mk_py_issubclass (mk_py_object obj1 range) (mk_py_object obj2 range) range
 
 let mk_py_hasattr e attr range =
-  mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
+  mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:(T_py None) (C_string attr) range] range
 
 let mk_py_isinstance e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
