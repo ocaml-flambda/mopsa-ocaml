@@ -18,7 +18,7 @@ build_job:
   stage: build
   script:
     - eval `opam config env`
-    - ./configure
+    - LVMCONFIG=/usr/bin/llvm-config-9 ./configure
     - make -j
   artifacts:
     paths:
