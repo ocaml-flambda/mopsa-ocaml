@@ -514,6 +514,10 @@ struct
        man.exec (mk_expr_stmt (mk_py_call (mk_py_attr v "__delitem__" range) [index] range) range) flow
        |> OptionExt.return
 
+    | S_py_delete {ekind = E_py_attribute(v, attr)} ->
+       man.exec (mk_expr_stmt (mk_py_call (mk_py_attr v "__delattr__" range) [mk_string ~etyp:(T_py None) attr range] range) range) flow
+       |> OptionExt.return
+
 
     | S_remove {ekind = E_addr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin s, _)}}, _)} when List.mem s ["int"; "float"; "bool"; "NoneType"; "NotImplementedType"; "str"; "bytes"] ->
        flow |> Post.return |> OptionExt.return
