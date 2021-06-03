@@ -18,7 +18,7 @@ build_job:
   stage: build
   script:
     - eval `opam config env`
-    - LVMCONFIG=/usr/bin/llvm-config-9 ./configure
+    - LLVMCONFIG=llvm-config-9 ./configure
     - make -j
   artifacts:
     paths:
@@ -282,7 +282,7 @@ test-u 3/3:
   script:
     - eval `opam config env`
     - echo $PY_FILE
-    - ./bin/mopsa-python -silent analyzer/tests/python/$PY_FILE
+    - cd analyzer/tests/python && ./bin/mopsa-python -silent $PY_FILE
 
 .test-typpete:
   stage: test
