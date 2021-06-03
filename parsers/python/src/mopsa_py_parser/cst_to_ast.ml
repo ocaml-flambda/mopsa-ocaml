@@ -757,7 +757,9 @@ and (-@) (l1) (l1', l2', l3') = (l1 @ l1'), l2', l3'
 
 and block_range sl =
   match sl with
-  | [] -> Exceptions.panic "block_range: empty block"
+  | [] ->
+     Location.mk_fresh_range ()
+     (* Exceptions.panic "block_range: empty block" *)
   | [s] -> s.srange
   | hd :: tl ->
     let last = List.rev tl |> List.hd in
