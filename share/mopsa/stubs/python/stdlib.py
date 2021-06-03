@@ -842,8 +842,58 @@ class staticmethod(object):
 
 
 class property(object):
-    def __init__(self, fget): pass
-    def __get__(self): pass
+    # stubs from the python doc, except for getter/setter/deleter
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __init__(self, fget=None, fset=None, fdel=None, doc=None):
+        if doc is None and fget is not None and hasattr(fget, "__doc__"):
+            doc = fget.__doc__
+        self.__get = fget
+        self.__set = fset
+        self.__del = fdel
+        self.__doc__ = doc
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __get__(self, inst, type=None):
+        if inst is None:
+            return self
+        if self.__get is None:
+            raise AttributeError("unreadable attribute")
+        return self.__get(inst)
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __set__(self, inst, value):
+        if self.__set is None:
+            raise AttributeError("can't set attribute")
+        return self.__set(inst, value)
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __delete__(self, inst):
+        if self.__del is None:
+            raise AttributeError("can't delete attribute")
+        return self.__del(inst)
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def getter(self, g):
+        self.__get = g
+        return self
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def setter(self, s):
+        self.__set = s
+        return self
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def deleter(self, d):
+        self.__del = d
+        return self
+
 
 @mopsa.unsupported
 class frozenset(object): pass

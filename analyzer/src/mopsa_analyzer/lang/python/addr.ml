@@ -485,7 +485,10 @@ let () =
 
 let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
-                              | A_py_class _ | A_py_module _ | A_py_function _ -> Universal.Heap.Policies.mk_addr_all ak
+                              | A_py_function _ ->
+                                 Universal.Heap.Policies.mk_addr_range ak
+                              | A_py_class _ | A_py_module _ ->
+                                 Universal.Heap.Policies.mk_addr_all ak
                               | _ -> default ak)
 
 let nominal_type_of_addr_kind : (addr_kind -> string) ref = ref (fun ak -> panic "unknown nominal type for addr_kind %a" pp_addr_kind ak)
