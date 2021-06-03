@@ -18,7 +18,6 @@ build_job:
   stage: build
   script:
     - eval `opam config env`
-    - apt list --installed llvm*
     - ./configure
     - make -j
   artifacts:
