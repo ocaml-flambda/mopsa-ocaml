@@ -66,23 +66,29 @@ struct
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__", _))}, _)}, args, kwargs)
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__", _))}, _)}, args, kwargs) ->
-      bind_list args (man.eval   ) flow |>
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__" as f, _))}, _)}, args, kwargs)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__" as f, _))}, _)}, args, kwargs) ->
+      bind_list args man.eval flow |>
       bind_result (fun args flow ->
           match args with
           | [] ->
             debug "Error during creation of a new instance@\n";
             man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty
           | cls :: tl ->
-            let c = fst @@ object_of_expr cls in
-            man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
-              (fun eaddr flow ->
-                let addr = Addr.from_expr eaddr in
-                man.exec   (mk_add eaddr range) flow >>% fun flow ->
-                Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
-                Eval.singleton (mk_py_object (addr, None) range)
-              )
+             let fcls = List.hd @@ String.split_on_char '.' f in
+             assume (mk_py_issubclass_builtin_r cls fcls range) man flow
+               ~fthen:(fun flow ->
+                 let c = fst @@ object_of_expr cls in
+                 man.eval (mk_alloc_addr (A_py_instance c) range) flow >>$ (fun eaddr flow ->
+                 let addr = Addr.from_expr eaddr in
+                 man.exec (mk_add eaddr range) flow >>% fun flow ->
+                 Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                 Eval.singleton (mk_py_object (addr, None) range)
+                 )
+               )
+               ~felse:(fun flow ->
+                 man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%s(%a)" f (Format.pp_print_list pp_expr) args) range) flow >>% Eval.empty
+               )
         )
       |> OptionExt.return
 
