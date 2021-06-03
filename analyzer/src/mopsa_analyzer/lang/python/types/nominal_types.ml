@@ -105,6 +105,7 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
        man.eval obj flow >>$ (fun obj flow ->
         let isinstance s = {exp with ekind = E_py_call(call, [obj; s], [])} in
+        if types = [] then man.eval (mk_py_false range) flow else
         let disj = List.fold_left (fun acc typ -> mk_binop ~etyp:(T_py None) acc O_py_or (isinstance typ) range) (isinstance @@ List.hd types) (List.tl types) in
         man.eval disj flow
       ) |> OptionExt.return
@@ -193,9 +194,16 @@ struct
                 man.eval   (mk_py_issubclass_builtin_l n_ak eattr range) flow
              end
 
-          | _ -> assert false
+          | _ ->
+             man.exec (Utils.mk_builtin_raise_msg "TypeError" "isinstance() arg 2 must be a type or tuple of types" range) flow >>% Eval.empty
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, args, kwargs) ->
+       man.exec (Utils.mk_builtin_raise_msg "TypeError"
+                   (Format.asprintf "isinstance expected 2 arguments, got %d" (List.length args + List.length kwargs)) range) flow >>%
+         Eval.empty |>
+         OptionExt.return
 
     | _ -> None
 
