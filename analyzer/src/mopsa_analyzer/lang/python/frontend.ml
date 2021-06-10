@@ -58,6 +58,16 @@ let rec parse_program (files: string list) : program =
     let () = opt_check_type_annot := (Filename.extension filename <> ".pyi") in
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
+    let body = snd @@ free_vars body in
+    let body = cell_vars body in
+    Visitor.fold_stmt (fun () e -> VisitParts ()) (fun () s -> (match skind s with
+                                                               | S_py_function f ->
+                                                                  debug "%a: cv=%a, fv=%a" pp_var f.py_func_var (Format.pp_print_list pp_var) f.py_func_cellvars (Format.pp_print_list pp_var) f.py_func_freevars
+                                                               | _ -> ());
+                                                                  VisitParts ()) () body;
+    (* debug "detecting closure";
+     *    let py_func_cellvars, py_func_body = detect_closures py_func_body in
+     *    debug "cellvars of %a: %a; locals: %a, params: %a" pp_var f.py_func_var (Format.pp_print_list pp_var) f.py_func_cellvars (Format.pp_print_list pp_var) f.py_func_locals (Format.pp_print_list pp_var) f.py_func_parameters; *)
     let body = if Filename.extension filename <> ".pyi" && !opt_gc_after_functioncall then
                  Universal.Ast.mk_block ([body;mk_stmt Universal.Heap.Recency.S_perform_gc (Location.mk_fresh_range ())]) body.srange
                else body in
@@ -140,24 +150,29 @@ and from_stmt (stmt: Mopsa_py_parser.Ast.stmt) : stmt =
       )
 
     | S_function f ->
-      Ast.S_py_function {
-        py_func_var = from_var f.func_var;
-        py_func_parameters = List.map from_var f.func_parameters;
-        py_func_defaults = List.map from_exp_option f.func_defaults;
-        py_func_vararg = OptionExt.lift from_var f.func_vararg;
-        py_func_kwonly_args = List.map from_var f.func_kwonly_args;
-        py_func_kwonly_defaults = List.map from_exp_option f.func_kwonly_defaults;
-        py_func_kwarg = OptionExt.lift from_var f.func_kwarg;
-        py_func_locals = List.map from_var f.func_locals;
-        py_func_body = from_stmt f.func_body;
-        py_func_is_generator = f.func_is_generator;
-        py_func_decors = List.map from_exp f.func_decors;
-        py_func_range = f.func_range;
-        py_func_types_in = List.map from_exp_option f.func_types_in;
-        py_func_type_out = from_exp_option f.func_type_out;
-        py_func_ret_var =
-          mk_fresh_uniq_var ("ret_" ^ f.func_var.name) (T_py None) ()
-      }
+       let py_func_body = from_stmt f.func_body in
+       let f = {
+           py_func_var = from_var f.func_var;
+           py_func_parameters = List.map from_var f.func_parameters;
+           py_func_defaults = List.map from_exp_option f.func_defaults;
+           py_func_vararg = OptionExt.lift from_var f.func_vararg;
+           py_func_kwonly_args = List.map from_var f.func_kwonly_args;
+           py_func_kwonly_defaults = List.map from_exp_option f.func_kwonly_defaults;
+           py_func_kwarg = OptionExt.lift from_var f.func_kwarg;
+           py_func_locals = List.map from_var f.func_locals;
+           py_func_body;
+           py_func_is_generator = f.func_is_generator;
+           py_func_decors = List.map from_exp f.func_decors;
+           py_func_range = f.func_range;
+           py_func_types_in = List.map from_exp_option f.func_types_in;
+           py_func_type_out = from_exp_option f.func_type_out;
+           py_func_ret_var =
+             mk_fresh_uniq_var ("ret_" ^ f.func_var.name) (T_py None) ();
+           py_func_cellvars = [];
+           py_func_freevars = []
+         } in
+       Ast.S_py_function f
+
 
     | S_class cls ->
       S_py_class {
@@ -451,6 +466,32 @@ and from_unop = function
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
 
+and free_vars s =
+  Visitor.fold_map_stmt
+    (fun fv expr -> match ekind expr with
+                    | E_var(v, _) -> VisitParts (v::fv, expr)
+                    | _ -> VisitParts (fv, expr))
+    (fun fv stmt -> match skind stmt with
+                    | S_py_function i ->
+                       let fv_inner, i_body = free_vars i.py_func_body in
+                       let bound_vars = i.py_func_parameters @ i.py_func_locals in
+                       let fv = List.filter (fun x -> not @@ List.mem x bound_vars) fv_inner in
+                       Keep (fv, {stmt with skind = S_py_function {i with py_func_body = i_body; py_func_freevars = fv}})
+                    | _ -> VisitParts (fv, stmt)) [] s
+
+and cell_vars s =
+  Visitor.map_stmt
+    (fun expr -> VisitParts expr)
+    (fun stmt -> match skind stmt with
+                 | S_py_function i ->
+                    let cv = Visitor.fold_stmt
+                                      (fun fv expr -> VisitParts fv)
+                                      (fun fv stmt' -> match skind stmt' with
+                                                       | S_py_function f -> Keep (f.py_func_freevars @ fv)
+                                                       | _ -> VisitParts fv) [] i.py_func_body in
+                    let body = cell_vars i.py_func_body in
+                    Keep {stmt with skind = S_py_function {i with py_func_cellvars = List.sort_uniq compare_var (List.filter (fun x -> not @@ List.mem x i.py_func_freevars) cv) ; py_func_body = body}}
+                 | _ -> VisitParts stmt) s
 
 (* Front-end registration *)
 let () =

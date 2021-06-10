@@ -486,7 +486,7 @@ let () =
 let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
                               | A_py_function _ ->
-                                 Universal.Heap.Policies.mk_addr_range ak
+                                 Universal.Heap.Policies.mk_addr_stack_range ak
                               | A_py_class _ | A_py_module _ ->
                                  Universal.Heap.Policies.mk_addr_all ak
                               | _ -> default ak)
@@ -551,6 +551,7 @@ let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
                               | A_py_c_module _ -> Universal.Heap.Policies.mk_addr_all ak
                               | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "cell", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
                               (* FIXME: only if cpython analysis. A bit expensive too... *)
                               | A_py_instance {addr_kind = A_py_c_class _} -> Universal.Heap.Policies.mk_addr_stack_range ak
                               | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}

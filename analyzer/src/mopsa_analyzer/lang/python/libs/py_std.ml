@@ -315,6 +315,28 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("cell.__init__", _))}, _)}, args, []) ->
+       let post =
+         if List.length args > 1 then
+           man.exec (mk_assign (mk_py_attr (List.hd args) "cell_contents" range) (List.nth args 1) range) flow
+         else Post.return flow in
+       post >>% man.eval (mk_py_none range) |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("cell.__getattribute__", _))}, _)}, cell::attr::[], []) ->
+       let cell_contents = (mk_string ~etyp:(T_py None) "cell_contents" range) in
+       assume (eq attr cell_contents ~etyp:(T_py None) range) man flow
+         ~fthen:(fun flow ->
+           assume (mk_py_ll_hasattr cell cell_contents range) man flow
+             ~fthen:(fun flow -> man.eval (mk_py_ll_getattr cell cell_contents range) flow)
+             ~felse:(fun flow ->
+               man.exec (Utils.mk_builtin_raise "NameError" range) flow >>% Eval.empty
+             )
+         )
+         ~felse:(fun flow ->
+           man.eval (mk_py_call (mk_py_object (find_builtin "object.__getattribute__") range) [cell;attr] range) flow
+         )
+       |> OptionExt.return
+
     (* FIXME: in libs.py_std or flows.exn? *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("BaseException.__init__" as f, _))}, _)}, args, []) ->
       Utils.check_instances ~arguments_after_check:(List.length args - 1) f man flow range args ["BaseException"]

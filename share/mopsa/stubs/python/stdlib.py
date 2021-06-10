@@ -908,6 +908,13 @@ class super(object):
     def __init__(self, cls): pass
     def __get__(self): pass
 
+class cell(object):
+    @mopsa.type("wrapper_descriptor")
+    def __init__(self): pass
+
+    @mopsa.type("wrapper_descriptor")
+    def __getattribute__(self, attr): pass
+
 class BaseException(object):
     @mopsa.type("wrapper_descriptor")
     def __init__(self, arg): pass

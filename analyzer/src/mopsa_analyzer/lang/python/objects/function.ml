@@ -201,23 +201,24 @@ module Domain =
           )
         |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
-        man.eval   (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
-        let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
-        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow >>%
-        man.eval   (mk_py_none range) |>
-        OptionExt.return
+      (* FIXME: we now use stubs to do that? *)
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
+       *   man.eval   (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
+       *
+       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
+       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+       *
+       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
+       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
+       *
+       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
+       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
+       *
+       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
+       *   let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
+       *   man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow >>%
+       *   man.eval   (mk_py_none range) |>
+       *   OptionExt.return *)
 
 
     (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
@@ -329,18 +330,38 @@ module Domain =
                       flow
                 in
 
+                (* for each cell variables, a cell value is created *)
+                (* then, these cell variables are replaced by the @cell.cell_contents *)
+                flow >>% bind_list pyfundec.py_func_cellvars (fun cellvar flow ->
+                    let range = tag_range exp.erange "cell %a" pp_var cellvar in
+                    man.eval (mk_py_call (mk_py_object (find_builtin "cell") range) [] range) flow
+                           ) >>$ fun cells flow ->
+                let cellmap = List.fold_left2 (fun map var cell -> VarMap.add var cell map) VarMap.empty pyfundec.py_func_cellvars cells in
+                let fun_body = Visitor.map_stmt
+                                 (fun e -> match ekind e with
+                                           | E_var (v, m) when List.mem v pyfundec.py_func_cellvars ->
+                                              let cell = VarMap.find v cellmap in
+                                              let e' = mk_py_attr cell "cell_contents" range in
+                                              Keep e' (* {e with ekind = E_var(v', m)}*)
+                                           | _ -> VisitParts e) (fun stmt -> VisitParts stmt) pyfundec.py_func_body in
+                (* if the closure variable is part of the param, we propagate the assignment *)
+                let pre_body = List.fold_left (fun stmts cellvar ->
+                                   if List.mem cellvar (pyfundec.py_func_parameters @ pyfundec.py_func_kwonly_args) then
+                                     (mk_assign (mk_py_attr (VarMap.find cellvar cellmap) "cell_contents" range) (mk_var cellvar range) range) :: stmts
+                                   else
+                                     stmts
+                                 ) [] pyfundec.py_func_cellvars in
                 let fundec = {
                   fun_orig_name = get_orig_vname pyfundec.py_func_var;
                   fun_uniq_name = pyfundec.py_func_var.vname;
                   fun_parameters = pyfundec.py_func_parameters @ pyfundec.py_func_kwonly_args;
-                  fun_locvars = pyfundec.py_func_locals;
-                  fun_body = pyfundec.py_func_body;
+                  fun_locvars = List.filter (fun x -> not @@ List.mem x pyfundec.py_func_cellvars) pyfundec.py_func_locals;
+                  fun_body = mk_block [mk_block pre_body range; fun_body] range;
                   fun_return_type = Some (T_py None);
                   fun_return_var = pyfundec.py_func_ret_var;
                   fun_range = pyfundec.py_func_range;
                 } in
-                flow >>%
-                man.eval (mk_call fundec args exp.erange) >>$
+                man.eval (mk_call fundec args exp.erange) flow >>$
                   (fun res flow -> man.eval res flow)
               )
           )

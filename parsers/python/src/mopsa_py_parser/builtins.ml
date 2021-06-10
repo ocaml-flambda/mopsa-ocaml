@@ -152,6 +152,7 @@ let classes = [
   "bool";
   "bytearray";
   "bytes";
+  "cell";
   "complex";
   "dict";
   "float";
