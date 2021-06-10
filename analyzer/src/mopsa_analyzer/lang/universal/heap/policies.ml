@@ -45,8 +45,8 @@ let () =
       );
       print = (fun next fmt g ->
         match g with
-        | G_range r -> pp_relative_range fmt r
-        | G_stack_range(cs, r) -> Format.fprintf fmt "%a:%a" pp_callstack_short cs pp_relative_range r
+        | G_range r -> pp_range fmt r
+        | G_stack_range(cs, r) -> Format.fprintf fmt "%a:%a" pp_callstack_short cs pp_range r
         | G_stack(cs) -> pp_callstack_short fmt cs
         | _ -> next fmt g
       );

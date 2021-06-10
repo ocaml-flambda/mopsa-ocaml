@@ -272,7 +272,9 @@ type py_fundec = {
   py_func_types_in: expr option list;
   py_func_type_out: expr option;
   py_func_range: range; (** range of the function *)
-  py_func_ret_var: var
+  py_func_ret_var: var;
+  py_func_cellvars: var list; (* list of cell vars, ie variables that may be part of function closures *)
+  py_func_freevars: var list;
 }
 
 type py_func_sig =
@@ -598,3 +600,16 @@ let builtin_type_name default fundec =
 
 let py_or e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_py_or e2 ~etyp range
 let py_and e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_py_and e2 ~etyp range
+
+
+let mk_py_ll_hasattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_hasattr(instance, attr)) range
+
+let mk_py_ll_getattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_getattr(instance, attr)) range
+
+let mk_py_ll_setattr instance attr valu range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, Some valu)) range
+
+let mk_py_ll_delattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, None)) range

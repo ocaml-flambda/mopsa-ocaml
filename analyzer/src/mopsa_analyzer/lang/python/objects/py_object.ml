@@ -29,19 +29,6 @@ open Universal.Ast
 open Alarms
 
 
-let mk_py_ll_hasattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_hasattr(instance, attr)) range
-
-let mk_py_ll_getattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_getattr(instance, attr)) range
-
-let mk_py_ll_setattr instance attr valu range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, Some valu)) range
-
-let mk_py_ll_delattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, None)) range
-
-
 module Domain =
 struct
 

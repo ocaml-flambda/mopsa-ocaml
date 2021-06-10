@@ -778,7 +778,7 @@ module Domain =
                       (match akind addr with
                        | A_py_class _ ->
                           assume ~route:(Semantic "Python")
-                            (Python.Objects.Py_object.mk_py_ll_hasattr (mk_py_object (addr, oe) range) (mk_string "__next__" range) range)
+                            (Python.Ast.mk_py_ll_hasattr (mk_py_object (addr, oe) range) (mk_string "__next__" range) range)
                             man flow
                             ~fthen:(man.exec (mk_assign (mk_c_arrow_access_by_name cls_obj "tp_iternext" range) (mk_expr (E_c_function (find_c_fundec_by_name "slot_tp_iternext" flow)) range) range))
                             ~felse:Post.return
