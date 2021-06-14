@@ -100,6 +100,24 @@ let _ =
 
       "exit";
       "quick_exit";
+
+      "__builtin_isfinite";
+      "__builtin_isnormal";
+      "__builtin_isnan";
+      "__builtin_isinf_sign";
+      "__builtin_huge_val";
+      "__builtin_huge_valf";
+      "__builtin_huge_vall";
+      "__builtin_inff";
+      "__builtin_nanf";
+      "__builtin_signbit";
+      "__builtin_fpclassify";
+      "__builtin_isgreater";
+      "__builtin_isgreaterequal";
+      "__builtin_isless";
+      "__builtin_islessequal";
+      "__builtin_islessgreater";
+      "__builtin_isunordered";
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

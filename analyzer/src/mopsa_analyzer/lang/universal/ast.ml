@@ -607,11 +607,13 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(ety
 
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
+let mk_minus_one = mk_int (-1)
 
 let universal_constants_range = tag_range (mk_fresh_range ()) "universal-constants"
 
 let zero = mk_zero universal_constants_range
 let one = mk_one universal_constants_range
+let minus_one = mk_minus_one universal_constants_range
 
 let of_z = mk_z
 let of_int = mk_int
@@ -657,9 +659,9 @@ let float_class ?(valid=false) ?(inf=false) ?(nan=false) () =
 let inv_float_class c =
   float_class ~valid:(not c.float_valid) ~inf:(not c.float_inf) ~nan:(not c.float_nan) ()
 
-let float_valid = float_class ~valid:true ()
-let float_inf   = float_class ~inf:true ()
-let float_nan   = float_class ~nan:true ()
+let float_valid   = float_class ~valid:true ()
+let float_inf     = float_class ~inf:true ()
+let float_nan     = float_class ~nan:true ()
 
 let mk_float_class (c:float_class) e range =
   mk_unop (O_float_class c) e ~etyp:T_bool range
