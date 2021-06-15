@@ -151,7 +151,7 @@ struct
     register_var {
       print = (fun next fmt v ->
           match v.vkind with
-          | V_c_num vv -> Format.fprintf fmt "num⦃%a⦄" pp_var vv
+          | V_c_num vv -> pp_var fmt vv
           | _ -> next fmt v
         );
       compare = (fun next v1 v2 ->

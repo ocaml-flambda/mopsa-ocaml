@@ -29,6 +29,9 @@ open Callstack
 open Format
 open Yojson.Basic
 open Yojson.Basic.Util
+open Interactive.Breakpoint
+open Interactive.Query
+
 
 (** {2 DAP engine} *)
 (** ************** *)
@@ -202,85 +205,6 @@ struct
 
   let initialize_mode = ref true
 
-
-  (** {2 Breakpoints} *)
-  (** *************** *)
-
-  (** Breakpoint *)
-  type breakpoint =
-    | B_function of string (** function *)
-    (** Break at the beginning of a function  *)
-
-    | B_line of string (** file *) * int (** line *)
-    (** Break at line *)
-
-
-  (** Compare two breakpoints *)
-  let compare_breakpoint b1 b2 : int =
-    match b1, b2 with
-    | B_function(f1), B_function(f2) ->
-       compare f1 f2
-
-    | B_line(file1,line1), B_line(file2,line2) ->
-       Compare.pair compare compare (file1,line1) (file2,line2)
-
-    | _ -> compare b1 b2
-
-  (** Set of breakpoints *)
-  module BreakpointSet = SetExt.Make(struct
-                             type t = breakpoint
-                             let compare = compare_breakpoint
-                           end)
-
-  (** Print a breakpoint *)
-  let pp_breakpoint fmt = function
-    | B_function f -> Format.fprintf fmt "%s" f
-    | B_line(file,line) -> Format.fprintf fmt "%s:%d" file line
-
-  (** Print a set of breakpoints *)
-  let pp_breakpoint_set fmt bs =
-    Format.fprintf fmt "@[<v>%a@]"
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_breakpoint)
-      (BreakpointSet.elements bs)
-
-  (** Test there is a breakpoint at a given program location *)
-  let is_range_breakpoint range breakpoints =
-    BreakpointSet.exists
-      (function B_line(file,line) -> match_range_file file range
-                                     && match_range_line line range
-              | B_function _ -> false
-      ) breakpoints
-
-
-  (** Test if there is a breakpoint at a given function *)
-  let is_function_breakpoint cs breakpoints =
-    not (is_empty_callstack cs)
-    && ( let call = callstack_top cs in
-         BreakpointSet.exists
-           (function
-            | B_function f -> f = call.call_fun_orig_name
-            | B_line _ -> false
-           ) breakpoints )
-
-  (** Exception raised when parsing an invalid breakpoint string *)
-  exception Invalid_breakpoint_syntax
-
-
-  (** Parse a breakpoint string *)
-  let parse_breakpoint range (s:string) : breakpoint =
-    if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") s 0 then
-      let file = Str.matched_group 1 s in
-      let line = int_of_string (Str.matched_group 2 s) in
-      B_line(file, line)
-    else if Str.string_match (Str.regexp "\\([0-9]+\\)$") s 0 then
-      let file = get_range_file range in
-      let line = int_of_string (Str.matched_group 1 s) in
-      B_line(file, line)
-    else if Str.string_match (Str.regexp "\\([^0-9].*\\)$") s 0 then
-      let func = Str.matched_group 1 s in
-      B_function(func)
-    else raise Invalid_breakpoint_syntax
-
   (** Extract breakpoints from request *)
   let breakpoints_from_request request =
     let path = extract_path request
@@ -294,9 +218,28 @@ struct
 
   (** Map from variable reference to associated var_sub_value *)
   module VariablesRefs = Map.Make(struct
-                             type t = int
-                             let compare = Int.compare
-                           end)
+      type t = int
+      let compare = Int.compare
+    end)
+
+  (** Test there is a breakpoint at a given program location *)
+  let is_range_breakpoint range breakpoints =
+    BreakpointSet.exists
+      (function B_line(file,line) -> match_range_file file range
+                                     && match_range_line line range
+              | B_function _ -> false
+      ) breakpoints
+
+  (** Test if there is a breakpoint at a given function *)
+  let is_function_breakpoint cs breakpoints =
+    not (is_empty_callstack cs)
+    && ( let call = callstack_top cs in
+         BreakpointSet.exists
+           (function
+            | B_function f -> f = call.call_fun_orig_name
+            | B_line _ -> false
+           ) breakpoints )
+
 
   (** {2 User commands} *)
   (** ***************** *)
@@ -391,7 +334,7 @@ struct
 
   (** Print an action *)
   let pp_action : type a. Toplevel.t flow -> formatter -> a action -> unit = fun flow fmt action ->
-    fprintf fmt "%a@." (Debug.color "fushia" pp_range) (action_range action);
+    fprintf fmt "%a@." Debug.(color fushia pp_range) (action_range action);
     match action with
     | Exec(stmt,route) ->
        fprintf fmt "@[<v 4>S[ %a@] ] in %a@."
@@ -470,7 +413,7 @@ struct
       mutable breakpoints: BreakpointSet.t;
       (** Registered breakpoints *)
 
-      mutable variablesRefs: Interactive.var_sub_value VariablesRefs.t;
+      mutable variablesRefs: var_sub_value VariablesRefs.t;
 
       mutable depth: int;
       (** Current depth of the interpretation tree *)
@@ -674,7 +617,7 @@ struct
     | Vars varref ->
        let varref_cpt = ref 1001 in
        let info_variable name valeur =
-         let varval = Some (Format.asprintf "%a" Interactive.pp_var_value valeur)
+         let varval = Some (Format.asprintf "%a" pp_var_value valeur)
          and vartype = Format.asprintf "%a" pp_typ valeur.var_value_type in
            (
              state.variablesRefs <- VariablesRefs.add !varref_cpt
@@ -688,9 +631,9 @@ struct
        in
        let vars_info =
          if varref = 1000 then
-           let vars = man.ask Interactive.Q_debug_variables flow in
+           let vars = man.ask Q_defined_variables flow in
            List.map (function v ->
-                       let valeur = man.ask (Interactive.Q_debug_variable_value v) flow
+                       let valeur = man.ask (Q_debug_variable_value v) flow
                        and varname = Format.asprintf "%a" pp_var v
                        in info_variable varname valeur)
              vars

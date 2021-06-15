@@ -181,9 +181,8 @@ struct
 
   let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
     fun query man flow ->
-    let open Framework.Engines.Interactive in
     match query with
-    | Q_debug_variables ->
+    | Q_defined_variables ->
        let (_, globals, body) = get_py_program flow in
        let cs = Flow.get_callstack flow in
        (try

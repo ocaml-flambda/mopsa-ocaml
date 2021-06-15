@@ -70,7 +70,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
        (* FIXME: tearDown *)
        debug "Search for all classes that inherit from TestCase";
-       let test_cases = man.ask Universal.Heap.Recency.Q_allocated_addresses flow |>
+       let test_cases = man.ask Q_allocated_addresses flow |>
                           List.filter (fun addr ->
                             match addr.addr_kind with
                             | A_py_class(cls, _ :: mro) ->

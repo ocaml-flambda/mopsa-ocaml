@@ -27,6 +27,8 @@
 open Lattice
 open Context
 open Mopsa_utils
+open Ast.Var
+open Ast.Addr
 
 
 type ('a,_) query = ..
@@ -102,21 +104,27 @@ let register_lattice_query info =
   }
 
 
-type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
+type ('a, _) query +=
+  | Q_defined_variables : ('a,var list) query
+  | Q_allocated_addresses : ('a,addr list) query
+  | Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
 
 let () =
   register_query {
       join = (
         let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
           fun next query a b ->
-          match query with
-          | Q_variables_linked_to _ -> Ast.Var.VarSet.union a b
-          | _ -> next.pool_join query a b in f
+            match query with
+            | Q_defined_variables -> a @ b
+            | Q_allocated_addresses -> a @ b
+            | Q_variables_linked_to _ -> Ast.Var.VarSet.union a b
+            | _ -> next.pool_join query a b in f
       );
       meet = (
         let f : type a r. query_pool -> (a, r) query -> r -> r -> r =
           fun next query a b ->
           match query with
+          | Q_allocated_addresses -> assert false
           | Q_variables_linked_to _ -> Ast.Var.VarSet.inter a b
           | _ -> next.pool_meet query a b in f
       );
