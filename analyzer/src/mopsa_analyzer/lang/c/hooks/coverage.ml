@@ -170,8 +170,8 @@ struct
                      (fun fmt range ->
                         fprintf fmt "%a %a"
                           (fun fmt -> function
-                             | true -> Debug.color_str "green" fmt "✓"
-                             | false -> Debug.color_str "red" fmt "✗"
+                             | true -> Debug.color_str Debug.green fmt "✓"
+                             | false -> Debug.color_str Debug.red fmt "✗"
                           ) (RangeSet.mem range fcov.reachable)
                           pp_relative_range range
                      )

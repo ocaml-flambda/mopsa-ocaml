@@ -23,6 +23,8 @@
 
 open Lattice
 open Context
+open Ast.Var
+open Ast.Addr
 
 
 (** Extensible type of queries *)
@@ -78,5 +80,10 @@ val register_lattice_query : lattice_query_info -> unit
 (** {1 Common queries} *)
 (** ****************** *)
 
-type ('a, _) query += Q_variables_linked_to : Ast.Expr.expr -> ('a, Ast.Var.VarSet.t) query
-(** Query to extract the auxiliary variables related to an expression *)
+type ('a, _) query +=
+  | Q_defined_variables : ('a,var list) query
+  (** Extract the list of defined variables *)
+  | Q_allocated_addresses : ('a,addr list) query
+  (** Query to extract the list of addresses allocated in the heap *)
+  | Q_variables_linked_to : Ast.Expr.expr -> ('a, VarSet.t) query
+  (** Query to extract the auxiliary variables related to an expression *)

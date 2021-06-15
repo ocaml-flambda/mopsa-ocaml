@@ -143,6 +143,10 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
         (function | { exprs = e::el } -> { stmt with skind = S_fold(e,el) }
                   | _ -> assert false)
 
+      | S_block(sl,vl) ->
+        {exprs = []; stmts = sl},
+        (fun parts -> {stmt with skind = S_block(parts.stmts,vl)})
+
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
 
@@ -164,10 +168,10 @@ let is_leaf_expr e =
   let parts, _ = structure_of_expr e in
   parts.exprs = [] && parts.stmts = []
 
-let rec is_stmt_free_expr e =
+let rec is_atomic_expr e =
   let parts, _ = structure_of_expr e in
   parts.stmts = []
-  && List.for_all is_stmt_free_expr parts.exprs
+  && List.for_all is_atomic_expr parts.exprs
 
 let is_atomic_stmt s =
   match skind s with
@@ -179,7 +183,7 @@ let is_atomic_stmt s =
   | _ ->
     let parts, _ = structure_of_stmt s in
     parts.stmts = []
-    && List.for_all is_stmt_free_expr parts.exprs
+    && List.for_all is_atomic_expr parts.exprs
 
 
 (*==========================================================================*)

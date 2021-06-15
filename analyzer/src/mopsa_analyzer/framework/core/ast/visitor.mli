@@ -183,7 +183,7 @@ val for_all_child_stmt : (expr -> bool) -> (stmt -> bool) -> stmt -> bool
 val is_leaf_expr : expr -> bool
 (** Test whether an expression is a leaf expression *)
 
-val is_stmt_free_expr : expr -> bool
+val is_atomic_expr : expr -> bool
 (** Test whether an expression has no sub-statement *)
 
 val is_atomic_stmt : stmt -> bool

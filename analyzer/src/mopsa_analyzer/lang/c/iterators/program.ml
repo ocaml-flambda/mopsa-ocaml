@@ -628,7 +628,7 @@ struct
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
-    | Q_debug_variables ->
+    | Q_defined_variables ->
       let prog = get_c_program flow in
       let cs = Flow.get_callstack flow in
       (* Get global variables *)
@@ -659,7 +659,8 @@ struct
 
 
     (* Get the value of a variable *)
-    | Q_debug_variable_value var ->
+    | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->
+      let open Framework.Engines.Interactive.Query in
       let open Universal.Numeric.Common in
       let module StringSet = SetExt.StringSet in
       let range = mk_fresh_range () in

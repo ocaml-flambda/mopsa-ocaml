@@ -1040,7 +1040,11 @@ struct
   let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
     match query with
     | Q_c_points_to e -> eval_points_to e man flow
-    | _ -> None
+    | Q_defined_variables ->
+      let a = get_env T_cur man flow in
+      let vars = try Map.fold (fun v _ acc -> v :: acc) a [] with Top.Found_TOP -> [] in
+      Some vars
+   | _ -> None
 
 
   (** {2 Pretty printer} *)
