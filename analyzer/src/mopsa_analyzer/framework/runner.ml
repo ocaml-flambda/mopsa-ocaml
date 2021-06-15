@@ -94,7 +94,7 @@ let analyze_files (files:string list) (args:string list option) : int =
       (val
         match !opt_interactive with
         | "interactive"   ->
-           let module E = Engines.Interactive.Make(Toplevel) in
+           let module E = Engines.Interactive.Engine.Make(Toplevel) in
            (module E)
         | "dap"   ->
            let module E = Engines.Dap.Make(Toplevel) in
@@ -103,7 +103,7 @@ let analyze_files (files:string list) (args:string list option) : int =
           let module E = Engines.Automatic.Make(Toplevel) in
           (module E)
         | x -> Exceptions.panic "unknown engine '%s'" x
-        : Engines.Engine.ENGINE with type t = Domain.t
+        : Engines.Engine_sig.ENGINE with type t = Domain.t
       )
     in
 

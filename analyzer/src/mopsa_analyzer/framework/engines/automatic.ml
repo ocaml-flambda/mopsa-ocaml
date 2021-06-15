@@ -23,7 +23,7 @@
 
 open Core.All
 open Toplevel
-open Engine
+open Engine_sig
 
 
 module Make(Toplevel : TOPLEVEL) : ENGINE with type t = Toplevel.t =

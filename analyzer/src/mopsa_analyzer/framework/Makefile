@@ -45,7 +45,8 @@ mopsa_analyzer.framework.combiners = common value domain
 mopsa_analyzer.framework.combiners.value = nonrel union product
 mopsa_analyzer.framework.combiners.domain = switch compose product simplified_product stateless_switch
 mopsa_analyzer.framework.abstraction.json = syntax visitor parser
-mopsa_analyzer.framework.engines = engine automatic interactive dap
+mopsa_analyzer.framework.engines = engine_sig automatic interactive dap
+mopsa_analyzer.framework.engines.interactive = breakpoint command query engine
 mopsa_analyzer.framework.output = common text json factory
 mopsa_analyzer.framework.config = abstraction paths options
 

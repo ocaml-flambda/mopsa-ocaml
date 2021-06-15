@@ -94,7 +94,7 @@ struct
   let on_before_exec route stmt man flow =
     match skind stmt with
     | S_py_function _ | S_py_class _ -> ()
-    | Universal.Ast.S_block (l, _) when l <> [] -> ()
+    | S_block (l, _) when l <> [] -> ()
     | S_assign (_, {ekind = E_py_object _}) -> ()
     | Universal.Ast.S_expression {ekind = E_py_call({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user _)}, _)}, _, _)} -> ()
     | _ ->

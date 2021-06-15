@@ -29,6 +29,10 @@ open Format
 
 type stmt_kind = ..
 
+type stmt = {
+  skind : stmt_kind;
+  srange : Location.range;
+}
 
 type stmt_kind +=
   | S_program of program * string list option
@@ -42,12 +46,7 @@ type stmt_kind +=
   | S_project of expr list
   | S_expand of expr * expr list
   | S_fold of expr * expr list
- 
-type stmt = {
-  skind : stmt_kind;
-  srange : Location.range;
-}
-
+  | S_block of stmt list * Var.var list
 
 type block = stmt list
 
@@ -152,6 +151,28 @@ let register_stmt info =
 let register_stmt_compare cmp = TypeExt.register_compare cmp stmt_compare_chain
 
 let register_stmt_pp pp = TypeExt.register_print pp stmt_pp_chain
+
+let () = register_stmt {
+    print = (fun next fmt stmt ->
+        match skind stmt with
+        | S_block([],_) -> fprintf fmt "pass"
+        | S_block([s],_) -> pp_stmt fmt s
+        | S_block(l,_) ->
+          fprintf fmt "@[<v>";
+          pp_print_list
+            ~pp_sep:(fun fmt () -> fprintf fmt "@,")
+            pp_stmt
+            fmt l
+          ;
+          fprintf fmt "@]"
+        | _ -> next fmt stmt);
+    compare = (fun next s1 s2 ->
+        match skind s1, skind s2 with
+        | S_block(sl1,vl1), S_block(sl2,vl2) ->
+          Compare.pair (Compare.list compare_stmt) (Compare.list Var.compare_var) (sl1,vl1) (sl2,vl2)
+        | _ -> next s1 s2
+      )
+  }
 
 let mk_stmt skind srange = {skind; srange}
 

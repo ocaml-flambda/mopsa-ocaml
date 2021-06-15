@@ -488,7 +488,7 @@ struct
        | A_py_instance _ ->
           debug "instance encountered, renaming methods too";
           (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
-          let aaddr = man.ask Universal.Heap.Recency.Q_allocated_addresses flow in
+          let aaddr = man.ask Q_allocated_addresses flow in
           let flow = List.fold_left (fun flow addr ->
                          match akind addr with
                          | A_py_method(func, (ainst, oe), mclass) when compare_addr a ainst = 0 ->
@@ -786,8 +786,8 @@ struct
              Some (VarSet.union acc r)
          end
 
-      | Framework.Engines.Interactive.Q_debug_variable_value var ->
-         let open Framework.Engines.Interactive in
+      | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->
+         let open Framework.Engines.Interactive.Query in
          let cur = get_env T_cur man flow in
          begin match AMap.find_opt var cur with
          | None ->

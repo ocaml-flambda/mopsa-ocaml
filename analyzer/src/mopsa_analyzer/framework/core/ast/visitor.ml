@@ -143,6 +143,10 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
         (function | { exprs = e::el } -> { stmt with skind = S_fold(e,el) }
                   | _ -> assert false)
 
+      | S_block(sl,vl) ->
+        {exprs = []; stmts = sl},
+        (fun parts -> {stmt with skind = S_block(parts.stmts,vl)})
+
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
 

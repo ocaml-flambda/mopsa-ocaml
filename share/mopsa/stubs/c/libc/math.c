@@ -834,11 +834,6 @@ int __isnanl(long double __value);
 int __isnormal(double __value);
 
 /*$
- * #alias __isnormal;
- */
-int __builtin_isnormal(double __value);
-
-/*$
  * ensures: (not valid_float(__value) implies return == 0);
  * // TODO: distinguish normal from denormal
  */
@@ -1742,68 +1737,3 @@ float scalbf(float __x, float __n);
  * ensures:  valid_float(return) or float_inf(return);
  */
 long double scalbl(long double __x, long double __n);
-
-
-/*$
- * ensures: float_inf(return) and return >= 0.;
- */
-double __builtin_huge_val();
-  
-/*$
- * ensures: float_inf(return) and return >= 0.;
- */
-float __builtin_huge_valf();
-  
-/*$
- * ensures: float_inf(return) and return >= 0.;
- */
-long double __builtin_huge_vall();
-
-/*$
- * ensures: float_inf(return) and return >= 0.;
- */
-float __builtin_inff();
-
-/*$
- * requires: valid_string(__tagb);
- * ensures: float_nan(return);
- */
-float __builtin_nanf(const char* __tagb);
-
-/*$
- * #alias __signbit;
- */
-int __builtin_signbit(double __value);
-
-/*$
- * #alias __finite;
- */
-int __builtin_isfinite(double __value);
-
-/*$
- * #alias __isnormal;
- */
-int __builtin_isnormal(double __value);
-
-/*$
- * #alias __isnan;
- */
-int __builtin_isnan(double __value);
-
-/*$
- * #alias __isinf;
- */
-int __builtin_isinf_sign(double __value);
-
-
-/* 
-   not well typed:
-   __builtin_isgreater(x, y)
-   __builtin_isgreaterequal(x, y)
-   __builtin_isless(x y)
-   __builtin_islessequal(x, y)
-   __builtin_islessgreater(x, y)
-   __builtin_isunordered((x. y)
-*/
-
-
