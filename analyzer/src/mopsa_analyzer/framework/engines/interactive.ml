@@ -259,6 +259,9 @@ struct
 
   (** Commands *)
   type command =
+    | Crash
+    (* Asserts false and crashes. Useful to get the backtrace sometimes *)
+
     | Break of string
     (** Add a breakpoint *)
 
@@ -337,6 +340,7 @@ struct
 
   (** Print a command *)
   let pp_command fmt = function
+    | Crash       -> Format.fprintf fmt "crash"
     | Break loc   -> Format.fprintf fmt "break %s" loc
     | Continue    -> Format.pp_print_string fmt "continue"
     | Next        -> Format.pp_print_string fmt "next"
@@ -452,6 +456,7 @@ struct
       | ["backtrace"|"bt"]   -> BackTrace
       | ["trace"    | "t"]   -> Trace
       | ["break"    | "b"; l]-> Break l
+      | ["crash"]            -> Crash
 
       | ("env"      | "e") :: domains ->
         let domains =
@@ -860,6 +865,8 @@ struct
     state.command_callstack <- (Flow.get_callstack flow);
     let range = action_range action in
     match cmd with
+    | Crash -> assert false
+
     | Break loc ->
       let () =
         try
@@ -892,8 +899,9 @@ struct
       let map =
         List.fold_left
           (fun acc v ->
-             let vname = asprintf "%a" pp_var v in
-             MapExt.StringMap.add vname v acc)
+            let vname = asprintf "%a" pp_var v in
+            debug "%s" vname;
+            MapExt.StringMap.add vname v acc)
           MapExt.StringMap.empty vars
       in
       let found,not_found =
