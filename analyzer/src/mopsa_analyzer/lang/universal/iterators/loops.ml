@@ -116,7 +116,7 @@ let get_range_unrolling range : int option =
 let opt_loop_widening_delay : int ref = ref 0
 (** Number of iterations before applying a widening. *)
 
-let opt_loop_use_cache : bool ref = ref true
+let opt_loop_use_cache : bool ref = ref false
 
 let opt_loop_decreasing_it : bool ref = ref false
 
@@ -276,36 +276,33 @@ struct
 
 
   let rec lfp count delay cond body man flow_init flow =
-    debug "lfp called, range = %a, count = %d" (* @\n flow = %a@\n*) pp_range body.srange count (* (Flow.print man.lattice) flow *);
+    debug "lfp called, range = %a, count = %d" pp_range body.srange count;
+    (* Ignore continue and break flows of the previous iterations *)
     Flow.remove T_continue flow |>
     Flow.remove T_break |>
+    (* Ignore report of the previous iterations *)
+    Flow.set_report (Flow.get_report flow_init) |>
+    (* Apply condition and execute body *)
     man.exec (mk_assume cond cond.erange) >>%
     man.exec body >>% fun f ->
+    (* Merge cur and continue flows *)
     let flow' = merge_cur_and_continue man f |>
                 Flow.join man.lattice flow_init
     in
+    (* Check convergence of cur flow *)
     let cur = Flow.get T_cur man.lattice flow in
     let cur' = Flow.get T_cur man.lattice flow' in
     let is_sub = man.lattice.subset (Flow.get_ctx flow') cur' cur in
     debug "lfp range %a is_sub: %b" pp_range body.srange is_sub;
     if is_sub then
-      (* Add a decreasing iteration if new alarms are reported *)
-      if subset_report (Flow.get_report flow') (Flow.get_report flow_init) then
-        Post.return flow'
-      else
-        let () = debug "decreasing iteration" in
-        Flow.remove T_continue flow' |>
-        Flow.remove T_break |>
-        Flow.remove_report |>
-        man.exec (mk_assume cond cond.erange) >>%
-        man.exec body >>% fun f ->
-        merge_cur_and_continue man f |>
-        Flow.join man.lattice flow_init |>
-        Post.return
+      (* Convergence *)
+      Post.return flow'
     else if delay = 0 then
+      (* Widen *)
       let wflow = Flow.widen man.lattice flow flow' in
       lfp (count+1) !opt_loop_widening_delay cond body man flow_init wflow
     else
+      (* Delay *)
       lfp (count+1) (delay - 1) cond body man flow_init flow'
 
 

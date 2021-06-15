@@ -160,6 +160,8 @@ type stmt_kind +=
   (** Fold a list of dimensions into a single one.
       The folded dimensions are removed *)
 
+  | S_block of stmt list (** Sequence block of statements *) * var list (** local variables declared within the block *)
+
 
 (** Utility functions to create various statements for dimension management *)
 val mk_rename : expr -> expr -> range -> stmt

@@ -194,6 +194,9 @@ val pp_set :
 (**                              {1 Format}                                 *)
 (****************************************************************************)
 
+val pp_print_object : Format.formatter -> print_object -> unit
+(** Pretty-print a printer objct *)
+
 val pflush : Format.formatter -> printer -> unit
 (** Pretty-print the printer output in a format string *)
 

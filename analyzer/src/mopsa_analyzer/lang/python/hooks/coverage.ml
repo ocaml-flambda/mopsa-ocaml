@@ -94,7 +94,7 @@ struct
   let on_before_exec route stmt man flow =
     match skind stmt with
     | S_py_function _ | S_py_class _ -> ()
-    | Universal.Ast.S_block (l, _) when l <> [] -> ()
+    | S_block (l, _) when l <> [] -> ()
     | S_assign (_, {ekind = E_py_object _}) -> ()
     | Universal.Ast.S_expression {ekind = E_py_call({ekind = E_py_object ({addr_kind = Addr.A_py_function (F_user _)}, _)}, _, _)} -> ()
     | _ ->
@@ -201,10 +201,10 @@ struct
             else if StmtSet.exists search_stmt entry.reachable_stmts then
               (* okay, statement reached *)
               let () = incr covered_lines in
-              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "green" Debug.colors) l
+              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.green l
             else if StmtSet.exists search_stmt entry.always_bottom_stmts then
               let () = incr covered_lines in
-              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "yellow" Debug.colors) l
+              Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.yellow l
             else
               begin
                 match ExprSet.choose_opt @@ ExprSet.filter search_expr entry.reachable_exprs with
@@ -217,7 +217,7 @@ struct
                                      max (get_pos_column @@ get_range_end e.erange) n*) in
                 Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                   (String.sub l 0 cols)
-                  (List.assoc "green" Debug.colors)
+                  Debug.green
                   (String.sub l cols (cole-cols))
                   (String.sub l cole (n-cole))
               | None ->
@@ -230,12 +230,12 @@ struct
                         max (get_pos_column @@ get_range_end e.erange) n*) in
                     Format.fprintf ocf "%s\027[38;5;%dm%s\027[0m%s@."
                       (String.sub l 0 cols)
-                      (List.assoc "yellow" Debug.colors)
+                      Debug.yellow
                       (String.sub l cols (cole-cols))
                       (String.sub l cole (n-cole))
                   | None ->
                     (* statement not analyzed *)
-                    Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." (List.assoc "red" Debug.colors) l
+                    Format.fprintf ocf "\027[38;5;%dm%s\027[0m@." Debug.red l
                 end
               end;
             process_file (lineno+1)

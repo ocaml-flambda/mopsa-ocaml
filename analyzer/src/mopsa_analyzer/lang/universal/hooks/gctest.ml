@@ -45,7 +45,7 @@ struct
   let on_after_eval route semantic exp man flow evl = ()
 
   let on_finish man flow =
-    let alladdr = man.ask Heap.Recency.Q_allocated_addresses flow in
+    let alladdr = man.ask Q_allocated_addresses flow in
     let reachaddr = Heap.Recency.Pool.elements @@ man.ask Heap.Recency.Q_alive_addresses_aspset flow in
     let lall = List.length alladdr in
     let lreach = List.length reachaddr in
