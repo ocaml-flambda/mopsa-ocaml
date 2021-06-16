@@ -394,7 +394,6 @@ struct
       (* division by zero can happen but will result *)
       check_float_valid cexp ~nexp range man flow
 
-
     
   (** Transfer functions *)
   (** ================== *)
