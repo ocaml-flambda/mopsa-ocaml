@@ -79,6 +79,7 @@ module Domain =
             List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
                 (* FIXME: I don't get why exec_except and escape_except are separated, and it seems to create more issues than anything. To merge *)
                 let caught, uncaught = exec_except man excpt range acc_uncaught in
+                debug "caught: %a@.uncaught: %a" (format @@ Flow.print man.lattice.print) caught (format @@ Flow.print man.lattice.print) uncaught;
                 Flow.join man.lattice acc_caught caught, uncaught)
               (Flow.bottom_from try_flow, try_flow)  excepts in
 
@@ -210,26 +211,49 @@ module Domain =
 
         (* Catch a particular exception *)
         | Some e ->
-           let apply_except except flow =
-             (* Add exception that match expression e *)
-             let caught_flow, exns, uncaught_flow =
-               Flow.fold (fun (caught, excs, uncaught) tk env ->
+           (* Add exception that match expression e *)
+           let caught_flow, exns, uncaught_flow =
+             Flow.fold (fun (caught, excs, uncaught) tk env ->
                  match tk with
                  | T_py_exception (exn, exc_name, _, _) ->
                     (* Evaluate e in env to check if it corresponds to eaddr *)
                     debug "T_cur now matches tk %a@\n" pp_token tk;
                     let flow = Flow.set T_cur env man.lattice flow0 in
-                    let flow' =
+
+                    let apply_except except flow =
                       assume
                         (mk_py_isinstance exn except range)
                         man
                         ~fthen:(fun flow ->
                           Cases.singleton (Caught [])
                             (Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exn.erange flow |>
-                            man.exec (mk_assign (mk_var except_var range) exn range) |> post_to_flow man))
+                               man.exec (mk_assign (mk_var except_var range) exn range) |> post_to_flow man))
                         ~felse:(fun flow ->
-                          Cases.singleton Uncaught flow)
+                          Flow.rename T_cur tk man.lattice flow |>
+                          Cases.singleton Uncaught)
                         flow in
+
+                    let flow' =
+                      (* FIXME: the evaluation of e is performed for all T_py_exception token, but there is no clean way to perform it outside either... in which environment should it be otherwise? This is thus probably unsound if e is a function with side effects and multiple exceptions are non-deterministically raised in the try body. *)
+                      man.eval e flow >>$ fun e flow ->
+                      assume (mk_py_isinstance_builtin e "tuple" range) man flow
+                        ~fthen:(fun flow ->
+                          let vars = Objects.Tuple.Domain.var_of_addr (addr_of_object @@ object_of_expr e) in
+                          Cases.join_list ~empty:(fun () -> assert false)
+                            (List.map (fun v -> apply_except (mk_var v range) flow ) vars))
+                        ~felse:(fun flow ->
+                          let baseexception_err = fun flow ->
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow >>% Cases.empty in
+                          assume
+                            (mk_py_isinstance_builtin e "type" range) man flow
+                            ~fthen:(fun flow ->
+                              assume (mk_py_issubclass_builtin_r e "BaseException" range) man flow
+                                ~fthen:(fun flow -> apply_except e flow)
+                                ~felse:baseexception_err
+                            )
+                            ~felse:baseexception_err
+                        ) in
+
                     let c, u =
                       Cases.reduce_result (fun exc_typ flow ->
                           match exc_typ with
@@ -240,25 +264,11 @@ module Domain =
                         ~bottom:(Flow.bottom_from flow, Flow.bottom_from flow) flow' in
                     c, exc_name :: excs, u
                  | _ -> (caught, excs, uncaught))
-                 (flow0, [], flow0) flow in
-             Cases.join
-               (Cases.return (Caught exns) caught_flow)
-               (Cases.return Uncaught uncaught_flow) in
+               (flow0, [], flow0) flow in
+           Cases.join
+             (Cases.return (Caught exns) caught_flow)
+             (Cases.return Uncaught uncaught_flow) in
 
-           man.eval e flow >>$ fun e flow ->
-           assume (mk_py_isinstance_builtin e "tuple" range) man flow
-             ~fthen:(fun flow ->
-               let vars = Objects.Tuple.Domain.var_of_addr (addr_of_object @@ object_of_expr e) in
-               Cases.join_list ~empty:(fun () -> assert false)
-                 (List.map (fun v -> apply_except (mk_var v range) flow ) vars))
-             ~felse:(fun flow ->
-               assume
-                 (mk_py_issubclass_builtin_r e "BaseException" range) man flow
-                 ~fthen:(fun flow -> apply_except e flow)
-                 ~felse:(fun flow ->
-                   man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow >>% Cases.empty)
-             )
-      in
       Cases.reduce_result (fun exc_type flow1 ->
           let flow1 = exec_cleaners man (Post.return flow1) |> post_to_flow man in
           match exc_type with
