@@ -231,6 +231,17 @@ struct
         OptionExt.return
 
     | _ -> None
+
+  let compare man op b e1 v1 e2 v2 =
+    let v1 = match ekind e1 with
+      | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
+         eval man e1
+      | _ -> v1 in
+    let v2 = match ekind e1 with
+      | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
+         eval man e2
+      | _ -> v2 in
+    V.compare man op b e1 v1 e2 v2
 end
 
 let () =

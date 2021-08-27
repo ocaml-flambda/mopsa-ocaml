@@ -353,23 +353,24 @@ struct
           Map.add pack aa' acc
         ) a packs
 
+    let is_var_numeric_type v = is_numeric_type (vtyp v)
 
     (* 𝕊⟦  ⟧ *)
     let exec stmt man ctx a =
       match skind stmt with
-      | S_add {ekind = E_var _} ->
+      | S_add {ekind = E_var (v, _)} when is_var_numeric_type v ->
         exec_add_var stmt man ctx a |>
         OptionExt.return
 
-      | S_assign ({ekind = E_var _}, _) ->
+      | S_assign ({ekind = E_var (v, _)}, _) when is_var_numeric_type v ->
         exec_assign_var stmt man ctx a
 
-      | S_expand( {ekind = E_var _}, _)
-      | S_fold( {ekind = E_var _}, _) ->
+      | S_expand( {ekind = E_var (v, _)}, _)
+      | S_fold( {ekind = E_var (v, _)}, _) when is_var_numeric_type v ->
         exec_expand_fold_var stmt man ctx a |>
         OptionExt.return
 
-      | S_rename( {ekind = E_var _}, {ekind = E_var _}) ->
+      | S_rename( {ekind = E_var (v1, _)}, {ekind = E_var (v2, _)}) when is_var_numeric_type v1 && is_var_numeric_type v2 ->
         exec_rename_var stmt man ctx a |>
         OptionExt.return
 
