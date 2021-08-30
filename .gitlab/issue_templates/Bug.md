@@ -22,10 +22,10 @@ _Describe the erroneous behavior you experience (include relevant logs, outputs,
 _What the behavior should be instead._
 
 
-## Possible cause or fixes
+## Possible cause or fix
 
 _If you can, link to the line of code that might be responsible for the problem and propose a fix._
 
 
 /label ~bug
-/assign @antoine_mine
+/cc @antoine_mine
