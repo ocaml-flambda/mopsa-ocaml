@@ -1,3 +1,3 @@
 
 /label ~support
-/cc @antoine_mine
+/assign @antoine_mine
