@@ -14,7 +14,7 @@ _Include the analyzer version, your platform and, if relevant, include the sourc
 
 ## What is the bug behavior?
 
-_What is erroneous behavior you see (include relevant logs, outputs, screenshots, ...)._
+_Describe the erroneous behavior you experience (include relevant logs, outputs, screenshots, ...)?_
 
 
 ## What is the expected correct behavior?
