@@ -28,16 +28,16 @@ module Make
   :
   sig
     type +'a map
-    include Map.S with type key := K.t and type 'a t := 'a map
+    include MapExtSig.S with type key := K.t and type 'a t := 'a map
     type t = E.t map
     val print : Format.formatter -> t -> unit
     val compare : t -> t -> int
   end
 =
 struct
-  module M = Map.Make(K)
+  module M = MapExt.Make(K)
   type 'a map = 'a M.t
-  module type S = Map.S with type key := K.t and type 'a t := 'a map
+  module type S = MapExtSig.S with type key := K.t and type 'a t := 'a map
   include (M : S)
   type t = E.t map
 
