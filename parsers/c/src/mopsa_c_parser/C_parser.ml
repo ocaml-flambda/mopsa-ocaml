@@ -25,20 +25,26 @@
 open Mopsa_utils
 module StringSet = SetExt.StringSet
 
-(* if only_parse is true, only parses the file without tranlating it to
+let debug fmt = Debug.debug ~channel:"c.parser" fmt
+
+(* if only_parse is true, only parses the file without translating it to
    C AST nor adding the result to the context
  *)
 let parse_file
     (command:string)
     (file:string)
     (opts:string list)
+    (triple:string)
     (warn_all:bool)
     (enable_cache:bool)
     (keep_static:bool)
     (only_parse:bool)
     (ctx:Clang_to_C.context)
   =
-  let target_options = Clang_parser.get_default_target_options () in
+  let target_options =
+    if triple = "" then Clang_parser.get_default_target_options ()
+    else { Clang_AST.empty_target_options with target_triple = triple }
+  in
   (* remove some options that are in the way *)
   let filtered_opts =
     List.filter (fun o -> not (List.mem o ["-MF"])) opts
@@ -47,8 +53,15 @@ let parse_file
                filtered_opts
   in
 
+  debug "Parsing %s, command '%s', target '%s', argument list %a" file command
+target_options.target_triple (ListExt.fprint ListExt.printer_list (fun ch s -> Format.fprintf ch "'%s'" s)) opts;
+
   let r = Clang_parser_cache.parse command target_options enable_cache file (Array.of_list opts)
   in
+
+  List.iter
+    (fun d -> debug "Diagnostic returned: %s" (Clang_dump.string_of_diagnostic d))
+    r.parse_diag;
 
   let is_error =
     List.exists

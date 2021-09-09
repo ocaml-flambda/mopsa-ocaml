@@ -270,6 +270,10 @@ char *_mopsa_new_readonly_string_max(size_t max);
  */
 void _mopsa_assert_valid_ptr(void *p);
 
+/*$
+ * requires: valid_bytes_or_fail(p, n);
+ */
+void _mopsa_assert_valid_bytes(void *p, size_t n);
 
 /*$
 

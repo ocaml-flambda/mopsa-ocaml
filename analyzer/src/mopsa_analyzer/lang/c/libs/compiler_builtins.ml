@@ -121,14 +121,14 @@ struct
          OptionExt.return
 
     (* 𝔼⟦ __builtin_huge_val() ⟧,
-       𝔼⟦ __builtin_huge_inf() ⟧ *)
-    | E_c_builtin_call("__builtin_huge_val", [])
-    | E_c_builtin_call("__builtin_inff", []) ->
+       𝔼⟦ __builtin_inff() ⟧ *)
+    | E_c_builtin_call("__builtin_huge_val", []) ->
        Eval.singleton (mk_float infinity exp.erange) flow |>
          OptionExt.return
 
     (* 𝔼⟦ __builtin_huge_valf() ⟧ *)
-    | E_c_builtin_call("__builtin_huge_valf", []) ->
+    | E_c_builtin_call("__builtin_huge_valf", [])
+    | E_c_builtin_call("__builtin_inff", []) ->
        Eval.singleton (mk_float ~prec:F_SINGLE infinity exp.erange) flow |>
          OptionExt.return
 
@@ -137,7 +137,7 @@ struct
        Eval.singleton (mk_float ~prec:F_LONG_DOUBLE infinity exp.erange) flow |>
          OptionExt.return
 
-    (* 𝔼⟦ __builtin_nanf("") ⟧ *)
+    (* 𝔼⟦ __builtin_nanf("")  ⟧ *)
     | E_c_builtin_call("__builtin_nanf", [_]) ->
        Eval.singleton (mk_float ~prec:F_SINGLE nan exp.erange) flow |>
          OptionExt.return

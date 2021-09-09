@@ -235,6 +235,14 @@ let comment_unify (c1:comment list) (c2:comment list) : comment list =
      (* could be improved, but we expect the lists to have length 1 at most *)
      List.sort_uniq compare (c1@c2)
   
+let comment_macro_unify (c1:(comment * macro StringMap.t) list) (c2:(comment * macro StringMap.t) list) : (comment * macro StringMap.t) list =
+  match c1,c2 with
+  | [], x | x, [] -> x
+  | [a], [b] -> if fst a = fst b then [a] else [a;b]
+  | _ ->
+     (* could be improved, but we expect the lists to have length 1 at most *)
+     List.sort_uniq (fun a b -> compare (fst a) (fst b)) (c1@c2)
+
 
 (** {2 Type compatibility} *)
 
