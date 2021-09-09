@@ -105,8 +105,10 @@ type context = {
 
     mutable ctx_files : SetExt.StringSet.t; (** set of parsed files *)
 
-    (* comments are stored in a map so that we can remove duplicates *)
-    mutable ctx_comments: comment list RangeMap.t;
+    (* comments are stored in a map so that we can remove duplicates
+       we attach the macros to each comment to apply preprocessing correctly later
+     *)
+    mutable ctx_comments: (comment * macro StringMap.t) list RangeMap.t;
     ctx_macros: (string,macro) Hashtbl.t;
   }
 (** Structure used internally during project parsing & linking. *)
@@ -167,6 +169,7 @@ let has_stub_comment l =
 
 let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) =
 
+
   
   (* utilities *)
   (* ********* *)
@@ -218,6 +221,14 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       tu_name;
       tu_range = decl.C.decl_range;
     }
+  in
+
+  (* converts macros to string map *)
+  let macros_map =
+    List.fold_left
+      (fun acc m -> StringMap.add m.C.macro_name m acc)
+      StringMap.empty
+      macros
   in
 
   let out =
@@ -732,8 +743,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
       );
-      
-      func.func_com <- comment_unify func.func_com f.C.function_com;
+
+      let coms = List.map (fun m -> m, macros_map) f.C.function_com in
+      func.func_com <- comment_macro_unify func.func_com coms;
       (* fill in body *)
       if func.func_body <> None && f.C.function_body <> None
       then warning range "function is defined twice with a body" org_name;
@@ -1151,22 +1163,22 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
   (* add parsed files *)
   ctx.ctx_files <- SetExt.StringSet.(union ctx.ctx_files (of_list files));
 
-  (* add comments, merging duplicates *)
+  (* add comments, attach macros, merging duplicates *)
   let c =
     List.fold_left
       (fun ctx c ->
         let r = c.Clang_AST.com_range in
         if RangeMap.mem r ctx then
           let old = RangeMap.find r ctx in
-          if List.exists (fun c' -> c = c') old then ctx
-          else RangeMap.add r (c::old) ctx
-        else RangeMap.add r [c] ctx
+          if List.exists (fun (c',_) -> c = c') old then ctx
+          else RangeMap.add r ((c,macros_map)::old) ctx
+        else RangeMap.add r [(c,macros_map)] ctx
       )
       ctx.ctx_comments coms
   in
   ctx.ctx_comments <- c;
 
-  (* add macros *)
+  (* add macros globally *)
   List.iter (fun macro ->
       if Hashtbl.mem ctx.ctx_macros macro.C.macro_name then
         begin

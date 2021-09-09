@@ -1950,6 +1950,18 @@ type target_options = {
   }
 (** Options for controlling the target. *)
 
+let empty_target_options = {
+    target_triple = "";
+    target_host_triple = "";
+    target_CPU = "";
+    target_FP_math = "";
+    target_ABI = "";
+    target_EABI_version = Target_EABI_Unknown;
+    target_linker_version = "";
+    target_features_as_written = [];
+    target_features = [];
+  }
+
 type target_int_type =
   | Target_NoInt
   | Target_SignedChar

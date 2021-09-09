@@ -34,19 +34,19 @@ let starts_with text prefix =
   (String.length text >= String.length prefix) &&
   (String.sub text 0 (String.length prefix) = prefix)
 
-let is_stub_comment com =
+let is_stub_comment (com,_) =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
   starts_with comment "/*$"
 
-let is_predicates_comment com =
+let is_predicates_comment (com,_) =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
   starts_with comment "/*$="
 
-let is_directive_comment com =
+let is_directive_comment (com,_) =
   let comment = com.Clang_AST.com_text |>
                 String.trim
   in
@@ -57,14 +57,14 @@ exception StubNotFound
 
 
 (* Parse function's comment into a stub CST *)
-let rec parse_cst func ?(selector=is_stub_comment) prj macros enums predicates cache =
+let rec parse_cst func ?(selector=is_stub_comment) prj enums predicates cache =
   match Hashtbl.find_opt cache func.func_org_name with
   | Some cst -> cst
   | None ->
     (* Find the stub of the function *)
     match List.find_opt selector func.func_com with
     | None -> raise StubNotFound
-    | Some com ->
+    | Some (com,macros) ->
       (* Create the lexing buffer *)
       let comment = com.com_text in
       let file = com.com_range.range_begin.loc_file in
@@ -92,7 +92,7 @@ let rec parse_cst func ?(selector=is_stub_comment) prj macros enums predicates c
         begin match StringMap.find_opt alias prj.proj_funcs with
           | None -> raise StubNotFound
           | Some f ->
-            parse_cst f prj macros enums predicates cache
+            parse_cst f prj enums predicates cache
         end
 
     | Lexer.SyntaxError s ->
@@ -110,23 +110,21 @@ let rec parse_function_comment
     (func:C_AST.func)
     ?(selector=is_stub_comment)
     (prj:C_AST.project)
-    (macros:C_AST.macro C_AST.StringMap.t)
     (enums:Z.t C_AST.StringMap.t)
     (predicates:Passes.Preprocessor.predicate C_AST.StringMap.t)
     (cache:(string,Cst.stub) Hashtbl.t)
   : Ast.stub
   =
-  let cst = parse_cst func ~selector prj macros enums predicates cache in
+  let cst = parse_cst func ~selector prj enums predicates cache in
   debug "stub of function %s:@\n  @[%a]" func.func_org_name Cst.pp_stub cst;
   (* Translate CST into AST *)
   Passes.Cst_to_ast.doit prj func cst
 
 (** Parse comment of a stub directive *)
 let parse_directive_comment
-    (com:Clang_AST.comment list)
+    (com:(Clang_AST.comment * C_AST.macro C_AST.StringMap.t) list)
     (range:Clang_AST.range)
     (prj:C_AST.project)
-    (macros:C_AST.macro C_AST.StringMap.t)
     (enums:Z.t C_AST.StringMap.t)
     (predicates:Passes.Preprocessor.predicate C_AST.StringMap.t)
     (stubs:(string,Cst.stub) Hashtbl.t)
@@ -149,13 +147,13 @@ let parse_directive_comment
       func_com = com;
     }
   in
-  parse_function_comment func ~selector:is_directive_comment prj macros enums predicates stubs
+  parse_function_comment func ~selector:is_directive_comment prj enums predicates stubs
 
 
 (** Parse a comment of predicates declarations *)
-let parse_predicates_comment (coms:Clang_AST.comment list) : Passes.Preprocessor.predicate list =
-  coms |> List.fold_left (fun acc com ->
-      if is_predicates_comment com then
+let parse_predicates_comment (coms:(Clang_AST.comment * Clang_AST.macro StringMap.t) list) : Passes.Preprocessor.predicate list =
+  coms |> List.fold_left (fun acc (com,macros) ->
+      if is_predicates_comment (com,macros) then
         (* Create the lexing buffer *)
         let comment = com.com_text in
         let file = com.com_range.range_begin.loc_file in
