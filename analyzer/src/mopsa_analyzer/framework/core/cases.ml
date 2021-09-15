@@ -517,7 +517,7 @@ let bind_result
 
 
 let (>>$) r f = bind_result f r
-
+let ( let* ) r f = bind_result f r
 
 let bind_conjunction
     (f:('r case * 'a flow) list -> ('a,'s) cases)

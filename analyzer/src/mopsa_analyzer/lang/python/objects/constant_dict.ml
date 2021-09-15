@@ -1,5 +1,6 @@
 (** A constant dictionary abstraction. Useful to be precise when passing named arguments to functions *)
 
+(* I guess this is completely broken... d = {}. x = 2. d[2x+1] = 3. x += 1. d[2]? d[3]? *)
 open Mopsa
 open Sig.Abstraction.Domain
 open Ast
