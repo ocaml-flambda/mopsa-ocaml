@@ -4,8 +4,6 @@
         "compose": [
             {
                 "switch": [
-                    // Partitioning
-	            "universal.partitioning.merge_after_stmt",
                     "cpython.cmodule",
                     {
                         "semantic": "Python",
