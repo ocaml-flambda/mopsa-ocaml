@@ -274,6 +274,8 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__iter__", _))}, _)}, [iterator], []) ->
+       man.eval iterator flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("tuple_iterator.__next__", _))}, _)}, [iterator], []) ->
       (* todo: checks? *)
@@ -404,6 +406,15 @@ struct
 
     | _ -> None
 
+  let print_expr man flow printer exp =
+    match ekind exp with
+    | E_addr ({addr_kind = A_py_tuple _} as addr, _) ->
+       let vars_tuple = var_of_addr addr in
+       List.iter (fun v ->
+           man.print_expr flow printer (mk_var v exp.erange);
+         ) vars_tuple
+
+    | _ ->  ()
   let print_expr _ _ _ _ = ()
 
 end

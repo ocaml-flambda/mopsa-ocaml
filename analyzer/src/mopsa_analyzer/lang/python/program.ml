@@ -42,7 +42,9 @@ struct
 
   let init prog man flow =
     match prog.prog_kind with
-    | Py_program (name, globals, body) -> set_py_program (name, globals, body) flow
+    | Py_program (name, globals, body) ->
+       debug "globals = %a" (Format.pp_print_list pp_var) globals;
+       set_py_program (name, globals, body) flow
     | _ -> flow
 
   let eval _ _ _ = None

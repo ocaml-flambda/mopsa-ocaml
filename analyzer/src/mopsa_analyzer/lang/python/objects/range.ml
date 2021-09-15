@@ -220,9 +220,13 @@ struct
               )
         )
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__contains__", _))}, _)}, args, []) ->
-      (* isinstance(arg1, range) && isinstance(arg2, int) ? *)
-      Exceptions.panic "todo: %a@\n" pp_expr exp
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__contains__" as f, _))}, _)}, args, []) ->
+       Utils.check_instances f man flow range args
+         ["range"; "int"]
+         (fun r flow ->
+           man.eval (mk_py_top T_bool range) flow
+         )
+       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("range.__len__", _))}, _)}, [arg], []) ->
       man.eval arg flow >>$? fun arg flow ->

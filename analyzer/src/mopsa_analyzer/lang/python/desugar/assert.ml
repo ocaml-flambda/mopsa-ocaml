@@ -42,8 +42,10 @@ module Domain =
       match skind stmt with
       (* S⟦ assert(e, msg) ⟧ *)
       | S_py_assert (e, msg)->
-         (
-           man.eval e flow >>$ fun e flow ->
+         (if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+           Flow.add_safe_check Alarms.CHK_PY_ASSERTIONERROR e.erange flow |> Post.return
+         else
+           man.eval (Utils.mk_builtin_call "bool" [e] range) flow >>$ fun e flow ->
          Flow.join
            man.lattice
            (man.exec (mk_assume e range) flow |> post_to_flow man |> Flow.add_safe_check Alarms.CHK_PY_ASSERTIONERROR e.erange)

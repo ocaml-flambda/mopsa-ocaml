@@ -100,10 +100,44 @@ module Domain =
                )
            )
            ~felse:(fun flow ->
-             let msg = Format.asprintf "descriptor '%s' requires a 'int' object but received '%a'" f pp_expr e1 in
+             let msg = Format.asprintf "descriptor '%s' requires a 'complex' object but received '%a'" f pp_expr e1 in
              man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
                Eval.empty)
         ) |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
+           when is_compare_op_fun "complex" f ->
+        bind_list [e1; e2] (man.eval  ) flow |>
+        bind_result (fun el flow ->
+            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+            assume (mk_py_isinstance_builtin e1 "complex" range) man flow
+              ~fthen:(fun flow ->
+                  let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
+                  assume
+                    (mk_py_isinstance_builtin e2 "complex" range)
+                    man flow
+                    ~fthen:(fun flow ->
+                      man.eval (mk_py_top T_bool range) flow
+                    )
+                    ~felse:(fun flow ->
+                      assume (mk_py_isinstance_builtin e2 "int" range) man flow
+                        ~fthen:(fun flow ->
+                          man.eval (mk_py_top T_bool range) flow )
+                        ~felse:(fun flow ->
+                          assume (mk_py_isinstance_builtin e2 "float" range) man flow
+                            ~fthen:(fun flow ->
+                              man.eval (mk_py_top T_bool range) flow )
+                            ~felse:(fun flow ->
+                              let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
+                              man.eval   expr flow)
+                        )
+                    )
+              )
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
+          )
+        |>  OptionExt.return
 
       | _ -> None
 

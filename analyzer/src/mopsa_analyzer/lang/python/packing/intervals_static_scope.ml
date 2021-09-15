@@ -40,6 +40,7 @@ struct
   module M = Framework.Lattices.Partial_map
   module O = Universal.Numeric.Relational.Instances.Octagon
   module P = Universal.Numeric.Relational.Instances.Polyhedra
+  module L = Universal.Numeric.Relational.Instances.LinEqualities
 
   (** Signature of relational numeric domains with the additional functions
       [related_vars], [bound_var] and [vars] functions.

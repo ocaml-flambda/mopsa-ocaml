@@ -212,6 +212,7 @@ let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~
          let caught_flow, flow_ok = Flow.fold (fun (caught, acc_ok) tk env ->
                                         match tk with
                                         | Alarms.T_py_exception (expr, name, msg, exc_kind) when not @@ Flow.mem tk flow ->
+                                           (* FIXME: tk could be renamed by the evaluation of expr... It would be better to split erroneous flows and merge them back I guess *)
                                            (expr, name, msg, env)::caught, acc_ok
                                         | _ -> caught, Flow.add tk env man.lattice acc_ok
                                       ) ([], Flow.bottom_from flow') flow' in

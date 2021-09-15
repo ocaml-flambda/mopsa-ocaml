@@ -80,7 +80,7 @@ module Domain =
                      let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
                      man.eval    (mk_py_kall (mk_py_attr f "__call__" range) args kwargs range) flow)
                    ~felse:(fun flow ->
-                       panic_at range "callable/E_py_call, on %a, exp=%a@\n" pp_expr f pp_expr exp
+                     man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%a object is not callable" pp_expr f) range) flow >>% Eval.empty
                      )
                    man flow
             ) in

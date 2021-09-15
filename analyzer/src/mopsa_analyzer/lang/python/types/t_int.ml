@@ -109,8 +109,21 @@ struct
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(fun flow ->
           man.eval   arg flow >>$
- (fun el flow ->
-                assume
+            (fun el flow ->
+              assume
+                (mk_py_isinstance_builtin el "bool" range) man flow
+                ~fthen:(fun flow ->
+                  let addr_e = addr_of_object @@ object_of_expr el in
+                  if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_bool_top) = 0 then
+                    man.eval (mk_int_interval 0 1 ~typ:(T_py None) range) flow
+                  else if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_true) = 0 then
+                    man.eval (mk_int 1 ~typ:(T_py None) range) flow
+                  else if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_false) = 0 then
+                    man.eval (mk_int 0 ~typ:(T_py None) range) flow
+                  else assert false
+                )
+                ~felse:(fun flow ->
+                  assume
                   (mk_py_isinstance_builtin el "int" range) man flow
                   ~fthen:(fun flow -> Eval.singleton el flow)
                   ~felse:(fun flow ->
@@ -122,12 +135,15 @@ struct
                       ~felse:(fun flow ->
                         man.eval   {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow)
                   )
-              )
+                )
+            )
         )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls; str; base], []), _ ->
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(man.eval   (mk_py_top T_int range))
+
+
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,  _))}, _)}, [e1; e2], []), _
@@ -167,7 +183,7 @@ struct
       |>  OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], []), _
-         when is_arith_binop_fun "int" f ->
+         when is_arith_binop_fun "int" f  ->
        (* FIXME: negative powers, 0 ** -1 *)
       bind_list [e1; e2] (man.eval ) flow |>
       bind_result (fun el flow ->
@@ -253,6 +269,12 @@ struct
         (fun e flow -> man.eval (List.hd e) flow)
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__round__" as f, _))}, _)}, args, []), _ ->
+      Utils.check_instances f man flow range args
+        ["int"]
+        (fun e flow -> man.eval (List.hd e) flow)
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f, _))}, _)}, args, []), _ ->
       Utils.check_instances f man flow range args
         ["int"]
@@ -265,6 +287,7 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__repr__" as f, _))}, _)}, args, []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__str__" as f, _))}, _)}, args, []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f, _))}, _)}, args, []), _
     (* todo: weird, tp_str set to 0 in longobject.c *)

@@ -58,7 +58,7 @@ let rec parse_program (files: string list) : program =
     let () = opt_check_type_annot := (Filename.extension filename <> ".pyi") in
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
-    let body = snd @@ free_vars body in
+    let body = snd @@ free_vars [] body in
     let body = cell_vars body in
     Visitor.fold_stmt (fun () e -> VisitParts ()) (fun () s -> (match skind s with
                                                                | S_py_function f ->
@@ -466,18 +466,27 @@ and from_unop = function
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
 
-and free_vars s =
-  Visitor.fold_map_stmt
-    (fun fv expr -> match ekind expr with
-                    | E_var(v, _) -> VisitParts (v::fv, expr)
-                    | _ -> VisitParts (fv, expr))
-    (fun fv stmt -> match skind stmt with
+and free_vars bv s =
+  debug "free_vars %a %a" (Format.pp_print_list pp_var) bv pp_stmt s;
+  let (fv, _), s = Visitor.fold_map_stmt
+    (fun (fv, bv) expr -> match ekind expr with
+                          | E_var(v, _) ->
+                             if not @@ List.mem v bv then
+                               VisitParts ((v::fv, bv), expr)
+                             else
+                               VisitParts ((fv, bv), expr)
+                          | _ -> VisitParts ((fv, bv), expr))
+    (fun (fv, bv) stmt -> match skind stmt with
                     | S_py_function i ->
-                       let fv_inner, i_body = free_vars i.py_func_body in
-                       let bound_vars = i.py_func_parameters @ i.py_func_locals in
-                       let fv = List.filter (fun x -> not @@ List.mem x bound_vars) fv_inner in
-                       Keep (fv, {stmt with skind = S_py_function {i with py_func_body = i_body; py_func_freevars = fv}})
-                    | _ -> VisitParts (fv, stmt)) [] s
+                       let bound_vars = i.py_func_parameters @ [i.py_func_var] in
+                       let fv, i_body = free_vars (bound_vars@bv) i.py_func_body in
+                       let fv = List.filter (fun x -> not @@ List.mem x i.py_func_locals) fv in
+                       debug "%a: fv_inner %a, bound_vars %a" pp_var i.py_func_var (Format.pp_print_list pp_var) fv (Format.pp_print_list pp_var) bound_vars;
+                       Keep ((fv, bv), {stmt with skind = S_py_function {i with py_func_body = i_body; py_func_freevars = fv}})
+                    | S_py_class c ->
+                       VisitParts ((fv, c.py_cls_var :: (List.flatten @@ List.map Visitor.expr_vars c.py_cls_bases) @ bv), stmt)
+                    | _ -> VisitParts ((fv, bv), stmt)) ([], bv) s in
+  fv, s
 
 and cell_vars s =
   Visitor.map_stmt

@@ -24,18 +24,18 @@
 open Mopsa
 open Ast
 
-type assumption_kind += A_py_unsound_list_contains_after_remove of Ast.py_object
-
-let () = register_assumption {
-    print = (fun next fmt -> function
-        | A_py_unsound_list_contains_after_remove obj ->
-          Format.fprintf fmt "unsound list.__contains__ if a call to remove has been made before, on list %a" Pp.pp_py_object obj
-        | a -> next fmt a
-      );
-    compare = (fun next a1 a2 ->
-        match a1,a2 with
-        | A_py_unsound_list_contains_after_remove o1, A_py_unsound_list_contains_after_remove o2 ->
-           compare_py_object o1 o2
-        | _ -> next a1 a2
-      );
-  }
+(* type assumption_kind += A_py_unsound_list_contains_after_remove of Ast.py_object
+ *
+ * let () = register_assumption {
+ *     print = (fun next fmt -> function
+ *         | A_py_unsound_list_contains_after_remove obj ->
+ *           Format.fprintf fmt "unsound list.__contains__ if a call to remove has been made before, on list %a" Pp.pp_py_object obj
+ *         | a -> next fmt a
+ *       );
+ *     compare = (fun next a1 a2 ->
+ *         match a1,a2 with
+ *         | A_py_unsound_list_contains_after_remove o1, A_py_unsound_list_contains_after_remove o2 ->
+ *            compare_py_object o1 o2
+ *         | _ -> next a1 a2
+ *       );
+ *   } *)

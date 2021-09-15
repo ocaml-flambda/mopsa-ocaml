@@ -135,9 +135,12 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, kwargs) ->
       Utils.new_wrapper man range flow "dict" cls
-        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([],[])) range))
+        ~fthennew:(
+          let keys, values = List.split @@ List.map (fun (os, v) ->
+                                               mk_string ~etyp:(T_py None) (OptionExt.none_to_exn os) range, v) kwargs in
+          man.eval (mk_expr ~etyp:(T_py None) (E_py_dict (keys, values)) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f, _))}, _)}, args, []) ->
@@ -317,6 +320,10 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__iter__" as f, _))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_valueiterator.__iter__" as f, _))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_itemiterator.__iter__" as f, _))}, _)}, args, []) ->
+       man.eval (List.hd args) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict_keyiterator"]
@@ -548,7 +555,13 @@ struct
 
     | _ -> None
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    match ekind exp with
+    | E_addr ({addr_kind = A_py_dict} as addr, _) ->
+       man.print_expr flow printer (mk_var (kvar_of_addr addr) exp.erange);
+       man.print_expr flow printer (mk_var (vvar_of_addr addr) exp.erange);
+
+    | _ ->  ()
 
 end
 

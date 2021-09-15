@@ -361,6 +361,9 @@ module Domain =
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
         let range = srange stmt in
         match skind stmt with
+        | S_assign ({ekind = E_var (v, _)}, {ekind = E_constant (C_int i)}) ->
+           stmt, globals, flow
+
         | S_assign ({ekind = E_var (v, _)}, e) ->
           debug "%s: adding alias %a[%s] = %a" base pp_var v v.vname pp_expr e;
           let ee = Visitor.map_expr (fun exp -> match ekind exp with

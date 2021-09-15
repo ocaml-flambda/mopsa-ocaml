@@ -115,7 +115,7 @@ struct
     end)
 
   module AMap = Framework.Lattices.Partial_map.Make
-      (struct type t = var let compare = compare_var let print = unformat pp_var end)
+      (struct type t = var let compare = compare_var let print = pp_variable ~path:[] end)
       (ASet)
 
   include AMap
@@ -392,6 +392,7 @@ struct
                               let flow = post_to_flow man flow in
                               let v' = match ekind ev' with
                                 | E_var (v', _) -> v'
+                                | E_py_object(_, Some {ekind = E_var (v', _)}) -> v'
                                 | _ -> assert false in
                               match AMap.find_opt v' cur with
                               | None -> av, Post.return flow
@@ -843,8 +844,26 @@ struct
     pprint ~path:[Key "addrs"] printer (pbox AMap.print m)
 
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    if not (is_py_exp exp) then () else
+    match ekind exp with
+    | E_var (v, m) ->
+       Cases.iter_result (fun res flow ->
+           match ekind res with
+           | E_py_object (addr, oe) ->
+              man.print_expr flow printer {res with ekind = E_addr (addr, None)};
+              pprint printer ~path:[ Key "environment"; fkey "%a" pp_var v ] (pbox (unformat pp_addr) addr);
+              begin match oe with
+              | Some e when List.exists (fun a -> compare_addr_kind (akind @@ OptionExt.none_to_exn !a) (akind addr) = 0) [addr_integers; addr_float; addr_strings] ->
+                 (* FIXME: class A: pass; a = A() yields <<@Inst{A} :: a>> *)
+                 man.print_expr flow printer e
+              | _ -> ()
+              end
+           | _ -> assert false
+         ) (man.eval exp flow);
 
+
+    | _ -> ()
 end
 
 let () =

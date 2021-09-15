@@ -105,6 +105,11 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("iter", _))}, _)},
+                [callable; sentinel], []) ->
+       man.eval (Utils.mk_builtin_call "callable_iterator" [callable; sentinel] range) flow |> OptionExt.return
+
+
     (* Calls to len built-in function *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("len", _))}, _)},
                 [obj], [])  ->
@@ -368,7 +373,7 @@ struct
                 let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR v.erange flow in
                 assume (mk_binop ~etyp:(T_py None) v O_ge (mk_int 0 ~typ:(T_py None) range) range) man flow
                   ~fthen:(fun flow ->
-                    man.eval v flow)
+                    man.eval (Utils.mk_builtin_call "int" [v] range) flow)
                   ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
                 )
               ~felse:(fun flow ->

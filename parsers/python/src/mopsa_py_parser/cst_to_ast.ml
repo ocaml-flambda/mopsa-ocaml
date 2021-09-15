@@ -429,7 +429,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
           translate_expr {ekind = (Tuple (els, ctx)); erange = range}
         )
       else
-        failwith "Subscript with ExtSlice not supported"
+        failwith (Format.asprintf "Subscript with ExtSlice not supported @@ %a" Location.pp_range range)
       (* debug "subscript value = %a, |extslice|=%d" Pp.print_exp (translate_expr value) (List.length s);
        * let rec f fmt = function
        *   | Slice (a, b, c) -> Format.fprintf fmt "slice[%a, %a, %a]" (OptionExt.print Pp.print_exp) (translate_expr_option2 a) (OptionExt.print Pp.print_exp) (translate_expr_option2 b) (OptionExt.print Pp.print_exp) (translate_expr_option2 c)

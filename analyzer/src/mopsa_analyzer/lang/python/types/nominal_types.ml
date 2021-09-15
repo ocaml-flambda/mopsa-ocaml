@@ -76,6 +76,15 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
+       man.eval obj flow >>$ (fun obj flow ->
+        let issubclass s = {exp with ekind = E_py_call(call, [obj; s], [])} in
+        if types = [] then man.eval (mk_py_false range) flow else
+        let disj = List.fold_left (fun acc typ -> mk_binop ~etyp:(T_py None) acc O_py_or (issubclass typ) range) (issubclass @@ List.hd types) (List.tl types) in
+        man.eval disj flow
+      ) |> OptionExt.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
       bind_list [cls; cls'] man.eval flow |>
       bind_result (fun evals flow ->
@@ -101,6 +110,13 @@ struct
              man.eval (mk_py_bool (List.exists (fun (addr, _) -> compare_addr addr addr_cls' = 0) mro) range) flow
           | _ -> panic_at range "%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, args, kwargs) ->
+       man.exec (Utils.mk_builtin_raise_msg "TypeError"
+                   (Format.asprintf "issubclass expected 2 arguments, got %d" (List.length args + List.length kwargs)) range) flow >>%
+         Eval.empty |>
+         OptionExt.return
+
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
        man.eval obj flow >>$ (fun obj flow ->

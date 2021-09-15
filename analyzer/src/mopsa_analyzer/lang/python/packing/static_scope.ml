@@ -59,8 +59,8 @@ struct
 
   (** Pretty printer of packing keys *)
   let print printer = function
-    | Globals  -> pp_string printer "[globals]"
-    | Locals f -> unformat pp_var printer f
+    | Globals  -> pp_string printer "pack-[globals]"
+    | Locals f -> pp_string printer (Format.asprintf "pack-%a" pp_var f)
     (* | User u  -> pp_user_pack printer u *)
 
   (** Initialization *)

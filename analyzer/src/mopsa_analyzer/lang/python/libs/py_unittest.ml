@@ -195,19 +195,19 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIs", _))}, _)}, [test; arg1; arg2], []) ->
-         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is arg2 range) range flow
+         Utils.check man (Utils.mk_builtin_call "bool" [mk_binop ~etyp:(T_py None) arg1 O_py_is arg2 range] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsNot", _))}, _)}, [test; arg1; arg2], []) ->
-         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_is_not arg2 range) range flow
+         Utils.check man (Utils.mk_builtin_call "bool" [mk_binop ~etyp:(T_py None) arg1 O_py_is_not arg2 range] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_in arg2 range) range flow
+         Utils.check man (Utils.mk_builtin_call "bool" [mk_binop ~etyp:(T_py None) arg1 O_py_in arg2 range] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertNotIn", _))}, _)}, [test; arg1; arg2], []) ->
-         Utils.check man (mk_binop ~etyp:(T_py None) arg1 O_py_not_in arg2 range) range flow
+         Utils.check man (Utils.mk_builtin_call "bool" [mk_binop ~etyp:(T_py None) arg1 O_py_not_in arg2 range] range) range flow
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertIsInstance", _))}, _)}, [test; arg1; arg2], []) ->
@@ -224,7 +224,7 @@ module Domain =
                       mk_stmt (S_expression (mk_py_kall f args kwargs range)) range)) range
          in
          man.exec stmt flow >>%
-         Eval.singleton (mk_py_none range)
+         man.eval (mk_py_none range)
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
@@ -308,6 +308,10 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.skipUnless", _))}, _)}, [], _) ->
          failwith "todo"
+
+      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.skip", _))}, _)}, args, _) ->
+       *    debug "skipping %a" (Format.pp_print_list pp_expr) args;
+       *    man.eval (mk_expr (E_py_lambda mk_py_none range) flow |> OptionExt.return *)
 
 
       | _ -> None

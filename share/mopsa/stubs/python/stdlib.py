@@ -894,6 +894,21 @@ class property(object):
         self.__del = d
         return self
 
+class callable_iterator:
+    @mopsa.stub
+    def __init__(self, c, s):
+        self.callable = c
+        self.sentinel = s
+
+    @mopsa.stub
+    def __iter__(self): return self
+
+    @mopsa.stub
+    def __next__(self):
+        r = self.callable()
+        if r == self.sentinel: raise StopIteration
+        return r
+
 
 @mopsa.unsupported
 class frozenset(object): pass

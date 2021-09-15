@@ -156,9 +156,15 @@ struct
         (fun eaddr_list flow ->
             let addr_list = Addr.from_expr eaddr_list in
             let els_var = var_of_addr addr_list in
-            let flow = List.fold_left (fun acc el ->
-                           let stmt = mk_assign (mk_var els_var range) el range in
-                           acc >>% man.exec   stmt) (Post.return flow) ls in
+            let flow =
+              match ls with
+              | [] -> Post.return flow
+              | hd :: tl ->
+                 List.fold_left (fun acc el ->
+                     let stmt = mk_assign (mk_var els_var range) el range in
+                     acc >>% man.exec   stmt)
+                   (man.exec (mk_assign (mk_var els_var ~mode:(Some STRONG) range) hd range) flow)
+                   tl in
             flow >>%
             man.exec  (mk_assign (mk_var (length_var_of_addr addr_list) range) (mk_int (List.length ls) ~typ:T_int range) range) >>%
               Eval.singleton (mk_py_object (addr_list, None) range)
@@ -481,7 +487,7 @@ struct
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
-           man.exec   (mk_assign (mk_var var_els range) element range) flow >>%
+           man.exec  (mk_assign (mk_var var_els range) element range) flow >>%
            man.exec  (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) >>%
            man.eval (mk_py_none range))
@@ -829,13 +835,6 @@ struct
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("list.__contains__" as f, _))}, _)}, args, []) ->
-       (* /!\ if remove is called, contains should be unprecise
-          l = ['a', 'b', 'c']
-          l.remove('a')
-          assert(not l.contains('a'))
-
-          FIXME: unsure because var_of_eobj list should be weak and thus everything ok
-        *)
       Utils.check_instances f ~arguments_after_check:1 man flow range args ["list"]
         (fun args flow ->
           let list, el = match args with a::b::[] -> a, b | _ -> assert false in
@@ -843,8 +842,6 @@ struct
             (mk_binop ~etyp:(T_py None) (mk_var (var_of_eobj list) range) O_eq el range)
             man flow
             ~fthen:(fun flow ->
-              let flow = Flow.add_local_assumption (Soundness.A_py_unsound_list_contains_after_remove (object_of_expr list)) range flow in
-              (* man.eval   (mk_py_top T_bool range) *)
               man.eval (mk_py_true range) flow
             )
             ~felse:(man.eval   (mk_py_false range))
@@ -1308,7 +1305,13 @@ struct
 
     | _ -> None
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    match ekind exp with
+    | E_addr ({addr_kind = A_py_list} as addr, _) ->
+       man.print_expr flow printer (mk_var (length_var_of_addr addr) exp.erange);
+       man.print_expr flow printer (mk_var (var_of_addr addr) exp.erange);
+
+    | _ ->  ()
 
 end
 

@@ -152,7 +152,10 @@ struct
                  | None -> newa, remove a' cur, stmts
                  | Some va' ->
                     AttrSet.join newa va', remove a' cur,
-                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
+                    if AttrSet.is_top va' then
+                      AttrSet.fold_o (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
+                    else
+                      AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
                 end
              | _ -> assert false
            ) (old_a, cur, []) addrs in
@@ -519,7 +522,21 @@ struct
   let print_state printer d =
     pprint ~path:[Key "attributes"] printer (pbox AMap.print d)
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    if not (is_py_exp exp) then () else
+      match ekind exp with
+      | E_addr (addr, _) when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
+         let cur = get_env T_cur man flow in
+         let attrset = AMap.find_opt addr cur in
+         if attrset = None then () else
+         let attrset = OptionExt.none_to_exn attrset in
+         AttrSet.fold_u (fun attr () -> debug "%s" attr) attrset ();
+         pprint printer ~path:[Key "attributes"; fkey "%a" pp_addr addr] (pbox AttrSet.print attrset);
+         AttrSet.fold_u (fun attr () ->
+             man.print_expr flow printer (mk_var (mk_addr_attr addr attr (T_py None)) exp.erange)
+           ) attrset ();
+
+      | _ -> ()
 
 end
 
