@@ -7,6 +7,8 @@ It features a modular architecture for supporting different kinds of languages, 
 
 For the moment, MOPSA can analyze only programs written in C and Python.
 
+A [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
+
 
 ## License
 
@@ -99,4 +101,7 @@ ocamlfind ocamlopt -package mopsa.analyzer -linkpkg test.ml
 
 ## Additional resources
 
-* [Mopsa project page](https://mopsa.lip6.fr/)
+* [source code](https://gitlab.com/mopsa/mopsa-analyzer) on GitLab
+* [research project page](https://mopsa.lip6.fr/)
+* [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/)
+* [benchmark analysis projects](https://gitlab.com/mopsa/benchmarks) on GitLab
