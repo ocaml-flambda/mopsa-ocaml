@@ -76,13 +76,16 @@ let compare_var v1 v2 =
   if v1 == v2 then 0 else
     let r = Stdlib.compare v1.vname v2.vname in
     if r <> 0 then r
-    else Compare.compose [
+    else
+      let r = Compare.compose [
       (fun () -> TypeExt.compare var_compare_chain v1 v2);
-      (fun () -> Stdlib.compare v1.vname v2.vname);
+      (* (fun () -> Stdlib.compare v1.vname v2.vname); already checked *)
       (fun () -> compare_typ v1.vtyp v2.vtyp);
       (fun () -> compare_mode v1.vmode v2.vmode);
       (fun () -> compare_semantic v1.vsemantic v2.vsemantic);
-    ]
+                ] in
+      (* Format.eprintf "compare_var %a %a = %d %d %d(%a %a) %d@." pp_var v1 pp_var v2 (TypeExt.compare var_compare_chain v1 v2) (compare_typ v1.vtyp v2.vtyp) (compare_mode v1.vmode v2.vmode) pp_mode v1.vmode pp_mode v2.vmode (compare_semantic v1.vsemantic v2.vsemantic); *)
+      r
 
 let register_var_compare f = TypeExt.register_compare f var_compare_chain
 
@@ -222,7 +225,9 @@ let () =
         match vkind v with
         | V_uniq (orig,uid) -> Format.fprintf fmt "%s" orig (* uid *)
 
-        | V_tmp _ | V_var_attr _ | V_range_attr _ -> Format.pp_print_string fmt v.vname
+        | V_var_attr (v, a) -> Format.fprintf fmt "%s(%a)" a pp_var v
+
+        | V_tmp _ | V_range_attr _ -> Format.pp_print_string fmt v.vname
 
         | _ -> next fmt v
       )
