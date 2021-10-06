@@ -7,7 +7,6 @@ module Reduction =
 
     let name = "universal.toy.string_reduction"
 
-
     let reduce exp _ _ _ results flow =
       let rec aux acc flow = function
         | [] -> Eval.singleton acc flow

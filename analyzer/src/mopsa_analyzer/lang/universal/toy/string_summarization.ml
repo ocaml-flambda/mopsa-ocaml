@@ -18,19 +18,9 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    (* | E_binop(O_concat, e1, e2) when etyp e1 = T_string && etyp e2 = T_string ->
-     *    (man.eval e1 flow >>$ fun e1 flow ->
-     *     man.eval e2 flow >>$ fun e2 flow ->
-     *     Eval.singleton {exp with ekind = E_binop(O_concat, e1, e2)} flow) |> OptionExt.return *)
-
     | E_subscript({ekind = E_var (s, _)}, i) ->
        Eval.singleton (mk_var (mk_ord_string s) range) flow |>
          OptionExt.return
-
-    (* to handle evaluations when combined with the stirng length domain *)
-    (* | E_len e when etyp e = T_string ->
-     *    Eval.singleton (mk_int_general_interval (ItvUtils.IntBound.Finite Z.zero) ItvUtils.IntBound.PINF range) flow |>
-     *      OptionExt.return *)
 
     | _ -> None
 

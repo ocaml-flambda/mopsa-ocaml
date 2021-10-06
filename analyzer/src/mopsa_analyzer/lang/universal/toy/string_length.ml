@@ -2,6 +2,44 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Ast
 
+type check +=
+   | CHK_U_SUBSCRIPT_ACCESS
+
+type alarm_kind += A_u_invalid_subscript of expr
+
+
+let () =
+  register_check (fun default fmt a ->
+      match a with
+      | CHK_U_SUBSCRIPT_ACCESS -> Format.fprintf fmt "Subscript access"
+      | _ -> default fmt a);
+  register_alarm {
+      check = (fun next -> function
+                | A_u_invalid_subscript _ -> CHK_U_SUBSCRIPT_ACCESS
+                | a -> next a);
+      compare = (fun default a a' ->
+        match a, a' with
+        | A_u_invalid_subscript e1, A_u_invalid_subscript e2 ->
+           compare_expr e1 e2
+        | _ -> default a a');
+      print = (fun default fmt a ->
+        match a with
+        | A_u_invalid_subscript e -> Format.fprintf fmt "Invalid subscript access %a" pp_expr e
+        | _ -> default fmt a);
+      join = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_u_invalid_subscript _, A_u_invalid_subscript e2 ->
+           if compare_alarm_kind a1 a2 = 0 then Some a1 else None
+        | _ -> next a1 a2);
+    }
+
+let safe_subscript_access_check exp flow =
+  Flow.add_safe_check CHK_U_SUBSCRIPT_ACCESS exp.erange flow
+
+let invalid_subscript_access_alarm exp flow lattice =
+  let cs = Flow.get_callstack flow in
+  Flow.raise_alarm (mk_alarm (A_u_invalid_subscript exp) cs exp.erange) ~bottom:false lattice flow
+
 module Domain =
 struct
 
@@ -13,9 +51,6 @@ struct
 
   let checks = []
 
-  (* TODO *)
-  let safe_subscript_access_check exp flow = flow
-  let invalid_subscript_access_alarm exp flow = flow
 
   let init (prog:program) man flow = flow
 
@@ -25,16 +60,6 @@ struct
     | E_len {ekind = E_binop(O_concat, {ekind = E_var (v1, _)}, {ekind = E_var (v2, _)})} ->
        Eval.singleton (mk_binop ~etyp:T_int (mk_var (mk_len_string v1) range) O_plus (mk_var (mk_len_string v2) range) range) flow
        |> OptionExt.return
-
-    (* | E_len {ekind = E_binop(O_concat, e1, e2)} when etyp e1 = T_string && etyp e2 = T_string ->
-     *    (man.eval e1 flow >>$ fun e1 flow ->
-     *    man.eval e2 flow >>$ fun e2 flow ->
-     *    match ekind e1, ekind e2 with
-     *    | E_var (v1, _), E_var (v2, _) ->
-     *       Eval.singleton (mk_binop ~etyp:T_int (mk_var (mk_len_string v1) range) O_plus (mk_var (mk_len_string v2) range) range) flow
-     *    | _, _ ->
-     *       Eval.singleton (mk_binop ~etyp:T_int (mk_expr (E_len e1) range) O_plus (mk_expr (E_len e2) range) range) flow)
-     *    |> OptionExt.return *)
 
     | E_len ({ekind = E_var (s, _)}) ->
        Eval.singleton (mk_var (mk_len_string s) range) flow |>
@@ -50,7 +75,7 @@ struct
            ~fthen:(fun flow ->
              let flow = safe_subscript_access_check exp flow in
              Cases.return (mk_int_interval 0 127 range) flow)
-           ~felse:(fun flow -> Cases.empty (invalid_subscript_access_alarm exp flow))
+           ~felse:(fun flow -> Cases.empty (invalid_subscript_access_alarm exp flow man.lattice))
        ) |> OptionExt.return
 
     | _ -> None
