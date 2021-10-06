@@ -262,7 +262,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let e2 = to_typ T_int e2 in
       match etyp e1 with
-      | T_string -> mk_expr (E_subscript(e1, e2)) ~etyp:T_char range
+      | T_string -> mk_expr (E_subscript(e1, e2)) ~etyp:T_int range
       | T_array t -> mk_expr (E_subscript(e1, e2)) ~etyp:t range
       | _ -> Exceptions.panic_at ext
                "%a is of type %a and can not be subscripted"

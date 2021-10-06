@@ -41,6 +41,7 @@ let _ =
      "int",    TOK_INT;
      "real",   TOK_REAL;
      "string", TOK_STRING;
+     "str", TOK_STRING;
      "char",   TOK_CHAR;
      "array",  TOK_ARRAY;
 
