@@ -68,7 +68,7 @@
 
 /* Other includes */
 #include <iostream>
-
+#include <unordered_map>
 
 using namespace clang;
 
@@ -758,6 +758,9 @@ public:
   CAMLprim value TranslateVarTemplateSpecializationDecl(const VarTemplateSpecializationDecl *x);
   CAMLprim value TranslateFunctionTemplateSpecializationDecl(const FunctionDecl* x);
   CAMLprim value TranslateUsingDecl(const UsingDecl *x);
+#if CLANG_VERSION_MAJOR >= 13
+  CAMLprim value TranslateBaseUsingDecl(const BaseUsingDecl *x);
+#endif
   CAMLprim value TranslateUsingPackDecl(const UsingPackDecl *x);
   CAMLprim value TranslateUsingShadowDecl(const UsingShadowDecl *x);
   CAMLprim value TranslateIndirectFieldDecl(const IndirectFieldDecl *x);
@@ -803,7 +806,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateAPSInt(const llvm::APSInt & i) {
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   // TODO: be more efficient!
-  tmp = caml_copy_string(i.toString(16).c_str());
+  SmallString<64> s;
+  i.toString(s,16);
+  tmp = caml_copy_string(s.c_str());
   ret = ml_z_of_substring_base(Val_int(16), tmp, Val_false, Val_int(caml_string_length(tmp)));
   CAMLreturn(ret);
 }
@@ -814,7 +819,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateAPInt(const llvm::APInt & i) {
   CAMLlocal2(ret,tmp);
   // TODO: be more efficient!
   // we assume APInt to be unsigned; otherwise, the APSInt class would have been used instead
-  tmp = caml_copy_string(i.toString(16, false).c_str());
+  SmallString<64> s;
+  i.toStringUnsigned(s,16);
+  tmp = caml_copy_string(s.c_str());
   ret = ml_z_of_substring_base(Val_int(16), tmp, Val_false, Val_int(caml_string_length(tmp)));
   CAMLreturn(ret);
 }
@@ -1311,6 +1318,16 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingDecl(const UsingDecl *x) {
   CAMLreturn(ret);
 }
 
+#if CLANG_VERSION_MAJOR >= 13
+/* BaseUsingDecl -> using_decl */
+CAMLprim value MLTreeBuilderVisitor::TranslateBaseUsingDecl(const BaseUsingDecl *x) {
+  // TODO: handle other cases
+  if (!isa<UsingDecl>(x))
+    caml_failwith("mlClangAST: unhandled BasUsingDecl");
+  return TranslateUsingDecl(cast<UsingDecl>(x));
+}
+#endif
+
 /* UsingPackDecl -> using_pack_decl */
 CAMLprim value MLTreeBuilderVisitor::TranslateUsingPackDecl(const UsingPackDecl *x) {
   CAMLparam0();
@@ -1338,7 +1355,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateUsingShadowDecl(const UsingShadowD
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 3, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateDecl(x->getTargetDecl()));
+#if CLANG_VERSION_MAJOR < 13
       Store_field(ret, 2, TranslateUsingDecl(x->getUsingDecl()));
+#else
+      Store_field(ret, 2, TranslateBaseUsingDecl(x->getIntroducer()));
+#endif
     });
 
   CAMLreturn(ret);
