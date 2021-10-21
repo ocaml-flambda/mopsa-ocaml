@@ -300,6 +300,11 @@ let pp_py_func_sig (fmt: Format.formatter) (sign: py_func_sig) =
        Format.fprintf fmt "%a: %a" pp_var p (OptionExt.print pp_expr) a))
     fmt (List.combine sign.py_funcs_parameters sign.py_funcs_types_in)
 
+let compare_py_func_sig s s' =
+  Compare.compose
+    [ (fun () -> Compare.list (OptionExt.compare compare_expr) s.py_funcs_types_in s'.py_funcs_types_in);
+      (fun () -> OptionExt.compare compare_expr s.py_funcs_type_out s'.py_funcs_type_out) ]
+
 let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
   List.iter (fun sign ->
       Format.fprintf fmt "%a%a(%a) -> %a: ...@\n"
