@@ -25,6 +25,7 @@ open Mopsa
 open Ast
 open Format
 
+let pp_vars = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var
 
 let pp_except fmt e =
   fprintf fmt "except %a%a:@\n@[<h 2>  %a@]"

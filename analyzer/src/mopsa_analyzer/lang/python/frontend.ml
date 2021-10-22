@@ -59,11 +59,11 @@ let rec parse_program (files: string list) : program =
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
     let globals = List.map from_var (ast.prog_globals @ Mopsa_py_parser.Scoping.gc) in
-    let body = snd @@ free_vars globals body in
+    let body = snd @@ free_vars globals [] body in
     let body = cell_vars body in
     Visitor.fold_stmt (fun () e -> VisitParts ()) (fun () s -> (match skind s with
                                                                | S_py_function f ->
-                                                                  debug "%a: cv=%a, fv=%a" pp_var f.py_func_var (Format.pp_print_list pp_var) f.py_func_cellvars (Format.pp_print_list pp_var) f.py_func_freevars
+                                                                  debug "%a: cv=%a, fv=%a, locals=%a" pp_var f.py_func_var (Format.pp_print_list pp_var) f.py_func_cellvars (Format.pp_print_list pp_var) f.py_func_freevars Pp.pp_vars f.py_func_locals
                                                                | _ -> ());
                                                                   VisitParts ()) () body;
     (* debug "detecting closure";
@@ -466,39 +466,39 @@ and from_unop = function
   | UAdd -> Universal.Ast.O_plus
   | Invert -> Universal.Ast.O_bit_invert
 
-and free_vars bv s =
+and free_vars globals bv s =
   let pp_vars = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var in
   debug "free_vars %a %a" pp_vars bv pp_stmt s;
-  let free_vars_expr bv e =
-    fst @@ free_vars bv {s with skind = Universal.Ast.S_expression e} in
-  let (fv, _), s = Visitor.fold_map_stmt
-                     (fun (fv, bv) expr -> match ekind expr with
+  let free_vars_expr globals bv e =
+    fst @@ free_vars globals bv {s with skind = Universal.Ast.S_expression e} in
+  let (fv, _, _), s = Visitor.fold_map_stmt
+                     (fun (fv, globs, bv) expr -> match ekind expr with
                           | E_py_list_comprehension (v, comprs) ->
                              let fv', bv' = List.fold_left (fun (fv, bv) (target, iterator, conds) ->
                                               let target = Visitor.expr_vars target in
                                               let bv = target @ bv in
-                                              let fv' = free_vars_expr bv iterator in
-                                              fv @ fv' @ (List.fold_left (fun fv c -> free_vars_expr bv c @ fv) [] conds), bv
+                                              let fv' = free_vars_expr globals bv iterator in
+                                              fv @ fv' @ (List.fold_left (fun fv c -> free_vars_expr globals bv c @ fv) [] conds), bv
                                             ) (fv, bv) comprs in
-                             let fv'' = free_vars_expr bv' v in
+                             let fv'' = free_vars_expr globals bv' v in
                              debug "list compr, fv = %a, bv' = %a" pp_vars (fv' @ fv'') pp_vars bv';
-                             Keep ((fv @ fv' @ fv'', bv), expr)
+                             Keep ((fv @ fv' @ fv'', globs, bv), expr)
                           | E_var(v, _) ->
-                             if not @@ List.mem v bv then
-                               VisitParts ((v::fv, bv), expr)
+                             if not @@ List.mem v bv && not @@ List.mem v globals && not @@ List.mem v globs then
+                               VisitParts ((v::fv, globs, bv), expr)
                              else
-                               VisitParts ((fv, bv), expr)
-                          | _ -> VisitParts ((fv, bv), expr))
-    (fun (fv, bv) stmt -> match skind stmt with
+                               VisitParts ((fv, globs, bv), expr)
+                          | _ -> VisitParts ((fv, globs, bv), expr))
+    (fun (fv, globs, bv) stmt -> match skind stmt with
                     | S_py_function i ->
                        let bound_vars = i.py_func_parameters @ [i.py_func_var] in
-                       let fv, i_body = free_vars (bound_vars@bv) i.py_func_body in
-                       let fv = List.filter (fun x -> not @@ List.mem x i.py_func_locals) fv in
+                       let fv, i_body = free_vars (globals@globs) bound_vars i.py_func_body in
+                       let fv = List.filter (fun x -> not @@ List.mem x (i.py_func_locals @ bound_vars)) fv in
                        debug "%a: fv_inner %a, bound_vars %a" pp_var i.py_func_var (Format.pp_print_list pp_var) fv (Format.pp_print_list pp_var) bound_vars;
-                       Keep ((fv, bv), {stmt with skind = S_py_function {i with py_func_body = i_body; py_func_freevars = fv}})
+                       Keep ((fv, globs, bv), {stmt with skind = S_py_function {i with py_func_body = i_body; py_func_freevars = fv}})
                     | S_py_class c ->
-                       VisitParts ((fv, c.py_cls_var :: (List.flatten @@ List.map Visitor.expr_vars c.py_cls_bases) @ bv), stmt)
-                    | _ -> VisitParts ((fv, bv), stmt)) ([], bv) s in
+                       VisitParts ((fv, c.py_cls_var :: (List.flatten @@ List.map Visitor.expr_vars c.py_cls_bases) @ globs, bv), stmt)
+                    | _ -> VisitParts ((fv, globs, bv), stmt)) ([], [], bv) s in
   fv, s
 
 and cell_vars s =
@@ -511,8 +511,13 @@ and cell_vars s =
                                       (fun fv stmt' -> match skind stmt' with
                                                        | S_py_function f -> Keep (f.py_func_freevars @ fv)
                                                        | _ -> VisitParts fv) [] i.py_func_body in
+                    let cdefs = Visitor.fold_stmt
+                                  (fun fv expr -> VisitParts fv)
+                                  (fun fv stmt' -> match skind stmt' with
+                                                   | S_py_class c -> Keep (c.py_cls_var :: fv)
+                                                   | _ -> VisitParts fv) [] i.py_func_body in
                     let body = cell_vars i.py_func_body in
-                    Keep {stmt with skind = S_py_function {i with py_func_cellvars = List.sort_uniq compare_var (List.filter (fun x -> not @@ List.mem x i.py_func_freevars) cv) ; py_func_body = body}}
+                    Keep {stmt with skind = S_py_function {i with py_func_cellvars = List.sort_uniq compare_var (List.filter (fun x -> not @@ List.mem x (i.py_func_freevars @ cdefs) && List.mem x (i.py_func_parameters @ i.py_func_locals)) cv) ; py_func_body = body}}
                  | _ -> VisitParts stmt) s
 
 (* Front-end registration *)
