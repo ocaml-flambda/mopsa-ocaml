@@ -58,7 +58,8 @@ let rec parse_program (files: string list) : program =
     let () = opt_check_type_annot := (Filename.extension filename <> ".pyi") in
     let ast, counter = Mopsa_py_parser.Main.parse_file ~counter:(Core.Ast.Var.get_vcounter_val ()) filename in
     let body = from_stmt ast.prog_body in
-    let body = snd @@ free_vars [] body in
+    let globals = List.map from_var (ast.prog_globals @ Mopsa_py_parser.Scoping.gc) in
+    let body = snd @@ free_vars globals body in
     let body = cell_vars body in
     Visitor.fold_stmt (fun () e -> VisitParts ()) (fun () s -> (match skind s with
                                                                | S_py_function f ->
@@ -72,7 +73,6 @@ let rec parse_program (files: string list) : program =
                  Universal.Ast.mk_block ([body;mk_stmt Universal.Heap.Recency.S_perform_gc (Location.mk_fresh_range ())]) body.srange
                else body in
     Hooks.Coverage.Hook.add_file filename body;
-    let globals = List.map from_var ast.prog_globals in
     Core.Ast.Var.start_vcounter_at counter;
     {
       prog_kind = Ast.Py_program (filename, globals, body);
@@ -467,9 +467,22 @@ and from_unop = function
   | Invert -> Universal.Ast.O_bit_invert
 
 and free_vars bv s =
-  debug "free_vars %a %a" (Format.pp_print_list pp_var) bv pp_stmt s;
+  let pp_vars = Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_var in
+  debug "free_vars %a %a" pp_vars bv pp_stmt s;
+  let free_vars_expr bv e =
+    fst @@ free_vars bv {s with skind = Universal.Ast.S_expression e} in
   let (fv, _), s = Visitor.fold_map_stmt
-    (fun (fv, bv) expr -> match ekind expr with
+                     (fun (fv, bv) expr -> match ekind expr with
+                          | E_py_list_comprehension (v, comprs) ->
+                             let fv', bv' = List.fold_left (fun (fv, bv) (target, iterator, conds) ->
+                                              let target = Visitor.expr_vars target in
+                                              let bv = target @ bv in
+                                              let fv' = free_vars_expr bv iterator in
+                                              fv @ fv' @ (List.fold_left (fun fv c -> free_vars_expr bv c @ fv) [] conds), bv
+                                            ) (fv, bv) comprs in
+                             let fv'' = free_vars_expr bv' v in
+                             debug "list compr, fv = %a, bv' = %a" pp_vars (fv' @ fv'') pp_vars bv';
+                             Keep ((fv @ fv' @ fv'', bv), expr)
                           | E_var(v, _) ->
                              if not @@ List.mem v bv then
                                VisitParts ((v::fv, bv), expr)
