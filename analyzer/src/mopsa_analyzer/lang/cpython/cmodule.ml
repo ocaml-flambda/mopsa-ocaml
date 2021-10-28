@@ -1,3 +1,25 @@
+(****************************************************************************)
+(*                                                                          *)
+(* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
+(*                                                                          *)
+(* Copyright (C) 2017-2021 The MOPSA Project.                               *)
+(*                                                                          *)
+(* This program is free software: you can redistribute it and/or modify     *)
+(* it under the terms of the GNU Lesser General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or     *)
+(* (at your option) any later version.                                      *)
+(*                                                                          *)
+(* This program is distributed in the hope that it will be useful,          *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
+(* GNU Lesser General Public License for more details.                      *)
+(*                                                                          *)
+(* You should have received a copy of the GNU Lesser General Public License *)
+(* along with this program.  If not, see <http://www.gnu.org/licenses/>.    *)
+(*                                                                          *)
+(****************************************************************************)
+
+
 (* FIXME: PyObject_GetItem, PyIter_Next: need to try lowlevel field access if instance of a_py_c_class *)
 (* FIXME: stronger types for each boundary. Resolve_c_pointer_into addr sometimes used while c_to_python boundary should be called *)
 (* FIXME: alloc_py_addr of some addresses should be done only if the thing is not already converted. See fix for A_py_c_function in new_method_from_def already written *)
@@ -5,10 +27,12 @@
   FIXME:
   - domain should track joint addresses + equiv C var bases <-> Py addrs
   - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
-    + if a builtin int/str abstract value's can be changed, it needs to be update
+    + if a builtin int/str abstract value's can be changed, it needs to be updated
   - triggering S_add(addr) should be sent to the correct domains...
   - assert offset = [0, 0] for Points_to
  *)
+open Alarms
+open Soundness
 open Mopsa
 open Sig.Abstraction.Domain
 open Universal.Ast
@@ -17,197 +41,136 @@ open C.Common.Points_to
 open Python.Ast
 open Python.Addr
 
-type assumption_kind +=
-   | A_cpython_unsupported_fields of string
-
-let () =
-  register_assumption {
-      print = (fun next fmt -> function
-                | A_cpython_unsupported_fields f ->
-                   Format.fprintf fmt "in C/Python analysis, unsupported fields: %a"
-                     (Debug.bold Format.pp_print_string) f
-                | a -> next fmt a);
-      compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_cpython_unsupported_fields s1, A_cpython_unsupported_fields s2 ->
-           Stdlib.compare s1 s2
-        | _ -> next a1 a2);
-    }
-
-type check += CHK_CPYTHON_CLASS_READY
-type alarm_kind += A_cpython_class_not_ready of expr
-
-let () =
-  register_check (fun next fmt -> function
-      | CHK_CPYTHON_CLASS_READY -> Format.fprintf fmt "CPython class not readied"
-      | a -> next fmt a)
-
-let () =
-  register_alarm {
-      check = (fun next -> function
-                | A_cpython_class_not_ready _ -> CHK_CPYTHON_CLASS_READY
-                | a -> next a);
-      compare = (fun next a1 a2 ->
-        match a1, a2 with
-        | A_cpython_class_not_ready e1, A_cpython_class_not_ready e2 ->
-           compare_expr e1 e2
-        | _ -> next a1 a2
-      );
-      print = (fun next fmt -> function
-                | A_cpython_class_not_ready e ->
-                   Format.fprintf fmt "PyTypeObject %a has not been readied using PyType_Ready"
-                     pp_expr e
-                | m -> next fmt m);
-      join = (fun next -> next);
-    }
-
-let raise_cpython_class_not_ready ?(bottom=true) e range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_cpython_class_not_ready e) cs range in
-  Flow.raise_alarm alarm ~bottom man.lattice flow
-
-let builtin_exceptions =
-  [
-    "PyExc_BaseException";
-    "PyExc_Exception";
-    "PyExc_StopAsyncIteration";
-    "PyExc_StopIteration";
-    "PyExc_GeneratorExit";
-    "PyExc_ArithmeticError";
-    "PyExc_LookupError";
-    "PyExc_AssertionError";
-    "PyExc_AttributeError";
-    "PyExc_BufferError";
-    "PyExc_EOFError";
-    "PyExc_FloatingPointError";
-    "PyExc_OSError";
-    "PyExc_ImportError";
-    "PyExc_ModuleNotFoundError";
-    "PyExc_IndexError";
-    "PyExc_KeyError";
-    "PyExc_KeyboardInterrupt";
-    "PyExc_MemoryError";
-    "PyExc_NameError";
-    "PyExc_OverflowError";
-    "PyExc_RuntimeError";
-    "PyExc_RecursionError";
-    "PyExc_NotImplementedError";
-    "PyExc_SyntaxError";
-    "PyExc_IndentationError";
-    "PyExc_TabError";
-    "PyExc_ReferenceError";
-    "PyExc_SystemError";
-    "PyExc_SystemExit";
-    "PyExc_TypeError";
-    "PyExc_UnboundLocalError";
-    "PyExc_UnicodeError";
-    "PyExc_UnicodeEncodeError";
-    "PyExc_UnicodeDecodeError";
-    "PyExc_UnicodeTranslateError";
-    "PyExc_ValueError";
-    "PyExc_ZeroDivisionError";
-    "PyExc_BlockingIOError";
-    "PyExc_BrokenPipeError";
-    "PyExc_ChildProcessError";
-    "PyExc_ConnectionError";
-    "PyExc_ConnectionAbortedError";
-    "PyExc_ConnectionRefusedError";
-    "PyExc_ConnectionResetError";
-    "PyExc_FileExistsError";
-    "PyExc_FileNotFoundError";
-    "PyExc_InterruptedError";
-    "PyExc_IsADirectoryError";
-    "PyExc_NotADirectoryError";
-    "PyExc_PermissionError";
-    "PyExc_ProcessLookupError";
-    "PyExc_TimeoutError";
-    "PyExc_EnvironmentError";
-    "PyExc_IOError";
-    "PyExc_Warning";
-    "PyExc_UserWarning";
-    "PyExc_DeprecationWarning";
-    "PyExc_PendingDeprecationWarning";
-    "PyExc_SyntaxWarning";
-    "PyExc_RuntimeWarning";
-    "PyExc_FutureWarning";
-    "PyExc_ImportWarning";
-    "PyExc_UnicodeWarning";
-    "PyExc_BytesWarning";
-    "PyExc_ResourceWarning";
-  ]
-
-let () =
-  C.Cstubs.Resources.register_is_resource_addr_chain (fun next ak ->
-      match ak with
-      (* FIXME: other container addresses *)
-      | Python.Objects.Py_list.A_py_list
-      | Python.Objects.Py_list.A_py_iterator _
-      | Python.Objects.Py_set.A_py_set
-      | Python.Objects.Tuple.A_py_tuple _
-      | Python.Objects.Dict.A_py_dict
-      | A_py_instance _
-      | A_py_class _
-      | A_py_c_class _
-      | A_py_c_function _
-      | A_py_c_module _
-      | A_py_function _
-      | A_py_method _
-      | A_py_module _ -> true
-      | _ -> next ak)
-
-let () =
-  C.Common.Base.register_addr_opaque (fun next ->
-      function
-      | Python.Objects.Py_list.A_py_list
-      | Python.Objects.Py_list.A_py_iterator _
-      | Python.Objects.Py_set.A_py_set
-      | Python.Objects.Tuple.A_py_tuple _
-      | Python.Objects.Dict.A_py_dict
-      | A_py_instance {addr_kind = A_py_class (C_builtin _, _)} -> OpaqueFrom 8
-      | ak -> next ak)
-
-
+open Prelude
 
 module Domain =
   struct
+    (* - types différents pour pas confondre le C et le Python ? *)
 
-    (* FIXME: propagate changes done by either C or Python during new
-       allocations/... which should not happen often *)
-    (* OR: sometimes ask the recency for a STRONG addr whatever the cost? *)
-    module EquivBaseAddrs = Framework.Lattices.Partial_inversible_map.Make
-                              (struct
-                                (* FIXME: we'd rather have PointerValue.t *)
-                                type t = C.Common.Points_to.points_to
-                                let compare p1 p2 =
-                                  match p1, p2 with
-                                  | P_fun f1, P_fun f2 ->
-                                     compare f1.C.Ast.c_func_unique_name f2.C.Ast.c_func_unique_name
-                                  | P_block (b1, o1, m1), P_block (b2, o2, m2) ->
-                                     Compare.compose [
-                                         (fun () -> C.Common.Base.compare_base b1 b2);
-                                         (fun () ->
-                                           let o1' = match ekind o1 with
-                                             | E_binop (O_plus, _, r) -> r
-                                             | _ -> o1 in
-                                           let o2' = match ekind o2 with
-                                             | E_binop (O_plus, _, r) -> r
-                                             | _ -> o2 in
-                                           (* FIXME: hack on offset comparison.py_cls_a_abases. I think we should evaluate the offset in universal for each block and see what happens *)
-                                           compare_expr o1' o2');
-                                         (fun () -> Option.compare compare_mode m1 m2);
-                                       ]
-                                  | _, _ -> Stdlib.compare p1 p2
-                                let print = unformat C.Common.Points_to.pp_points_to
-                              end)
-                              (struct
-                                type t = addr
-                                let compare = compare_addr
-                                let print = unformat pp_addr
-                              end)
+    module AddrSet=
+      Framework.Lattices.Powerset.Make(struct type t = addr
+                                              let compare = compare_addr
+                                              let print = unformat pp_addr end)
+
+    let rec eval_offset man flow e =
+      Visitor.map_expr (fun e -> match ekind e with
+                                 | E_var _ ->
+                                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                                    if ItvUtils.IntItv.is_singleton (Bot.bot_to_exn itv) then
+                                      let (a, b) = Bot.bot_to_exn itv in
+                                      match a with
+                                      | Finite a ->
+                                         Keep {e with ekind = E_constant (C_int a)}
+                                      | _ -> assert false
+                                    else
+                                      assert false
+                                 | E_constant _ -> Keep e
+                                 | E_binop (O_plus, e1, e2) ->
+                                    let e1 = eval_offset man flow e1 in
+                                    let e2 = eval_offset man flow e2 in
+                                    begin match ekind e1, ekind e2 with
+                                    | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.add z1 z2)) }
+                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e1
+                                    | _ -> Keep {e with ekind = E_binop(O_plus, e1, e2)}
+                                    end
+                                 | E_binop (O_mult, e1, e2) ->
+                                    let e1 = eval_offset man flow e1 in
+                                    let e2 = eval_offset man flow e2 in
+                                    begin match ekind e1, ekind e2 with
+                                    | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.mul z1 z2)) }
+                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e2
+                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.one -> Keep e1
+                                    | _ -> Keep {e with ekind = E_binop(O_mult, e1, e2)}
+                                    end
+                                 | _ -> VisitParts e
+        ) (fun stmt -> Keep stmt) e
+
+    module NoAddrBase =
+      struct
+          type t =
+            | Fun of C.Ast.c_fundec
+            | Varbase of var * expr (* offset *)
+          let compare p1 p2 =
+            match p1, p2 with
+            | Fun f1, Fun f2 ->
+               compare f1.C.Ast.c_func_unique_name f2.C.Ast.c_func_unique_name
+            | Varbase (v1, o1), Varbase (v2, o2) ->
+               Compare.pair compare_var compare_expr (v1, o1) (v2, o2)
+            | _, _ -> Stdlib.compare p1 p2
+          let print =
+            unformat (fun fmt a -> match a with
+                                   | Fun f -> Format.fprintf fmt "%s" f.c_func_org_name
+                                   | Varbase (v, o) -> Format.fprintf fmt "(%a,%a)" pp_var v pp_expr o)
+      end
+
+    module OtherMap =
+      Framework.Lattices.Partial_inversible_map.Make(NoAddrBase)(Addr)
+
+    module EquivBaseAddrs =
+      struct
+        include Framework.Lattices.Pair.Make(AddrSet)(OtherMap)
+        let empty = (AddrSet.empty, OtherMap.empty)
+        let find_opt_from_c pt man flow =
+          let curs, curm = get_env T_cur man flow in
+          match pt with
+          | P_block ({base_kind = Addr a}, _, _) ->
+             if AddrSet.mem a curs then Some a
+             else None
+          | P_block ({base_kind = Var v}, offset, _) ->
+             let r = Top.detop (OtherMap.find (Varbase (v, eval_offset man flow offset)) curm) in
+             debug "searching for %a %a in:@.%a" pp_var v pp_expr offset (format OtherMap.print) curm;
+             if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
+             else if OtherMap.ValueSet.cardinal r = 0 then None
+             else assert false
+          | P_fun f ->
+             let r = Top.detop (OtherMap.find (Fun f) curm) in
+             if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
+             else if OtherMap.ValueSet.cardinal r = 0 then None
+             else assert false
+          | _ -> assert false
+
+        let find_opt_from_py addr range man flow =
+          let curs, curm = get_env T_cur man flow in
+          if AddrSet.mem addr curs then
+            Some (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None)
+          else
+            let r = Top.detop @@ OtherMap.find_inverse addr curm in
+            if OtherMap.KeySet.cardinal r = 1 then
+              match OtherMap.KeySet.choose r with
+              | Fun f ->
+                 Some (mk_c_points_to_fun f)
+              | Varbase (v, offset) ->
+                 Some (mk_c_points_to_bloc (C.Common.Base.mk_var_base v) offset None)
+            else if OtherMap.KeySet.cardinal r  > 1 then assert false
+            else None
+
+        let add_addr addr man flow =
+          let curs, curm = get_env T_cur man flow in
+          let curs = AddrSet.add addr curs in
+          set_env T_cur (curs, curm) man flow
+
+        let add_c_py_equiv pt addr man flow =
+          let curs, curm = get_env T_cur man flow in
+          let noab : NoAddrBase.t = match pt with
+            | P_fun f -> Fun f
+            | P_block ({base_kind = Var v}, offset, _) -> Varbase (v, eval_offset man flow offset)
+            | _ -> assert false in
+          let curm = OtherMap.set noab (Nt (OtherMap.ValueSet.singleton addr)) curm in
+          set_env T_cur (curs, curm) man flow
+
+        let rename_addr src dst man flow =
+          let curs, curm = get_env T_cur man flow in
+          let curs, to_rename = if AddrSet.mem src curs then AddrSet.add dst (AddrSet.remove src curs), true
+                     else curs, false in
+          let curm = OtherMap.rename_inverse src dst curm in
+          set_env T_cur (curs, curm) man flow, to_rename
+      end
 
     include EquivBaseAddrs
 
+
     let widen ctx = join
+
     include Framework.Core.Id.GenDomainId(
                 struct
                   type nonrec t = t
@@ -215,14 +178,6 @@ module Domain =
                 end)
 
     let checks = []
-
-    let set_singleton p a man flow =
-      let r = get_env T_cur man flow |>
-                set p (Nt (ValueSet.singleton a)) in
-      set_env T_cur r man flow
-
-    let yield_results_before_crash man flow =
-      Framework.Output.Text.report man flow ~time:(0.) ~files:[] ~out:None
 
     let strongify_int_addr_hack addr man range flow =
       (* since integer addresses are always weak in python, this
@@ -232,7 +187,7 @@ module Domain =
       (* FIXME: this should be done with a DIFFERENT range for each addr *)
       (* FIXME: if this address goes back to Python, we need to fix it in the boundary too *)
       (* ASSUMPTION: the concrete C can't change the value of the object.
-         This should be fine on integers *)
+         This is fine on integers as they are opaque from C *)
       if List.exists (fun a -> compare_addr addr (OptionExt.none_to_exn !a) = 0) [Python.Types.Addr_env.addr_integers; Python.Types.Addr_env.addr_float;
                                                                                   Python.Types.Addr_env.addr_bytes; Python.Types.Addr_env.addr_strings
            ] then
@@ -245,75 +200,7 @@ module Domain =
         Cases.singleton addr flow
 
     let init _ man flow =
-      List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ())
-        [
-          "PyModule_Create2";
-          "PyModule_AddObject";
-          "PyType_FromSpec";
-          "PyType_Ready";
-          "PyType_GenericAlloc_Helper";
-          "PyType_IsSubtype";
-          "PyArg_ParseTuple";
-          "PyArg_ParseTupleAndKeywords";
-          "PyArg_UnpackTuple";
-          "Py_BuildValue";
-          "PyNumber_Add";
-          "PyObject_CallFunction";
-          "PyObject_CallObject";
-          "PyObject_CallMethod";
-          "PyObject_GetAttrString";
-          "PyObject_GetItem";
-          "PyObject_GetIter";
-          "PyObject_RichCompare";
-          "PyObject_RichCompareBool";
-          "PyObject_Size";
-          "PyObject_Repr";
-          "PyObject_Length";
-          "PyObject_IsTrue";
-          "PyIter_Next";
-          "PySequence_GetSlice";
-          "PyLong_FromLong";
-          "PyLong_FromUnsignedLong";
-          "PyLong_FromSsize_t";
-          "PyLong_AsLong";
-          "PyLong_AsSsize_t";
-          "PyFloat_FromDouble";
-          "PyFloat_AsDouble";
-          "PyBytes_FromStringAndSize";
-          "PyBytes_Size";
-          "PyBytes_AsString";
-          "PyUnicode_Concat";
-          "PyUnicode_GetLength";
-          "PyUnicode_InternFromString";
-          "PyUnicode_FromString";
-          "PyUnicode_FromKindAndData";
-          "PyUnicode_FromWideChar";
-          "PyUnicode_AsEncodedString";
-          "PyUnicode_AsUnicode";
-          "PyUnicode_AsUTF8AndSize";
-          "PyTuple_New";
-          "PyTuple_SetItem";
-          "PyTuple_Size";
-          "PyTuple_GetItem";
-          "PyTuple_GetSlice";
-          "PyList_New";
-          "PyList_Size";
-          "PyList_GetItem";
-          "PyList_SetItem";
-          "PyList_Append";
-          "PyDict_Size";
-          "PyDict_Next";
-          "PyDict_New";
-          "PyDict_GetItem";
-          "PyDict_SetItem";
-          "PySet_New";
-          "PySet_Size";
-          "PySet_Add";
-          "PySet_Clear";
-          "PyWeakref_NewRef";
-          "PyWeakref_GetObject";
-        ];
-
+      List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
       set_env T_cur EquivBaseAddrs.empty man flow
 
     let mk_avalue_from_pyaddr addr typ range =
@@ -331,7 +218,6 @@ module Domain =
                      Cases.singleton None flow
                   | _ -> panic "safe_get_name_of points_to %a" pp_points_to points_to
                 ) in
-      (* assert(Cases.cardinal r <= 1); *)
       r
 
 
@@ -393,9 +279,9 @@ module Domain =
           let methd_fundec = match methd_function with
             | P_fun f -> f
             | _ -> assert false in
-          let a_methd_function = Top.detop @@ EquivBaseAddrs.find methd_function (get_env T_cur man flow) in
-          (if ValueSet.cardinal a_methd_function > 0 then
-            Eval.singleton (mk_addr (ValueSet.choose a_methd_function) range) flow
+          let oa_methd_function = EquivBaseAddrs.find_opt_from_c methd_function man flow in
+          (if oa_methd_function <> None then
+            Eval.singleton (mk_addr (OptionExt.none_to_exn oa_methd_function) range) flow
            else
             man.eval ~translate:"Universal" (mk_c_member_access_by_name methd "ml_flags" range) flow >>$ fun methd_flags flow ->
            let oflags =
@@ -405,7 +291,7 @@ module Domain =
             alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, oflags, (binder_addr, None))) range flow) >>$
               fun methd_eaddr flow ->
               let methd_addr = Addr.from_expr methd_eaddr in
-              let flow = set_singleton methd_function methd_addr man flow in
+              let flow = EquivBaseAddrs.add_c_py_equiv methd_function methd_addr man flow in
               (* bind method to binder *)
               bind_in_python binder_addr methd_name methd_addr range man flow >>%
                 Cases.singleton true
@@ -463,7 +349,7 @@ module Domain =
                   alloc_py_addr man (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range flow >>$
                     fun member_descr flow ->
                     let member_descr = Addr.from_expr member_descr in
-                    let flow = set_singleton member_points_to  member_descr man flow in
+                    let flow = add_c_py_equiv member_points_to member_descr man flow in
                     man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
                       bind_in_python binder_addr member_name member_descr range man >>%
                       Cases.singleton true
@@ -499,7 +385,7 @@ module Domain =
            alloc_py_addr man (Python.Addr.A_py_c_module module_name) range flow >>$
              fun module_addr flow ->
              let m_addr = Addr.from_expr module_addr in
-             let flow = set_singleton (mk_c_points_to_bloc (C.Common.Base.mk_addr_base m_addr) (mk_zero range) None) m_addr man flow in
+             let flow = EquivBaseAddrs.add_addr m_addr man flow in
              add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
              >>% Eval.singleton module_addr
         )
@@ -517,30 +403,29 @@ module Domain =
       resolve_pointer expr man flow >>$
         (fun points_to flow ->
           debug "[resolve_c_pointer %a:%a] searching for %a" pp_expr expr pp_typ (etyp expr) pp_points_to points_to;
+          debug "%a" (format EquivBaseAddrs.print) (get_env T_cur man flow);
           if points_to = P_null then let () = debug "that's NULL" in Cases.singleton None flow
           else if points_to = P_top then Cases.singleton (Some Top.TOP) flow
           else
-          let aset = Top.detop @@ find points_to (get_env T_cur man flow) in
-          debug "got %a" (ValueSet.fprint SetExt.printer_default pp_addr) aset;
-          if ValueSet.cardinal aset = 1 then
-            Cases.singleton (OptionExt.return (Top.Nt (ValueSet.choose aset))) flow
-          else if ValueSet.cardinal aset = 0 then
-            match points_to with
-            | P_block ({base_kind = Var v}, _, _) ->
-               begin match remove_typedef_qual @@ vtyp v with
-               | T_c_record {c_record_kind = C_struct; c_record_org_name} when c_record_org_name = "_typeobject" ->
-                  let range = erange expr in
-                  raise_cpython_class_not_ready (mk_var v range) range man flow |>
-                  Cases.empty
-               | _ -> assert false
-               end
-            | _ ->
-               if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-                 Cases.empty flow
-               else
-                 panic_at expr.erange "resolve_c_pointer_into_addr %a" pp_points_to points_to;
-          else
-            assert false
+            let oa = EquivBaseAddrs.find_opt_from_c points_to man flow in
+            debug "got %a" (OptionExt.print pp_addr) oa;
+            if oa <> None then
+              Cases.singleton (OptionExt.return (Top.Nt (OptionExt.none_to_exn oa))) flow
+            else
+              match points_to with
+              | P_block ({base_kind = Var v}, _, _) ->
+                 begin match remove_typedef_qual @@ vtyp v with
+                 | T_c_record {c_record_kind = C_struct; c_record_org_name} when c_record_org_name = "_typeobject" ->
+                    let range = erange expr in
+                    raise_cpython_class_not_ready (mk_var v range) range man flow |>
+                      Cases.empty
+                 | _ -> assert false
+                 end
+              | _ ->
+                 if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+                   Cases.empty flow
+                 else
+                   panic_at expr.erange "resolve_c_pointer_into_addr %a" pp_points_to points_to;
         )
 
     let c_to_python_boundary
@@ -587,7 +472,7 @@ module Domain =
               alloc_py_addr man (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, None, (cls_addr, None))) range flow >>$
                 (fun fun_eaddr flow ->
                   let fun_addr = Addr.from_expr fun_eaddr in
-                  let flow = set_singleton func fun_addr man flow in
+                  let flow = EquivBaseAddrs.add_c_py_equiv func fun_addr man flow in
                   bind_in_python cls_addr name fun_addr range man flow)
               |> post_to_flow man
 
@@ -678,7 +563,7 @@ module Domain =
       | _ -> assert false
 
     let py_addr_to_c_expr addr typ range man flow =
-      points_to_to_c_expr (KeySet.choose @@ Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow)) typ range
+      points_to_to_c_expr (OptionExt.none_to_exn @@ EquivBaseAddrs.find_opt_from_py addr range man flow) typ range
 
     let rec python_to_c_boundary addr oaddr_ctyp oe ?(size=None) range man (flow: 'a flow) : (expr * 'a flow) =
       (* FIXME: give py_object so that the boundary handles translation of integers with value addr_attr *)
@@ -712,8 +597,8 @@ module Domain =
         | A_py_method _ -> fst @@ find_builtin "method"
         | _ -> panic_at range "parent addr of %a?" pp_addr addr in
       let c_addr, post =
-        let inverse = Top.detop @@ EquivBaseAddrs.find_inverse addr (get_env T_cur man flow) in
-        match KeySet.choose_opt inverse with
+        let inverse = EquivBaseAddrs.find_opt_from_py addr range man flow in
+        match inverse with
         | Some inverse ->
            let () = debug "%a already converted according to equiv: %a" pp_addr addr pp_points_to inverse in
            points_to_to_c_expr inverse addr_ctyp range, Post.return flow
@@ -739,8 +624,7 @@ module Domain =
                let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) in
                mk_z ~typ:(T_c_integer C_unsigned_long) size range
             | Some s -> s in
-          let pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None in
-          let flow = set_singleton pt addr man flow in
+          let flow = EquivBaseAddrs.add_addr addr man flow in
           final_obj,
           (
             man.exec ~route:(Semantic "C") (mk_add obj range) flow >>% fun flow ->
@@ -834,7 +718,7 @@ module Domain =
          | P_block ({base_kind = Var v}, _, _) ->
             alloc_py_addr man (Python.Addr.A_py_c_class (get_orig_vname v)) range flow >>$ fun cls_eaddr flow ->
             (* no boundary call needed since it's a statically declared PyTypeObject by the C itself *)
-            let flow = set_singleton cls (Addr.from_expr cls_eaddr) man flow in
+            let flow = EquivBaseAddrs.add_c_py_equiv cls (Addr.from_expr cls_eaddr) man flow in
             Cases.singleton cls_eaddr flow
          | P_block ({base_kind = Addr a}, _, _) ->
             let cls_eaddr, flow = python_to_c_boundary a None None range man flow in
@@ -1388,15 +1272,14 @@ module Domain =
       (* FIXME: PyModule_Create is a macro expanded into PyModule_Create2. Maybe we should have a custom .h file *)
       | E_c_builtin_call ("PyModule_Create2", [module_decl; _]) ->
          let addr_type = fst @@ Python.Addr.find_builtin "type" in
-         let cur = get_env T_cur man flow in
          let flow =
-           if EquivBaseAddrs.KeySet.is_empty @@ Top.detop @@ EquivBaseAddrs.find_inverse addr_type cur then
+           if EquivBaseAddrs.find_opt_from_py addr_type range man flow = None then
              (* since we can't do this in init yet (the C program context is initially empty, we don't know what we'll parse and when*)
              let add_class_equiv c_var_name py_bltin_name flow =
                let py_addr = fst @@ Python.Addr.find_builtin py_bltin_name in
                let c_var = search_c_globals_for flow c_var_name in
                debug "cls_equiv c_var %a %a" pp_var c_var pp_typ c_var.vtyp;
-               set_singleton
+               EquivBaseAddrs.add_c_py_equiv
                  (mk_c_points_to_bloc (C.Common.Base.mk_var_base c_var) (mk_zero (Location.mk_program_range [])) None)
                  py_addr
                  man flow
@@ -1409,9 +1292,7 @@ module Domain =
                List.fold_left (fun flow c ->
                    let py = String.sub c 6 (String.length c - 6) in
                    let py_addr = fst @@ Python.Addr.find_builtin py in
-                   set_singleton
-                     (mk_c_points_to_bloc (C.Common.Base.mk_addr_base py_addr) (mk_zero (Location.mk_program_range [])) None)
-                   py_addr man flow) flow descr
+                   EquivBaseAddrs.add_addr py_addr man flow) flow descr
              in
              let flow =
                let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
@@ -1424,19 +1305,19 @@ module Domain =
                let false_var = search_c_globals_for flow "_Py_FalseStruct" in
                let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr true_addr T_int range) (mk_one range) range) flow in
                let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr false_addr T_int range) (mk_zero range) range) flow in
-               let flow = set_singleton
+               let flow = EquivBaseAddrs.add_c_py_equiv
                             (mk_c_points_to_bloc (C.Common.Base.mk_var_base none_var) (mk_zero (Location.mk_program_range [])) None)
                             none_addr
                             man flow in
-               let flow = set_singleton
+               let flow = EquivBaseAddrs.add_c_py_equiv
                             (mk_c_points_to_bloc (C.Common.Base.mk_var_base ni_var) (mk_zero (Location.mk_program_range [])) None)
                             ni_addr
                             man flow in
-               let flow = set_singleton
+               let flow = EquivBaseAddrs.add_c_py_equiv
                             (mk_c_points_to_bloc (C.Common.Base.mk_var_base true_var) (mk_zero (Location.mk_program_range [])) None)
                             true_addr
                             man flow in
-               set_singleton
+               EquivBaseAddrs.add_c_py_equiv
                  (mk_c_points_to_bloc (C.Common.Base.mk_var_base false_var) (mk_zero (Location.mk_program_range [])) None)
                  false_addr
                  man flow
@@ -2802,6 +2683,7 @@ module Domain =
            | _ -> assert false in
          let c_cls_inst = py_addr_to_c_expr (fst @@ object_of_expr cls_inst) cls_typ range man flow in
          let addr_inst = addr_of_object ~etyp:inst_typ inst in
+         debug "state = %a" (format EquivBaseAddrs.print) (get_env T_cur man flow);
          let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
          let cfunc_args = [c_descriptor; addr_inst; c_cls_inst] in
          let call = mk_c_call cfunc cfunc_args range in
@@ -2853,26 +2735,7 @@ module Domain =
       (* FIXME: propagate it to the value attribute *)
       | S_fold ({ekind = E_addr (dst, _)}, [{ekind = E_addr (src, _)}])
       | S_rename ({ekind = E_addr (src, _)}, {ekind = E_addr (dst, _)}) when is_py_addr src && is_py_addr dst ->
-         let cur = get_env T_cur man flow in
-         (* change cur on both sides *)
-         (* NB: we should remove points_to base_addr/addr bindings in favor of a set for those. This would simplify this step too *)
-         let ncur, c_rename_needed =
-           let points_to_src = find_inverse src cur in
-           let cur = remove_inverse src cur in
-           match points_to_src with
-           | Top.TOP ->
-              assert(cur = EquivBaseAddrs.top);
-              EquivBaseAddrs.top, true
-           | Nt pt ->
-              let src_pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base src) (mk_zero range) None in
-              if KeySet.mem src_pt pt then
-                let dst_pt = mk_c_points_to_bloc (C.Common.Base.mk_addr_base dst) (mk_zero range) None in
-                let pt' = KeySet.add dst_pt (KeySet.remove src_pt pt) in
-                add_inverse dst pt' cur, true
-              else
-                add_inverse dst pt cur, false
-         in
-         let flow = set_env T_cur ncur man flow in
+         let flow, c_rename_needed = EquivBaseAddrs.rename_addr src dst man flow in
          (* delegate to C if needed *)
          (if c_rename_needed then
             let post = man.exec ~route:(Semantic "C") stmt flow in
