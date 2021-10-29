@@ -110,6 +110,7 @@ module Domain =
       struct
         include Framework.Lattices.Pair.Make(AddrSet)(OtherMap)
         let empty = (AddrSet.empty, OtherMap.empty)
+        let is_bottom (a, o) = AddrSet.is_bottom a && OtherMap.is_bottom o
         let find_opt_from_c pt man flow =
           let curs, curm = get_env T_cur man flow in
           match pt with
