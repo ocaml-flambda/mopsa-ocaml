@@ -281,10 +281,10 @@ struct
 
     | S_assume(e) when is_numeric_type (etyp e) -> begin
         let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
-        let env = Apron.Abstract1.env a in
 
         try
           let dnf, a, bnd, l = bexp_to_apron e (a,bnd) [] in
+          let env = Apron.Abstract1.env a in
           let a' =
             Dnf.reduce_conjunction
               (fun conj ->
