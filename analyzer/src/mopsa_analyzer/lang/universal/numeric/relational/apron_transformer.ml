@@ -232,7 +232,7 @@ struct
       let x_apr, bnd = Binding.mopsa_to_apron_var x bnd in
       let x_apr', _ = Binding.mopsa_to_apron_var x' bnd in
       let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
-      (Apron.Texpr1.Var x_apr, abs, bnd, x_apr' :: l)
+      (Apron.Texpr1.Var x_apr', abs, bnd, x_apr' :: l)
 
     | E_binop((O_ediv|O_erem) as binop, e1, e2) ->
       let binop' = binop_to_apron binop in
