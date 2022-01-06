@@ -284,7 +284,7 @@ and type_qual = typ * qualifier
      mutable func_variadic: bool; (** whether the has a variable number of arguments *)
      mutable func_range: range; (** range of the full declaration *)
      mutable func_name_range: range; (** range of the name part of the declaration *)
-     mutable func_com: comment list; (** comments associated to the declaration *)
+     mutable func_com: (comment * macro StringMap.t) list; (** comments associated to the declaration *)
    }
 
 
@@ -444,7 +444,7 @@ and type_qual = typ * qualifier
      proj_funcs: func StringMap.t; (** functions, by unique name *)
 
      proj_files: string list; (** list of parsed files *)
-     proj_comments: comment list RangeMap.t; (** all comments *)
+     proj_comments: (comment * macro StringMap.t) list RangeMap.t; (** all comments *)
      proj_macros : macro StringMap.t; (** macros, by name *)
    }
 (** A project is a set of translation units linked together. *)

@@ -58,6 +58,11 @@ let opt_use_stub = ref []
 (** Lists of functions that the body will be replaced by a stub *)
 
 let opt_library_only = ref false
+(** Allow library-only targets in the .db files (used for multilanguage analysis) *)
+
+let opt_target_triple = ref ""
+(** Target architecture triple to analyze for (host if left empty) *)
+
 
 let () =
   register_language_option "c" {
@@ -115,6 +120,13 @@ let () =
     doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
     spec = ArgExt.Set opt_library_only;
     default = "false";
+  };
+  register_language_option "c" {
+    key = "-target-triple";
+    category = "C";
+    doc = " target architecture to analyze, as a triple (host if left empty).";
+    spec = ArgExt.Set_string opt_target_triple;
+    default = "";
   };
   ()
 
@@ -263,7 +275,7 @@ and parse_db (dbfile: string) ctx : unit =
         else if execs = []
         then panic "no binary in database"
         else if !opt_make_target = ""
-        then panic "a target is required in a multi-binary Makefile.@\nPossible targets:@\n @[%a@]"
+        then panic "a target is required in a multi-binary database, use the -make-target option.@\nPossible targets:@\n @[%a@]"
                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
                execs
         else
@@ -299,14 +311,14 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
               "-Wall" ::
               "-Qunused-arguments"::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
-              !opt_clang @
-              opts
+              opts @
+              !opt_clang
   in
   input_files := file :: !input_files;
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' !opt_warn_all enable_cache stub ignore ctx
+  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub ignore ctx
 
 
 and parse_stubs ctx () =
@@ -853,7 +865,6 @@ and from_stub_comment ctx f =
   try
     let stub = Mopsa_c_stubs_parser.Main.parse_function_comment f
           ctx.ctx_prj
-          ctx.ctx_macros
           ctx.ctx_enums
           ctx.ctx_predicates
           ctx.ctx_stubs in
@@ -1042,7 +1053,6 @@ and from_stub_directives ctx com_map =
             com
             range
             ctx.ctx_prj
-            ctx.ctx_macros
             ctx.ctx_enums
             ctx.ctx_predicates
             ctx.ctx_stubs

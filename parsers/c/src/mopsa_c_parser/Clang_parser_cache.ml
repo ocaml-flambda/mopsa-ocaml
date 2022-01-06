@@ -34,11 +34,7 @@ open Clang_AST
 open Clang_parser
 
 
-
-(** Output debug information. *)
-let debug = ref false
-
-                   
+let debug fmt = Mopsa_utils.Debug.debug ~channel:"c.parser_cache" fmt
 
 (** Version number. 
     This is checked when using the cache, and should be changed when
@@ -94,11 +90,11 @@ let file_cache_name file =
 (** Drop-in replacement to [Clang_parser.cache], but uses a cache on disk. *)
 let parse cmd tgt file opts : parse_result =
 
-  if !debug then Printf.printf "Clang_parser_cache: parsing %s\n" file;
+  debug "Clang_parser_cache: parsing %s" file;
       
   (* try to read cache *)
   let file_cache = file_cache_name file in
-  if !debug then Printf.printf "Clang_parser_cache: looking for cache file %s\n" file_cache;
+  debug "Clang_parser_cache: looking for cache file %s" file_cache;
   let from_cache : parse_result option =
     try
       (* try cache file *)
@@ -108,7 +104,7 @@ let parse cmd tgt file opts : parse_result =
       let v = Marshal.from_channel cache in
       let r = 
         if v <> version then (
-          if !debug then Printf.printf "Clang_parser_cache: incompatible version\n";
+          debug "Clang_parser_cache: %s incompatible version" file_cache;
           None
         )
         else
@@ -118,12 +114,12 @@ let parse cmd tgt file opts : parse_result =
           in
           if check then  (
             (* correct signature -> use cache *)
-            if !debug then Printf.printf "Clang_parser_cache: found\n";
+            debug "Clang_parser_cache: %s found" file_cache;
             Some (Marshal.from_channel cache)
           )
           else (
             (* incorrect signature *)
-            if !debug then Printf.printf "Clang_parser_cache: incompatible signature\n";
+            debug "Clang_parser_cache: %s incompatible signature" file_cache;
             None
           )
       in
@@ -133,7 +129,7 @@ let parse cmd tgt file opts : parse_result =
       r
     with _ ->
       (* cache file not available *)
-      if !debug then Printf.printf "Clang_parser_cache: cache file not found\n";
+      debug "Clang_parser_cache: %s cache file not found" file_cache;
       None 
   in
   
@@ -146,7 +142,7 @@ let parse cmd tgt file opts : parse_result =
      let files = List.filter (fun x -> x <> "<built-in>") files in
      let c = get_signature cmd tgt opts files in
      (* store signature & parse result *)
-     if !debug then Printf.printf "Clang_parser_cache: storing cache to %s\n" file_cache;
+     debug "Clang_parser_cache: storing cache to %s" file_cache;
 
      let f = Unix.openfile file_cache [Unix.O_WRONLY;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
      let cache = Unix.out_channel_of_descr f in

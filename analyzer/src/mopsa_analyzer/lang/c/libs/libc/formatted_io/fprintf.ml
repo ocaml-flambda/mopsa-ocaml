@@ -229,6 +229,12 @@ struct
       man.eval (mk_top s32 exp.erange) flow |>
       OptionExt.return
 
+    (* 𝔼⟦ syslog(...) ⟧ *)
+    | E_c_builtin_call("syslog", priority :: format :: args) ->
+      check_args format args exp.erange man flow >>%? fun flow ->
+      Eval.singleton (mk_unit exp.erange) flow |>
+      OptionExt.return
+
     | _ -> None
 
   let ask _ _ _  = None

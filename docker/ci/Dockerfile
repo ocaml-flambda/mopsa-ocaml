@@ -11,10 +11,13 @@ FROM ubuntu:20.04
 
 ENV APT_DEPS build-essential opam llvm-10-dev libclang-10-dev \
              libclang-cpp10-dev clang-10 libgmp-dev libmpfr-dev  \
-             git
+             git pkg-config python3-dev python3-setuptools python3-pip
 
 ENV OPAM_DEPS apron zarith menhir yojson
 
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV TZ=Europe/Paris
 
 # install system packages as root
 # create a mopsa user
