@@ -196,7 +196,7 @@ struct
                            man flow
                            ~fthen:(fun flow ->
                              Flow.add_safe_check Alarms.CHK_PY_INDEXERROR range flow |>
-                             man.eval (mk_var var_els range))
+                               man.eval (mk_var ~mode:(Some WEAK) var_els range))
                            ~felse:(fun flow ->
                              man.exec (Utils.mk_builtin_raise "IndexError" range) flow >>%
                                Eval.empty
@@ -487,7 +487,12 @@ struct
            let list, element = match args with | [l; e] -> l, e | _ -> assert false in
            let var_els = var_of_eobj list in
            let len_els = length_var_of_eobj list in
-           man.exec  (mk_assign (mk_var var_els range) element range) flow >>%
+           assume (mk_eq (mk_var len_els range) (mk_zero range) range) man flow
+             ~fthen:(fun flow ->
+               man.exec  (mk_assign (mk_var ~mode:(Some STRONG) var_els range) element range) flow)
+             ~felse:(fun flow ->
+               man.exec  (mk_assign (mk_var var_els range) element range) flow)
+              >>%
            man.exec  (mk_assign (mk_var len_els range)
                                        (mk_binop (mk_var len_els range) O_plus (mk_int 1 range) ~etyp:T_int range) range) >>%
            man.eval (mk_py_none range))
@@ -1127,6 +1132,8 @@ struct
             man.eval   (mk_py_false range) flow
           )
       |> OptionExt.return
+
+
 
     | _ -> None
 

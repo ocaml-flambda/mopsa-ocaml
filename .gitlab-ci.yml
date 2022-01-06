@@ -43,7 +43,7 @@ build_job:
     - echo $CPY_FILE
     - echo $PWD
     - cd analyzer/tests/cpython
-    - LDSHARED="../../../bin/mopsa-wrappers/x86_64-linux-gnu-gcc -shared" CC="../../../bin/mopsa-wrappers/x86_64-linux-gnu-gcc" python3 setup.py build --force
+    - mopsa-build python3 setup.py build --force
     - ../../../bin/mopsa-cpython $CPY_FILE > log || true
     - grep "Assertion failure. $NB_CHECKS total, .*$NB_SAFE safe" log || (cat log && false)
 

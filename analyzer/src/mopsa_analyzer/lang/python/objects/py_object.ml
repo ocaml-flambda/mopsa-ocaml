@@ -177,6 +177,8 @@ struct
         (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
+          man.eval attribute flow >>$ fun attribute flow ->
+          man.eval instance flow >>$ fun instance flow ->
           let tryinstance ~fother flow =
             assume (mk_py_ll_hasattr instance attribute range) man flow
               ~fthen:(fun flow ->

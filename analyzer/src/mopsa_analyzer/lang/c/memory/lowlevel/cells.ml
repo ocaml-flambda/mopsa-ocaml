@@ -518,7 +518,6 @@ struct
     let doit ss aa acc =
       Cells.fold
         (fun c acc ->
-          debug "unification on %a" pp_cell c;
           sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
         ss acc
     in
@@ -561,9 +560,7 @@ struct
     (true, s, s')
 
   let join man sman ctx (a,s) (a',s') =
-    debug "joining";(* (format CellSet.print) a.cells (format CellSet.print) a'.cells;*)
     let s, s' = unify man sman ctx (a,s) (a',s') in
-    debug "unification done";
     let a = {
       cells = CellSet.join a.cells a'.cells;
       bases = BaseSet.join a.bases a'.bases;

@@ -243,14 +243,6 @@ struct
     Value.eval imprecise_value_man (mk_top typ range)
 
   let add ctx var v a =
-    (* let _ = VarMap.exists (fun v' _ ->
-     *              if var.vname = v'.vname && compare_var var v' <> 0 && compare_typ var.vtyp v'.vtyp = 0 then
-     *                match vkind var, vkind v' with
-     *                | V_addr_attr (ad,_), V_addr_attr(ad', _) ->
-     *                   Mopsa_utils.Exceptions.panic "adding %a but a similar variable exists %a %a %d %d@.%a" pp_var var (pp_addr_partitioning ~full:true) ad.addr_partitioning (pp_addr_partitioning ~full:true) ad'.addr_partitioning (compare_addr ad ad') (compare_addr_partitioning ad.addr_partitioning ad'.addr_partitioning) (format VarMap.print) a
-     *                | _ -> true
-     *              else false
-     *            ) a in *)
     let vv = meet_with_bound_constraints ctx var v in
     VarMap.add var vv a
 

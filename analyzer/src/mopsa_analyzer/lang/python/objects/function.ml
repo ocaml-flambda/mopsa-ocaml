@@ -201,25 +201,6 @@ module Domain =
           )
         |> OptionExt.return
 
-      (* FIXME: we now use stubs to do that? *)
-      (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
-       *   man.eval   (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
-       *
-       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
-       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-       *
-       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
-       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-       *
-       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
-       *   man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
-       *
-       * | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
-       *   let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
-       *   man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow >>%
-       *   man.eval   (mk_py_none range) |>
-       *   OptionExt.return *)
-
 
     (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, kwargs) ->
@@ -329,10 +310,10 @@ module Domain =
                          ) pyfundec.py_func_locals) range)
                       flow
                 in
-
                 (* for each cell variables, a cell value is created *)
                 (* then, these cell variables are replaced by the @cell.cell_contents *)
-                flow >>% bind_list pyfundec.py_func_cellvars (fun cellvar flow ->
+                flow >>%
+                  bind_list pyfundec.py_func_cellvars (fun cellvar flow ->
                     let range = tag_range exp.erange "cell %a" pp_var cellvar in
                     man.eval (mk_py_call (mk_py_object (find_builtin "cell") range) [] range) flow
                            ) >>$ fun cells flow ->

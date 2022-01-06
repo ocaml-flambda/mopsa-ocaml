@@ -34,3 +34,9 @@ def random():
 
 def choice(s):
     return s[mopsa.random_int(0, len(s))]
+
+def shuffle(l):
+    # works for summarization abstraction
+    m = []
+    m.extend(l)
+    return m

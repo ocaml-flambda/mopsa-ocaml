@@ -52,6 +52,7 @@ type fun_context = (T.fundec) MS.t
 let builtin_functions =
   [
     {name = "mopsa_assume"; args = [None]; output = T_unit};
+    {name = "append"; args = [Some (T_array T_int); Some T_int]; output = T_unit};
   ]
 
 let from_extent (e: U.extent) : Location.range = e
@@ -121,6 +122,7 @@ let from_binop (t: typ) (b: U.binary_op) : operator =
   | T_float _, AST_LESS_EQUAL    -> O_le
   | T_float _, AST_GREATER       -> O_gt
   | T_float _, AST_GREATER_EQUAL -> O_ge
+  | T_array _, AST_CONCAT -> O_concat
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: typ) (b: U.unary_op) : operator =
@@ -247,7 +249,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     Exceptions.panic "char not implemented yet"
 
   | AST_array_const(a, _) ->
-    Exceptions.panic "array not implemented yet"
+     mk_expr (E_array (List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) (Array.to_list a))) range
 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range

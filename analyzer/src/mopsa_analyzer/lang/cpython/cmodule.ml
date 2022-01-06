@@ -19,17 +19,13 @@
 (*                                                                          *)
 (****************************************************************************)
 
-
-(* FIXME: PyObject_GetItem, PyIter_Next: need to try lowlevel field access if instance of a_py_c_class *)
 (* FIXME: stronger types for each boundary. Resolve_c_pointer_into addr sometimes used while c_to_python boundary should be called *)
 (* FIXME: alloc_py_addr of some addresses should be done only if the thing is not already converted. See fix for A_py_c_function in new_method_from_def already written *)
 (*
   FIXME:
-  - domain should track joint addresses + equiv C var bases <-> Py addrs
   - wrap try/with check_consistent_null + handling of addresses in C->Python boundary
     + if a builtin int/str abstract value's can be changed, it needs to be updated
   - triggering S_add(addr) should be sent to the correct domains...
-  - assert offset = [0, 0] for Points_to
  *)
 open Alarms
 open Soundness
@@ -43,134 +39,132 @@ open Python.Addr
 
 open Prelude
 
-module Domain =
+module AddrSet=
+  Framework.Lattices.Powerset.Make(struct type t = addr
+                                          let compare = compare_addr
+                                          let print = unformat pp_addr end)
+
+let rec eval_offset man flow e =
+  Visitor.map_expr (fun e -> match ekind e with
+                             | E_var _ ->
+                                let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                                if ItvUtils.IntItv.is_singleton (Bot.bot_to_exn itv) then
+                                  let (a, b) = Bot.bot_to_exn itv in
+                                  match a with
+                                  | Finite a ->
+                                     Keep {e with ekind = E_constant (C_int a)}
+                                  | _ -> assert false
+                                else
+                                  assert false
+                             | E_constant _ -> Keep e
+                             | E_binop (O_plus, e1, e2) ->
+                                let e1 = eval_offset man flow e1 in
+                                let e2 = eval_offset man flow e2 in
+                                begin match ekind e1, ekind e2 with
+                                | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.add z1 z2)) }
+                                | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e1
+                                | _ -> Keep {e with ekind = E_binop(O_plus, e1, e2)}
+                                end
+                             | E_binop (O_mult, e1, e2) ->
+                                let e1 = eval_offset man flow e1 in
+                                let e2 = eval_offset man flow e2 in
+                                begin match ekind e1, ekind e2 with
+                                | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.mul z1 z2)) }
+                                | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e2
+                                | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.one -> Keep e1
+                                | _ -> Keep {e with ekind = E_binop(O_mult, e1, e2)}
+                                end
+                             | _ -> VisitParts e
+    ) (fun stmt -> Keep stmt) e
+
+module NoAddrBase =
   struct
-    (* - types différents pour pas confondre le C et le Python ? *)
+    type t =
+      | Fun of C.Ast.c_fundec
+      | Varbase of var * expr (* offset *)
+    let compare p1 p2 =
+      match p1, p2 with
+      | Fun f1, Fun f2 ->
+         compare f1.C.Ast.c_func_unique_name f2.C.Ast.c_func_unique_name
+      | Varbase (v1, o1), Varbase (v2, o2) ->
+         Compare.pair compare_var compare_expr (v1, o1) (v2, o2)
+      | _, _ -> Stdlib.compare p1 p2
+    let print =
+      unformat (fun fmt a -> match a with
+                             | Fun f -> Format.fprintf fmt "%s" f.c_func_org_name
+                             | Varbase (v, o) -> Format.fprintf fmt "(%a,%a)" pp_var v pp_expr o)
+  end
 
-    module AddrSet=
-      Framework.Lattices.Powerset.Make(struct type t = addr
-                                              let compare = compare_addr
-                                              let print = unformat pp_addr end)
+module OtherMap =
+  Framework.Lattices.Partial_inversible_map.Make(NoAddrBase)(Addr)
 
-    let rec eval_offset man flow e =
-      Visitor.map_expr (fun e -> match ekind e with
-                                 | E_var _ ->
-                                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
-                                    if ItvUtils.IntItv.is_singleton (Bot.bot_to_exn itv) then
-                                      let (a, b) = Bot.bot_to_exn itv in
-                                      match a with
-                                      | Finite a ->
-                                         Keep {e with ekind = E_constant (C_int a)}
-                                      | _ -> assert false
-                                    else
-                                      assert false
-                                 | E_constant _ -> Keep e
-                                 | E_binop (O_plus, e1, e2) ->
-                                    let e1 = eval_offset man flow e1 in
-                                    let e2 = eval_offset man flow e2 in
-                                    begin match ekind e1, ekind e2 with
-                                    | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.add z1 z2)) }
-                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e1
-                                    | _ -> Keep {e with ekind = E_binop(O_plus, e1, e2)}
-                                    end
-                                 | E_binop (O_mult, e1, e2) ->
-                                    let e1 = eval_offset man flow e1 in
-                                    let e2 = eval_offset man flow e2 in
-                                    begin match ekind e1, ekind e2 with
-                                    | E_constant (C_int z1), E_constant (C_int z2) -> Keep {e with ekind = E_constant (C_int (Z.mul z1 z2)) }
-                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.zero -> Keep e2
-                                    | _, E_constant (C_int z) | E_constant (C_int z), _ when Z.equal z Z.one -> Keep e1
-                                    | _ -> Keep {e with ekind = E_binop(O_mult, e1, e2)}
-                                    end
-                                 | _ -> VisitParts e
-        ) (fun stmt -> Keep stmt) e
+module EquivBaseAddrs =
+  struct
+    include Framework.Lattices.Pair.Make(AddrSet)(OtherMap)
+    let empty = (AddrSet.empty, OtherMap.empty)
+    let is_bottom (a, o) = AddrSet.is_bottom a && OtherMap.is_bottom o
+    let find_opt_from_c pt man flow =
+      let curs, curm = get_env T_cur man flow in
+      match pt with
+      | P_block ({base_kind = Addr a}, _, _) ->
+         if AddrSet.mem a curs then Some a
+         else None
+      | P_block ({base_kind = Var v}, offset, _) ->
+         let r = Top.detop (OtherMap.find (Varbase (v, eval_offset man flow offset)) curm) in
+         debug "searching for %a %a in:@.%a" pp_var v pp_expr offset (format OtherMap.print) curm;
+         if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
+         else if OtherMap.ValueSet.cardinal r = 0 then None
+         else assert false
+      | P_fun f ->
+         let r = Top.detop (OtherMap.find (Fun f) curm) in
+         if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
+         else if OtherMap.ValueSet.cardinal r = 0 then None
+         else assert false
+      | _ -> assert false
 
-    module NoAddrBase =
-      struct
-          type t =
-            | Fun of C.Ast.c_fundec
-            | Varbase of var * expr (* offset *)
-          let compare p1 p2 =
-            match p1, p2 with
-            | Fun f1, Fun f2 ->
-               compare f1.C.Ast.c_func_unique_name f2.C.Ast.c_func_unique_name
-            | Varbase (v1, o1), Varbase (v2, o2) ->
-               Compare.pair compare_var compare_expr (v1, o1) (v2, o2)
-            | _, _ -> Stdlib.compare p1 p2
-          let print =
-            unformat (fun fmt a -> match a with
-                                   | Fun f -> Format.fprintf fmt "%s" f.c_func_org_name
-                                   | Varbase (v, o) -> Format.fprintf fmt "(%a,%a)" pp_var v pp_expr o)
-      end
+    let find_opt_from_py addr range man flow =
+      let curs, curm = get_env T_cur man flow in
+      if AddrSet.mem addr curs then
+        Some (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None)
+      else
+        let r = Top.detop @@ OtherMap.find_inverse addr curm in
+        if OtherMap.KeySet.cardinal r = 1 then
+          match OtherMap.KeySet.choose r with
+          | Fun f ->
+             Some (mk_c_points_to_fun f)
+          | Varbase (v, offset) ->
+             Some (mk_c_points_to_bloc (C.Common.Base.mk_var_base v) offset None)
+        else if OtherMap.KeySet.cardinal r  > 1 then assert false
+        else None
 
-    module OtherMap =
-      Framework.Lattices.Partial_inversible_map.Make(NoAddrBase)(Addr)
+    let add_addr addr man flow =
+      let curs, curm = get_env T_cur man flow in
+      let curs = AddrSet.add addr curs in
+      set_env T_cur (curs, curm) man flow
 
-    module EquivBaseAddrs =
-      struct
-        include Framework.Lattices.Pair.Make(AddrSet)(OtherMap)
-        let empty = (AddrSet.empty, OtherMap.empty)
-        let is_bottom (a, o) = AddrSet.is_bottom a && OtherMap.is_bottom o
-        let find_opt_from_c pt man flow =
-          let curs, curm = get_env T_cur man flow in
-          match pt with
-          | P_block ({base_kind = Addr a}, _, _) ->
-             if AddrSet.mem a curs then Some a
-             else None
-          | P_block ({base_kind = Var v}, offset, _) ->
-             let r = Top.detop (OtherMap.find (Varbase (v, eval_offset man flow offset)) curm) in
-             debug "searching for %a %a in:@.%a" pp_var v pp_expr offset (format OtherMap.print) curm;
-             if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
-             else if OtherMap.ValueSet.cardinal r = 0 then None
-             else assert false
-          | P_fun f ->
-             let r = Top.detop (OtherMap.find (Fun f) curm) in
-             if OtherMap.ValueSet.cardinal r = 1 then Some (OtherMap.ValueSet.choose r)
-             else if OtherMap.ValueSet.cardinal r = 0 then None
-             else assert false
-          | _ -> assert false
+    let add_c_py_equiv pt addr man flow =
+      let curs, curm = get_env T_cur man flow in
+      let noab : NoAddrBase.t = match pt with
+        | P_fun f -> Fun f
+        | P_block ({base_kind = Var v}, offset, _) -> Varbase (v, eval_offset man flow offset)
+        | _ -> assert false in
+      let curm = OtherMap.set noab (Nt (OtherMap.ValueSet.singleton addr)) curm in
+      set_env T_cur (curs, curm) man flow
 
-        let find_opt_from_py addr range man flow =
-          let curs, curm = get_env T_cur man flow in
-          if AddrSet.mem addr curs then
-            Some (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None)
-          else
-            let r = Top.detop @@ OtherMap.find_inverse addr curm in
-            if OtherMap.KeySet.cardinal r = 1 then
-              match OtherMap.KeySet.choose r with
-              | Fun f ->
-                 Some (mk_c_points_to_fun f)
-              | Varbase (v, offset) ->
-                 Some (mk_c_points_to_bloc (C.Common.Base.mk_var_base v) offset None)
-            else if OtherMap.KeySet.cardinal r  > 1 then assert false
-            else None
-
-        let add_addr addr man flow =
-          let curs, curm = get_env T_cur man flow in
-          let curs = AddrSet.add addr curs in
-          set_env T_cur (curs, curm) man flow
-
-        let add_c_py_equiv pt addr man flow =
-          let curs, curm = get_env T_cur man flow in
-          let noab : NoAddrBase.t = match pt with
-            | P_fun f -> Fun f
-            | P_block ({base_kind = Var v}, offset, _) -> Varbase (v, eval_offset man flow offset)
-            | _ -> assert false in
-          let curm = OtherMap.set noab (Nt (OtherMap.ValueSet.singleton addr)) curm in
-          set_env T_cur (curs, curm) man flow
-
-        let rename_addr src dst man flow =
-          let curs, curm = get_env T_cur man flow in
-          let curs, to_rename = if AddrSet.mem src curs then AddrSet.add dst (AddrSet.remove src curs), true
-                     else curs, false in
-          let curm = OtherMap.rename_inverse src dst curm in
-          set_env T_cur (curs, curm) man flow, to_rename
-      end
-
-    include EquivBaseAddrs
-
+    let rename_addr src dst man flow =
+      let curs, curm = get_env T_cur man flow in
+      let curs, to_rename = if AddrSet.mem src curs then AddrSet.add dst (AddrSet.remove src curs), true
+                            else curs, false in
+      let curm = OtherMap.rename_inverse src dst curm in
+      set_env T_cur (curs, curm) man flow, to_rename
 
     let widen ctx = join
+  end
+
+module Domain =
+  struct
+
+    include EquivBaseAddrs
 
     include Framework.Core.Id.GenDomainId(
                 struct
@@ -179,6 +173,10 @@ module Domain =
                 end)
 
     let checks = []
+
+    let init _ man flow =
+      List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
+      set_env T_cur EquivBaseAddrs.empty man flow
 
     let strongify_int_addr_hack addr man range flow =
       (* since integer addresses are always weak in python, this
@@ -199,10 +197,6 @@ module Domain =
         Cases.singleton strong flow
       else
         Cases.singleton addr flow
-
-    let init _ man flow =
-      List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
-      set_env T_cur EquivBaseAddrs.empty man flow
 
     let mk_avalue_from_pyaddr addr typ range =
       mk_var (mk_addr_attr addr "value" typ) range
@@ -2733,7 +2727,6 @@ module Domain =
     let exec stmt man flow =
       let range = srange stmt in
       match skind stmt with
-      (* FIXME: propagate it to the value attribute *)
       | S_fold ({ekind = E_addr (dst, _)}, [{ekind = E_addr (src, _)}])
       | S_rename ({ekind = E_addr (src, _)}, {ekind = E_addr (dst, _)}) when is_py_addr src && is_py_addr dst ->
          let flow, c_rename_needed = EquivBaseAddrs.rename_addr src dst man flow in
