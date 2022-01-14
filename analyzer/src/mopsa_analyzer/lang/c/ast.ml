@@ -921,7 +921,7 @@ let mk_c_subscript_access a i range =
 
 let mk_c_character c range t =
   let x = int_of_char c in
-  let x = if is_signed t && x > 128 then x - 256 else x in
+  let x = if is_signed t && x >= 128 then x - 256 else x in
   mk_constant (C_c_character (Z.of_int x, C_char_ascii)) range ~etyp:t
 
 (* extract a multi-byte integer of type t starting at offset off of s *)
