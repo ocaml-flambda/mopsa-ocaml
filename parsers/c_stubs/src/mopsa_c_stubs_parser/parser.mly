@@ -96,10 +96,40 @@
 %start parse_expr
 %start parse_type
 
-
 %type <Cst.stub> parse_stub
 %type <Cst.expr> parse_expr
 %type <Cst.c_qual_typ> parse_type
+
+%type <section list> section_list
+%type <section> section
+%type <case> case_section
+%type <leaf list> leaf_section_list
+%type <leaf> leaf_section
+%type <requires> requires
+%type <local> local
+%type <local_value> local_value
+%type <assigns> assigns
+%type <interval list> assigns_offset_list
+%type <free> free
+%type <assumes> assumes
+%type <ensures> ensures
+%type <message> message
+%type <message_kind> message_kind
+%type <formula> primary_formula composed_formula formula
+%type <expr> primary_expr postfix_expr unary_expr cast_expr multiplicative_expr additive_expr shift_expr relational_expr equality_expr band_expr bxor_expr bor_expr land_expr lor_expr conditional_expr expr
+%type <c_typ> type_specifier_except_typedef type_specifier
+%type <c_qual> type_qualifier type_qualifier_list
+%type <c_typ * c_qual> specifier_qualifier_list pointer type_name type_name_except_typedef
+%type <binop> additive_binop multiplicative_binop equality_binop relational_binop shift_binop
+%type <unop> unop
+%type <set> set
+%type <interval> interval
+%type <expr with_range list> args
+%type <resource> resource
+%type <var> var
+%type <expr> const
+
+
 %%
 
 parse_stub:

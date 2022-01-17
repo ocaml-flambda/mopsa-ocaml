@@ -149,7 +149,7 @@ module Domain =
                      else
                        let cs = Flow.get_callstack true_flow in
                        mk_py_exception exp exc_str exc_message
-                         cs range
+                         ~cs range
                    in
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
