@@ -122,6 +122,31 @@
 %start<U_ast.stat> stat_eof
 %start<U_ast.expr> expr_eof
 
+%type<bool> boolean_constant
+%type<string> integer_constant real_constant string_constant
+%type<char> char_constant
+%type<(expr ext) array> array_constant
+%type<var> var
+%type<expr> expr
+%type<string> sign_int_literal
+%type<typ * var> tvar
+%type<declaration> declaration
+%type<typ> typ
+%type<typ option> topt
+%type<stat> block_no_curly stat
+%type<unit> ender
+%type<fundec> fundec
+%type<prog> prog
+
+%type<declaration ext list> list(ext(declaration))
+%type<stat ext list> list(ext(stat))
+%type<expr ext list> loption(separated_nonempty_list(TOK_COMMA,ext(expr)))
+%type<(typ * var) ext list> loption(separated_nonempty_list(TOK_COMMA,ext(tvar)))
+%type<expr ext list> loption(separated_nonempty_list(TOK_SEMICOLON,ext(expr)))
+%type<expr ext list> separated_nonempty_list(TOK_COMMA,ext(expr))
+%type<(typ * var) ext list> separated_nonempty_list(TOK_COMMA,ext(tvar))
+%type<expr ext list> separated_nonempty_list(TOK_SEMICOLON,ext(expr))
+
 
 %%
 

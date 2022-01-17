@@ -144,7 +144,7 @@ let rec match_print_object_keys re obj =
              then Map.add k v acc
              else acc
            | _ -> acc
-        ) map (Map.empty compare_print_object) in
+        ) map (Map.empty ~compare:compare_print_object) in
     if Map.is_empty map' then Empty else Map(map',sym)
 
   | List(list,sym) ->
@@ -180,7 +180,7 @@ let pprint ?(path=[]) printer obj =
   let rec iter p o =
     match p,o with
     | Key k::tl, Map (m,sym) -> Map (Map.add (String k) (iter tl (try Map.find (String k) m with Not_found -> Empty)) m, sym)
-    | Key k::tl, Empty -> Map (Map.singleton compare_print_object (String k) (iter tl Empty), default_map_symbols)
+    | Key k::tl, Empty -> Map (Map.singleton ~compare:compare_print_object (String k) (iter tl Empty), default_map_symbols)
     | Key _::_,_ -> Exceptions.panic "print: key selector on non-map object"
     | Index i::tl, List (l,sym) -> List (List.mapi (fun j e -> if i = j then iter tl e else e) l, sym)
     | Index i::tl, Empty -> List (List.init (i+1) (fun j -> if i = j then iter tl Empty else Empty), default_list_symbols)

@@ -63,7 +63,17 @@
 %start parse_input_format
 
 %type <Placeholder.output_placeholder list> parse_output_format
-%type <Placeholder.intput_placeholder list> parse_input_format
+%type <Placeholder.input_placeholder list> parse_input_format
+
+%type<input_placeholder> input_placeholder
+%type<input_placeholder list> input_placeholder_list
+%type<placeholder_type> input_typ
+%type<int option> input_width
+%type<unit> output_flag output_flag_list
+%type<output_placeholder list> output_placeholder output_placeholder_list
+%type<int option * bool> output_precision
+%type<placeholder_type> output_typ
+%type<int option * bool> output_width
 
 %%
 

@@ -39,7 +39,7 @@ type output_placeholder = {
 }
 
 (** Placeholder for input streams, e.g. scanf *)
-type intput_placeholder = {
+type input_placeholder = {
   ip_width: int option;
   ip_typ: placeholder_type;
 }

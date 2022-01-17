@@ -48,7 +48,7 @@
         | _ -> assert false
 %}
 
-%token <string> IDENT
+%token <Cst.identifier> IDENT
 %token <Z.t> INT
 %token <float> FLOAT
 %token <string> IMAG
@@ -91,8 +91,81 @@
 /* Type returned */
 %type <Cst.stmt list> file_input
 
-%type <Cst.stmt list> stmt
-%type <string> dotted_name
+%type<stmt list> nl_stmt_list
+%type<expr> decorator decor_name
+%type<expr list> decorators
+%type<stmt_kind> decorated async_funcdef funcdef
+%type<arguments> parameters typedargslist
+%type<arg> tfpdef
+%type<arg option * arg list * expr list * arg option> tfpvarargs
+%type<arg list * expr list * arg option> tfpkwonly_args
+%type<arg> tfpkwargs
+%type<arguments> varargslist
+%type<arg> vfpdef
+%type<arg option * arg list * expr list * arg option> vfpvarargs
+%type<arg list * expr list * arg option> vfpkwonly_args
+%type<arg> vfpkwargs
+%type<stmt list> stmt simple_stmt
+%type<stmt> small_stmt
+%type<stmt_kind> small_stmt_kind expr_stmt
+%type<expr list * expr> expr_stmt_rh_lst
+%type<expr> expr_stmt_rh
+%type<expr * expr option> annassign
+%type<expr> test_starexpr testlist_star_expr
+%type<binop> augassign
+%type<stmt_kind> del_stmt pass_stmt flow_stmt break_stmt continue_stmt return_stmt raise_stmt import_stmt import_name import_from
+%type<identifier option * int option> importfrom_module
+%type<int> dot_level dot_or_zero
+%type<alias> import_as_name dotted_as_name
+%type<alias list> import_as_names
+%type<alias list> dotted_as_names
+%type<identifier> dotted_name
+%type<stmt_kind> global_stmt nonlocal_stmt assert_stmt
+%type<stmt> compound_stmt
+%type<stmt_kind> compound_stmt_kind async_stmt if_stmt  while_stmt for_stmt try_stmt
+%type<stmt list> elif_else
+%type<excepthandler list> except_handlerlist
+%type<excepthandler> except_handler
+%type<expr option * identifier option> except_clause
+%type<stmt_kind> with_stmt
+%type<withitem> with_item
+%type<stmt list> suite
+%type<expr> test test_nocond lambdef lambdef_nocond or_test and_test not_test comparison star_expr expr xor_expr and_expr shift_expr arith_expr term factor power atom_expr atom_trailer atom atom_tuple atom_list atom_dict
+%type<expr option> option(test)
+%type<cmpop list * expr list> comp_list comp_list_empty
+%type<cmpop> comp_op
+%type<binop> term_op
+%type<unop> factor_op
+%type<number> number
+%type<Lexing.position * Lexing.position * string> strings
+%type<string> bytes
+%type<slice list> subscriptlist
+%type<slice> subscript
+%type<expr> expr_star
+%type<expr list> exprlist
+%type<expr> testlist
+%type<expr list * expr list> dict_elts
+%type<stmt_kind> classdef
+%type<expr list * keyword list> arglist argument
+%type<comprehension list> comp_for
+%type<comprehension> comp_for1
+%type<expr> comp_if yield_expr yield_stmt
+%type <identifier> name
+%type<expr list> list(comp_if) nonempty_list(decorator)
+%type<comprehension list> nonempty_list(comp_for1)
+%type<excepthandler list> nonempty_list(except_handler)
+%type<stmt list list> nonempty_list(stmt)
+%type<expr list> nonempty_list(terminated(expr_star,COMMA)) nonempty_list(terminated(test,COMMA)) nonempty_list(terminated(test_starexpr,COMMA)) separated_nonempty_list(AND,not_test)
+%type<(expr list * keyword list) list> separated_nonempty_list(COMMA,argument)
+%type<expr list> separated_nonempty_list(COMMA,expr_star)
+%type<identifier list> separated_nonempty_list(COMMA,name)
+%type<slice list> separated_nonempty_list(COMMA,subscript)
+%type<expr list> separated_nonempty_list(COMMA,test) separated_nonempty_list(COMMA,test_starexpr)
+%type<withitem list> separated_nonempty_list(COMMA,with_item)
+%type<expr list> separated_nonempty_list(OR,and_test)
+%type<stmt list> separated_nonempty_list(SEMICOL,small_stmt)
+%type<unit option> option(COMMA)
+
 
 %%
 

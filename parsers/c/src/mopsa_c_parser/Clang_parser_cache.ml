@@ -137,7 +137,7 @@ let parse cmd tgt file opts : parse_result =
   | Some c -> c
   | None ->
      (* parse *)
-     let r = Clang_parser.parse cmd tgt file opts in
+     let r = Clang_parser.parse ~command:cmd ~target:tgt ~filename:file ~args:opts in
      let files = List.sort compare r.parse_files in
      let files = List.filter (fun x -> x <> "<built-in>") files in
      let c = get_signature cmd tgt opts files in
@@ -158,5 +158,5 @@ let parse cmd tgt file opts : parse_result =
 
 let parse cmd tgt enable_cache file opts =
   if enable_cache then parse cmd tgt file opts
-  else Clang_parser.parse cmd tgt file opts
+  else Clang_parser.parse ~command:cmd ~target:tgt ~filename:file ~args:opts
    

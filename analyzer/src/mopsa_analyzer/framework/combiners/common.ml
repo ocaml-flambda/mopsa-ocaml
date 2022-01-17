@@ -117,8 +117,8 @@ let rec find_domain_man : type b c. target:b id -> tree:c id -> ('a,c) man -> ('
   | C_empty -> raise Not_found
   | C_pair(_,left,right) ->
     begin
-      try find_domain_man target left (fst_pair_man man)
-      with Not_found -> find_domain_man target right (snd_pair_man man)
+      try find_domain_man ~target ~tree:left (fst_pair_man man)
+      with Not_found -> find_domain_man ~target ~tree:right (snd_pair_man man)
     end
   | _ ->
     match equal_id target tree with
@@ -129,7 +129,7 @@ let rec find_domain_man : type b c. target:b id -> tree:c id -> ('a,c) man -> ('
 let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~tree ->
   match tree with
   | C_empty -> false
-  | C_pair(_,left,right) -> mem_domain target left || mem_domain target right
+  | C_pair(_,left,right) -> mem_domain ~target ~tree:left || mem_domain ~target ~tree:right
   | _ ->
     match equal_id target tree with
     | Some Eq -> true
