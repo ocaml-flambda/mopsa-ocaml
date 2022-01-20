@@ -178,7 +178,7 @@ module Domain =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
       set_env T_cur EquivBaseAddrs.empty man flow
 
-    let strongify_int_addr_hack addr man range flow =
+    let materialize_builtin_val_addr addr man range flow =
       (* since integer addresses are always weak in python, this
          creates huge precision issues for the value attribute used to
          pass the abstract value of an integer object *)
@@ -1131,7 +1131,7 @@ module Domain =
          begin match fmt with
          | 'c' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               assume ~route:(Semantic "Python") (eq (Python.Utils.mk_builtin_call "len" [obj] range) (mk_one ~typ:(T_py None) range) ~etyp:(T_py None) range) man flow
                 ~fthen:(fun flow ->
@@ -1150,7 +1150,7 @@ module Domain =
            | 'f' ->
          (* Call PyFloat_AsDouble. If value is -1 and PyErr_Occurred, return 0. Otherwise return value (or cast for 'f') *)
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_float) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               let pyfloat_asdouble = C.Ast.find_c_fundec_by_name "PyFloat_AsDouble" flow in
               let pyerr_occurred = (* not calling the macro as it seems to create issues *)
@@ -1173,7 +1173,7 @@ module Domain =
 
          | 'h' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
               debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
@@ -1195,7 +1195,7 @@ module Domain =
                                  Python function call PyLong_AsLong *)
             debug "got obj = %a" pp_expr obj;
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               (* FIXME: maybe replace oe with None, and handle conversion here before giving it to the Helper *)
               debug "value should be stored %a" pp_expr (mk_avalue_from_pyaddr addr T_int range);
@@ -1213,7 +1213,7 @@ module Domain =
 
          | 'n' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               let pylong_as_ssizet = C.Ast.find_c_fundec_by_name "PyLong_AsSsize_t" flow in
               man.exec (mk_assign c (mk_c_call pylong_as_ssizet [c_addr] range) range) flow >>% Cases.return 1
@@ -1223,13 +1223,13 @@ module Domain =
 
          | 'O' ->
             debug "ParseTuple O ~> %a" pp_addr addr;
-            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+            materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
             let c_addr, flow = python_to_c_boundary addr None oe range man flow in
             man.exec (mk_assign c c_addr range) flow >>%
               fun flow -> Cases.return 1 flow
 
          | 'p' ->
-            strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+            materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
             let c_addr, flow = python_to_c_boundary addr None oe range man flow in
             man.eval (mk_c_call (find_c_fundec_by_name "PyObject_IsTrue" flow) [c_addr] range) flow >>$ (fun c_val flow ->
               assume (gt c_val (mk_zero range) range) man flow
@@ -1243,7 +1243,7 @@ module Domain =
 
          | 's' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
-              strongify_int_addr_hack addr man range flow >>$ fun addr flow ->
+              materialize_builtin_val_addr addr man range flow >>$ fun addr flow ->
               let c_addr, flow = python_to_c_boundary addr None oe range man flow in
               let pyunicode_asuas = C.Ast.find_c_fundec_by_name "PyUnicode_AsUTF8AndSize" flow in
               man.exec (mk_assign c (mk_c_call pyunicode_asuas [c_addr; mk_c_null range] range) range) flow >>% Cases.return 1
@@ -2249,7 +2249,7 @@ module Domain =
                man.eval (mk_top c.c_func_return range) flow
              else
              let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-             strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
+             materialize_builtin_val_addr addr_py_elem man range flow >>$ fun addr_py_elem flow ->
              let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
              man.eval c_addr flow
            )
@@ -2283,7 +2283,7 @@ module Domain =
            )
            ~on_result:(fun py_elem flow ->
              let addr_py_elem, oe_py_elem = object_of_expr py_elem in
-             strongify_int_addr_hack addr_py_elem man range flow >>$ fun addr_py_elem flow ->
+             materialize_builtin_val_addr addr_py_elem man range flow >>$ fun addr_py_elem flow ->
              let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
              man.eval c_addr flow
            )
@@ -2534,7 +2534,7 @@ module Domain =
           | _ ->
              if List.length args = 0 then Eval.singleton (mk_c_null range) flow
              else
-               strongify_int_addr_hack (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
+               materialize_builtin_val_addr (fst self) man (tag_range range "self") flow >>$ fun addr_self flow ->
                let c_addr, flow = python_to_c_boundary addr_self (Some (List.hd args_types)) (snd self) range man flow in
                Eval.singleton c_addr flow
          ) >>$ (fun self flow ->
@@ -2543,7 +2543,7 @@ module Domain =
              Cases.return (self, args) flow
            | Wrapper_descriptor _ | Method_descriptor ->
               if List.length args > 0 then
-                strongify_int_addr_hack (fst @@ object_of_expr @@ List.hd args) man (tag_range range "_descr") flow >>$ fun fst_arg flow ->
+                materialize_builtin_val_addr (fst @@ object_of_expr @@ List.hd args) man (tag_range range "_descr") flow >>$ fun fst_arg flow ->
                 let c_addr, flow = python_to_c_boundary fst_arg None (snd @@ object_of_expr @@ List.hd args) range man flow in
                 Cases.return (subst_addr_eobj (Addr.from_expr c_addr)  (List.hd args), List.tl args) flow
               else
@@ -2706,8 +2706,8 @@ module Domain =
          let addr_inst = addr_of_eobject inst in
          let addr_value = addr_of_eobject value in
          let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
-         strongify_int_addr_hack addr_inst man (tag_range range "addr_inst") flow >>$ (fun addr_inst flow ->
-         strongify_int_addr_hack addr_value man  (tag_range range "addr_value") flow >>$ fun addr_value flow ->
+         materialize_builtin_val_addr addr_inst man (tag_range range "addr_inst") flow >>$ (fun addr_inst flow ->
+         materialize_builtin_val_addr addr_value man  (tag_range range "addr_value") flow >>$ fun addr_value flow ->
          let c_addr_inst, flow = python_to_c_boundary addr_inst (Some inst_typ) (snd @@ object_of_expr inst) range man flow in
          let c_addr_value, flow = python_to_c_boundary addr_value (Some value_typ) (snd @@ object_of_expr value) range man flow in
          let cfunc_args = [c_addr_inst; c_descriptor; c_addr_value] in
