@@ -45,6 +45,11 @@ open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Universal.Numeric.Common
 
+let is_var_affine_in_expr v expr =
+  (* we could generalize this predicate, but the C analysis currently yields that kind of expression *)
+  match ekind expr with
+  | E_binop(O_plus, _, {ekind = E_var (v', _)}) -> compare_var v v' = 0
+  | _ -> false
 
 module Domain =
 struct
@@ -958,11 +963,11 @@ struct
     (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
     | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)})
     | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
-         when is_c_scalar_type lval1.etyp && is_c_scalar_type lval2.etyp && is_var_in_expr i lval1 && is_var_in_expr i lval2
-      (* FIXME: this transfer function is sound only when the offset is an
-         affine function with coefficient 1, i.e. of the form ∀i + a *)
+         when is_c_scalar_type lval1.etyp &&
+              is_c_scalar_type lval2.etyp &&
+              is_var_affine_in_expr i lval1 &&
+              is_var_affine_in_expr i lval2
       ->
-       debug "quantified formula: calling eval_forall_eq2 @ %a" pp_range exp.erange;
         eval_forall_eq2 i a b (remove_casts lval1) (remove_casts lval2) exp.erange man flow |>
        OptionExt.return
 
