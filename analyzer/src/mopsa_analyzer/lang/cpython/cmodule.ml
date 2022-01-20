@@ -1498,7 +1498,7 @@ module Domain =
         (* actually, PyLong_AsSsize_t seems to use the same bounds as PyLong_AsLong -_- *)
       | E_c_builtin_call ("PyLong_AsLong", args) ->
          let long_max = Z.of_string  "9223372036854775807" in
-         let long_min = Z.of_string "-9223372036854775807" in
+         let long_min = Z.of_string "-9223372036854775808" in
          pylong_to_c_type (List.hd args) range man flow (long_min, long_max, "long")
          |> OptionExt.return
 
