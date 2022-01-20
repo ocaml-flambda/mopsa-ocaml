@@ -517,7 +517,13 @@ let main () =
   if !log then Printf.fprintf !logfile "DB: got %s %a\n%!" tool (print_list " " output_string) args;
 
   (* cut suffix after - *)
-  let tool_normalized = List.hd (Str.split (Str.regexp "-") tool) in
+  let tool_normalized =
+    let prefix = "x86_64-linux-gnu-" in
+    let tool =
+      if String.length tool >= String.length prefix then
+        String.sub tool (String.length prefix) (String.length tool - String.length prefix)
+      else tool in
+    List.hd (Str.split (Str.regexp "-") tool) in
 
   (* executes action f on database *)
   let apply f =
@@ -540,8 +546,7 @@ let main () =
     | "ln" -> apply ln
     | "mopsa" -> print dbfile args; exit 0
     | _ ->
-       if tool = "x86_64-linux-gnu-gcc" then apply (compile C) else
-       () (* unknown -> nothing to do! *)
+       Mopsa_utils.Debug.warn "unrecognized tool %s, skipped" tool
   );
 
   (* now execute the original command *)
