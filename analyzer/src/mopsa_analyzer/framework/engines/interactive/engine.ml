@@ -477,6 +477,8 @@ struct
     state.command_callstack <- (Flow.get_callstack flow);
     let range = action_range action in
     match cmd with
+    | Crash -> assert false
+
     | Break loc ->
       let () =
         try
