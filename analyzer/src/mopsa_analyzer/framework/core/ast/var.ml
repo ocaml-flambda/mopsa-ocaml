@@ -74,18 +74,12 @@ let compare_mode (m1:mode) (m2:mode) = compare m1 m2
 
 let compare_var v1 v2 =
   if v1 == v2 then 0 else
-    let r = Stdlib.compare v1.vname v2.vname in
-    if r <> 0 then r
-    else
-      let r = Compare.compose [
-      (fun () -> TypeExt.compare var_compare_chain v1 v2);
-      (* (fun () -> Stdlib.compare v1.vname v2.vname); already checked *)
-      (fun () -> compare_typ v1.vtyp v2.vtyp);
-      (fun () -> compare_mode v1.vmode v2.vmode);
-      (fun () -> compare_semantic v1.vsemantic v2.vsemantic);
-                ] in
-      (* Format.eprintf "compare_var %a %a = %d %d %d(%a %a) %d@." pp_var v1 pp_var v2 (TypeExt.compare var_compare_chain v1 v2) (compare_typ v1.vtyp v2.vtyp) (compare_mode v1.vmode v2.vmode) pp_mode v1.vmode pp_mode v2.vmode (compare_semantic v1.vsemantic v2.vsemantic); *)
-      r
+    Compare.compose [
+        (fun () -> TypeExt.compare var_compare_chain v1 v2);
+        (fun () -> compare_typ v1.vtyp v2.vtyp);
+        (fun () -> compare_mode v1.vmode v2.vmode);
+        (fun () -> compare_semantic v1.vsemantic v2.vsemantic);
+      ]
 
 let register_var_compare f = TypeExt.register_compare f var_compare_chain
 

@@ -58,12 +58,11 @@ let compare_base_kind b b' = match b, b' with
   | _ -> compare b b'
 
 let compare_base b b' =
-  let r0 = compare_base_kind b.base_kind b'.base_kind in
-  if r0 <> 0 then r0 else
-  let r1 = compare b.base_valid b'.base_valid in
-  if r1 <> 0 then r1 else
-  Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range
-
+  Compare.compose [
+      (fun () -> compare_base_kind b.base_kind b'.base_kind);
+      (fun () -> compare b.base_valid b'.base_valid);
+      (fun () -> Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range)
+    ]
 
 let mk_base ?(valid=true) ?(invalidation_range=None) kind =
   { base_kind = kind;
