@@ -72,9 +72,8 @@ struct
 
   let is_bottom = function BOT -> true | _ -> false
 
-  (* is that so? what if u is top but l is not empty ? *)
   let is_top (su: t) =
-    bot_apply (fun _ (l, u) -> (* Set.is_empty l && *) USet.is_top u) false su
+    bot_apply (fun _ (l, u) -> Set.is_empty l && USet.is_top u) false su
 
   let subset (su1: t) (su2: t) : bool =
     bot_apply2 false false (fun (l1, u1) (l2, u2) -> Set.subset l1 l2 && USet.subset u1 u2) su1 su2
@@ -93,7 +92,7 @@ struct
   let inter = meet
 
   let widen ctx (su1: t) (su2: t) : t =
-    bot_neutral2 (fun (l1, u1) (l2, u2) -> Set.inter l1 l2, USet.join (* widen ctx *) u1 u2) su1 su2
+    bot_neutral2 (fun (l1, u1) (l2, u2) -> Set.inter l1 l2, USet.widen ctx u1 u2) su1 su2
 
   let fold_u (f : Elt.t -> 'a -> 'a) (s : t) (init : 'a) : 'a =
     bot_to_exn s |> (fun (_, u) -> USet.fold f u init)
