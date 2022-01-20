@@ -919,7 +919,7 @@ module Domain =
                            Eval.singleton (mk_int ~typ:T_int (-1) range)
                        )
                 | _ ->
-                   c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>%
+                   c_set_exception "PyExc_TypeError" (Format.asprintf "an integer is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>%
                      fun flow ->
                      Eval.singleton (mk_int ~typ:T_int (-1) range) flow
                 end
@@ -1139,9 +1139,12 @@ module Domain =
                   man.exec (mk_assign c (mk_c_subscript_access (mk_c_call pybytes_asstring [c_addr] range) (mk_zero range) range) range) flow >>% Cases.return 1
                 )
                 ~felse:(fun flow ->
-                  c_set_exception "PyExc_TypeError" "expected a byte string of length 1, got ???" range man flow >>% Cases.return 0)
+                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (Python.Utils.mk_builtin_call "len" [obj] range))) flow in
+                  c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, not of length %a"
+                                                       Universal.Numeric.Common.pp_int_interval itv_len)
+                    range man flow >>% Cases.return 0)
             else
-                  c_set_exception "PyExc_TypeError" "expected a byte string of length 1, got ???" range man flow >>% Cases.return 0
+                  c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, got a wrongly typed value %a" pp_addr addr) range man flow >>% Cases.return 0
 
          | 'd'
            | 'f' ->
@@ -1166,7 +1169,7 @@ module Domain =
                   man.exec (mk_assign c (if fmt = 'f' then mk_c_cast float_val (T_c_float C_float) range else float_val) range) flow >>% Cases.return 1)
             else
               let () = debug "not a float..." in
-              c_set_exception "PyExc_TypeError" "a float is required (got type ???)" range man flow >>% Cases.return 0
+              c_set_exception "PyExc_TypeError" (Format.asprintf "a float is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>% Cases.return 0
 
          | 'h' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
@@ -1184,7 +1187,7 @@ module Domain =
             else
               let () = debug "wrong type for convert_single integer" in
               (* set error *)
-              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+              c_set_exception "PyExc_TypeError" (Format.asprintf "an integer is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>% Cases.return 0
 
          | 'i' ->
             (* FIXME: this sould be a boundary between python and C.
@@ -1206,7 +1209,7 @@ module Domain =
             else
               let () = debug "wrong type for convert_single integer" in
               (* set error *)
-              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+              c_set_exception "PyExc_TypeError" (Format.asprintf "an integer is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>% Cases.return 0
 
          | 'n' ->
             if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_integers) = 0 then
@@ -1215,7 +1218,7 @@ module Domain =
               let pylong_as_ssizet = C.Ast.find_c_fundec_by_name "PyLong_AsSsize_t" flow in
               man.exec (mk_assign c (mk_c_call pylong_as_ssizet [c_addr] range) range) flow >>% Cases.return 1
             else
-              c_set_exception "PyExc_TypeError" "an integer is required (got type ???)" range man flow >>% Cases.return 0
+              c_set_exception "PyExc_TypeError" (Format.asprintf "an integer is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>% Cases.return 0
 
 
          | 'O' ->
@@ -1245,7 +1248,7 @@ module Domain =
               let pyunicode_asuas = C.Ast.find_c_fundec_by_name "PyUnicode_AsUTF8AndSize" flow in
               man.exec (mk_assign c (mk_c_call pyunicode_asuas [c_addr; mk_c_null range] range) range) flow >>% Cases.return 1
             else
-              c_set_exception "PyExc_TypeError" "a string is required (got type ???)" range man flow >>% Cases.return 0
+              c_set_exception "PyExc_TypeError" (Format.asprintf "a string is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>% Cases.return 0
 
          | _ ->
             if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
@@ -1512,7 +1515,7 @@ module Domain =
              (* FIXME: do the cast but for now it just doesn't work *)
              man.eval (mk_unop O_cast (mk_avalue_from_pyaddr addr (T_float F_DOUBLE) range)  ~etyp:(T_c_float C_double) range) flow
           | _ ->
-             c_set_exception "PyExc_TypeError" "a float is required (got type ???)" range man flow >>%
+             c_set_exception "PyExc_TypeError" (Format.asprintf "a float is required (got type %a)" pp_addr_kind (akind addr)) range man flow >>%
                Eval.singleton (mk_int ~typ:T_int (-1) range)
 
         ) |> OptionExt.return
