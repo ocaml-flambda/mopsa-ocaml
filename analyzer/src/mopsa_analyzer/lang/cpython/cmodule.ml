@@ -1130,7 +1130,7 @@ module Domain =
                   man.exec (mk_assign c (mk_c_subscript_access (mk_c_call pybytes_asstring [c_addr] range) (mk_zero range) range) range) flow >>% Cases.return 1
                 )
                 ~felse:(fun flow ->
-                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (Python.Utils.mk_builtin_call "len" [obj] range))) flow in
+                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.change_evar_type T_int (Python.Utils.mk_builtin_call "len" [obj] range))) flow in
                   c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, not of length %a"
                                                        Universal.Numeric.Common.pp_int_interval itv_len)
                     range man flow >>% Cases.return 0)
@@ -1958,7 +1958,8 @@ module Domain =
          Eval.singleton c_addr flow
         ) |> OptionExt.return
 
-      | E_c_builtin_call ("PyObject_RichCompareBool", [left; right; op]) ->
+      | E_c_builtin_call ("PyObject_RichCompareBool" as f, [left; right; op])
+      | E_c_builtin_call ("PyObject_RichCompare" as f, [left; right; op]) ->
          let check_null flow =
            assume (eq (mk_c_arrow_access_by_name (mk_var (search_c_globals_for flow "exc") range) "exc_state" range) (mk_c_null range) range) man flow
              ~fthen:(man.exec (mk_c_call_stmt (find_c_fundec_by_name "PyErr_BadInternalCall" flow) [] range))
@@ -1982,42 +1983,19 @@ module Domain =
          | 4 -> O_gt
          | 5 -> O_ge
          | _ -> assert false in
-         debug "py_left = %a, py_op = %a, py_right = %a" pp_expr py_left pp_operator py_op pp_expr py_right;
-         assume ~route:(Semantic "Python") (mk_binop ~etyp:(T_py None) py_left py_op py_right range) man flow
-           ~fthen:(Eval.singleton (mk_one range))
-           ~felse:(Eval.singleton (mk_zero range))
-           ~fboth:(fun f1 f2 -> Eval.singleton (mk_int_interval 0 1 range) (Flow.join man.lattice f1 f2))
-        ) |> OptionExt.return
-
-      | E_c_builtin_call ("PyObject_RichCompare", [left; right; op]) ->
-         let check_null flow =
-           assume (eq (mk_c_arrow_access_by_name (mk_var (search_c_globals_for flow "exc") range) "exc_state" range) (mk_c_null range) range) man flow
-             ~fthen:(man.exec (mk_c_call_stmt (find_c_fundec_by_name "PyErr_BadInternalCall" flow) [] range))
-               ~felse:(Post.return) >>%
-             man.eval (mk_c_null range) in
-         c_to_python_boundary ~on_null:check_null left man flow range >>$ (fun py_left flow ->
-         if compare_expr  py_left (mk_c_null range) = 0 then Eval.singleton py_left flow
+         let py_comp = mk_binop ~etyp:(T_py None) py_left py_op py_right range in
+         if f = "PyObject_RichCompareBool" then
+           assume ~route:(Semantic "Python") py_comp man flow
+             ~fthen:(Eval.singleton (mk_one range))
+             ~felse:(Eval.singleton (mk_zero range))
+             ~fboth:(fun f1 f2 -> Eval.singleton (mk_int_interval 0 1 range) (Flow.join man.lattice f1 f2))
          else
-         c_to_python_boundary ~on_null:check_null right man flow range >>$ fun py_right flow ->
-         if compare_expr  py_right (mk_c_null range) = 0 then Eval.singleton py_right flow
-         else
-         man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
-         let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
-           | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
-           | _ -> assert false in
-         let py_op = match op with
-         | 0 -> O_lt
-         | 1 -> O_le
-         | 2 -> O_eq
-         | 3 -> O_ne
-         | 4 -> O_gt
-         | 5 -> O_ge
-         | _ -> assert false in
-         man.eval ~route:(Semantic "Python") (mk_binop ~etyp:(T_py None) py_left py_op py_right range) flow >>$ fun py_result flow ->
-         let py_result_addr, py_result_oe = object_of_expr py_result in
-         let c_addr, flow = python_to_c_boundary py_result_addr None py_result_oe range man flow in
-         Eval.singleton c_addr flow
-        ) |> OptionExt.return
+           man.eval ~route:(Semantic "Python") py_comp flow >>$ fun py_result flow ->
+           let py_result_addr, py_result_oe = object_of_expr py_result in
+           let c_addr, flow = python_to_c_boundary py_result_addr None py_result_oe range man flow in
+           Eval.singleton c_addr flow
+         )
+         |> OptionExt.return
 
       | E_c_builtin_call ("PyObject_IsTrue", [v]) ->
          c_to_python_boundary v man flow range >>$ (fun py_v flow ->
