@@ -4,6 +4,9 @@
 #include <Python.h>
 #include <structmember.h>
 
+// transfer function in cmodule.c
+PyObject *PyUnicode_GetItem(PyObject *list, Py_ssize_t index);
+
 
 static inline void _noop(PyObject *op) {}
 
@@ -316,6 +319,13 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     return 0;
 }
 
+
+PyObject*
+PyModuleDef_Init(struct PyModuleDef* def)
+{
+    return PyModule_Create(def);
+}
+
 int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
 {
     PyObject *o = PyLong_FromLong(value);
@@ -328,6 +338,7 @@ int PyModule_AddIntConstant(PyObject *m, const char *name, long value)
     Py_DECREF(o);
     return -1;
 }
+
 
 static int
 check_num_args(PyObject *ob, int n)
@@ -734,6 +745,22 @@ _PyType_Assign_Helper(PyObject* obj, PyTypeObject* type)
     *(PyTypeObject**) ((char*)obj + offsetof(PyObject, ob_type)) = type;
 }
 
+
+static PySequenceMethods unicode_as_sequence =
+{
+    .sq_length=(lenfunc)PyObject_Size,
+    .sq_item=(ssizeargfunc)PyUnicode_GetItem,
+//    .sq_ass_item=???
+};
+
+static PyMappingMethods unicode_as_mapping = {
+    .mp_length=(lenfunc)PyObject_Size,
+    .mp_subscript=(binaryfunc)PyObject_GetItem,  /* mp_subscript */
+    .mp_ass_subscript=(objobjargproc)0,           /* mp_ass_subscript */
+};
+
+
+
 static PySequenceMethods list_as_sequence =
 {
     .sq_length=(lenfunc)PyList_Size,
@@ -772,6 +799,7 @@ init_flags()
     Py_TYPE(&PyUnicode_Type) = &PyType_Type;
     Py_TYPE(&PyList_Type) = &PyType_Type;
     Py_TYPE(&PyListIter_Type) = &PyType_Type;
+    Py_TYPE(&PySlice_Type) = &PyType_Type;
     Py_TYPE(&PySet_Type) = &PyType_Type;
     Py_TYPE(&PySetIter_Type) = &PyType_Type;
     Py_TYPE(&PyRange_Type) = &PyType_Type;
@@ -787,7 +815,8 @@ init_flags()
     PyBaseObject_Type.tp_as_sequence = 0;
     PyLong_Type.tp_as_sequence = 0;
     PyFloat_Type.tp_as_sequence = 0;
-    // FIXME: unicode_as_sequence
+    PyUnicode_Type.tp_as_sequence = &unicode_as_sequence;
+    PyUnicode_Type.tp_as_mapping = &unicode_as_mapping;
     PyTuple_Type.tp_as_sequence = &tuple_as_sequence;
     PySet_Type.tp_as_sequence = &set_as_sequence;
     PyList_Type.tp_as_sequence = &list_as_sequence;
@@ -796,6 +825,7 @@ init_flags()
     PySetIter_Type.tp_as_sequence = 0;
     PyListIter_Type.tp_as_sequence = 0;
     PyRangeIter_Type.tp_as_sequence = 0;
+    PySlice_Type.tp_as_sequence = 0;
     _PyNone_Type.tp_as_sequence = 0;
     _PyNotImplemented_Type.tp_as_sequence = 0;
     // FIXME: bytes_as_sequence
@@ -805,9 +835,11 @@ init_flags()
     PyBaseObject_Type.tp_iternext = 0;
     PyLong_Type.tp_iternext = 0;
     PyFloat_Type.tp_iternext = 0;
+    PyUnicode_Type.tp_iternext = 0;
     PyTuple_Type.tp_iternext = 0;
     PySet_Type.tp_iternext = 0;
     PyList_Type.tp_iternext = 0;
+    PySlice_Type.tp_iternext = 0;
     PyRange_Type.tp_iternext = 0;
     _PyNone_Type.tp_iternext = 0;
     _PyNotImplemented_Type.tp_iternext = 0;
@@ -820,8 +852,10 @@ init_flags()
     PyBaseObject_Type.tp_iter = 0;
     PyLong_Type.tp_iter = 0;
     PyFloat_Type.tp_iter = 0;
+    PyUnicode_Type.tp_iter = PyObject_GetIter;
     PyTuple_Type.tp_iter = PyObject_GetIter;
     PyList_Type.tp_iter = PyObject_GetIter;
+    PySlice_Type.tp_iter = 0;
     PySet_Type.tp_iter = PyObject_GetIter;
     PyRange_Type.tp_iter = PyObject_GetIter;
     PyTupleIter_Type.tp_iter = PyObject_GetIter; // FIXME should be selfiter for all Py*Iter_Type
@@ -854,6 +888,7 @@ init_flags()
     _PyNotImplemented_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_READY;
     PyBytes_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_BYTES_SUBCLASS | Py_TPFLAGS_READY;
     PyDict_Type.tp_flags =  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_READY;
+    PySlice_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_READY;
 }
 
 struct _longobject _Py_FalseStruct = {

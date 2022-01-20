@@ -140,6 +140,7 @@ let builtin_functions =
           "PyBytes_FromStringAndSize";
           "PyBytes_Size";
           "PyBytes_AsString";
+          "PyUnicode_GetItem";
           "PyUnicode_Concat";
           "PyUnicode_GetLength";
           "PyUnicode_InternFromString";
@@ -164,6 +165,7 @@ let builtin_functions =
           "PyDict_New";
           "PyDict_GetItem";
           "PyDict_SetItem";
+          "PySlice_New";
           "PySet_New";
           "PySet_Size";
           "PySet_Add";

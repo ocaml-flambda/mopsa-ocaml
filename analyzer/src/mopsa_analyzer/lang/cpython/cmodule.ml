@@ -216,7 +216,7 @@ module Domain =
       r
 
 
-    (* Creates stmt binder_addr · obj_name = obj_addr *)
+    (* Executes 𝕊⟦ binder_addr · obj_name = obj_addr ⟧ *)
     let bind_in_python binder_addr obj_name obj_addr range man flow =
       (* FIXME: bind_in_python should call the boundaries maybe? *)
       (if compare_addr_kind (akind obj_addr) (akind @@ OptionExt.none_to_exn @@ !Python.Types.Addr_env.addr_integers) = 0 then
@@ -386,15 +386,6 @@ module Domain =
         )
 
     let resolve_c_pointer_into_addr expr man flow =
-      (* FIXME: enable check and make proper casts to PyObject where needed? or allow pytypeobject* ? *)
-      (* let () = match etyp expr with
-       *   | T_c_pointer t ->
-       *      begin match remove_typedef_qual t with
-       *      | T_c_record c when c.c_record_kind = C_struct && c.c_record_org_name = "_object" -> ()
-       *      | _ -> panic_at expr.erange "resolve_c_pointer_into_addr: got %a of typ %a, expected PyObject*" pp_expr expr pp_typ (etyp expr)
-       *      end
-       *   | _ -> panic_at expr.erange "resolve_c_pointer_into_addr: got %a of typ %a, expected PyObject*" pp_expr expr pp_typ (etyp expr) in *)
-      (* None if Null is found, Some addr otherwise *)
       resolve_pointer expr man flow >>$
         (fun points_to flow ->
           debug "[resolve_c_pointer %a:%a] searching for %a" pp_expr expr pp_typ (etyp expr) pp_points_to points_to;
@@ -1331,6 +1322,7 @@ module Domain =
                    ("PyBytes_Type", "bytes");
                    ("PyList_Type", "list");
                    ("PyListIter_Type", "list_iterator");
+                   ("PySlice_Type", "slice");
                    ("PySet_Type", "set");
                    ("PySetIter_Type", "set_iterator");
                    ("PyRange_Type", "range");
@@ -2092,13 +2084,11 @@ module Domain =
       | E_c_builtin_call ("PyList_Size", [arg])
       | E_c_builtin_call ("PyTuple_Size", [arg])
       | E_c_builtin_call ("PyDict_Size", [arg]) ->
-         (* FIXME: check the type *)
-         resolve_c_pointer_into_addr arg man flow >>$
-           (fun oaddr flow ->
-             let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+         c_to_python_boundary arg man flow range >>$
+           (fun arg_value flow ->
              man.eval (Python.Ast.mk_py_call
                          (Python.Ast.mk_py_object (Python.Addr.find_builtin_function "len") range)
-                         [Python.Ast.mk_py_object (addr, None) range] range) flow >>$
+                         [arg_value] range) flow >>$
                (
                  fun earg flow ->
                  (* FIXME: handle integer boundary properly.
@@ -2216,11 +2206,13 @@ module Domain =
          ) |> OptionExt.return
 
 
+      | E_c_builtin_call ("PyUnicode_GetItem", [o; key])
       | E_c_builtin_call ("PyList_GetItem", [o; key])
       | E_c_builtin_call ("PyTuple_GetItem", [o; key]) ->
-         resolve_c_pointer_into_addr o man flow >>$? fun oaddr flow ->
-         let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
-         let py_o = Python.Ast.mk_py_object (addr, None) (tag_range range "%a" pp_addr_kind (akind addr)) in
+         c_to_python_boundary o man flow range >>$? (fun py_o flow ->
+         (* resolve_c_pointer_into_addr o man flow >>$? fun oaddr flow ->
+          * let addr = Top.detop @@ OptionExt.none_to_exn oaddr in
+          * let py_o = Python.Ast.mk_py_object (addr, None) (tag_range range "%a" pp_addr_kind (akind addr)) in *)
          c_int_to_python key man flow (tag_range range "key") >>$? fun py_key flow ->
          Python.Utils.try_eval_expr man ~route:(Semantic "Python")
            (Python.Ast.mk_py_call (Python.Ast.mk_py_attr py_o "__getitem__" range) [py_key] range) flow
@@ -2253,6 +2245,7 @@ module Domain =
              let c_addr, flow = python_to_c_boundary addr_py_elem None oe_py_elem range man flow in
              man.eval c_addr flow
            )
+        )
 
       | E_c_builtin_call ("PyDict_GetItem", [o; key])
       | E_c_builtin_call ("PyObject_GetItem", [o; key]) ->
@@ -2381,6 +2374,36 @@ module Domain =
          let c_addr, flow = python_to_c_boundary addr_earg None (snd @@ object_of_expr earg) range man flow in
          Eval.singleton c_addr flow)
          |> OptionExt.return
+
+      | E_c_builtin_call ("PySlice_New", [start; stop; step]) ->
+         fold_c_to_python_boundary man range [start; stop; step] flow >>$? (fun o_args flow ->
+          Python.Utils.try_eval_expr man ~route:(Semantic "Python")
+            (mk_py_call (Python.Ast.mk_py_object (find_builtin "slice") range) o_args range) flow
+           ~on_empty:(fun exc_exp exc_str exc_msg flow ->
+             man.eval ~route:(Semantic "Python") (mk_py_type exc_exp range) flow >>$? fun exc_typ flow ->
+             let exc_addr, exc_oe = object_of_expr exc_typ in
+             let exc_msg = Universal.Strings.Powerset.StringPower.elements exc_msg in
+             let setstring msg =
+               man.exec
+                 (mk_c_call_stmt
+                    (C.Ast.find_c_fundec_by_name "PyErr_SetString" flow)
+                    [
+                      mk_addr exc_addr range;
+                      msg
+                    ]
+                    range) flow
+               >>%
+                 man.eval (mk_c_null range) in
+             Eval.join_list ~empty:(fun () -> setstring (mk_c_null range))
+               (List.map (fun exc_msg -> setstring (mk_c_string exc_msg range)) exc_msg)
+             |> OptionExt.return
+           )
+           ~on_result:(fun py_res flow ->
+             let addr_py, oe_py = object_of_expr py_res in
+             let c_addr, flow = python_to_c_boundary addr_py None oe_py range man flow in
+             man.eval c_addr flow
+           )
+        )
 
       | E_c_builtin_call ("PySet_New", [iterable]) ->
          (* FIXME: refactor with c_to_python_boundary boundary and on_null... *)
