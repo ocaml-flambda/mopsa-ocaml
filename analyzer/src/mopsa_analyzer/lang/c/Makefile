@@ -38,7 +38,7 @@ mopsa_analyzer.lang.c.libs = libc libmopsa compiler_builtins
 mopsa_analyzer.lang.c.libs.libc.formatted_io = placeholder parser lexer format_string fscanf fprintf
 mopsa_analyzer.lang.c.libs.libc.file_descriptor = slot table domain
 mopsa_analyzer.lang.c.hooks = disj analysis_bugs coverage
-mopsa_analyzer.lang.c.packing = static_scope reductions
+mopsa_analyzer.lang.c.packing = static_scope
 
 
 

@@ -80,7 +80,7 @@
                             }
                         ],
                         "reductions": [
-                            "python.packing.reductions.intervals_static_scope"
+                            "universal.packing.reductions.intervals_static_scope"
                         ]
                     }
                 ]

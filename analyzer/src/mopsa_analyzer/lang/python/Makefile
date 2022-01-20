@@ -31,7 +31,7 @@ mopsa_analyzer.lang.python.libs = math py_mopsa py_std py_unittest py_typing
 mopsa_analyzer.lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
 mopsa_analyzer.lang.python.types = nominal_types addr_env structural_types polymorphism t_int t_float t_string  t_complex dummy_numeric type_annot
-mopsa_analyzer.lang.python.packing = static_scope intervals_static_scope
+mopsa_analyzer.lang.python.packing = static_scope
 
 
 # MOPSA libraries
