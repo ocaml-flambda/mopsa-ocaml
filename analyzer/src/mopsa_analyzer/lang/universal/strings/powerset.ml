@@ -237,7 +237,7 @@ struct
       | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
          eval man e1
       | _ -> v1 in
-    let v2 = match ekind e1 with
+    let v2 = match ekind e2 with
       | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
          eval man e2
       | _ -> v2 in
