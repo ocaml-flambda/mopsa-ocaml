@@ -366,6 +366,11 @@ struct
           Post.return flow_init
         else
           lfp 0 !opt_loop_widening_delay cond body man flow_init flow_init >>% fun flow_lfp ->
+          begin
+            if !opt_loop_decreasing_it then
+              decr_iteration cond body man flow_init flow_lfp
+            else Post.return flow_lfp
+          end >>% fun flow_lfp ->
           let flow_lfp = if !opt_loop_use_cache then
                            store_fixpoint man flow_lfp (stmt.srange, Flow.get_callstack flow_lfp) else flow_lfp in
           Post.return flow_lfp
