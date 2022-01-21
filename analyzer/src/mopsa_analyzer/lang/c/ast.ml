@@ -919,8 +919,10 @@ let mk_c_arrow_access_by_name r fname range =
 let mk_c_subscript_access a i range =
   mk_expr (E_c_array_subscript (a, i)) ~etyp:(under_type a.etyp) range
 
-let mk_c_character c range =
-  mk_constant (C_c_character ((Z.of_int @@ int_of_char c), C_char_ascii)) range ~etyp:(T_c_integer(C_unsigned_char))
+let mk_c_character c range t =
+  let x = int_of_char c in
+  let x = if is_signed t && x >= 128 then x - 256 else x in
+  mk_constant (C_c_character (Z.of_int x, C_char_ascii)) range ~etyp:t
 
 (* extract a multi-byte integer of type t starting at offset off of s *)
 let extract_multibyte_integer (s:string) (off:int) t =

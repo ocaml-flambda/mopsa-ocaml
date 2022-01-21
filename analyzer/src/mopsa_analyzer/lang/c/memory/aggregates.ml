@@ -168,10 +168,10 @@ struct
         then acc1, acc2
 
         else if i < String.length s
-        then aux (i+1) ((mk_c_character (String.get s i) erange, o, under_typ)::acc1) acc2
+        then aux (i+1) ((mk_c_character (String.get s i) erange under_typ, o, under_typ)::acc1) acc2
 
         else if i = String.length s
-        then aux (i+1) ((mk_c_character (char_of_int 0) erange, o, under_typ)::acc1) acc2
+        then aux (i+1) ((mk_c_character (char_of_int 0) erange under_typ, o, under_typ)::acc1) acc2
 
         else acc1,(None,Z.sub n (Z.of_int i), o, s8)::acc2
       in
