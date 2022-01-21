@@ -277,7 +277,7 @@ struct
       let argi = mk_c_subscript_access arg (mk_int i range) range in
       if i = n then man.exec (mk_assign argi zero range) flow
       else
-        man.exec (mk_assign argi (mk_c_character (String.get str i) range) range) flow >>% fun flow ->
+        man.exec (mk_assign argi (mk_c_character (String.get str i) range (etyp argi)) range) flow >>% fun flow ->
         aux (i + 1) flow
     in
     aux 0 flow
