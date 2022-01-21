@@ -63,6 +63,8 @@ let opt_library_only = ref false
 let opt_target_triple = ref ""
 (** Target architecture triple to analyze for (host if left empty) *)
 
+let opt_stubs_files = ref []
+(** Additional stub files to parse *)
 
 let () =
   register_language_option "c" {
@@ -120,6 +122,13 @@ let () =
     doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
     spec = ArgExt.Set opt_library_only;
     default = "false";
+  };
+  register_language_option "c" {
+    key = "-additional-stubs";
+    category = "C";
+    doc = " additional stubs file";
+    spec = ArgExt.Set_string_list opt_stubs_files;
+    default = "";
   };
   register_language_option "c" {
     key = "-target-triple";
@@ -326,6 +335,11 @@ and parse_stubs ctx () =
   parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
   (** Add compiler builtins *)
   parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/compiler_builtins.c") false false ctx;
+  List.iter (fun stub_file ->
+      try
+        parse_file ~stub:true "clang" [] (Filename.concat (Paths.get_stubs_dir ()) stub_file) false false ctx;
+      with SyntaxErrorList es ->
+        panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es) !opt_stubs_files;
   if !opt_without_libc then ()
   else
     (** Add stubs of the included headers *)

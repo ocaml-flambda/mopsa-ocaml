@@ -4,4 +4,4 @@ MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=python/multilanguage.json
 SHAREDIR=$(realpath ${MOPSADIR}/share/mopsa)
 
-${MOPSADIR}/bin/mopsa-python -config=${CONFIG} -hash-heap-address=true -split-returns -unprecise-exn=MemoryError -ccopt="-DMOPSA" -library-only -default-alloc-pol=range -I ${SHAREDIR}/stubs/cpython/ -use-stub=memset,vasprintf,memcpy,memmove,strcpy -no-warning $@
+${MOPSADIR}/bin/mopsa-python -config=${CONFIG} -hash-heap-address=true -split-returns -unprecise-exn=MemoryError  -library-only -default-alloc-pol=range -I=/usr/include/python3.8/ -ccopt="-include${SHAREDIR}/stubs/cpython/python_stubs.h" -additional-stubs=cpython/Python.c,cpython/python_stubs.c  -use-stub=memset,vasprintf,memcpy,memmove,strcpy $@

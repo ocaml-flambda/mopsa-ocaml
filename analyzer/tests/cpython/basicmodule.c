@@ -2,10 +2,6 @@
 #include <Python.h>
 #include <structmember.h>
 
-#ifdef MOPSA
-#include "python_stubs.c"
-#endif
-
 // the Cbox objects has two C fields:
 // - contents, which can be any python object
 // - counter, a C integer
@@ -564,8 +560,16 @@ basic_boom(PyObject* self, PyObject* args)
 /*     Py_RETURN_NONE; */
 }
 
+static PyObject*
+basic_checklen(PyObject* self, PyObject* args)
+{
+    PyObject* obj = PyTuple_GET_ITEM(args, 0);
+    Py_ssize_t len = PyObject_Length(obj);
+    return Py_BuildValue("i", len);
+}
 
 static PyMethodDef module_methods[] = {
+    {"checklen", (PyCFunction) basic_checklen, METH_VARARGS, ""},
     {"boom", (PyCFunction) basic_boom, METH_VARARGS, ""},
     {"typ", (PyCFunction) basic_typ, METH_VARARGS, ""},
     {"subtype", (PyCFunction) basic_subtype, METH_VARARGS, ""},

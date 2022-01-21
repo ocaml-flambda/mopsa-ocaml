@@ -364,5 +364,11 @@ class Test(unittest.TestCase):
         with self.assertRaises(TypeError):
             basic.pb_float("abc")
 
+    def test_checklen(self):
+        l = "smith"
+        cl = basic.checklen(l)
+        pyl = len(l)
+        self.assertEqual(cl, pyl)
+
 if __name__ == "__main__":
     unittest.main()

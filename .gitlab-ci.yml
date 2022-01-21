@@ -48,8 +48,8 @@ build_job:
 test-cpython 1/1:
   variables:
     CPY_FILE: 'basic_tests.py'
-    NB_CHECKS: '140'
-    NB_SAFE: '139'
+    NB_CHECKS: '141'
+    NB_SAFE: '140'
   extends: .test-cpython
 
 ###########
