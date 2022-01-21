@@ -300,6 +300,9 @@ struct
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__hash__", _))}, _)}, args, []) ->
+        man.eval (mk_py_top T_int range) flow
+        |> OptionExt.return
 
     | _ -> None
 
