@@ -309,7 +309,7 @@ struct
       process_simple f man flow range args in_args out_type
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], [])  ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], ([(Some "reverse", _)] | []))  ->
       (* todo: call list on obj first *)
       let seq = mk_range_attr_var range "sorted" (T_py None) in
       man.exec (mk_assign (mk_var seq range) obj range) flow >>%
@@ -393,9 +393,9 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
-      |> OptionExt.return
+    (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
+     *   Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
+     *   |> OptionExt.return *)
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round", _))}, _)}, args, []) ->
        man.eval (List.hd args) flow >>$ (fun number flow ->

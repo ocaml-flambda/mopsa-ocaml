@@ -1070,8 +1070,16 @@ class ResourceWarning(Warning): pass
 #################
 
 def abs(x): pass
-def all(itr): pass
-def any(itr): pass
+@mopsa.stub
+def all(itr):
+    for x in itr:
+        if not x: return False
+    return True
+@mopsa.stub
+def any(itr):
+    for x in itr:
+        if x: return True
+    return False
 def ascii(x): pass
 def bin(x): pass
 def callable(obj): pass
