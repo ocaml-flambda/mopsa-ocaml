@@ -175,7 +175,7 @@ struct
       let bytes = mk_bytes_var addr in
       man.exec (mk_add_var bytes eaddr.erange) flow >>%
       (* Add the address dimension to memory abstraction *)
-      man.exec ~route:(Semantic "C") (mk_add eaddr range) >>%
+      man.exec ~route:(Below name) (mk_add eaddr range) >>%
       Eval.singleton eaddr
 
     | _ -> assert false
