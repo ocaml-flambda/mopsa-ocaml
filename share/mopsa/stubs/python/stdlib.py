@@ -144,8 +144,6 @@ class int(object):
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
     @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
-    @mopsa.type("wrapper_descriptor")
     def __index__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __int__(self): pass
@@ -259,8 +257,6 @@ class float(object):
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
     @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
-    @mopsa.type("wrapper_descriptor")
     def __int__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __le__(self, other): pass
@@ -335,8 +331,6 @@ class complex(object):
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
     @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
-    @mopsa.type("wrapper_descriptor")
     def __int__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __le__(self, other): pass
@@ -402,8 +396,6 @@ class str(object):
     def __getnewargs__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
-    @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
     @mopsa.type("wrapper_descriptor")
