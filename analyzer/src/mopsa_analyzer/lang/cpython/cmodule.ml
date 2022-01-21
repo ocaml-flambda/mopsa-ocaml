@@ -1130,7 +1130,8 @@ module Domain =
                   man.exec (mk_assign c (mk_c_subscript_access (mk_c_call pybytes_asstring [c_addr] range) (mk_zero range) range) range) flow >>% Cases.return 1
                 )
                 ~felse:(fun flow ->
-                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.change_evar_type T_int (Python.Utils.mk_builtin_call "len" [obj] range))) flow in
+                  man.eval (Python.Utils.mk_builtin_call "len" [obj] range) flow >>$ fun py_len flow ->
+                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.extract_oobject py_len)) flow in
                   c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, not of length %a"
                                                        Universal.Numeric.Common.pp_int_interval itv_len)
                     range man flow >>% Cases.return 0)
