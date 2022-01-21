@@ -35,7 +35,7 @@ mopsa_analyzer.lang.universal.numeric.packing = strategy functor
 mopsa_analyzer.lang.universal.numeric.relational = apron_manager binding apron_transformer \
                                                    apron_pp domain instances
 mopsa_analyzer.lang.universal.numeric.reductions = intervals_congruences intervals_rel intervals_powerset numeric_eval
-mopsa_analyzer.lang.universal.packing = static
+mopsa_analyzer.lang.universal.packing = static intervals_static_scope
 mopsa_analyzer.lang.universal.hooks = logs progress function_profiler loop_profiler gctest constant_widening_thresholds
 mopsa_analyzer.lang.universal.toy = string_length string_summarization string_reduction
 

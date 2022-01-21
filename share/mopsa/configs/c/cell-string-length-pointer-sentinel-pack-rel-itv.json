@@ -80,7 +80,7 @@
                             }
                         ],
                         "reductions": [
-                            "universal.packing.reductions.intervals_static_scope"
+                            "reductions.c.memory.packing.static_scope"
                         ]
                     }
                 ]

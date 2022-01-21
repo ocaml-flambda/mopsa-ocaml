@@ -26,20 +26,19 @@
 open Mopsa
 open Sig.Reduction.Simplified
 open Sig.Abstraction.Simplified
-open Universal.Packing.Static
+open Static
 open Bot_top
 
-module Reduction =
+module ReductionMake(S : Static.STRATEGY) : SIMPLIFIED_REDUCTION =
 struct
 
-  let name = "c.memory.packing.reductions.intervals_static_scope"
+  let name = "reductions." ^ S.name
   let debug fmt = Debug.debug ~channel:name fmt
 
-  module I = Universal.Numeric.Values.Intervals.Integer.Value
-  module S = Static_scope.Strategy
+  module I = Numeric.Values.Intervals.Integer.Value
   module M = Framework.Lattices.Partial_map
-  module O = Universal.Numeric.Relational.Instances.Octagon
-  module P = Universal.Numeric.Relational.Instances.Polyhedra
+  module O = Numeric.Relational.Instances.Octagon
+  module P = Numeric.Relational.Instances.Polyhedra
 
   (** Signature of relational numeric domains with the additional functions
       [related_vars], [bound_var] and [vars] functions.
@@ -58,7 +57,7 @@ struct
 
   (** Get the packing map and the underlying relational domain *)
   let get_pack_map man a : pack_map =
-    match !Universal.Numeric.Relational.Instances.opt_numeric with
+    match !Numeric.Relational.Instances.opt_numeric with
     | "octagon" ->
       let aa = man.get_env (D_static_packing (S.id,O.id)) a in
       PM (aa, (module O))
@@ -151,5 +150,7 @@ struct
 end
 
 
-let () =
+let register_itv_packing_reduction s =
+  let module S = (val s : STRATEGY) in
+  let module Reduction = ReductionMake(S) in
   register_simplified_reduction (module Reduction)

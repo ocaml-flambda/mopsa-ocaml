@@ -111,4 +111,5 @@ end
 
 (** Registration *)
 let () =
-  Universal.Packing.Static.register_strategy (module Strategy)
+  Universal.Packing.Static.register_strategy (module Strategy);
+  Universal.Packing.Intervals_static_scope.register_itv_packing_reduction (module Strategy)
