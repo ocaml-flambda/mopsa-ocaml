@@ -40,7 +40,7 @@ open Sig.Reduction.Exec
 open Sig.Reduction.Eval
 open Sig.Reduction.Simplified
 open Sig.Reduction.Value
-              
+
 
 (** {2 Configuration file} *)
 (** ********************** *)
@@ -49,6 +49,23 @@ open Sig.Reduction.Value
 let opt_config = ref ""
 
 
+
+let all_domains () =
+  stacked_domain_names () @
+  standard_domain_names () @
+  simplified_domain_names () @
+  stateless_domain_names () @
+  value_abstraction_names () @
+  stacked_functor_names () @
+  domain_functor_names () @
+  simplified_functor_names () @
+  value_functor_names ()
+
+let all_reductions () =
+  simplified_value_reductions () @
+  eval_reductions () @
+  exec_reductions () @
+  simplified_reductions ()
 
 (** {2 Domain parser} *)
 (** ***************** *)
@@ -63,7 +80,7 @@ let rec parse_domain json : domain =
           try D_domain(find_standard_domain name)     with Not_found ->
           try D_stateless(find_stateless_domain name) with Not_found ->
           try D_simplified(find_simplified_domain name)
-          with Not_found -> Exceptions.panic "Domain '%s' not found" name
+          with Not_found -> Exceptions.panic "Domain '%s' not found@.Available domains: %a" name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) (all_domains ())
         in
         mk_domain d ~semantic
       );
@@ -89,7 +106,7 @@ and parse_domain_reduction (name:string) : domain_reduction =
   try DR_eval(find_eval_reduction name) with Not_found ->
   try DR_exec(find_exec_reduction name) with Not_found ->
   try DR_simplified(find_simplified_reduction name)
-  with Not_found -> Exceptions.panic "Domain reduction '%s' not found" name
+  with Not_found -> Exceptions.panic "Domain reduction '%s' not found@.Available reductions: %a" name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) (all_reductions ())
 
 and parse_domain_functor name : domain_functor =
   try F_stacked(find_stacked_functor name) with Not_found ->
@@ -148,17 +165,6 @@ let language file : string =
   let json = Yojson.Basic.from_file file in
   get_language json
 
-let all_domains () =
-  stacked_domain_names () @
-  standard_domain_names () @
-  simplified_domain_names () @
-  stateless_domain_names () @
-  value_abstraction_names () @
-  stacked_functor_names () @
-  domain_functor_names () @
-  simplified_functor_names () @
-  value_functor_names ()
-
 let domains file : string list =
   if file = "" then
     all_domains ()
@@ -176,5 +182,3 @@ let domains file : string list =
     }
     and get_names json = Visitor.visit name_visitor json in
     get_names domain
-
-

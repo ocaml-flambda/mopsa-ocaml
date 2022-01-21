@@ -21,22 +21,22 @@
 
 (** Signature of reduction rules for product evaluations
 
-    In a reduced product, evaluations of member domains are combined by 
-    conjunction. Since each domain [Di] can return disjunctive evaluations 
-    [(e_i1, f_i1) ∨ ... ], the overall evaluation of [D1 ∧ ... ∧ Dn] is 
-    translated into a disjunctive normal form 
+    In a reduced product, evaluations of member domains are combined by
+    conjunction. Since each domain [Di] can return disjunctive evaluations
+    [(e_i1, f_i1) ∨ ... ], the overall evaluation of [D1 ∧ ... ∧ Dn] is
+    translated into a disjunctive normal form
     [(e_11 ∧ ... ∧ e_n1, f_11 ∩ ... ∩ f_n1) ∨ ...]
 
     Each resulting conjunction, called a product evaluation, represents the
     evaluations of the domains on the same state partition. Since expressions
     can not be combined, a transfer function [F] performed over a product
-    evaluation [(e_1 ∧ ... ∧ e_n, f)] is equivalent to 
+    evaluation [(e_1 ∧ ... ∧ e_n, f)] is equivalent to
     [(F e_1 f) ∩ ... ∩ (F e_n f)], which is inefficient.
 
     The goal of a reduction rule is to reduce a product evaluation
     [(e_1 ∧ ... ∧ e_n, f)] into a more efficient evaluation [(e', f')] by
     keeping the most precise evaluation and eventually keep information about
-    the other ones in the abstract state (such as equality with [e']). 
+    the other ones in the abstract state (such as equality with [e']).
  *)
 
 open Core.All
@@ -71,3 +71,6 @@ val register_eval_reduction : (module EVAL_REDUCTION) -> unit
 
 (** Find an eval reduction by its name *)
 val find_eval_reduction : string -> (module EVAL_REDUCTION)
+
+(** List all eval reductions *)
+val eval_reductions : unit -> string list

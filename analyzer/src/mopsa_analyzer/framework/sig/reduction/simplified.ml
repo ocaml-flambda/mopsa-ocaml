@@ -59,3 +59,9 @@ let find_simplified_reduction name =
       let module V = (val v : SIMPLIFIED_REDUCTION) in
       compare V.name name = 0
     ) !simplified_reductions
+
+let simplified_reductions () =
+  List.map (fun v ->
+      let module D = (val v : SIMPLIFIED_REDUCTION) in
+      D.name
+    ) !simplified_reductions
