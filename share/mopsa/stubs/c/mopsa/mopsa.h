@@ -22,6 +22,8 @@
 #ifndef _MOPSA_H
 #define _MOPSA_H
 
+#define __MOPSA__
+
 #include <stddef.h>
 
 // Generators of typed random values
