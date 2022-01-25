@@ -65,8 +65,7 @@ let fix_va_list = true
    as it refuses to call __builtin_va_arg with anything other than va_list
  *)
 
-(* FIXME: hack for CPython *)
-let remove_unused_static = false
+let remove_unused_static = true
 (* remove static functions that are not referenced in a translation unit
    to improve performance
  *)
