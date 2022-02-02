@@ -33,8 +33,8 @@ type command =
   | Continue
   (** Stop at next breakpoint *)
 
-  | Crash
-  (* Asserts false and crashes. Useful to get the backtrace sometimes *)
+  | MopsaBackTrace
+  (* Returns the current backtrace of Mopsa *)
 
   | Next
   (** Stop at next statement and skip function calls *)
@@ -107,7 +107,7 @@ and set_command =
 (** Print a command *)
 let pp_command fmt = function
   | Break loc   -> Format.fprintf fmt "break %s" loc
-  | Crash       -> Format.fprintf fmt "crash"
+  | MopsaBackTrace -> Format.fprintf fmt "mopsa_bt"
   | Continue    -> Format.pp_print_string fmt "continue"
   | Next        -> Format.pp_print_string fmt "next"
   | Finish      -> Format.pp_print_string fmt "finish"
@@ -148,7 +148,6 @@ let print_usage () =
   printf "  b[reak] <[file:]line> add a breakpoint at a line@.";
   printf "  b[reak] <function>    add a breakpoint at a function@.";
   printf "  c[ontinue]            run until next breakpoint@.";
-  printf "  crash                 trigger an assert false and terminates the program. To be used in conjunction with OCAMLRUNPARAM=b@.";
   printf "  n[ext]                stop at next statement and skip function calls.@.";
   printf "  n[ext]i               stop at next statement and skip nodes in the interpretation sub-tree@.";
   printf "  s[tep]                step into function calls@.";
@@ -173,6 +172,7 @@ let print_usage () =
   printf "  s[et] d[ebug] <d>     set debug channels@.";
   printf "  u[nset] d[ebug]       unset debug channels@.";
   printf "  save <file>           save the abstract state in a file@.";
+  printf "  mopsa_bt              shows the current backtrace of the analyzer";
   printf "  help                  print this message@.";
   ()
 
@@ -235,7 +235,7 @@ let rec read_command () =
   in
   match parts with
   | ["continue" | "c"]   -> Continue
-  | ["crash"]            -> Crash
+  | ["mopsa_bt"]         -> MopsaBackTrace
   | ["next"     | "n"]   -> Next
   | ["step"     | "s"]   -> Step
   | ["finish"   | "f"]   -> Finish

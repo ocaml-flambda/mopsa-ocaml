@@ -477,7 +477,9 @@ struct
     state.command_callstack <- (Flow.get_callstack flow);
     let range = action_range action in
     match cmd with
-    | Crash -> assert false
+    | MopsaBackTrace ->
+       Printexc.print_raw_backtrace Stdlib.stdout (Printexc.get_callstack Int.max_int);
+       interact action flow
 
     | Break loc ->
       let () =
