@@ -361,7 +361,7 @@ module Domain =
       let rec parse basename stmt globals flow : stmt * var list * 'a flow  =
         let range = srange stmt in
         match skind stmt with
-        | S_assign ({ekind = E_var (v, _)}, {ekind = E_constant (C_int i)}) ->
+        | S_assign ({ekind = E_var (v, _)}, {ekind = E_constant _ | E_py_tuple _}) ->
            stmt, globals, flow
 
         | S_assign ({ekind = E_var (v, _)}, e) ->

@@ -205,7 +205,7 @@ struct
       if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && not @@ is_top strings_e1 && cardinal strings_e1 <= 3 then
         fold (fun str acc ->
             List.fold_left (fun acc nb ->
-                if Z.leq nb Z.zero then (* FIXME to_int *)
+                if Z.leq nb Z.zero then
                   add "" acc
                 else
                   add (repeat str (Z.to_int nb)) acc

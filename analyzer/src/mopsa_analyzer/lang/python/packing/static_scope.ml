@@ -23,7 +23,6 @@
 
     Global variables are kept in the same pack
     Functions have their own packs containing parameters, local variables and return value
-    Addr attribute packs with addr_kind?
 *)
 
 open Mopsa
@@ -41,7 +40,6 @@ struct
   type pack =
     | Globals          (** Pack of global variables *)
     | Locals of var    (** Pack of local variables of a function *)
-    (* | Addr of addr_kind   (\** ??? *\) *)
 
   (** Generate a unique ID for the strategy *)
   include GenDomainId(struct
@@ -61,7 +59,6 @@ struct
   let print printer = function
     | Globals  -> pp_string printer "pack-[globals]"
     | Locals f -> pp_string printer (Format.asprintf "pack-%a" pp_var f)
-    (* | User u  -> pp_user_pack printer u *)
 
   (** Initialization *)
   let init prog = ()
@@ -94,8 +91,6 @@ struct
             | None -> []
             | Some f -> [Locals f.py_func_var]
           end
-    (* Search in body to find corresponding function *)
-    (* | V_addr_attr({addr_kind = Python.Addr.A_py_instance {}}, _) -> {} *)
 
     | V_addr_attr({addr_kind = (Objects.Py_list.A_py_list | Objects.Py_list.A_py_iterator _ | A_py_instance {addr_kind = A_py_class (C_builtin "range", _) }); addr_partitioning = Universal.Heap.Policies.G_range r | Universal.Heap.Policies.G_stack_range (_, r)}, _) ->
        begin
