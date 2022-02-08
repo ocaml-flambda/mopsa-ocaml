@@ -12,6 +12,7 @@ stages:
 - build
 - test
 - benchmarks
+- downstream_benchmarks
 
 build_job:
   stage: build
@@ -27,6 +28,81 @@ build_job:
     - ./analyzer/share
     expire_in: 2h
 
+
+###########################################################
+# Trigger downstream benchmarks in case of merge requests #
+###########################################################
+.downstream-benchs:
+  stage: downstream_benchmarks
+  variables:
+    CI_DEBUG_TRACE: "true"
+    GIT_REPO: "${CI_MERGE_REQUEST_SOURCE_PROJECT_URL}.git"
+    BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+  trigger:
+    project: $PROJECT_NAME
+    branch: $PROJECT_BRANCH
+  # rules:
+  #   - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
+downstream-benchs 1/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/coreutils-benchmarks
+    PROJECT_BRANCH: ci_args
+  extends: .downstream-benchs
+
+downstream-benchs 2/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/juliet-benchmarks
+    PROJECT_BRANCH: fix/json
+  extends: .downstream-benchs
+
+downstream-benchs 3/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/pathpicker-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 4/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/pyperformance-benchmarks
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 5/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/cdistance-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 6/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/pyahocorasick-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 7/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/noise-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 8/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/levenshtein-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 9/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/llist-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
+
+downstream-benchs 10/10:
+  variables:
+    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/bitarray-analysis
+    PROJECT_BRANCH: master
+  extends: .downstream-benchs
 
 
 #################
