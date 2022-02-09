@@ -31,20 +31,9 @@
 #include <errno.h>
 #include "mopsa_libc_utils.h"
 
-
-/*
-  Starting from glibc 2.28, stdin and stdout and stderr have type
-  FILE* not struct _IO_FILE*
-*/
-#if __GLIBC_MINOR__ <= 27
-#define _FILE_ struct _IO_FILE
-#else
-#define _FILE_ FILE
-#endif
-
-_FILE_ *stdin;
-_FILE_ *stdout;
-_FILE_ *stderr;
+FILE *stdin;
+FILE *stdout;
+FILE *stderr;
 
 #define STD_BUFFER_SIZE 100
 char _std_buffer[STD_BUFFER_SIZE];
@@ -52,8 +41,8 @@ char _std_buffer[STD_BUFFER_SIZE];
 /*$
  * local: void *f = new FileRes;
  * local: int fd = _mopsa_register_file_resource(f);
- * local: _FILE_* file = new File;
- * ensures: bytes(file) == sizeof_type(_FILE_);
+ * local: FILE* file = new File;
+ * ensures: bytes(file) == sizeof_type(FILE);
  * ensures: file->_fileno == fd;
  * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_ptr == &(_std_buffer[i]);
  * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_read_end == &(_std_buffer[i]);
@@ -63,7 +52,7 @@ char _std_buffer[STD_BUFFER_SIZE];
  * ensures: exists size_t i in [0, STD_BUFFER_SIZE - 1]: file->_IO_write_base == &(_std_buffer[i]);
  * ensures: return == file;
  */
-_FILE_ *_alloc_std_stream();
+FILE *_alloc_std_stream();
 
 
 
@@ -71,9 +60,9 @@ _FILE_ *_alloc_std_stream();
  * assigns: stdin;
  * assigns: stdout;
  * assigns: stderr;
- * local:   _FILE_* fstdin = _alloc_std_stream();
- * local:   _FILE_* fstdout = _alloc_std_stream();
- * local:   _FILE_* fstderr = _alloc_std_stream();
+ * local:   FILE* fstdin = _alloc_std_stream();
+ * local:   FILE* fstdout = _alloc_std_stream();
+ * local:   FILE* fstderr = _alloc_std_stream();
  * ensures: stdin' == fstdin;
  * ensures: stdout' == fstdout;
  * ensures: stderr' == fstderr;

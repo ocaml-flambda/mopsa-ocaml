@@ -65,7 +65,7 @@ let rec is_simplified_domain d =
 let rec make_simplified_product (domains:domain list) (reductions:domain_reduction list) : (module SIMPLIFIED_COMBINER) =
   Combiners.Domain.Simplified_product.make
     (List.map make_simplified_domain domains)
-    (List.fold_left
+    ~rules:(List.fold_left
        (fun acc -> function DR_simplified r -> r :: acc | _ -> acc)
        [] reductions)
 
@@ -217,10 +217,10 @@ and make_stacked_domain_without_semantic (domain:domain) : (module STACKED_COMBI
     else
       Combiners.Domain.Product.make
         (List.map make_stacked_domain domains)
-        (List.fold_left
+        ~eval_rules:(List.fold_left
            (fun acc -> function DR_eval r -> r :: acc | _ -> acc)
            [] reductions)
-        (List.fold_left
+        ~exec_rules:(List.fold_left
            (fun acc -> function DR_exec r -> r :: acc | _ -> acc)
            [] reductions)
 

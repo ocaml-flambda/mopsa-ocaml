@@ -455,7 +455,7 @@ struct
 
   (** Manager used by reductions *)
   let exec_reduction_man (man:('a, t) man) : 'a exec_reduction_man = {
-    get_man = (fun id -> find_domain_man id Pool.id man);
+    get_man = (fun id -> find_domain_man ~target:id ~tree:Pool.id man);
   }
 
 
@@ -503,7 +503,7 @@ struct
 
   (** Manager used by reductions *)
   let eval_reduction_man (man:('a, t) man) : 'a eval_reduction_man = {
-    get_man = (fun id -> find_domain_man id Pool.id man);
+    get_man = (fun id -> find_domain_man ~target:id ~tree:Pool.id man);
   }
 
 
