@@ -9,9 +9,8 @@ FROM ubuntu:20.04
 # configuration: required packages
 ##
 
-ENV APT_DEPS build-essential opam llvm-10-dev libclang-10-dev \
-             libclang-cpp10-dev clang-10 libgmp-dev libmpfr-dev  \
-             git pkg-config \
+ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
+             llvm-10-dev libclang-10-dev libclang-cpp10-dev clang-10  \
              python3-dev python3-setuptools python3-pip python3-requests
 
 ENV OPAM_DEPS apron zarith menhir yojson
