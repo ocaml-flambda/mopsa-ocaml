@@ -158,7 +158,10 @@ class Report:
             self.time = float(data["time"])
             if data["success"]:
                 self.success = True
-                self.alarms = { Alarm(a) for a in data["alarms"] }
+                if data["version"] == "1.0~pre1":
+                    self.alarms = { Alarm(a) for a in data["alarms"] }
+                else:
+                    self.alarms = { Alarm(a) for a in data["checks"] if x["kind"] == "error"}
                 self.assumptions = { Assumption(w) for w in data["assumptions"] }
                 self.exception = None
             else:
