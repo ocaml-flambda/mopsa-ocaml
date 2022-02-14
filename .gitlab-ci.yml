@@ -35,14 +35,18 @@ build_job:
 .downstream-benchs:
   stage: downstream_benchmarks
   variables:
-    CI_DEBUG_TRACE: "true"
-    GIT_REPO: "${CI_MERGE_REQUEST_SOURCE_PROJECT_URL}.git"
+    GIT_REPO: "gitlab.com/${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH}.git"
     BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
-  trigger:
-    project: $PROJECT_NAME
-    branch: $PROJECT_BRANCH
-  # rules:
-  #   - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  # trigger:
+  #   project: $PROJECT_NAME
+  #   branch: $PROJECT_BRANCH
+  script:
+    - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
+    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
+    - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
+    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
+  only:
+    - merge_requests
 
 downstream-benchs 1/10:
   variables:
