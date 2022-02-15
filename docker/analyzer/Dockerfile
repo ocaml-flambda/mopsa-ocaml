@@ -14,6 +14,7 @@ RUN \
     make install && \
     make tests && \
     mopsa -v && \
+    cd /home/mopsa && \
     mkdir workspace
 
 WORKDIR /home/mopsa
