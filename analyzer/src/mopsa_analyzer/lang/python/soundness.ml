@@ -24,23 +24,23 @@
 open Mopsa
 open Ast
 
-type assumption_kind += A_py_use_type_annot of range * var * Ast.py_func_sig * expr
+type assumption_kind += A_py_use_type_annot of range * var * Ast.py_func_sig
 
 let () = register_assumption {
     print = (fun next fmt -> function
-              | A_py_use_type_annot (r, v, annot, e) ->
-                 Format.fprintf fmt "Used type annotation %a(%a) -> %a in call %a@.Annotation source: %a" pp_var v Ast.pp_py_func_sig annot pp_expr e  (OptionExt.print pp_expr) annot.py_funcs_type_out pp_relative_range r
+              | A_py_use_type_annot (r, v, annot) ->
+                 Format.fprintf fmt "Used type annotation %a(%a) -> %a@.Annotation source: %a" pp_var v Ast.pp_py_func_sig annot  (OptionExt.print pp_expr) annot.py_funcs_type_out pp_relative_range r
               | a -> next fmt a
       );
     compare = (fun next a1 a2 ->
         match a1,a2 with
-        | A_py_use_type_annot (r1, v1, a1, e1), A_py_use_type_annot (r2, v2, a2, e2) ->
+        | A_py_use_type_annot (r1, v1, a1), A_py_use_type_annot (r2, v2, a2) ->
            Compare.compose
              [
                (fun () -> compare_range r1 r2);
                (fun () -> compare_var v1 v2);
                (fun () -> Ast.compare_py_func_sig a1 a2);
-               (fun () -> compare_expr e1 e2) ]
+             ]
         | _ -> next a1 a2
       );
   }

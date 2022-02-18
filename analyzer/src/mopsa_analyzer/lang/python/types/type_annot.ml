@@ -313,7 +313,7 @@ struct
                           raised_exn @ acc, flow_notok
                         else
                           let ret = (
-                              Flow.add_local_assumption (Soundness.A_py_use_type_annot (pyannot.py_funca_range, pyannot.py_funca_var, sign, exp)) range nflow |>
+                              Flow.add_global_assumption (Soundness.A_py_use_type_annot (pyannot.py_funca_range, pyannot.py_funca_var, sign)) nflow |>
                               Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range |>
                               Eval.singleton (mk_var ret_var range) ~cleaners:([mk_remove_var ret_var range]) >>$
  (man.eval)) in
