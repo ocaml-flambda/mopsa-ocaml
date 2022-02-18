@@ -42,7 +42,7 @@ build_job:
   #   branch: $PROJECT_BRANCH
   script:
     - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
-    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
+#    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
     - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
     - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
   only:
