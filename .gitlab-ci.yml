@@ -109,6 +109,106 @@ downstream-benchs 10/10:
   extends: .downstream-benchs
 
 
+###########
+# C tests #
+###########
+
+test-c:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    C_FILES: 'array_tests.c goto_tests.c libc/errno_tests.c libc/malloc_tests.c libc/builtin_constant_p_tests.c libc/file_tests.c libc/alloca_tests.c libc/variadic_tests.c libc/free_tests.c libc/memcpy_tests.c switch_tests.c  bitshift_tests.c enum_tests.c cond_expr_tests.c function_tests.c  for_tests.c struct_tests.c stubs/macro_tests.c stubs/case_tests.c stubs/directive_tests.c stubs/local_tests.c  stubs/alias_tests.c stubs/assigns_tests.c stubs/global_predicate_tests.c stubs/implies_tests.c stubs/builtins_tests.c stubs/memory_resource_tests.c union_tests.c string_tests.c float_tests.c int_tests.c pointer_tests.c'
+  script:
+    - eval `opam config env`
+    - |
+      for C_FILE in $C_FILES
+        do
+          echo $C_FILE
+          $MOPSA_C analyzer/tests/c/$C_FILE
+        done
+
+###################
+# Universal tests #
+###################
+
+
+test-u:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    U_FILES: 'int_tests.u function_tests.u loop_tests.u'
+  script:
+    - eval `opam config env`
+    - |
+      for U_FILE in $U_FILES
+        do
+          echo $U_FILE
+          $MOPSA_U analyzer/tests/universal/$U_FILE
+        done
+
+################
+# Python tests #
+################
+
+
+test-pyty:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    PY_FILES: 'int_tests.py misc_tests.py exception_tests.py'
+  script:
+    - eval `opam config env`
+    - |
+      for PY_FILE in $PY_FILES
+        do
+          echo $PY_FILE
+          ./bin/mopsa-python-types -unittest analyzer/tests/python/types/$PY_FILE
+        done
+
+test-py:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    PY_FILES: 'bool_tests.py builtins_tests.py class_tests.py dict_tests.py exception_tests.py float_tests.py function_tests.py generator_tests.py int_tests.py iter_assign_tests.py loop_tests.py misc_tests.py operator_tests.py str_tests.py with_tests.py'
+  script:
+    - eval `opam config env`
+    - |
+      for PY_FILE in $PY_FILES
+        do
+          echo $PY_FILE
+          ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
+        done
+
+
+test-py-no-unittest:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    PY_FILES: 'list_tests.py import_tests.py'
+  script:
+    - eval `opam config env`
+    - cd analyzer/tests/python
+    - |
+      for PY_FILE in $PY_FILES
+        do
+          echo $PY_FILE
+          ../../../bin/mopsa-python -silent $PY_FILE
+        done
+
+test-typpete:
+  stage: test
+  dependencies: [build_job]
+  variables:
+    PY_FILES: 'bellman_ford.py builtins_test.py callable_class.py callable_interface_generic.py classes.py class_pre_store.py comparison_test.py cookie.py coop_concatenate.py crafting_challenge.py deceitful.py default_args_class.py dict_methods.py disjoint_sets.py eight_queens.py except_clause.py explicit_object_superclass.py expressions1.py expressions2.py expressions.py factorization.py file_download.py functions.py generic_class_test.py guess_the_number.py inheritance_cov_incorrect.py inheritance_cov_sat.py isinstance.py linear_equality.py list_methods.py magic.py math_test.py mro.py mult_inheritance.py override_default_args_correct.py prog_1.py prog_2.py statements.py staticmethod.py str_methods.py stubs_default_args.py syntax.py unary_test_not.py'
+  script:
+    - eval `opam config env`
+    - |
+      for PY_FILE in $PY_FILES
+        do
+          echo $PY_FILE
+          $MOPSA_PYTYP -gc benchmarks/python/typpete/$PY_FILE
+        done
+
 #################
 # CPython tests #
 #################
@@ -131,556 +231,3 @@ test-cpython 1/1:
     NB_CHECKS: '141'
     NB_SAFE: '140'
   extends: .test-cpython
-
-###########
-# C tests #
-###########
-
-.test-c:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $C_FILE
-    - $MOPSA_C analyzer/tests/c/$C_FILE
-
-test-c 1/32:
-  variables:
-    C_FILE: 'array_tests.c'
-  extends: .test-c
-
-test-c 2/32:
-  variables:
-    C_FILE: 'goto_tests.c'
-  extends: .test-c
-
-test-c 3/32:
-  variables:
-    C_FILE: 'libc/errno_tests.c'
-  extends: .test-c
-
-test-c 4/32:
-  variables:
-    C_FILE: 'libc/malloc_tests.c'
-  extends: .test-c
-
-test-c 5/32:
-  variables:
-    C_FILE: 'libc/builtin_constant_p_tests.c'
-  extends: .test-c
-
-test-c 6/32:
-  variables:
-    C_FILE: 'libc/file_tests.c'
-  extends: .test-c
-
-test-c 7/32:
-  variables:
-    C_FILE: 'libc/alloca_tests.c'
-  extends: .test-c
-
-test-c 8/32:
-  variables:
-    C_FILE: 'libc/variadic_tests.c'
-  extends: .test-c
-
-test-c 9/32:
-  variables:
-    C_FILE: 'libc/free_tests.c'
-  extends: .test-c
-
-test-c 10/32:
-  variables:
-    C_FILE: 'libc/memcpy_tests.c'
-  extends: .test-c
-
-test-c 11/32:
-  variables:
-    C_FILE: 'switch_tests.c'
-  extends: .test-c
-
-test-c 12/32:
-  variables:
-    C_FILE: 'bitshift_tests.c'
-  extends: .test-c
-
-test-c 13/32:
-  variables:
-    C_FILE: 'enum_tests.c'
-  extends: .test-c
-
-test-c 14/32:
-  variables:
-    C_FILE: 'cond_expr_tests.c'
-  extends: .test-c
-
-test-c 15/32:
-  variables:
-    C_FILE: 'function_tests.c'
-  extends: .test-c
-
-test-c 16/32:
-  variables:
-    C_FILE: 'for_tests.c'
-  extends: .test-c
-
-test-c 17/32:
-  variables:
-    C_FILE: 'struct_tests.c'
-  extends: .test-c
-
-test-c 18/32:
-  variables:
-    C_FILE: 'stubs/macro_tests.c'
-  extends: .test-c
-
-test-c 19/32:
-  variables:
-    C_FILE: 'stubs/case_tests.c'
-  extends: .test-c
-
-test-c 20/32:
-  variables:
-    C_FILE: 'stubs/directive_tests.c'
-  extends: .test-c
-
-test-c 21/32:
-  variables:
-    C_FILE: 'stubs/local_tests.c'
-  extends: .test-c
-
-test-c 22/32:
-  variables:
-    C_FILE: 'stubs/alias_tests.c'
-  extends: .test-c
-
-test-c 23/32:
-  variables:
-    C_FILE: 'stubs/assigns_tests.c'
-  extends: .test-c
-
-test-c 24/32:
-  variables:
-    C_FILE: 'stubs/global_predicate_tests.c'
-  extends: .test-c
-
-test-c 25/32:
-  variables:
-    C_FILE: 'stubs/implies_tests.c'
-  extends: .test-c
-
-test-c 26/32:
-  variables:
-    C_FILE: 'stubs/builtins_tests.c'
-  extends: .test-c
-
-test-c 27/32:
-  variables:
-    C_FILE: 'stubs/memory_resource_tests.c'
-  extends: .test-c
-
-test-c 28/32:
-  variables:
-    C_FILE: 'union_tests.c'
-  extends: .test-c
-
-test-c 29/32:
-  variables:
-    C_FILE: 'string_tests.c'
-  extends: .test-c
-
-test-c 30/32:
-  variables:
-    C_FILE: 'float_tests.c'
-  extends: .test-c
-
-test-c 31/32:
-  variables:
-    C_FILE: 'int_tests.c'
-  extends: .test-c
-
-test-c 32/32:
-  variables:
-    C_FILE: 'pointer_tests.c'
-  extends: .test-c
-
-###################
-# Universal tests #
-###################
-
-
-.test-u:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $U_FILE
-    - $MOPSA_U analyzer/tests/universal/$U_FILE
-
-test-u 1/3:
-  variables:
-    U_FILE: 'int_tests.u'
-  extends: .test-u
-
-test-u 2/3:
-  variables:
-    U_FILE: 'function_tests.u'
-  extends: .test-u
-
-test-u 3/3:
-  variables:
-    U_FILE: 'loop_tests.u'
-  extends: .test-u
-
-
-################
-# Python tests #
-################
-
-
-.test-pyty:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $PY_FILE
-    - ./bin/mopsa-python-types -unittest analyzer/tests/python/types/$PY_FILE
-
-.test-py:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $PY_FILE
-    - ./bin/mopsa-python -unittest analyzer/tests/python/$PY_FILE
-
-.test-py-no-unittest:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $PY_FILE
-    - cd analyzer/tests/python && ../../../bin/mopsa-python -silent $PY_FILE
-
-.test-typpete:
-  stage: test
-  dependencies: [build_job]
-  script:
-    - eval `opam config env`
-    - echo $PY_FILE
-    - $MOPSA_PYTYP -gc benchmarks/python/typpete/$PY_FILE
-
-test-pyty 1/3:
-  variables:
-    PY_FILE: 'int_tests.py'
-  extends: .test-pyty
-
-test-pyty 2/3:
-  variables:
-    PY_FILE: 'misc_tests.py'
-  extends: .test-pyty
-
-test-pyty 3/3:
-  variables:
-    PY_FILE: 'exception_tests.py'
-  extends: .test-pyty
-
-test-py 1/17:
-  variables:
-    PY_FILE: 'bool_tests.py'
-  extends: .test-py
-
-test-py 2/17:
-  variables:
-    PY_FILE: 'builtins_tests.py'
-  extends: .test-py
-
-test-py 3/17:
-  variables:
-    PY_FILE: 'class_tests.py'
-  extends: .test-py
-
-test-py 4/17:
-  variables:
-    PY_FILE: 'dict_tests.py'
-  extends: .test-py
-
-test-py 5/17:
-  variables:
-    PY_FILE: 'exception_tests.py'
-  extends: .test-py
-
-test-py 6/17:
-  variables:
-    PY_FILE: 'float_tests.py'
-  extends: .test-py
-
-test-py 7/17:
-  variables:
-    PY_FILE: 'function_tests.py'
-  extends: .test-py
-
-test-py 8/17:
-  variables:
-    PY_FILE: 'generator_tests.py'
-  extends: .test-py
-
-test-py 9/17:
-  variables:
-    PY_FILE: 'int_tests.py'
-  extends: .test-py
-
-test-py 10/17:
-  variables:
-    PY_FILE: 'iter_assign_tests.py'
-  extends: .test-py
-
-test-py 11/17:
-  variables:
-    PY_FILE: 'list_tests.py'
-  extends: .test-py-no-unittest
-
-test-py 12/17:
-  variables:
-    PY_FILE: 'loop_tests.py'
-  extends: .test-py
-
-test-py 13/17:
-  variables:
-    PY_FILE: 'misc_tests.py'
-  extends: .test-py
-
-test-py 14/17:
-  variables:
-    PY_FILE: 'operator_tests.py'
-  extends: .test-py
-
-test-py 15/17:
-  variables:
-    PY_FILE: 'str_tests.py'
-  extends: .test-py
-
-test-py 16/17:
-  variables:
-    PY_FILE: 'with_tests.py'
-  extends: .test-py
-
-test-py 17/17:
-  variables:
-    PY_FILE: 'import_tests.py'
-  extends: .test-py-no-unittest
-
-test-typpete 1/43:
-  variables:
-    PY_FILE: 'bellman_ford.py'
-  extends: .test-typpete
-
-test-typpete 2/43:
-  variables:
-    PY_FILE: 'builtins_test.py'
-  extends: .test-typpete
-
-test-typpete 3/43:
-  variables:
-    PY_FILE: 'callable_class.py'
-  extends: .test-typpete
-
-test-typpete 4/43:
-  variables:
-    PY_FILE: 'callable_interface_generic.py'
-  extends: .test-typpete
-
-test-typpete 5/43:
-  variables:
-    PY_FILE: 'classes.py'
-  extends: .test-typpete
-
-test-typpete 6/43:
-  variables:
-    PY_FILE: 'class_pre_store.py'
-  extends: .test-typpete
-
-test-typpete 7/43:
-  variables:
-    PY_FILE: 'comparison_test.py'
-  extends: .test-typpete
-
-test-typpete 8/43:
-  variables:
-    PY_FILE: 'cookie.py'
-  extends: .test-typpete
-
-test-typpete 9/43:
-  variables:
-    PY_FILE: 'coop_concatenate.py'
-  extends: .test-typpete
-
-test-typpete 10/43:
-  variables:
-    PY_FILE: 'crafting_challenge.py'
-  extends: .test-typpete
-
-test-typpete 11/43:
-  variables:
-    PY_FILE: 'deceitful.py'
-  extends: .test-typpete
-
-test-typpete 12/43:
-  variables:
-    PY_FILE: 'default_args_class.py'
-  extends: .test-typpete
-
-test-typpete 13/43:
-  variables:
-    PY_FILE: 'dict_methods.py'
-  extends: .test-typpete
-
-test-typpete 14/43:
-  variables:
-    PY_FILE: 'disjoint_sets.py'
-  extends: .test-typpete
-
-test-typpete 15/43:
-  variables:
-    PY_FILE: 'eight_queens.py'
-  extends: .test-typpete
-
-test-typpete 16/43:
-  variables:
-    PY_FILE: 'except_clause.py'
-  extends: .test-typpete
-
-test-typpete 17/43:
-  variables:
-    PY_FILE: 'explicit_object_superclass.py'
-  extends: .test-typpete
-
-test-typpete 18/43:
-  variables:
-    PY_FILE: 'expressions1.py'
-  extends: .test-typpete
-
-test-typpete 19/43:
-  variables:
-    PY_FILE: 'expressions2.py'
-  extends: .test-typpete
-
-test-typpete 20/43:
-  variables:
-    PY_FILE: 'expressions.py'
-  extends: .test-typpete
-
-test-typpete 21/43:
-  variables:
-    PY_FILE: 'factorization.py'
-  extends: .test-typpete
-
-test-typpete 22/43:
-  variables:
-    PY_FILE: 'file_download.py'
-  extends: .test-typpete
-
-test-typpete 23/43:
-  variables:
-    PY_FILE: 'functions.py'
-  extends: .test-typpete
-
-test-typpete 24/43:
-  variables:
-    PY_FILE: 'generic_class_test.py'
-  extends: .test-typpete
-
-test-typpete 25/43:
-  variables:
-    PY_FILE: 'guess_the_number.py'
-  extends: .test-typpete
-
-test-typpete 26/43:
-  variables:
-    PY_FILE: 'inheritance_cov_incorrect.py'
-  extends: .test-typpete
-
-test-typpete 27/43:
-  variables:
-    PY_FILE: 'inheritance_cov_sat.py'
-  extends: .test-typpete
-
-test-typpete 28/43:
-  variables:
-    PY_FILE: 'isinstance.py'
-  extends: .test-typpete
-
-test-typpete 29/43:
-  variables:
-    PY_FILE: 'linear_equality.py'
-  extends: .test-typpete
-
-test-typpete 30/43:
-  variables:
-    PY_FILE: 'list_methods.py'
-  extends: .test-typpete
-
-test-typpete 31/43:
-  variables:
-    PY_FILE: 'magic.py'
-  extends: .test-typpete
-
-test-typpete 32/43:
-  variables:
-    PY_FILE: 'math_test.py'
-  extends: .test-typpete
-
-test-typpete 33/43:
-  variables:
-    PY_FILE: 'mro.py'
-  extends: .test-typpete
-
-test-typpete 34/43:
-  variables:
-    PY_FILE: 'mult_inheritance.py'
-  extends: .test-typpete
-
-test-typpete 35/43:
-  variables:
-    PY_FILE: 'override_default_args_correct.py'
-  extends: .test-typpete
-
-test-typpete 36/43:
-  variables:
-    PY_FILE: 'prog_1.py'
-  extends: .test-typpete
-
-test-typpete 37/43:
-  variables:
-    PY_FILE: 'prog_2.py'
-  extends: .test-typpete
-
-test-typpete 38/43:
-  variables:
-    PY_FILE: 'statements.py'
-  extends: .test-typpete
-
-test-typpete 39/43:
-  variables:
-    PY_FILE: 'staticmethod.py'
-  extends: .test-typpete
-
-test-typpete 40/43:
-  variables:
-    PY_FILE: 'str_methods.py'
-  extends: .test-typpete
-
-test-typpete 41/43:
-  variables:
-    PY_FILE: 'stubs_default_args.py'
-  extends: .test-typpete
-
-test-typpete 42/43:
-  variables:
-    PY_FILE: 'syntax.py'
-  extends: .test-typpete
-
-test-typpete 43/43:
-  variables:
-    PY_FILE: 'unary_test_not.py'
-  extends: .test-typpete
