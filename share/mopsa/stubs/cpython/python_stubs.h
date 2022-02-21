@@ -20,6 +20,11 @@ static inline void _noop(PyObject *op) {}
 #define Py_XDECREF(op) _noop(_PyObject_CAST(op))
 #define Py_CLEAR(op) _noop(_PyObject_CAST(op))
 
+#undef Py_BEGIN_ALLOW_THREADS
+#define Py_BEGIN_ALLOW_THREADS
+#undef Py_END_ALLOW_THREADS
+#define Py_END_ALLOW_THREADS
+
 #undef PyArg_ParseTuple
 #undef PyArg_ParseTupleAndKeywords
 #undef Py_BuildValue
@@ -97,5 +102,12 @@ int PyParseTuple_shortint_helper(PyObject *obj, short *result);
 #undef PyObject_CallMethod
 PyObject *
 PyObject_CallMethod(PyObject *obj, const char *name, const char *format, ...);
+
+#include <stdarg.h>
+PyAPI_FUNC(int) PyOS_snprintf(char *str, size_t size, const char  *format, ...)
+                        Py_GCC_ATTRIBUTE((format(printf, 3, 4)));
+PyAPI_FUNC(int) PyOS_vsnprintf(char *str, size_t size, const char  *format, va_list va)
+                        Py_GCC_ATTRIBUTE((format(printf, 3, 0)));
+
 
 #endif

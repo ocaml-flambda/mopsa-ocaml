@@ -35,16 +35,16 @@ let builtin_exceptions =
     "PyExc_SystemExit";
     "PyExc_TypeError";
     "PyExc_UnboundLocalError";
+    "PyExc_ValueError";
     "PyExc_UnicodeError";
     "PyExc_UnicodeEncodeError";
     "PyExc_UnicodeDecodeError";
     "PyExc_UnicodeTranslateError";
-    "PyExc_ValueError";
     "PyExc_ZeroDivisionError";
     "PyExc_BlockingIOError";
+    "PyExc_ConnectionError";
     "PyExc_BrokenPipeError";
     "PyExc_ChildProcessError";
-    "PyExc_ConnectionError";
     "PyExc_ConnectionAbortedError";
     "PyExc_ConnectionRefusedError";
     "PyExc_ConnectionResetError";
@@ -172,4 +172,5 @@ let builtin_functions =
           "PySet_Clear";
           "PyWeakref_NewRef";
           "PyWeakref_GetObject";
+          "PyErr_NewException";
         ]

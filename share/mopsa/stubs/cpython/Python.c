@@ -1,6 +1,8 @@
 #include <Python.h>
 #include "python_stubs.h"
 
+#undef Py_BEGIN_ALLOW_THREADS
+
 PyObject*
 PyErr_NoMemory()
 {
