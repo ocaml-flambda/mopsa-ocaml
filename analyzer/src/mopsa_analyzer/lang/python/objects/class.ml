@@ -43,9 +43,31 @@ struct
   let rec eval  exp man (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [name; bases; dict], []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [{ekind = E_constant (C_string name)}; {ekind = E_py_tuple bases}; {ekind = E_py_dict ([], [])}], []) ->
+       bind_list bases man.eval flow >>$ (fun bases flow ->
        (* FIXME: mechanism more general than S_py_class, since we don't assign any variable to the class object, and just return it. Refactoring needed *)
-       panic_at range "dynamic class creation"
+       let py_cls_var = mk_fresh_uniq_var name  (T_py None) () in
+       (* TODO: change py_cls_var:var in py_cls_dec by a string? *)
+       let py_cls_bases =
+         match bases with
+         | [] -> [find_builtin "object"]
+         | _ -> List.map (fun x -> let a, e = object_of_expr x in (a, None))  bases
+       in
+       let clsdec = {
+           py_cls_var;
+           py_cls_bases=List.map (fun c -> mk_py_object c range) py_cls_bases;
+           py_cls_body=mk_block [] range;
+           py_cls_static_attributes=[];
+           py_cls_decors=[];
+           py_cls_keywords=[];
+           py_cls_range=range} in
+       let mro = c3_lin ({addr_kind= (A_py_class (C_user clsdec, py_cls_bases)); addr_partitioning=G_all; addr_mode = STRONG}, None) in
+       eval_alloc man (A_py_class (C_user clsdec, mro)) range flow >>$ (fun addr flow ->
+         Eval.singleton (mk_py_object (addr, None) range) flow
+       )) |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [name; bases; dict], []) ->
+        panic_at range "type(..., ..., ...) not supported"
 
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
@@ -117,8 +139,7 @@ struct
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval  ) flow |>
-      bind_result (fun bases flow ->
+      bind_list cls.py_cls_bases man.eval flow >>$ (fun bases flow ->
           let bases' =
             match bases with
             | [] -> [find_builtin "object"]
