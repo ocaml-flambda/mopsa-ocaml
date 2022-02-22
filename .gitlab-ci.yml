@@ -1,4 +1,5 @@
 variables:
+  GROUP: "mopsa"
   MOPSA_C: "./bin/mopsa-c -unittest"
   MOPSA_U: "./bin/mopsa-universal -unittest"
   MOPSA_PYTYP: "./bin/mopsa-python-types -unittest -unittest-filter=test_types"
@@ -52,61 +53,61 @@ build_job:
 
 downstream-benchs 1/10:
   variables:
-    PROJECT_NAME: ${PROJECT_GROUP}/benchmarks/coreutils-benchmarks
+    PROJECT_NAME: ${GROUP}/benchmarks/coreutils-benchmarks
     PROJECT_BRANCH: ci_args
   extends: .downstream-benchs
 
 downstream-benchs 2/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/juliet-benchmarks
+    PROJECT_NAME: ${GROUP}/benchmarks/juliet-benchmarks
     PROJECT_BRANCH: fix/json
   extends: .downstream-benchs
 
 downstream-benchs 3/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/pathpicker-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/pathpicker-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 4/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/pyperformance-benchmarks
+    PROJECT_NAME: ${GROUP}/benchmarks/pyperformance-benchmarks
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 5/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/cdistance-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/cdistance-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 6/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/pyahocorasick-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/pyahocorasick-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 7/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/noise-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/noise-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 8/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/levenshtein-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/levenshtein-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 9/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/llist-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/llist-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 10/10:
   variables:
-    PROJECT_NAME: mopsa/benchmarks/cpython-benchmarks/bitarray-analysis
+    PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/bitarray-analysis
     PROJECT_BRANCH: master
   extends: .downstream-benchs
 
