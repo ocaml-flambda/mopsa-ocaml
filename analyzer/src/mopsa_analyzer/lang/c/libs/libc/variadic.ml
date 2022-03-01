@@ -200,9 +200,7 @@ struct
     let last, _ = get_unnamed_args flow in
 
     (* Ensure that param is the last named parameter *)
-    if last.vname <> param.vname && (match vkind param with
-                                    | V_var_attr(v, _) -> last.vname <> v.vname
-                                    | _ -> true)
+    if last.vname <> param.vname
     then panic_at range "va_start: %a is not the last named parameter"
         pp_var param
     ;
