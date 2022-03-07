@@ -72,7 +72,11 @@ def get_project_pipelines(projectid):
 
 def get_last_successful_pipeline(projectid,pipelines):
     for p in pipelines:
-        if p.get('status') == 'success' and p.get("ref") == 'master' and p.get("source") == 'schedule':
+        if p.get('status') == 'success' and p.get("ref") == 'master' and p.get("source") in ['schedule', 'web']:
+            print(json.dumps(p, indent=True))
+            print()
+            print()
+            print()
             return p
     raise Exception('cannot find the last successful pipeline for project ' + projectid)
 
@@ -87,6 +91,7 @@ def get_pipeline_jobs(projectid,pipelineid):
 def get_pipeline_job_by_name(projectid,pipelineid,name):
     for j in get_pipeline_jobs(projectid,pipelineid):
         if j.get('name') == name:
+            print(json.dumps(j, indent=True))
             return j
 
 def get_job_zipped_artifacts(projectid,jobid):
