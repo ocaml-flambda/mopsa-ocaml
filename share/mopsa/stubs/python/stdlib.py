@@ -104,6 +104,12 @@ class method(object):
 class method_descriptor(object):
     def __get__(self): pass
 
+class member_descriptor(object):
+    @mopsa.type("wrapper_descriptor")
+    def __get__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __set__(self, val): pass
+
 class module(object):
     def __new__(cls, args): pass
 
@@ -137,8 +143,6 @@ class int(object):
     def __getnewargs__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
-    @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __index__(self): pass
     @mopsa.type("wrapper_descriptor")
@@ -253,8 +257,6 @@ class float(object):
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
     @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
-    @mopsa.type("wrapper_descriptor")
     def __int__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __le__(self, other): pass
@@ -329,8 +331,6 @@ class complex(object):
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
     @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
-    @mopsa.type("wrapper_descriptor")
     def __int__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __le__(self, other): pass
@@ -396,8 +396,6 @@ class str(object):
     def __getnewargs__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __gt__(self, other): pass
-    @mopsa.type("wrapper_descriptor")
-    def __hash__(self): pass
     @mopsa.type("wrapper_descriptor")
     def __iter__(self): pass
     @mopsa.type("wrapper_descriptor")
@@ -770,6 +768,18 @@ class tuple(object):
     def __getitem__(self, k): pass
     @mopsa.type("wrapper_descriptor")
     def __len__(self): pass
+    @mopsa.type("wrapper_descriptor")
+    def __eq__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __ge__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __gt__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __le__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __lt__(self, o): pass
+    @mopsa.type("wrapper_descriptor")
+    def __ne__(self, o): pass
 
 class tuple_iterator(object):
     @mopsa.type("wrapper_descriptor")
@@ -784,6 +794,8 @@ class slice(object):
 
 class NotImplementedType(object): pass
 
+class ellipsis(object): pass
+
 class NoneType(object):
     @mopsa.type("wrapper_descriptor")
     def __bool__(self): pass
@@ -793,6 +805,7 @@ class NoneType(object):
 class bytearray(object): pass
 
 class bytes(object):
+    def __new__(self, args): pass
     @mopsa.type("wrapper_descriptor")
     def __getitem__(self, i): pass
     @mopsa.type("wrapper_descriptor")
@@ -821,8 +834,73 @@ class staticmethod(object):
 
 
 class property(object):
-    def __init__(self, fget): pass
-    def __get__(self): pass
+    # stubs from the python doc, except for getter/setter/deleter
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __init__(self, fget=None, fset=None, fdel=None, doc=None):
+        if doc is None and fget is not None and hasattr(fget, "__doc__"):
+            doc = fget.__doc__
+        self.__get = fget
+        self.__set = fset
+        self.__del = fdel
+        self.__doc__ = doc
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __get__(self, inst, type=None):
+        if inst is None:
+            return self
+        if self.__get is None:
+            raise AttributeError("unreadable attribute")
+        return self.__get(inst)
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __set__(self, inst, value):
+        if self.__set is None:
+            raise AttributeError("can't set attribute")
+        return self.__set(inst, value)
+
+    @mopsa.type("wrapper_descriptor")
+    @mopsa.stub
+    def __delete__(self, inst):
+        if self.__del is None:
+            raise AttributeError("can't delete attribute")
+        return self.__del(inst)
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def getter(self, g):
+        self.__get = g
+        return self
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def setter(self, s):
+        self.__set = s
+        return self
+
+    @mopsa.type("method_descriptor")
+    @mopsa.stub
+    def deleter(self, d):
+        self.__del = d
+        return self
+
+class callable_iterator:
+    @mopsa.stub
+    def __init__(self, c, s):
+        self.callable = c
+        self.sentinel = s
+
+    @mopsa.stub
+    def __iter__(self): return self
+
+    @mopsa.stub
+    def __next__(self):
+        r = self.callable()
+        if r == self.sentinel: raise StopIteration
+        return r
+
 
 @mopsa.unsupported
 class frozenset(object): pass
@@ -836,6 +914,13 @@ class memoryview(object): pass
 class super(object):
     def __init__(self, cls): pass
     def __get__(self): pass
+
+class cell(object):
+    @mopsa.type("wrapper_descriptor")
+    def __init__(self): pass
+
+    @mopsa.type("wrapper_descriptor")
+    def __getattribute__(self, attr): pass
 
 class BaseException(object):
     @mopsa.type("wrapper_descriptor")
@@ -977,8 +1062,16 @@ class ResourceWarning(Warning): pass
 #################
 
 def abs(x): pass
-def all(itr): pass
-def any(itr): pass
+@mopsa.stub
+def all(itr):
+    for x in itr:
+        if not x: return False
+    return True
+@mopsa.stub
+def any(itr):
+    for x in itr:
+        if x: return True
+    return False
 def ascii(x): pass
 def bin(x): pass
 def callable(obj): pass

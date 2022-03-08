@@ -22,9 +22,21 @@
 import mopsa
 
 def randrange(c):
-    return mopsa.random_int(0, c+1)
+    return mopsa.random_int(0, c)
+
+def randint(a, b):
+    return mopsa.random_int(a, b)
 
 def seed(v): pass
 
 def random():
     return mopsa.random_float(0, 1)
+
+def choice(s):
+    return s[mopsa.random_int(0, len(s))]
+
+def shuffle(l):
+    # works for summarization abstraction
+    m = []
+    m.extend(l)
+    return m

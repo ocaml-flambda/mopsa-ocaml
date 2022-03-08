@@ -86,7 +86,9 @@ struct
                     (fun iter flow ->
                         assume
                           (Utils.mk_hasattr iter "__next__" range)
-                          ~fthen:(fun true_flow -> Eval.singleton iter true_flow)
+                          ~fthen:(fun true_flow ->
+                            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR iter.erange true_flow |>
+                            Eval.singleton iter)
                           ~felse:(fun false_flow ->
                             let msg = Format.asprintf "iter() returned non-iterator of type '%a'" pp_addr_kind (akind @@ fst @@ object_of_expr iter) in
                             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
@@ -102,6 +104,11 @@ struct
             )
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("iter", _))}, _)},
+                [callable; sentinel], []) ->
+       man.eval (Utils.mk_builtin_call "callable_iterator" [callable; sentinel] range) flow |> OptionExt.return
+
 
     (* Calls to len built-in function *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("len", _))}, _)},
@@ -121,7 +128,8 @@ struct
                         assume
                           (mk_py_isinstance_builtin len "int" range)
                           ~fthen:(fun true_flow ->
-                              Eval.singleton len true_flow)
+                            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR len.erange true_flow |>
+                              Eval.singleton len)
                           ~felse:(fun false_flow ->
                               let msg = Format.asprintf "'%a' object cannot be interpreted as an integer" pp_addr_kind (akind @@ fst @@ object_of_expr len) in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
@@ -150,7 +158,8 @@ struct
               assume
                 (Utils.mk_object_hasattr cls "__next__" range)
                 ~fthen:(fun true_flow ->
-                    man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range) true_flow
+                    Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range true_flow |>
+                    man.eval (mk_py_call (mk_py_object_attr cls "__next__" range) [eobj] range)
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not an iterator" pp_addr_kind (akind @@ fst cls) in
@@ -166,7 +175,7 @@ struct
          let msg = Format.asprintf "input expected at most 1 arguments, got %d" (List.length args) in
          man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty in
        if List.length args <= 1 then
-        man.eval   (mk_py_top T_string range) flow |> OptionExt.return
+         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |> man.eval (mk_py_top T_string range) |> OptionExt.return
       else
         tyerror flow |> OptionExt.return
 
@@ -224,6 +233,7 @@ struct
       let assign_iter = mk_assign iter_var (Utils.mk_builtin_call "iter" [{iterable with erange = tag_range iterable.erange "assign_iter"}] (tag_range range "assign_iter")) (tag_range range "assign_iter") in
       let msg = Format.asprintf "%s() arg is an empty sequence" s in
       let assign_max =
+        (* FIXME: safe check ? *)
         Utils.mk_try_stopiteration
           (mk_assign maxi_var (Utils.mk_builtin_call "next" [iter_var] range) range)
           (Utils.mk_builtin_raise_msg "ValueError" msg range)
@@ -263,27 +273,31 @@ struct
       Cases.bind_result (fun eargs flow ->
           if List.length eargs <> 1 then tyerror flow else
             let el = List.hd eargs in
-            man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range) flow
+            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+            man.eval (mk_py_call (mk_py_object_attr (object_of_expr el) "__hash__" range) [] range)
         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("repr", _))}, _)}, [v], [])  ->
-      man.eval   (mk_py_type v range) flow >>$
+      man.eval (mk_py_type v range) flow >>$
       (fun etype flow ->
           assume
             (mk_py_hasattr etype "__repr__" range)
             man flow
             ~fthen:(fun flow ->
-                man.eval   (mk_py_call (mk_py_attr etype "__repr__" range) [] range) flow >>$
+                man.eval (mk_py_call (mk_py_attr etype "__repr__" range) [v] range) flow >>$
                   (fun repro flow ->
                     assume (mk_py_isinstance_builtin repro "str" range) man flow
-                      ~fthen:(Eval.singleton repro)
+                      ~fthen:(fun flow ->
+                        Flow.add_safe_check Alarms.CHK_PY_TYPEERROR repro.erange flow |>
+                        Eval.singleton repro)
                       ~felse:(fun flow ->  man.exec (Utils.mk_builtin_raise_msg "TypeError" "__repr__ returned non-string" range) flow >>% Eval.empty)
                   )
               )
-            ~felse:(
+            ~felse:(fun flow ->
               (* there is a default implementation saying "<%s object at %p>" % (name(type(v)), v as addr I guess *)
-              man.eval   (mk_py_top T_string range)
+              Flow.add_safe_check Alarms.CHK_PY_TYPEERROR etype.erange flow |>
+                man.eval (mk_py_top T_string range)
             )
         )
       |> OptionExt.return
@@ -295,7 +309,7 @@ struct
       process_simple f man flow range args in_args out_type
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], [])  ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("sorted", _))}, _)}, [obj], ([(Some "reverse", _)] | []))  ->
       (* todo: call list on obj first *)
       let seq = mk_range_attr_var range "sorted" (T_py None) in
       man.exec (mk_assign (mk_var seq range) obj range) flow >>%
@@ -305,6 +319,28 @@ struct
           Cases.add_cleaners [mk_remove_var seq range]
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("cell.__init__", _))}, _)}, args, []) ->
+       let post =
+         if List.length args > 1 then
+           man.exec (mk_assign (mk_py_attr (List.hd args) "cell_contents" range) (List.nth args 1) range) flow
+         else Post.return flow in
+       post >>% man.eval (mk_py_none range) |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("cell.__getattribute__", _))}, _)}, cell::attr::[], []) ->
+       let cell_contents = (mk_string ~etyp:(T_py None) "cell_contents" range) in
+       assume (eq attr cell_contents ~etyp:(T_py None) range) man flow
+         ~fthen:(fun flow ->
+           assume (mk_py_ll_hasattr cell cell_contents range) man flow
+             ~fthen:(fun flow -> man.eval (mk_py_ll_getattr cell cell_contents range) flow)
+             ~felse:(fun flow ->
+               man.exec (Utils.mk_builtin_raise "NameError" range) flow >>% Eval.empty
+             )
+         )
+         ~felse:(fun flow ->
+           man.eval (mk_py_call (mk_py_object (find_builtin "object.__getattribute__") range) [cell;attr] range) flow
+         )
+       |> OptionExt.return
 
     (* FIXME: in libs.py_std or flows.exn? *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("BaseException.__init__" as f, _))}, _)}, args, []) ->
@@ -334,13 +370,16 @@ struct
             let v = List.hd eargs in
             assume (mk_py_isinstance_builtin v "int" range) man flow
               ~fthen:(fun flow ->
-                  assume (mk_binop ~etyp:(T_py None) v O_ge (mk_int 0 ~typ:(T_py None) range) range) man flow
-                    ~fthen:(fun flow -> man.eval v flow)
-                    ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
+                let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR v.erange flow in
+                assume (mk_binop ~etyp:(T_py None) v O_ge (mk_int 0 ~typ:(T_py None) range) range) man flow
+                  ~fthen:(fun flow ->
+                    man.eval (Utils.mk_builtin_call "int" [v] range) flow)
+                  ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
                 )
               ~felse:(fun flow ->
                   assume (mk_py_isinstance_builtin v "float" range) man flow
                     ~fthen:(fun flow ->
+                      let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR v.erange flow in
                       assume (mk_binop ~etyp:(T_py None) v O_ge {(mk_float 0. range) with etyp=(T_py (Some (Float F_DOUBLE)))} range) man flow
                         ~fthen:(fun flow -> man.eval v flow)
                         ~felse:(fun flow -> man.eval (mk_unop ~etyp:(T_py None) O_minus v range) flow)
@@ -354,12 +393,20 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
-      Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
-      |> OptionExt.return
+    (* | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("all" as f, _))}, _)}, args, []) ->
+     *   Utils.check_instances f man flow range args ["list"] (fun _ -> man.eval (mk_py_top (T_py (Some Bool)) range))
+     *   |> OptionExt.return *)
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round" as f, _))}, _)}, args, []) ->
-      Utils.check_instances_disj f man flow range args [["float"; "int"]] (fun _ -> man.eval (mk_py_top T_int range))
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("round", _))}, _)}, args, []) ->
+       man.eval (List.hd args) flow >>$ (fun number flow ->
+       assume (mk_py_hasattr number "__round__" range) man flow
+         ~fthen:(fun flow ->
+           man.eval (mk_py_call (mk_py_attr number "__round__" ~etyp:(T_py None) range) [] range) flow
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "type %a doesn't define __round__ method" pp_expr number) range) flow >>% Eval.empty
+         )
+      )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("divmod", _))}, _)}, args, []) ->
@@ -372,10 +419,17 @@ struct
             assume (mk_py_isinstance_builtin argl "int" range) man flow
               ~fthen:(fun flow ->
                   assume (mk_py_isinstance_builtin argr "int" range) man flow
-                    ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top T_int range; mk_py_top T_int range]) range))
+                    ~fthen:(fun flow ->
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argr.erange flow |>
+                        man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [
+                                                                 mk_binop ~etyp:(T_py None) argl O_py_floor_div argr range;
+                                                                 mk_binop ~etyp:(T_py None) argl O_mod argr range
+                                    ]) range))
                     ~felse:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "float" range) man flow
-                          ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(fun flow ->
+                            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argr.erange flow |>
+                            man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:tyerror
                       )
                 )
@@ -383,10 +437,14 @@ struct
                   assume (mk_py_isinstance_builtin argl "float" range) man flow
                     ~fthen:(fun flow ->
                         assume (mk_py_isinstance_builtin argr "int" range) man flow
-                          ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                          ~fthen:(fun flow ->
+                            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argr.erange flow |>
+                            man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                           ~felse:(fun flow ->
                               assume (mk_py_isinstance_builtin argr "float" range) man flow
-                                ~fthen:(man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
+                                ~fthen:(fun flow ->
+                                  Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argr.erange flow |>
+                                  man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_py_top (T_float F_DOUBLE) range; mk_py_top (T_float F_DOUBLE) range]) range))
                                 ~felse:tyerror
                             )
 
@@ -396,6 +454,8 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("id", _))}, _)}, [x], []) ->
+       man.eval (mk_py_top T_int range) flow |> OptionExt.return
 
     | _ ->
       None

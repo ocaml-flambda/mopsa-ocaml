@@ -63,3 +63,6 @@ val register_value_reduction : (module VALUE_REDUCTION) -> unit
 
 val find_value_reduction : string -> (module VALUE_REDUCTION)
 (** Find a value reduction by its name *)
+
+(** List all simplified value reductions *)
+val simplified_value_reductions : unit -> string list

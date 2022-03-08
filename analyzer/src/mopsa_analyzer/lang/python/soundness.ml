@@ -24,18 +24,23 @@
 open Mopsa
 open Ast
 
-type assumption_kind += A_py_unsound_list_contains_after_remove of Ast.py_object
+type assumption_kind += A_py_use_type_annot of range * var * Ast.py_func_sig
 
 let () = register_assumption {
     print = (fun next fmt -> function
-        | A_py_unsound_list_contains_after_remove obj ->
-          Format.fprintf fmt "unsound list.__contains__ if a call to remove has been made before, on list %a" Pp.pp_py_object obj
-        | a -> next fmt a
+              | A_py_use_type_annot (r, v, annot) ->
+                 Format.fprintf fmt "Used type annotation %a(%a) -> %a@.Annotation source: %a" pp_var v Ast.pp_py_func_sig annot  (OptionExt.print pp_expr) annot.py_funcs_type_out pp_relative_range r
+              | a -> next fmt a
       );
     compare = (fun next a1 a2 ->
         match a1,a2 with
-        | A_py_unsound_list_contains_after_remove o1, A_py_unsound_list_contains_after_remove o2 ->
-           compare_py_object o1 o2
+        | A_py_use_type_annot (r1, v1, a1), A_py_use_type_annot (r2, v2, a2) ->
+           Compare.compose
+             [
+               (fun () -> compare_range r1 r2);
+               (fun () -> compare_var v1 v2);
+               (fun () -> Ast.compare_py_func_sig a1 a2);
+             ]
         | _ -> next a1 a2
       );
   }

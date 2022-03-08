@@ -118,30 +118,35 @@ val open_db : ?create:bool -> string -> Unix.file_descr
 (** Open DB file and lock. Optionally create if it does not exist. *)
 
 val close_db : Unix.file_descr -> unit
-(** Unlock and close DB file. *)        
-    
+(** Unlock and close DB file. *)
+
 val read_db : Unix.file_descr -> db
 (** Read from open DB file. *)
-                            
+
 val write_db : Unix.file_descr -> db -> unit
 (** Write to open DB file. *)
-        
+
 val load_db : string -> db
 (** Load DB from file. *)
 
-                          
+
 (** {1 DB extraction for analysis driver} *)
 
 val get_executables : db -> string list
 (** [get_executables db] returns the list of all executable compiled in this database. Full path-names are returned. *)
 
-val get_executable_file_sources : db -> string -> source list
-(** [get_executable_file_sources db executable_path] returns the list of sources that compose the given executable in the database (includes recursively the contents of libraries linked to the executable, when known). *)
+val get_libraries : db -> string list
+(** [get_libraries db] returns the list of all libraries compiled in this database. Full path-names are returned. *)
+
+val get_file_sources : ?expected_kind:file_kind -> db -> string -> source list
+(** [get_file_sources expected_kind db executable_path] returns the list of sources that compose the given expected kind (by default, executables) in the database (includes recursively the contents of libraries linked to the executable, when known). *)
 
 val get_executable_sources : db -> string -> source list
-(** [get_executable_sources db executable] behaves as [get_executable_file_sources] but uses the short executable name instead of the full path-name. *)
+(** [get_executable_sources db executable] behaves as [get_file_sources] but uses the short executable name instead of the full path-name. *)
 
 
+val get_library_sources : db -> string -> source list
+(** [get_library_sources db executable] behaves as [get_file_sources] with the library kind, but it uses the short executable name instead of the full path-name. *)
 
 (** {1 Exported utilities} *)
 

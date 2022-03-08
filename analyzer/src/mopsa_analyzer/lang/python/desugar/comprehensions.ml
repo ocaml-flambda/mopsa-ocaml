@@ -106,6 +106,7 @@ module Domain =
            OptionExt.return
 
       | E_py_generator_comprehension (expr, comprehensions) ->
+         (* TODO: samething but need to yield rather than add to containers. Also need to wrap this in a function to create the generator *)
          Debug.warn "No desugaring for generator comprehensions@\n"; None
 
       | _ -> None

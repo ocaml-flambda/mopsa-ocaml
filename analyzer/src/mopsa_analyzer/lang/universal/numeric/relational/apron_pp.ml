@@ -89,14 +89,14 @@ let pp_lincons bnd fmt lc =
         Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) Coeff.print cst
       else if neg = [] then
         Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
-      else 
+      else
         Format.fprintf fmt "%a %a %a + %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) (pp_coef_var_list bnd) pos Coeff.print cst
     | _ ->
       if neg = [] then
         Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) Coeff.print (Coeff.neg cst)
       else if pos = [] then
         Format.fprintf fmt "%a %a %a" (pp_coef_var_list bnd) (neg_list neg) pp_typ (typ, true) Coeff.print (cst)
-      else 
+      else
         Format.fprintf fmt "%a %a %a + %a" (pp_coef_var_list bnd) pos pp_typ (typ, false) (pp_coef_var_list bnd) (neg_list neg) Coeff.print (Coeff.neg cst)
 
 let pp_lincons_earray bnd pr ea =

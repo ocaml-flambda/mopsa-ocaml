@@ -55,7 +55,8 @@ struct
                 ~fthen:(fun true_flow ->
                     (* we need to keep the unevaluated index here for the type analysis *)
                     let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; index] range in
-                    man.eval   exp' true_flow
+                    Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range true_flow |>
+                    man.eval   exp'
                   )
                 ~felse:(fun false_flow ->
                   let msg = Format.asprintf "'%a' object is not subscriptable" pp_addr_kind (akind @@ fst @@ object_of_expr cls) in
@@ -71,13 +72,14 @@ struct
       bind_result (fun el flow ->
           let eobj, start, stop, step = match el with [obj; start; stop; step] -> obj, start, stop, step | _ -> assert false in
           man.eval   (mk_py_type eobj range) flow >>$
- (fun cls flow ->
+            (fun cls flow ->
               assume
                 (Utils.mk_hasattr cls "__getitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
+                    let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range true_flow in
                     man.eval   (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow >>$
- (fun slice flow ->
+                      (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__getitem__" range) [eobj; slice] range in
                         man.eval   exp' flow
                       )
@@ -110,6 +112,7 @@ struct
                  ~fthen:(fun true_flow ->
                    (* we need to keep the unevaluated index here to improve the precision *)
                      let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [obj; index; exp] range in
+                     let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range true_flow in
                      man.exec {stmt with skind = S_expression(exp')} true_flow >>% Post.return
                    )
                  ~felse:(fun false_flow ->
@@ -130,6 +133,7 @@ struct
                 (Utils.mk_hasattr cls "__setitem__" range)
                 man flow
                 ~fthen:(fun true_flow ->
+                    let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range true_flow in
                     man.eval   (Utils.mk_builtin_call "slice" [start; stop; step] range) true_flow |>
                     bind_result (fun slice flow ->
                         let exp' = mk_py_call (mk_py_attr cls "__setitem__" range) [eobj; slice; exp] range in

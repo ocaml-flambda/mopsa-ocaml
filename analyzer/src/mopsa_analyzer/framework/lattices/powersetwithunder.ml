@@ -72,7 +72,6 @@ struct
 
   let is_bottom = function BOT -> true | _ -> false
 
-  (* is that so? what if u is top but l is not empty ? *)
   let is_top (su: t) =
     bot_apply (fun _ (l, u) -> Set.is_empty l && USet.is_top u) false su
 

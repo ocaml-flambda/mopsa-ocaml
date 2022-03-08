@@ -47,7 +47,7 @@ let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
 let mk_hasattr obj attr range =
-  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string attr range] range
+  mk_builtin_call "hasattr" [obj; Universal.Ast.mk_string ~etyp:(T_py None) attr range] range
 
 let mk_object_hasattr obj attr range =
   mk_hasattr (mk_py_object obj range) attr range
@@ -74,14 +74,16 @@ let check_instances ?(arguments_after_check=0) funname man flow range exprs inst
     match lexprs, linstances with
     | _, [] ->
       if arguments_after_check = List.length lexprs then
-        processing iexprs flow
+        processing iexprs (Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow)
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
           Eval.empty
     | e::es, i::is ->
       assume (Addr.mk_py_isinstance_builtin e i range) man flow
-        ~fthen:(aux (pos+1) iexprs es is)
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e.erange flow |>
+          aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance of '%s', but found %a at argument #%d" funname i pp_expr e pos in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -101,8 +103,9 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
   let rec aux pos iexprs lexprs linstances flow =
     match lexprs, linstances with
     | _, [] ->
-      if arguments_after_check = List.length lexprs then
-        processing iexprs flow
+       if arguments_after_check = List.length lexprs then
+         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+           processing iexprs
       else
         let msg = Format.asprintf "%s: too many arguments: %d given, %d expected" funname (List.length exprs) (arguments_after_check + List.length instances) in
         man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -113,7 +116,9 @@ let check_instances_disj ?(arguments_after_check=0) funname man flow range exprs
           mk_binop ~etyp:(T_py None) acc O_py_or (mk_onecond el) range)
           (mk_onecond @@ List.hd i) (List.tl i) in
       assume cond man flow
-        ~fthen:(aux (pos+1) iexprs es is)
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e.erange flow |>
+          aux (pos+1) iexprs es is)
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s: expected instance ∈ {%a}, but found %a at argument #%d"
               funname
@@ -145,7 +150,10 @@ let new_wrapper man range flow newcls argcls ~fthennew =
       assume
         (Addr.mk_py_issubclass_builtin_r argcls newcls range)
         man flow
-        ~fthen:fthennew
+        ~fthen:(fun flow ->
+          Flow.add_safe_check Alarms.CHK_PY_TYPEERROR argcls.erange flow |>
+            fthennew
+        )
         ~felse:(fun flow ->
           let msg = Format.asprintf "%s.__new__(%a): %a is not a subtype of int" newcls pp_expr argcls pp_expr ecls in
           man.exec (mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -192,7 +200,7 @@ let get_eobj_itv man flow e =
 
 (* tries to evaluate python expr.
    If the evaluation fails and raises an exception, the exception flow is caught, put back to cur and `on_empty` is then run *)
-let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~(on_result:expr -> 'a flow -> ('a, expr) cases) (man: ('a, 'b) man) ?(route=Core.Route.toplevel) expr (flow: 'a flow) range : ('a, expr) cases option =
+let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~(on_result:expr -> 'a flow -> ('a, expr) cases) (man: ('a, 'b) man) ?(route=Core.Route.toplevel) expr (flow: 'a flow) : ('a, expr) cases option =
   man.eval ~route:route expr flow >>=?
     fun case flow' ->
     Some (
@@ -204,6 +212,7 @@ let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~
          let caught_flow, flow_ok = Flow.fold (fun (caught, acc_ok) tk env ->
                                         match tk with
                                         | Alarms.T_py_exception (expr, name, msg, exc_kind) when not @@ Flow.mem tk flow ->
+                                           (* FIXME: tk could be renamed by the evaluation of expr... It would be better to split erroneous flows and merge them back I guess *)
                                            (expr, name, msg, env)::caught, acc_ok
                                         | _ -> caught, Flow.add tk env man.lattice acc_ok
                                       ) ([], Flow.bottom_from flow') flow' in
@@ -215,3 +224,7 @@ let try_eval_expr ?(on_empty=fun exc_exp exc_str exc_msg flow -> assert false) ~
          Eval.join_list ~empty:(fun () -> Eval.empty flow_ok) results
       | NotHandled -> assert false
     )
+
+let check man cond range flow =
+  man.exec (Universal.Ast.mk_assert cond range) flow >>%
+  man.eval (mk_py_none range)

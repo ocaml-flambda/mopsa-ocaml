@@ -52,6 +52,7 @@ type fun_context = (T.fundec) MS.t
 let builtin_functions =
   [
     {name = "mopsa_assume"; args = [None]; output = T_unit};
+    {name = "append"; args = [Some (T_array T_int); Some T_int]; output = T_unit};
   ]
 
 let from_extent (e: U.extent) : Location.range = e
@@ -121,6 +122,7 @@ let from_binop (t: typ) (b: U.binary_op) : operator =
   | T_float _, AST_LESS_EQUAL    -> O_le
   | T_float _, AST_GREATER       -> O_gt
   | T_float _, AST_GREATER_EQUAL -> O_ge
+  | T_array _, AST_CONCAT -> O_concat
   | _ -> Exceptions.panic "operator %a cannot be used with type %a" U_ast_printer.print_binary_op b pp_typ t
 
 let from_unop (t: typ) (b: U.unary_op) : operator =
@@ -247,7 +249,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     Exceptions.panic "char not implemented yet"
 
   | AST_array_const(a, _) ->
-    Exceptions.panic "array not implemented yet"
+     mk_expr (E_array (List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) (Array.to_list a))) range
 
   | AST_rand((l, _), (u, _)) ->
     mk_z_interval (Z.of_string l) (Z.of_string u) range
@@ -262,7 +264,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
       let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let e2 = to_typ T_int e2 in
       match etyp e1 with
-      | T_string -> mk_expr (E_subscript(e1, e2)) ~etyp:T_char range
+      | T_string -> mk_expr (E_subscript(e1, e2)) ~etyp:T_int range
       | T_array t -> mk_expr (E_subscript(e1, e2)) ~etyp:t range
       | _ -> Exceptions.panic_at ext
                "%a is of type %a and can not be subscripted"

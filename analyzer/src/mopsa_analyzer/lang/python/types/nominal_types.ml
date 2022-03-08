@@ -76,8 +76,17 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
+       man.eval obj flow >>$ (fun obj flow ->
+        let issubclass s = {exp with ekind = E_py_call(call, [obj; s], [])} in
+        if types = [] then man.eval (mk_py_false range) flow else
+        let disj = List.fold_left (fun acc typ -> mk_binop ~etyp:(T_py None) acc O_py_or (issubclass typ) range) (issubclass @@ List.hd types) (List.tl types) in
+        man.eval disj flow
+      ) |> OptionExt.return
+
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, [cls; cls'], []) ->
-      bind_list [cls; cls'] (man.eval   ) flow |>
+      bind_list [cls; cls'] man.eval flow |>
       bind_result (fun evals flow ->
           let cls, cls' = match evals with [e1; e2] -> e1, e2 | _ -> assert false in
           let addr_cls = match ekind cls with | E_py_object (a, _) -> a | _ -> assert false in
@@ -85,8 +94,37 @@ struct
           match akind addr_cls, akind addr_cls' with
           | A_py_class (c, mro), A_py_class (c', mro') ->
              man.eval   (mk_py_bool (class_le (c, mro) (c', mro')) range) flow
-          | _ -> panic_at range "%a, cls=%a, cls'=%a" pp_expr exp pp_expr cls pp_expr cls')
+          | A_py_c_class v, A_py_c_class v' ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_bool (compare v v' = 0) range) flow
+          | A_py_c_class v, A_py_class (C_builtin s, _) ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_bool (s = "object") range) flow
+          | A_py_c_class v, A_py_class (C_user _, _) ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_false range) flow
+          | A_py_class (C_builtin _, _), A_py_c_class v' ->
+             warn_at range "issubclass unsound for classes %a %a" pp_addr addr_cls pp_addr addr_cls';
+             man.eval (mk_py_false range) flow
+          | A_py_class (C_user _, mro), A_py_c_class v' ->
+             man.eval (mk_py_bool (List.exists (fun (addr, _) -> compare_addr addr addr_cls' = 0) mro) range) flow
+          | _ -> panic_at range "%a" pp_expr exp pp_expr cls pp_expr cls')
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("issubclass", _))}, _)}, args, kwargs) ->
+       man.exec (Utils.mk_builtin_raise_msg "TypeError"
+                   (Format.asprintf "issubclass expected 2 arguments, got %d" (List.length args + List.length kwargs)) range) flow >>%
+         Eval.empty |>
+         OptionExt.return
+
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)} as call, [obj; {ekind = E_py_tuple types}], []) ->
+       man.eval obj flow >>$ (fun obj flow ->
+        let isinstance s = {exp with ekind = E_py_call(call, [obj; s], [])} in
+        if types = [] then man.eval (mk_py_false range) flow else
+        let disj = List.fold_left (fun acc typ -> mk_binop ~etyp:(T_py None) acc O_py_or (isinstance typ) range) (isinstance @@ List.hd types) (List.tl types) in
+        man.eval disj flow
+      ) |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, [obj; attr], []) ->
       (* TODO: if v is a class inheriting from protocol we should check the attributes *)
@@ -134,11 +172,29 @@ struct
                 man.eval (mk_and conds) flow
             | Some _ -> assert false
             | None ->
-               let ic, imro = match akind cls with
-                 | A_py_class (c, m) -> c, m
-                 | _ -> assert false in
-               man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+               begin match akind cls with
+               | A_py_class (ic, imro) ->
+                  man.eval (mk_py_bool (class_le (ic, imro) (c, mro)) range) flow
+               | A_py_c_class _ ->
+                  warn_at range "%a returned false, is that right? (type class not handled correctly)" pp_expr exp;
+                  man.eval (mk_py_false range) flow
+               | _ -> assert false
+               end
             end
+
+          | A_py_instance cls, A_py_c_class c ->
+             begin match akind cls with
+             | A_py_class (_, imro) ->
+                let res = List.exists (fun x -> match akind @@ fst x with
+                                                | A_py_c_class x -> compare x c = 0
+                                                | _ -> false) imro in
+                man.eval (mk_py_bool res range) flow
+
+             | A_py_c_class c' ->
+                man.eval (mk_py_bool (compare c c' = 0) range) flow
+
+             | _ -> assert false
+             end
 
           | A_py_module _, A_py_class (C_builtin c, _) ->
             man.eval (mk_py_bool (c = "module" || c = "object") range) flow
@@ -154,9 +210,16 @@ struct
                 man.eval   (mk_py_issubclass_builtin_l n_ak eattr range) flow
              end
 
-          | _ -> assert false
+          | _ ->
+             man.exec (Utils.mk_builtin_raise_msg "TypeError" "isinstance() arg 2 must be a type or tuple of types" range) flow >>% Eval.empty
         )
       |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("isinstance", _))}, _)}, args, kwargs) ->
+       man.exec (Utils.mk_builtin_raise_msg "TypeError"
+                   (Format.asprintf "isinstance expected 2 arguments, got %d" (List.length args + List.length kwargs)) range) flow >>%
+         Eval.empty |>
+         OptionExt.return
 
     | _ -> None
 

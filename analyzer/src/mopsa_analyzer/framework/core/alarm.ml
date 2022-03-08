@@ -475,20 +475,15 @@ let join_report r1 r2 =
   if subset_report r1 r2 then r2 else
   if subset_report r2 r1 then r1
   else
-    let weaken_diagnostic diag =
-      match diag.diag_kind with
-      | Error -> { diag with diag_kind = Warning }
-      | _     -> diag
-    in
     { report_assumptions = AssumptionSet.union r1.report_assumptions r2.report_assumptions;
       report_diagnostics =
         RangeMap.map2zo
-          (fun _ checks1 -> CheckMap.map weaken_diagnostic checks1)
-          (fun _ checks2 -> CheckMap.map weaken_diagnostic checks2)
+          (fun range checks1 -> checks1)
+          (fun range checks2 -> checks2)
           (fun range checks1 checks2 ->
              CheckMap.map2zo
-               (fun check diag1 -> weaken_diagnostic diag1)
-               (fun check diag2 -> weaken_diagnostic diag2)
+               (fun check diag1 -> diag1)
+               (fun check diag2 -> diag2)
                (fun _ diag1 diag2 -> join_diagnostic diag1 diag2)
                checks1 checks2
           )

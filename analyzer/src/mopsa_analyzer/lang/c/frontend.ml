@@ -57,8 +57,14 @@ let opt_warn_all = ref false
 let opt_use_stub = ref []
 (** Lists of functions that the body will be replaced by a stub *)
 
+let opt_library_only = ref false
+(** Allow library-only targets in the .db files (used for multilanguage analysis) *)
+
 let opt_target_triple = ref ""
 (** Target architecture triple to analyze for (host if left empty) *)
+
+let opt_stubs_files = ref []
+(** Additional stub files to parse *)
 
 let () =
   register_language_option "c" {
@@ -108,6 +114,20 @@ let () =
     category = "C";
     doc = " list of functions for which the stub is used instead of the declaration.";
     spec = ArgExt.Set_string_list opt_use_stub;
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-library-only";
+    category = "C";
+    doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
+    spec = ArgExt.Set opt_library_only;
+    default = "false";
+  };
+  register_language_option "c" {
+    key = "-additional-stubs";
+    category = "C";
+    doc = " additional stubs file";
+    spec = ArgExt.Set_string_list opt_stubs_files;
     default = "";
   };
   register_language_option "c" {
@@ -238,23 +258,41 @@ and parse_db (dbfile: string) ctx : unit =
   let open Mopsa_build_db in
 
   let db = load_db dbfile in
-  let execs = get_executables db in
-  let exec =
-    (* No need for target selection if there is only one binary *)
-    if List.length execs = 1
-    then List.hd execs
-    else if execs = []
-    then panic "no binary in database"
-    else if !opt_make_target = ""
-    then panic "a target is required in a multi-binary database, use the -make-target option.@\nPossible targets:@\n @[%a@]"
-        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
-        execs
+  let srcs =
+    if !opt_library_only then
+      let libs = get_libraries db in
+      let lib =
+        if List.length libs = 1 then List.hd libs
+        else if libs = [] then panic "no library in database"
+        else if !opt_make_target = "" then
+          panic "a target is required in a multi-library Makefile@.Possible targets:@\n@[%a@]"
+            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+               Format.pp_print_string)
+            libs
+        else
+          try find_target !opt_make_target libs
+          with Not_found ->
+            panic "library target %s not found" !opt_make_target
+      in
+      get_library_sources db lib
     else
-      try find_target !opt_make_target execs
-      with Not_found ->
-        panic "binary target %s not found" !opt_make_target
-  in
-  let srcs = get_executable_sources db exec in
+      let execs = get_executables db in
+      let exec =
+        (* No need for target selection if there is only one binary *)
+        if List.length execs = 1
+        then List.hd execs
+        else if execs = []
+        then panic "no binary in database"
+        else if !opt_make_target = ""
+        then panic "a target is required in a multi-binary database, use the -make-target option.@\nPossible targets:@\n @[%a@]"
+               (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") Format.pp_print_string)
+               execs
+        else
+          try find_target !opt_make_target execs
+          with Not_found ->
+            panic "binary target %s not found" !opt_make_target
+      in
+      get_executable_sources db exec in
   let nb = List.length srcs in
   input_files := [];
   let cwd = Sys.getcwd() in
@@ -297,6 +335,11 @@ and parse_stubs ctx () =
   parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/mopsa.c") false false ctx;
   (** Add compiler builtins *)
   parse_file ~stub:true "clang" [] (Config.Paths.resolve_stub "c" "mopsa/compiler_builtins.c") false false ctx;
+  List.iter (fun stub_file ->
+      try
+        parse_file ~stub:true "clang" [] (Filename.concat (Paths.get_stubs_dir ()) stub_file) false false ctx;
+      with SyntaxErrorList es ->
+        panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es) !opt_stubs_files;
   if !opt_without_libc then ()
   else
     (** Add stubs of the included headers *)
@@ -398,9 +441,17 @@ and from_project prj =
 
 and find_target target targets =
   let re = Str.regexp (".*" ^ target ^ "$") in
-  List.find (fun t ->
-      Str.string_match re t 0
-    ) targets
+  let search_targets r =
+    List.find (fun t ->
+        Str.string_match r t 0
+      ) targets in
+  try
+    search_targets re
+  with Not_found ->
+    let re_permissive = Str.regexp (".*" ^ target ^ ".*") in
+    let t = search_targets re_permissive in
+    warn "permissive search selected target %s" t;
+    t
 
 (** {2 functions} *)
 (** ============= *)

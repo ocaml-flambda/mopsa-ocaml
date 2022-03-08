@@ -59,7 +59,9 @@ struct
                      ~fthen:(fun flow ->
                          let var_iterable = Py_list.Domain.var_of_eobj iterable in
                          assume (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var_iterable range) "str" range) man flow
-                           ~fthen:(man.eval (mk_py_top T_string range))
+                           ~fthen:(fun flow ->
+                             Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                             man.eval (mk_py_top T_string range))
                            ~felse:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
                                Eval.empty
@@ -73,7 +75,9 @@ struct
                                  List.fold_left (fun acc var ->
                                      mk_binop ~etyp:(T_py None) acc O_py_and (mk_py_isinstance_builtin (mk_var ~mode:(Some WEAK) var range) "str" range) range) (mk_py_true range) vars_tuple in
                                assume assume_all man flow
-                                 ~fthen:(man.eval (mk_py_top T_string range))
+                                 ~fthen:(fun flow ->
+                                   Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                                   man.eval (mk_py_top T_string range))
                                  ~felse:(fun flow ->
                                      man.exec (Utils.mk_builtin_raise_msg "TypeError" "sequence item: expected str instance" range) flow >>%
                                      Eval.empty

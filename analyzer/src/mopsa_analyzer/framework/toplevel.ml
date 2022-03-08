@@ -507,8 +507,8 @@ struct
     let route = refine_route_with_var_semantic route exp in
     match RouteMap.find_opt route print_expr_map with
     | Some f ->
-      f man flow printer exp;
-      Print.add_printed_expr printer exp
+      Print.add_printed_expr printer exp;
+      f man flow printer exp
 
     | None ->
       Exceptions.panic_at exp.erange "pretty printer for %a not found" pp_route route

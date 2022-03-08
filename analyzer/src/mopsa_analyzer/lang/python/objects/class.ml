@@ -43,18 +43,46 @@ struct
   let rec eval  exp man (flow: 'a flow) =
     let range = erange exp in
     match ekind exp with
-    (* 𝔼⟦ C() | isinstance(C, type) ⟧ *)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [{ekind = E_constant (C_string name)}; {ekind = E_py_tuple bases}; {ekind = E_py_dict ([], [])}], []) ->
+       bind_list bases man.eval flow >>$ (fun bases flow ->
+       (* FIXME: mechanism more general than S_py_class, since we don't assign any variable to the class object, and just return it. Refactoring needed *)
+       let py_cls_var = mk_fresh_uniq_var name  (T_py None) () in
+       (* TODO: change py_cls_var:var in py_cls_dec by a string? *)
+       let py_cls_bases =
+         match bases with
+         | [] -> [find_builtin "object"]
+         | _ -> List.map (fun x -> let a, e = object_of_expr x in (a, None))  bases
+       in
+       let clsdec = {
+           py_cls_var;
+           py_cls_bases=List.map (fun c -> mk_py_object c range) py_cls_bases;
+           py_cls_body=mk_block [] range;
+           py_cls_static_attributes=[];
+           py_cls_decors=[];
+           py_cls_keywords=[];
+           py_cls_range=range} in
+       let mro = c3_lin ({addr_kind= (A_py_class (C_user clsdec, py_cls_bases)); addr_partitioning=G_all; addr_mode = STRONG}, None) in
+       eval_alloc man (A_py_class (C_user clsdec, mro)) range flow >>$ (fun addr flow ->
+         Eval.singleton (mk_py_object (addr, None) range) flow
+       )) |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_class (C_builtin "type", _)}, _)}, [name; bases; dict], []) ->
+        panic_at range "type(..., ..., ...) not supported"
+
     | E_py_call({ekind = E_py_object ({addr_kind=A_py_class (C_builtin "type", _)}, _)}, args, []) ->
       None
 
     | E_py_call({ekind = E_py_object (({addr_kind=A_py_class (C_builtin "bool", _)}, _))}, args, kwargs) ->
        None
 
-    | E_py_call({ekind = E_py_object (({addr_kind=A_py_class _}, _) as cls)} as ecls, args, kwargs) ->
+    | E_py_call({ekind = E_py_object (({addr_kind=(A_py_class _ | A_py_c_class _)}, _) as cls)} as ecls, args, kwargs) ->
       debug "class call  %a@\n@\n" pp_expr exp;
       (* FIXME: this is actually type.__call__(cls) *)
       (* Call __new__ and __init__ *)
+
       let rec bind count args vars (flow: 'a post) f =
+      (* we don't want to evaluate args twice, (in __new__ and __init__)
+         we don't want a cascading disjunction either, so we assign them into tmps... *)
         match args with
         | [] ->
            f (List.rev vars) flow
@@ -71,8 +99,8 @@ struct
                          match vkind v with
                          | V_range_attr (r, _) -> mk_var v r
                          | _ -> assert false) vars in
-          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" range) ((mk_py_object cls range)
-                                                                             :: tmps) kwargs range in
+          let new_call = mk_py_kall (mk_py_object_attr cls "__new__" (tag_range range "__new__")) ((mk_py_object cls range)
+                                                                             :: tmps) kwargs (tag_range range "__new__") in
           flow >>%
             man.eval   new_call |>
             Cases.add_cleaners (List.map (fun x -> match ekind x with
@@ -83,11 +111,13 @@ struct
                   (mk_py_isinstance inst ecls range)
                   ~fthen:(fun flow ->
                     debug "init!@\n";
-                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" range) (inst :: tmps) kwargs range) flow >>$
+                    man.eval   (mk_py_kall (mk_py_object_attr cls "__init__" (tag_range range "__init__")) (inst :: tmps) kwargs (tag_range range "__init__")) flow >>$
                       (fun r flow ->
                           assume
                             (mk_py_isinstance_builtin r "NoneType" range)
-                            ~fthen:(fun flow -> man.eval    inst flow)
+                            ~fthen:(fun flow ->
+                              Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                              man.eval inst)
                             ~felse:(fun flow ->
                               let msg = Format.asprintf "__init__() should return None, not %a" pp_expr r in
                               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -109,8 +139,7 @@ struct
     (* 𝕊⟦ class cls: body ⟧ *)
     | S_py_class cls ->
       debug "definition of class %a" pp_var cls.py_cls_var;
-      bind_list cls.py_cls_bases (man.eval  ) flow |>
-      bind_result (fun bases flow ->
+      bind_list cls.py_cls_bases man.eval flow >>$ (fun bases flow ->
           let bases' =
             match bases with
             | [] -> [find_builtin "object"]
@@ -144,7 +173,9 @@ struct
                   man.exec cls.py_cls_body flow >>% fun flow ->
                   let parent = List.hd @@ List.tl mro in
                   man.eval (mk_py_call (mk_py_object_attr parent "__init_subclass__" range) [mk_py_object obj range] range) flow >>$
-                    (fun _ flow -> Post.return flow)
+                    (fun _ flow ->
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                      Post.return)
                 )
             with C3_lin_failure ->
               Exceptions.warn "C3 linearization failure during class declaration %a@\n" pp_var cls.py_cls_var;

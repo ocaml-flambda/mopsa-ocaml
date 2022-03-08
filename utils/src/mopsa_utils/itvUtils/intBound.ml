@@ -42,7 +42,7 @@ let zero : t = Finite Z.zero
 let one : t = Finite Z.one
 let minus_one : t = Finite Z.minus_one
 (** Useful constants *)
-                       
+
 let of_int (x:int) : t = Finite (Z.of_int x)
 let of_int64 (x:int64) : t = Finite (Z.of_int64 x)
 (** Exact conversion from machine integers. *)
@@ -58,13 +58,13 @@ let infinite (sign:int) : t =
   if sign > 0 then PINF
   else if sign < 0 then MINF
   else zero
-(** Constructs an infinity with the given sign. Zero maps to zero. *)         
+(** Constructs an infinity with the given sign. Zero maps to zero. *)
 
 let pow2 (nb:int) : t =
   Finite (Z.shift_left Z.one nb)
 (** A power of two. The argument must be positive. *)
 
-                     
+
 
 (** {2 Predicates} *)
 
@@ -77,13 +77,13 @@ let is_finite (x:t) : bool =
   | Finite _ -> true
   | _ -> false
 (** Whether x is finite or not. *)
-                     
+
 let equal (x:t) (y:t) : bool =
   match x,y with
   | Finite a, Finite b -> Z.equal a b
   | MINF,MINF | PINF,PINF -> true
   | _ -> false
-(** Equality comparison. = also works. *)          
+(** Equality comparison. = also works. *)
 
 let compare (x:t) (y:t) : int =
   match x,y with
@@ -100,7 +100,7 @@ let gt  (x:t) (y:t) : bool = compare x y > 0
 let eq  (x:t) (y:t) : bool = equal x y
 let neq (x:t) (y:t) : bool = not (equal x y)
 (** Comparison predicates. *)
-                  
+
 let min (x:t) (y:t) : t = if leq x y then x else y
 let max (x:t) (y:t) : t = if leq x y then y else x
 (** Minimum and maximum. *)
@@ -112,12 +112,12 @@ let is_negative (x:t) : bool = sign x <= 0
 let is_positive_strict (x:t) : bool = sign x > 0
 let is_negative_strict (x:t) : bool = sign x < 0
 (** Sign predicates. *)
-                              
+
 let hash (a:t) : int =
   match a with PINF -> 1 | MINF -> -1 | Finite x -> Z.hash x
 (** Hashing function. *)
-                                                           
-                              
+
+
 (** {2 Printing} *)
 
 let to_string (x:t) : string =
@@ -125,12 +125,12 @@ let to_string (x:t) : string =
   | PINF -> "+∞"
   | MINF -> "-∞"
   | Finite x -> Z.to_string x
-                       
+
 let print ch (x:t) = output_string ch (to_string x)
 let fprint ch (x:t) = Format.pp_print_string ch (to_string x)
 let bprint ch (x:t) = Buffer.add_string ch (to_string x)
 
-                              
+
 (** {2 Operators} *)
 
 let succ (a:t) : t =
@@ -140,7 +140,7 @@ let succ (a:t) : t =
 let pred (a:t) :t =
   match a with Finite x -> Finite (Z.pred x) | _ -> a
 (** -1. Infinities are left unchanged. *)
-                              
+
 let neg (a:t) : t =
   match a with MINF -> PINF | PINF -> MINF | Finite x -> Finite (Z.neg x)
 (** Negation. *)
@@ -148,7 +148,7 @@ let neg (a:t) : t =
 let abs (a:t) : t =
   match a with MINF | PINF -> PINF | Finite x -> Finite (Z.abs x)
 (** Absolute value. *)
-                                                        
+
 let add (a:t) (b:t) : t =
   match a, b with
   | PINF,MINF | MINF,PINF-> invalid_arg "IntBound.add"
@@ -156,7 +156,7 @@ let add (a:t) (b:t) : t =
   | MINF,_ | _,MINF -> MINF
   | Finite x, Finite y -> Finite (Z.add x y)
 (** Addition. +∞ + -∞ is undefined (invalid argument exception). *)
-                                 
+
 let sub (a:t) (b:t) : t =
   match a, b with
   | PINF,PINF | MINF,MINF-> invalid_arg "IntBound.sub"
@@ -197,14 +197,14 @@ let ediv (a:t) (b:t) :t =
 
 let rem (a:t) (b:t) : t =
   match a with
-  | PINF | MINF -> invalid_arg "IntBound.rem"
+  | PINF | MINF -> invalid_arg "IntBound.rem INF"
   | Finite x ->
      match b with
      | PINF | MINF -> a
      | Finite y ->
-        if y = Z.zero then invalid_arg "IntBound.rem"
+        if y = Z.zero then invalid_arg "IntBound.rem ZERO"
         else Finite (Z.rem x y)
-(** Remainder. rem x y has the sign of x, rem x (-y) = rem x y, and rem x +∞ = x. 
+(** Remainder. rem x y has the sign of x, rem x (-y) = rem x y, and rem x +∞ = x.
     rem +∞ y and rem x 0 are undefined (invalid argument exception).
 *)
 
@@ -231,7 +231,7 @@ let shift_left (a:t) (b:t) : t =
         (try Finite (Z.shift_left x (Z.to_int y))
         with Z.Overflow -> infinite (sign a))
      | _ -> invalid_arg "IntBound.shift_left"
-(** Left bitshift. 
+(** Left bitshift.
     Undefined if the second argument is negative (invalid argument exception).
     Returns an infinity if the second argument is too large.
  *)
@@ -246,7 +246,7 @@ let shift_right (a:t) (b:t) :t =
         (try Finite (Z.shift_right x (Z.to_int y))
          with Z.Overflow -> zero)
      | _ -> invalid_arg "IntBound.shift_right"
-(** Right bitshift, rounding towards -∞. 
+(** Right bitshift, rounding towards -∞.
     Undefined if the second argument is negative (invalid argument exception).
     Returns zero if the second argument is too large.
  *)
@@ -261,8 +261,8 @@ let shift_right_trunc (a:t) (b:t) : t =
         (try Finite (Z.shift_right_trunc x (Z.to_int y))
          with Z.Overflow -> zero)
      | _ -> invalid_arg "IntBound.shift_right_trunc"
-(** Right bitshift, rounding towards 0 (truncation). 
-    Undefined if the second argument is negative (invalid argument exception). 
+(** Right bitshift, rounding towards 0 (truncation).
+    Undefined if the second argument is negative (invalid argument exception).
     Returns zero if the second argument is too large.
 *)
 
@@ -270,7 +270,7 @@ let only_finite msg op a b =
   match a,b with
   | Finite x, Finite y -> Finite (op x y)
   | _ -> invalid_arg msg
-                        
+
 let bit_or : t -> t -> t = only_finite "IntBound.bit_or"  Z.logor
 let bit_xor : t -> t -> t = only_finite "IntBound.bit_xor" Z.logxor
 let bit_and : t -> t -> t = only_finite "IntBound.bit_and" Z.logand

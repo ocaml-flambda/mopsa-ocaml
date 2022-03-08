@@ -61,6 +61,8 @@ module Domain =
               py_func_type_out = None;
               py_func_range = range;
               py_func_ret_var = mk_range_attr_var range ("ret "^lname) (T_py None);
+              py_func_cellvars = [];(* FIXME *)
+              py_func_freevars = []; (*FIXME *)
             } in
         eval_alloc man (A_py_function fun_addr) range flow |>
         bind_result (fun addr flow ->

@@ -33,6 +33,7 @@
     exception LexingError of string
 
     let id_or_kwd s = match s with
+    | "Ellipsis" -> ELLIPSIS
     | "False" -> FALSE
     | "None" -> NONE
     | "NotImplemented" -> NOTIMPLEMENTED
@@ -507,6 +508,7 @@ and long_dq_prefix = parse
         | FALSE -> "FALSE "
         | NONE -> "NONE "
 	| NOTIMPLEMENTED -> "NOTIMPLEMENTED"
+	| ELLIPSIS -> "ELLIPSIS"
         | TRUE -> "TRUE "
         | AND -> "AND "
         | AS -> "AS "

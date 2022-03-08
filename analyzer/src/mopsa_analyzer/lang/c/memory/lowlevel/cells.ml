@@ -45,13 +45,18 @@ open Common.Points_to
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 open Universal.Numeric.Common
 
+let is_var_affine_in_expr v expr =
+  (* we could generalize this predicate, but the C analysis currently yields that kind of expression *)
+  match ekind expr with
+  | E_binop(O_plus, _, {ekind = E_var (v', _)}) -> compare_var v v' = 0
+  | _ -> false
 
 module Domain =
 struct
 
   let name = "c.memory.lowlevel.cells"
 
-  
+
   (** {2 Memory cells} *)
   (** **************** *)
 
@@ -485,7 +490,7 @@ struct
               raise NotPossible
           with
           | NotPossible -> None
-    
+
 
 
   (** Add a cell and its constraints *)
@@ -518,7 +523,7 @@ struct
     let doit ss aa acc =
       Cells.fold
         (fun c acc ->
-           sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
+          sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
         ss acc
     in
     CellSet.fold2zo
@@ -586,6 +591,13 @@ struct
     | Cell of cell * mode option
     | Region of base * Z.t (** offset lower bound *) * Z.t (** offset higher bound *) * Z.t (** offset step *)
     | Top
+
+  let pp_expansion fmt = function
+    | Cell (c, om) ->
+       Format.fprintf fmt "Cell(%a, %a)" pp_cell c (OptionExt.print pp_mode) om
+    | Region (b, l, u, s) ->
+       Format.fprintf fmt "Region(%a, %a, %a, %a)" pp_base b Z.pp_print l Z.pp_print u Z.pp_print s
+    | Top -> Format.fprintf fmt "T"
 
 
   let rec is_interesting_base = function
@@ -688,6 +700,7 @@ struct
     || not (is_interesting_base base)
     || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
     then
+      let () = debug "%a: expansion %a not worth smashing, results in T" pp_range range pp_expansion (Region (base,lo,hi,step)) in
       top
     else
       (* In order to smash a region in something useful, we ensure
@@ -816,14 +829,21 @@ struct
     let stmt = mk_forget_var v range in
     man.exec stmt ~route:scalar flow
 
+  (** Compute the interval of an offset *)
+  let offset_interval offset range man flow : Itv.t =
+    let evl = man.eval offset flow ~translate:"Universal" in
+    Cases.reduce_result
+      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
+      ~join:Itv.join
+      ~meet:Itv.meet
+      ~bottom:Itv.bottom
+      evl
 
   (** {2 Initial state} *)
   (** ***************** *)
 
   let init prog man flow =
     set_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow
-
-
 
 
   (** {2 Abstract evaluations} *)
@@ -835,7 +855,7 @@ struct
     let t = under_type p.etyp in
     expand p range man flow >>$ fun expansion flow ->
     match expansion with
-    | Top -> 
+    | Top ->
       man.eval (mk_top (void_to_char t) range) flow
 
     | Region (base,lo,hi,step) ->
@@ -863,7 +883,69 @@ struct
         mk_numeric_cell_var_expr c ~mode range
     in
     man.eval v flow ~route:scalar
-  
+
+  let assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctyp2 range man flow =
+    Post.return flow
+
+  let assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow =
+    let itv_a = offset_interval a range man flow in
+    let itv_b = offset_interval b range man flow in
+    match itv_a, itv_b with
+    | BOT, _ | _, BOT -> Post.return flow
+    | Nb (_, itv_amax), Nb (itv_bmin, _) ->
+       let safe_itv = ItvUtils.IntItv.of_bound itv_amax itv_bmin in
+       let cur = get_env T_cur man flow in
+       let cells1 = CellSet.find base1 cur.cells in
+       let cells2 = cell_set_find_base base2 cur.cells in
+       let () = debug "assume_forall_eq2 (%a, %a, %a) (%a, %a, %a), safe_itv = %a"
+                  pp_base base1 pp_expr offset1 (OptionExt.print pp_mode) mode1
+                  pp_base base2 pp_expr offset2 (OptionExt.print pp_mode) mode2
+              ItvUtils.IntItv.fprint safe_itv
+       in
+       (* let's handle the case appearing most in stubs: copying the contents to a newly allocated memory without any cells *)
+       if OffCells.is_empty cells1 || OffCells.for_all2 (fun _ cs1 cs2 -> Cells.cardinal cs1 = 1 && Cells.cardinal cs2 = 1 && compare_cell_typ (Cells.choose cs1).typ (Cells.choose cs2).typ = 0) cells1 (CellSet.find base2 cur.cells) then
+         let () = debug "trying expansion to copy cells from %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_cell) cells2 in
+         let post =
+         List.fold_left (fun acc c2 ->
+             if ItvUtils.IntItv.contains c2.offset safe_itv then
+             (* Create the corresponding expanded cells *)
+               let c1 = {c2 with base = base1} in
+               (* FIXME: what happens if c1 exists already? *)
+               Post.bind (expand_cell c2 [c1] range man) acc
+             else
+               acc
+           ) (Post.return flow) cells2 in
+         let () = debug "copy finished" in
+         post
+       else
+         let () = debug "cells1 = %a, transfer function not implemented" (format OffCells.print) cells1 (* (format @@ man.lattice.print) (Flow.get T_cur man.lattice flow)  *) in
+         Post.return flow
+
+  let eval_forall_eq2 i a b lval1 lval2 range man flow =
+    let ctype1 = (remove_casts lval1).etyp
+    and ctype2 = (remove_casts lval2).etyp in
+    let evl1 = eval_pointed_base_offset (mk_c_address_of lval1 range) range man flow in
+    let evl2 = eval_pointed_base_offset (mk_c_address_of lval2 range) range man flow in
+
+    evl1 >>$ fun bo1 flow ->
+    match bo1 with
+    | None -> Eval.singleton (mk_top T_bool range) flow
+    | Some (base1,offset1,mode1) ->
+      if not (is_interesting_base base1) then Eval.singleton (mk_top T_bool range) flow
+      else
+        evl2 >>$ fun bo2 flow ->
+        match bo2 with
+        | None -> Eval.singleton (mk_top T_bool range) flow
+        | Some (base2,offset2,mode2) ->
+          if not (is_interesting_base base2) then Eval.singleton (mk_top T_bool range) flow
+          else
+            let r = Eval.join
+              (assume_exists_ne2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% Eval.singleton (mk_false range))
+              (assume_forall_eq2 i a b base1 offset1 mode1 ctype1 base2 offset2 mode2 ctype2 range man flow >>% Eval.singleton (mk_true range)) in
+            let () = debug "joining" in
+            r
+
+
 
   let eval exp man flow =
     match ekind exp with
@@ -877,6 +959,17 @@ struct
       ->
       eval_deref_scalar_pointer p exp.erange man flow |>
       OptionExt.return
+
+    (* 𝕊⟦ ∀i ∈ [a,b]: *(p + i) == *(q + i) ⟧ *)
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, lval1, lval2)})
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_unop(O_log_not, { ekind = E_binop(O_ne, lval1, lval2)} )})
+         when is_c_scalar_type lval1.etyp &&
+              is_c_scalar_type lval2.etyp &&
+              is_var_affine_in_expr i lval1 &&
+              is_var_affine_in_expr i lval2
+      ->
+        eval_forall_eq2 i a b (remove_casts lval1) (remove_casts lval2) exp.erange man flow |>
+       OptionExt.return
 
     | _ -> None
 
@@ -1048,18 +1141,8 @@ struct
       (fun acc bb ->
          Post.bind (exec_remove bb range man) acc
       ) (Post.return flow) bl
-    
-         
 
-  (** Compute the interval of an offset *)
-  let offset_interval offset range man flow : Itv.t =
-    let evl = man.eval offset flow ~translate:"Universal" in
-    Cases.reduce_result
-      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
-      ~join:Itv.join
-      ~meet:Itv.meet
-      ~bottom:Itv.bottom
-      evl
+
 
 
   (** Forget the value of an lval *)

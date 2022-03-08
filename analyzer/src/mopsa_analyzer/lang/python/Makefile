@@ -24,14 +24,14 @@
 # Python
 mopsa_analyzer.lang += python
 mopsa_analyzer.lang.python = ast pp addr alarms utils visitor operators  ast_compare hooks frontend   \
-              soundness desugar libs objects data_model types flows program
+              soundness objects desugar libs  data_model types flows program packing
+mopsa_analyzer.lang.python.objects = lambda class data_container_utils function py_list range tuple dict constant_dict dict_reduction py_set py_object iterable
 mopsa_analyzer.lang.python.desugar = assert bool comprehensions if import iterable_assign loops with
 mopsa_analyzer.lang.python.libs = math py_mopsa py_std py_unittest py_typing
-mopsa_analyzer.lang.python.objects = lambda class data_container_utils function py_list range tuple dict py_set py_object iterable
 mopsa_analyzer.lang.python.data_model = callable arith_ops compare_ops aug_assign	\
                          attribute subscript
 mopsa_analyzer.lang.python.types = nominal_types addr_env structural_types polymorphism t_int t_float t_string  t_complex dummy_numeric type_annot
-
+mopsa_analyzer.lang.python.packing = static_scope
 
 
 # MOPSA libraries

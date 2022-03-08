@@ -1,6 +1,7 @@
 {
     "language": "c",
     "domain": {
+        "semantic": "C",
         "compose": [
             {
                 "switch": [

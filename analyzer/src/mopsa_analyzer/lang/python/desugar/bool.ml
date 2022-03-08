@@ -105,17 +105,15 @@ module Domain =
              man.eval (mk_py_type e2 range) flow >>$
                (fun cls2 flow ->
                  assume
-                   (Utils.mk_hasattr cls2 "__contains__" range)
+                   (Utils.mk_hasattr cls2 "__contains__" range) man flow
                    ~fthen:(fun true_flow ->
-                       let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
-                       man.eval exp' true_flow
+                     let exp' = mk_py_call (mk_py_attr cls2 "__contains__" range) [e2; e1] range in
+                     Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e2.erange true_flow |>
+                       man.eval exp'
                      )
                    ~felse:(fun false_flow ->
-                       assume
-                         (Utils.mk_hasattr cls2 "__iter__" range)
-                         ~fthen:(fun true_flow ->
-                             let v = mk_range_attr_var range "iter_v" (T_py None) in
-                             let stmt = mk_stmt (S_py_for (
+                     let v = mk_range_attr_var range "iter_v" (T_py None) in
+                     let stmt = mk_stmt (S_py_for (
                                  mk_var v range,
                                  e2,
                                  mk_if
@@ -124,27 +122,13 @@ module Domain =
                                    (mk_block [] range)
                                    range,
                                  (mk_block [] range)
-                               )) range
-                             in
-                             man.exec stmt true_flow >>%
-                             man.eval (mk_var v range) |>
-                             Cases.add_cleaners [mk_remove_var v range]
-                           )
-                         ~felse:(fun false_flow ->
-                             assume
-                               (Utils.mk_hasattr cls2 "__getitem__" range)
-                               ~fthen:(fun true_flow ->
-                                   panic_at range "evaluating 'in' operator using __getitem__ not supported"
-                                 )
-                               ~felse:(fun false_flow ->
-                                 let msg = Format.asprintf "argument of type '%a' is not iterable" pp_addr_kind (akind @@ fst @@ object_of_expr cls2) in
-                                 man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) false_flow >>%
-                                 Eval.empty
-                               )
-                               man false_flow
-                           )
-                         man false_flow
-                     ) man flow
+                                  )) range
+                     in
+                     Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e2.erange false_flow |>
+                       man.exec stmt >>%
+                       man.eval (mk_var v range) |>
+                       Cases.add_cleaners [mk_remove_var v range]
+                   )
                )
              |> OptionExt.return
            )
@@ -163,7 +147,7 @@ module Domain =
              let rec aux left flow = function
                | [] ->
                  debug "leaf case -> true";
-                 Eval.singleton (mk_py_true range) flow
+                 man.eval (mk_py_true range) flow
 
                | (op, right) :: tl ->
                  man.eval right flow >>$
@@ -171,7 +155,7 @@ module Domain =
                      assume
                        (mk_binop ~etyp:(T_py None) left op right range)
                        ~fthen:(fun true_flow -> aux right true_flow tl)
-                       ~felse:(fun false_flow -> Eval.singleton (mk_py_false range) flow)
+                       ~felse:(fun false_flow -> man.eval (mk_py_false range) flow)
                        man flow
                    )
              in

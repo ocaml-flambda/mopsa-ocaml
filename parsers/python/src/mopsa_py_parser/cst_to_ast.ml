@@ -39,8 +39,11 @@ open Ast
 
 let debug fmt = Debug.debug ~channel:"frontend.cst_to_ast" fmt
 
+let filename = ref ""
+
 (** Main entry point that translates a CST to an AST *)
-let rec translate_program (sl: Cst.stmt list) : Ast.program =
+let rec translate_program (fname:string) (sl: Cst.stmt list) : Ast.program =
+  let () = filename := fname in
   {
     prog_body = translate_block sl (block_range sl);
     prog_globals = find_program_globals sl;
@@ -201,6 +204,29 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
           )
       )
 
+    | ImportFrom (Some modl, aliases, Some d) when d > 0 ->
+       (* from .^d[omodl] import aliases *)
+       (* hack: just replace the relative import with an absolute import *)
+       let dirname = Filename.dirname !filename in
+       let path = String.split_on_char '/' dirname in
+       let rec get_last path =
+         if List.length path <= d then path
+         else get_last (List.tl path) in
+       let absolute_dir = get_last path |> String.concat "." in
+       let modl = absolute_dir ^ "." ^ modl in
+       (translate_stmt {stmt with skind = ImportFrom (Some modl, aliases, Some 0)}).skind
+
+    | ImportFrom (None, aliases, Some d) when d > 0 ->
+       (* from .^d import aliases ~> import absolute_path.alias *)
+       let dirname = Filename.dirname !filename in
+       let path = String.split_on_char '/' dirname in
+       let rec get_last path =
+         if List.length path <= d then path
+         else get_last (List.tl path) in
+       let absolute_dir = get_last path |> String.concat "." in
+       let imports_aliases = List.map (fun (name, obinding) -> (absolute_dir ^ "." ^ name, obinding)) aliases in
+       (translate_stmt {stmt with skind = Import imports_aliases}).skind
+
     | Global names -> S_pass
     | Nonlocal names -> S_pass
 
@@ -239,7 +265,7 @@ and translate_stmt (stmt: Cst.stmt) : Ast.stmt =
       OptionExt.apply (fun expr -> S_block (translate_stmt {skind=(Assign ([var], expr)); srange=range} :: tya :: [])) tya.skind expr
 
     (* Not supported statements *)
-    | ImportFrom _ -> failwith "Import from not supported"
+    | ImportFrom _ -> failwith "import from not supported"
     | AsyncFunctionDef (_,_,_,_,_) -> failwith "async not supported"
     | AsyncFor _ -> failwith "Async not supported"
     | AsyncWith (_,_) -> failwith "Async not supported"
@@ -403,7 +429,7 @@ and translate_expr (expr: Cst.expr) : Ast.expr =
           translate_expr {ekind = (Tuple (els, ctx)); erange = range}
         )
       else
-        failwith "Subscript with ExtSlice not supported"
+        failwith (Format.asprintf "Subscript with ExtSlice not supported @@ %a" Location.pp_range range)
       (* debug "subscript value = %a, |extslice|=%d" Pp.print_exp (translate_expr value) (List.length s);
        * let rec f fmt = function
        *   | Slice (a, b, c) -> Format.fprintf fmt "slice[%a, %a, %a]" (OptionExt.print Pp.print_exp) (translate_expr_option2 a) (OptionExt.print Pp.print_exp) (translate_expr_option2 b) (OptionExt.print Pp.print_exp) (translate_expr_option2 c)
@@ -487,6 +513,29 @@ and find_lvals_in_stmt stmt =
         let stmt = {stmt with skind = Import([alias])} in
         acc @ find_lvals_in_stmt stmt
       ) []
+
+  | ImportFrom (Some modl, aliases, Some d) when d > 0 ->
+     (* from .^d[omodl] import aliases *)
+     (* hack: just replace the relative import with an absolute import *)
+     let dirname = Filename.dirname !filename in
+     let path = String.split_on_char '/' dirname in
+     let rec get_last path =
+       if List.length path <= d then path
+       else get_last (List.tl path) in
+     let absolute_dir = get_last path |> String.concat "." in
+     let modl = absolute_dir ^ "." ^ modl in
+     find_lvals_in_stmt {stmt with skind = ImportFrom (Some modl, aliases, Some 0)}
+
+  | ImportFrom (None, aliases, Some d) when d > 0 ->
+    (* from .^d import aliases ~> import absolute_path.alias *)
+     let dirname = Filename.dirname !filename in
+     let path = String.split_on_char '/' dirname in
+     let rec get_last path =
+       if List.length path <= d then path
+       else get_last (List.tl path) in
+     let absolute_dir = get_last path |> String.concat "." in
+     let imports_aliases = List.map (fun (name, obinding) -> (absolute_dir ^ "." ^ name, obinding)) aliases in
+     find_lvals_in_stmt {stmt with skind = Import imports_aliases}
 
   | ImportFrom (Some modl, names, _) ->
     let hd = module_hd modl in
@@ -708,7 +757,9 @@ and (-@) (l1) (l1', l2', l3') = (l1 @ l1'), l2', l3'
 
 and block_range sl =
   match sl with
-  | [] -> Exceptions.panic "block_range: empty block"
+  | [] ->
+     Location.mk_fresh_range ()
+     (* Exceptions.panic "block_range: empty block" *)
   | [s] -> s.srange
   | hd :: tl ->
     let last = List.rev tl |> List.hd in
@@ -716,5 +767,5 @@ and block_range sl =
     mk_orig_range (get_range_start hd.srange) (get_range_end last.srange)
 
 and module_hd modl =
-  Str.split (Str.regexp "\\.") modl |>
-  List.hd
+  let s = Str.split (Str.regexp "\\.") modl in
+  List.nth s (List.length s - 1)

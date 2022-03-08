@@ -273,10 +273,14 @@ struct
           | _ -> assert false
         ) vl
       in
+      let a, bnd = add_missing_vars (a,bnd) (v::vl) in
       let v, bnd = Binding.mopsa_to_apron_var v bnd in
       let vl, bnd = Binding.mopsa_to_apron_vars vl bnd in
       let bnd = Binding.remove_apron_vars vl bnd in
-      let abs' = Apron.Abstract1.fold ApronManager.man a (Array.of_list (v::vl)) in
+      let abs' = try Apron.Abstract1.fold ApronManager.man a (Array.of_list (v::vl))
+                 with Apron.Manager.Error exc ->
+                   panic_at stmt.srange "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc
+      in
       Some (abs', bnd)
 
     | S_assume(e) when is_numeric_type (etyp e) -> begin
@@ -365,8 +369,11 @@ struct
 
 
   let print_state printer a =
+    let size = Apron.Environment.size (Apron.Abstract1.env (fst a)) in
+    debug "%d variables in the env" size;
     pprint printer
-      (pbox (Apron_pp.pp_env ApronManager.man) a)
+      (pbox (unformat (Apron.Abstract1.print)) (fst a))
+      (* (pbox (Apron_pp.pp_env ApronManager.man) a) *)
       ~path:[Key "numeric-relations"]
 
   let print_expr man ctx a printer exp =

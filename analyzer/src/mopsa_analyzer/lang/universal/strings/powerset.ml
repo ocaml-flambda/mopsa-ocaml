@@ -205,7 +205,7 @@ struct
       if ItvUtils.IntItv.is_bounded @@ Bot.bot_to_exn itv_e2 && ItvUtils.IntItv.size @@ Bot.bot_to_exn itv_e2 <= (Z.of_int 5) && not @@ is_top strings_e1 && cardinal strings_e1 <= 3 then
         fold (fun str acc ->
             List.fold_left (fun acc nb ->
-                if Z.to_int nb <= 0 then (* FIXME to_int *)
+                if Z.leq nb Z.zero then
                   add "" acc
                 else
                   add (repeat str (Z.to_int nb)) acc
@@ -231,6 +231,17 @@ struct
         OptionExt.return
 
     | _ -> None
+
+  let compare man op b e1 v1 e2 v2 =
+    let v1 = match ekind e1 with
+      | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
+         eval man e1
+      | _ -> v1 in
+    let v2 = match ekind e2 with
+      | E_binop(O_mult, {etyp = T_string}, {etyp = T_int}) ->
+         eval man e2
+      | _ -> v2 in
+    V.compare man op b e1 v1 e2 v2
 end
 
 let () =

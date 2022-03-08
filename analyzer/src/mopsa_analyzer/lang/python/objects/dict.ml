@@ -135,9 +135,12 @@ struct
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, []) ->
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__new__", _))}, _)}, cls :: _, kwargs) ->
       Utils.new_wrapper man range flow "dict" cls
-        ~fthennew:(man.eval (mk_expr ~etyp:(T_py None) (E_py_dict ([],[])) range))
+        ~fthennew:(
+          let keys, values = List.split @@ List.map (fun (os, v) ->
+                                               mk_string ~etyp:(T_py None) (OptionExt.none_to_exn os) range, v) kwargs in
+          man.eval (mk_expr ~etyp:(T_py None) (E_py_dict (keys, values)) range))
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.__init__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict.update" as f, _))}, _)}, args, []) ->
@@ -195,7 +198,9 @@ struct
 
            let flow = Flow.copy_ctx keyerror_f flow in
            debug "evaluating %a" pp_var var_v;
-           let evals = man.eval (mk_var var_v range) flow in
+           let evals =
+             Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |>
+             man.eval (mk_var var_v range) in
 
            Eval.join_list ~empty:(fun () -> Eval.empty flow) (evals :: Cases.copy_ctx evals keyerror :: [])
         )
@@ -223,7 +228,9 @@ struct
         (fun args flow ->
            let var_k, var_v = extract_vars (List.hd args) in
 
-           let eval_r = man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) flow in
+           let eval_r =
+             Flow.add_safe_check Alarms.CHK_PY_KEYERROR range flow |>
+             man.eval   (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k range; mk_var var_v range]) range) in
 
            let flow = Flow.set_ctx (Cases.get_ctx eval_r) flow in
 
@@ -313,6 +320,10 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__iter__" as f, _))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_valueiterator.__iter__" as f, _))}, _)}, args, [])
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_itemiterator.__iter__" as f, _))}, _)}, args, []) ->
+       man.eval (List.hd args) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("dict_keyiterator.__next__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args ["dict_keyiterator"]
@@ -320,7 +331,9 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k = kvar_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_var var_k ~mode:(Some WEAK) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_var var_k ~mode:(Some WEAK) range) in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
@@ -335,7 +348,9 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_v = vvar_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_var var_v ~mode:(Some WEAK) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_var var_v ~mode:(Some WEAK) range) in
 
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
@@ -350,8 +365,10 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
  (fun dict_eobj flow ->
                 let var_k, var_v = var_of_addr @@ addr_of_eobj dict_eobj in
-                let els = man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
-                                                         mk_var var_v ~mode:(Some WEAK) range]) range) flow in
+                let els =
+                  Flow.add_safe_check Alarms.CHK_PY_STOPITERATION range flow |>
+                  man.eval (mk_expr ~etyp:(T_py None) (E_py_tuple [mk_var var_k ~mode:(Some WEAK) range;
+                                                                   mk_var var_v ~mode:(Some WEAK) range]) range) in
                 let flow = Flow.set_ctx (Cases.get_ctx els) flow in
                 let stopiteration = man.exec (Utils.mk_builtin_raise "StopIteration" range) flow >>% Eval.empty in
                 Eval.join_list ~empty:(fun () -> Eval.empty flow) (Cases.copy_ctx stopiteration els :: stopiteration :: [])
@@ -366,7 +383,7 @@ struct
           assume (mk_py_isinstance_builtin dict "dict" range) man flow
             ~fthen:(fun flow ->
                 let var_k, var_v = extract_vars dict in
-                Libs.Py_mopsa.check man
+                Utils.check man
                   (Utils.mk_builtin_call "bool" [
                       (mk_binop ~etyp:(T_py None)
                          (mk_py_isinstance (mk_var ~mode:(Some WEAK) var_k range) type_k range)
@@ -376,7 +393,7 @@ struct
                     ] range)
                   range flow
               )
-            ~felse:(Libs.Py_mopsa.check man (mk_py_false range) range)
+            ~felse:(Utils.check man (mk_py_false range) range)
         )
       |> OptionExt.return
 
@@ -538,7 +555,13 @@ struct
 
     | _ -> None
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    match ekind exp with
+    | E_addr ({addr_kind = A_py_dict} as addr, _) ->
+       man.print_expr flow printer (mk_var (kvar_of_addr addr) exp.erange);
+       man.print_expr flow printer (mk_var (vvar_of_addr addr) exp.erange);
+
+    | _ ->  ()
 
 end
 

@@ -57,3 +57,9 @@ let find_exec_reduction name =
       let module V = (val v : EXEC_REDUCTION) in
       compare V.name name = 0
     ) !exec_reductions
+
+let exec_reductions () =
+  List.map (fun v ->
+      let module D = (val v : EXEC_REDUCTION) in
+      D.name
+    ) !exec_reductions

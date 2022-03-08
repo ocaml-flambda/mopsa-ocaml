@@ -928,7 +928,22 @@ let bwd_wrap (a:t) range (r:t) : t_with_bot =
   then meet a r (* no overflow *)
   else Nb a (* might be improved *)
 
-let bwd_rem : t -> t -> t -> (t*t) with_bot= bwd_default_binary
+let pos_mod a b =
+  let r = IntBound.rem a b in
+  if IntBound.geq r IntBound.zero then r else IntBound.add b r
+
+let bwd_rem (a:t) (b:t) (r: t) : (t * t) with_bot =
+  if is_singleton r && is_singleton b && not (contains_zero b) && is_bounded a then
+    let al, ah = a in
+    let rs, _ = r in
+    let bs, _ = b in
+    let al = IntBound.add al (pos_mod (IntBound.sub rs al) bs) in
+    let ah = IntBound.sub ah (pos_mod (IntBound.sub ah rs) bs) in
+    if ah < al then BOT else Nb ((al, ah), b)
+  else
+      bwd_default_binary a b r
+
+
 let bwd_erem : t -> t -> t -> (t*t) with_bot = bwd_default_binary
 let bwd_pow = bwd_default_binary
 (* TODO: more precise backward functions *)

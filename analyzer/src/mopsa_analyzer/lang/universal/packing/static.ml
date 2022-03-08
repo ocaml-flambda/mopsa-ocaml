@@ -353,25 +353,42 @@ struct
           Map.add pack aa' acc
         ) a packs
 
+    (* let is_var_numeric_type v = is_numeric_type (vtyp v) *)
 
     (* 𝕊⟦  ⟧ *)
     let exec stmt man ctx a =
       match skind stmt with
-      | S_add {ekind = E_var _} ->
-        exec_add_var stmt man ctx a |>
-        OptionExt.return
+      | S_add {ekind = E_var (v, _)} ->
+        (
+          try
+            exec_add_var stmt man ctx a |>
+            OptionExt.return
+          with OptionExt.Found_None -> None
+        )
 
-      | S_assign ({ekind = E_var _}, _) ->
-        exec_assign_var stmt man ctx a
+      | S_assign ({ekind = E_var (v, _)}, _) ->
+        (
+          try
+            exec_assign_var stmt man ctx a
+          with OptionExt.Found_None -> None
+        )
 
-      | S_expand( {ekind = E_var _}, _)
-      | S_fold( {ekind = E_var _}, _) ->
-        exec_expand_fold_var stmt man ctx a |>
-        OptionExt.return
+      | S_expand( {ekind = E_var (v, _)}, _)
+      | S_fold( {ekind = E_var (v, _)}, _) ->
+        (
+          try
+            exec_expand_fold_var stmt man ctx a |>
+            OptionExt.return
+          with OptionExt.Found_None -> None
+        )
 
-      | S_rename( {ekind = E_var _}, {ekind = E_var _}) ->
-        exec_rename_var stmt man ctx a |>
-        OptionExt.return
+      | S_rename( {ekind = E_var (v1, _)}, {ekind = E_var (v2, _)}) ->
+        (
+          try
+            exec_rename_var stmt man ctx a |>
+            OptionExt.return
+          with OptionExt.Found_None -> None
+        )
 
       | _ ->
         let has_vars = Visitor.fold_stmt

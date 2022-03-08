@@ -68,6 +68,17 @@ struct
 
   let check_offset_access base offset mode typ range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
+    (match base.base_kind with
+     | Addr a -> begin match addr_opaque (akind a) with
+                 | NotOpaque ->
+                    Post.return flow
+                 | OpaqueFrom i ->
+                    assume (mk_in offset zero (mk_int i range) range) man flow
+                      ~fthen:Post.return
+                      ~felse:(fun eflow ->
+                        raise_c_opaque_access base i offset typ range man flow eflow |> Cases.empty)
+                 end
+     | _ -> Post.return flow) >>% fun flow ->
     let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
     assume_num cond man flow
       ~fthen:(fun tflow -> safe_c_memory_access_check range man tflow |>

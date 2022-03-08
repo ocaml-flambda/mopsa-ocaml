@@ -32,6 +32,9 @@ open Alarms
 module Domain =
   struct
 
+    type flow_type = | Caught of string list | Uncaught
+
+
     include GenStatelessDomainId(struct
         let name = "python.flows.exceptions"
       end)
@@ -75,12 +78,10 @@ module Domain =
           let flow_caught, flow_uncaught =
             List.fold_left (fun (acc_caught, acc_uncaught) excpt ->
                 (* FIXME: I don't get why exec_except and escape_except are separated, and it seems to create more issues than anything. To merge *)
-                let caught = exec_except man excpt range acc_uncaught in
-                let acc_uncaught = Flow.copy_ctx caught acc_uncaught in
-                let uncaught = escape_except man excpt range acc_uncaught in
-                let caught = Flow.copy_ctx uncaught caught in
+                let caught, uncaught = exec_except man excpt range acc_uncaught in
+                debug "caught: %a@.uncaught: %a" (format @@ Flow.print man.lattice.print) caught (format @@ Flow.print man.lattice.print) uncaught;
                 Flow.join man.lattice acc_caught caught, uncaught)
-              (Flow.bottom (Flow.get_ctx try_flow) (Flow.get_report try_flow), try_flow)  excepts in
+              (Flow.bottom_from try_flow, try_flow)  excepts in
 
           (* Execute else body after removing all exceptions *)
           Flow.filter (function
@@ -154,14 +155,16 @@ module Domain =
                    let flow' = Flow.add tk cur man.lattice true_flow |>
                                Flow.set T_cur man.lattice.bottom man.lattice
                    in
-                   Post.return flow')
+                   Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exp.erange flow' |>
+                   Post.return)
                ~felse:(fun false_flow ->
                    assume
                      (* isclass obj <=> isinstance(obj, type) *)
                      (mk_py_isinstance_builtin exp "type" range)
                      man
                      ~fthen:(fun true_flow ->
-                         man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))} true_flow
+                         Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exp.erange true_flow |>
+                         man.exec {stmt with skind = S_py_raise(Some (mk_py_call exp [] range))}
                          >>% Post.return)
                      ~felse:(fun false_flow ->
                          man.exec (Utils.mk_builtin_raise_msg "TypeError" "exceptions must derive from BaseException" range) false_flow
@@ -181,9 +184,11 @@ module Domain =
 
 
     and exec_except man excpt range flow =
+      (* FIXME: if no excpt variable but there is a raise w/o argument, we should do something *)
       debug "exec except %a on@ @[%a@]" (OptionExt.print pp_expr) excpt.py_excpt_type (format (Flow.print man.lattice.print)) flow;
       let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow in
       debug "flow_cur %a@\n" (format (Flow.print man.lattice.print)) flow;
+      (* flow0 is our base: all the non-exceptional flows *)
       let flow0 = Flow.filter (function
           | T_py_exception _ -> fun _ -> false
           | _ -> fun _ -> true) flow0 in
@@ -192,122 +197,111 @@ module Domain =
         match excpt.py_excpt_name with
         | None -> mk_range_attr_var range "artificial_except_var" (T_py None)
         | Some v -> v in
-      let flow1 =
-        match excpt.py_excpt_type with
+      let cases = match excpt.py_excpt_type with
         (* Default except case: catch all exceptions *)
         | None ->
           (* Add all remaining exceptions env to cur *)
-          Flow.fold (fun acc tk env ->
+          let flow, exns = Flow.fold (fun (acc, excs) tk env ->
               match tk with
-              | T_py_exception _ -> Flow.add T_cur env man.lattice acc
-              | _ -> acc)
-            flow0 flow
+              | T_py_exception (_, exc_name, _, _) ->
+                 Flow.add T_cur env man.lattice acc, exc_name :: excs
+              | _ -> (acc, excs))
+                             (flow0, []) flow in
+          Cases.singleton (Caught exns) flow
 
         (* Catch a particular exception *)
         | Some e ->
-          (* Add exception that match expression e *)
-          Flow.fold (fun acc tk env ->
-              match tk with
-              | T_py_exception (exn, _, _, _) ->
-                (* Evaluate e in env to check if it corresponds to eaddr *)
-                debug "T_cur now matches tk %a@\n" pp_token tk;
-                let flow = Flow.set T_cur env man.lattice flow0 in
-                let flow' =
-                  man.eval e flow >>$ fun e flow ->
-                  let _ = object_of_expr e in
-                  assume
-                    (mk_py_issubclass_builtin_r e "BaseException" range)
-                    man flow
-                    ~fthen:(fun flow ->
+           (* Add exception that match expression e *)
+           let caught_flow, exns, uncaught_flow =
+             Flow.fold (fun (caught, excs, uncaught) tk env ->
+                 match tk with
+                 | T_py_exception (exn, exc_name, _, _) ->
+                    (* Evaluate e in env to check if it corresponds to eaddr *)
+                    debug "T_cur now matches tk %a@\n" pp_token tk;
+                    let flow = Flow.set T_cur env man.lattice flow0 in
+
+                    let apply_except except flow =
                       assume
-                        (mk_py_isinstance exn e range)
+                        (mk_py_isinstance exn except range)
                         man
                         ~fthen:(fun flow ->
-                          man.exec (mk_assign (mk_var except_var range) exn range) flow)
+                          Cases.singleton (Caught [])
+                            (Flow.add_safe_check Alarms.CHK_PY_TYPEERROR exn.erange flow |>
+                               man.exec (mk_assign (mk_var except_var range) exn range) |> post_to_flow man))
                         ~felse:(fun flow ->
-                          Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
-                        )
-                        flow
-                    )
-                    ~felse:(fun flow ->
-                      man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow) in
-                let flow' = post_to_flow man flow' in
-                Flow.fold (fun acc tk env ->
-                    match tk with
-                    | T_cur | T_py_exception _ -> Flow.add tk env man.lattice acc
-                    | _ -> acc
-                  ) acc flow'
-              | _ -> acc
-            ) flow0 flow
-      in
-      let clean_except_var = mk_remove_var except_var (tag_range range "clean_except_var") in
-      let except_body =
-        (* replace raise without arguments with `raise except_var` *)
-        Visitor.map_stmt
-          (fun e -> Keep e)
-          (fun s -> match skind s with
-                    | S_py_raise None -> Keep {s with skind=(S_py_raise (Some (mk_var except_var range)))}
-                    | _ -> VisitParts s)
-          excpt.py_excpt_body
-      in
-      debug "except flow1 =@ @[%a@]" (format (Flow.print man.lattice.print)) flow1;
-      man.exec except_body flow1
-      >>% man.exec clean_except_var |> post_to_flow man
+                          Flow.rename T_cur tk man.lattice flow |>
+                          Cases.singleton Uncaught)
+                        flow in
 
+                    let flow' =
+                      (* FIXME: the evaluation of e is performed for all T_py_exception token, but there is no clean way to perform it outside either... in which environment should it be otherwise? This is thus probably unsound if e is a function with side effects and multiple exceptions are non-deterministically raised in the try body. *)
+                      man.eval e flow >>$ fun e flow ->
+                      assume (mk_py_isinstance_builtin e "tuple" range) man flow
+                        ~fthen:(fun flow ->
+                          let vars = Objects.Tuple.Domain.var_of_addr (addr_of_object @@ object_of_expr e) in
+                          Cases.join_list ~empty:(fun () -> assert false)
+                            (List.map (fun v -> apply_except (mk_var v range) flow ) vars))
+                        ~felse:(fun flow ->
+                          let baseexception_err = fun flow ->
+                              man.exec (Utils.mk_builtin_raise_msg "TypeError" "catching classes that do not inherit from BaseException is not allowed" range) flow >>% Cases.empty in
+                          assume
+                            (mk_py_isinstance_builtin e "type" range) man flow
+                            ~fthen:(fun flow ->
+                              assume (mk_py_issubclass_builtin_r e "BaseException" range) man flow
+                                ~fthen:(fun flow -> apply_except e flow)
+                                ~felse:baseexception_err
+                            )
+                            ~felse:baseexception_err
+                        ) in
 
-    and escape_except man excpt range flow =
-      let flow0 = Flow.set T_cur man.lattice.bottom man.lattice flow |>
-                  Flow.filter (function
-                      | T_py_exception _ -> fun _ -> false
-                      | _ -> fun _ -> true) in
-      debug "escape except %a@.flow = %a" (OptionExt.print pp_expr) excpt.py_excpt_type (format @@ Flow.print man.lattice.print) flow;
-      match excpt.py_excpt_type with
-      | None -> flow0
+                    let c, u =
+                      Cases.reduce_result (fun exc_typ flow ->
+                          match exc_typ with
+                          | Caught _ -> flow, Flow.bottom_from flow
+                          | Uncaught -> Flow.bottom_from flow, flow)
+                        ~join:(fun (c, u) (c', u') -> Flow.join man.lattice c c', Flow.join man.lattice u u')
+                        ~meet:(fun (c, u) (c', u') -> Flow.meet man.lattice c c', Flow.meet man.lattice u u')
+                        ~bottom:(Flow.bottom_from flow, Flow.bottom_from flow) flow' in
+                    c, exc_name :: excs, u
+                 | _ -> (caught, excs, uncaught))
+               (flow0, [], flow0) flow in
+           Cases.join
+             (Cases.return (Caught exns) caught_flow)
+             (Cases.return Uncaught uncaught_flow) in
 
-      | Some e ->
-         let flow =
-           Flow.fold (fun acc tk env ->
-               match tk with
-               | T_py_exception (exn, exn_str, exn_messages, k) ->
-                  debug "tk is %a" pp_expr exn;
-                  (* Evaluate e in env to check if it corresponds to exn *)
-                  let flow = Flow.set T_cur env man.lattice flow0 in
-                  let flow' =
-                    man.eval   e flow |>
-                      bind_result (fun e flow ->
-                          match ekind e with
-                          | E_py_object obj ->
-                             assume
-                               (mk_py_issubclass_builtin_r e "BaseException" range)
-                               man
-                               ~fthen:(fun flow ->
-                                 assume
-                                   (mk_py_isinstance exn e range)
-                                   man
-                                   ~fthen:(fun flow ->
-                                     Flow.set T_cur man.lattice.bottom man.lattice flow |> Post.return
-                                   )
-                                   ~felse:(fun flow ->
-                                     Flow.add tk env man.lattice flow |> Post.return
-                                   )
-                                   flow)
-                               ~felse:(fun flow -> Post.return flow)
-                               flow
-                          | _ -> Post.return flow
-                        )
-                  in
-                  let flow' = post_to_flow man flow' in
-                  let acc = Flow.fold (fun acc tk env ->
-                      match tk with
-                      | T_py_exception _ ->
-                         Flow.add tk env man.lattice acc
-                      | _ -> acc
-                              ) acc flow' in
-                  acc
-               | _ -> acc
-             ) flow0 flow in
-         debug "resulting flow is %a" (format @@ Flow.print man.lattice.print) flow;
-         flow
+      Cases.reduce_result (fun exc_type flow1 ->
+          let flow1 = exec_cleaners man (Post.return flow1) |> post_to_flow man in
+          match exc_type with
+          | Caught caught_excs ->
+             let clean_except_var = mk_remove_var except_var (tag_range range "clean_except_var") in
+             let except_body =
+               (* replace raise without arguments with `raise except_var` *)
+               Visitor.map_stmt
+                 (fun e -> Keep e)
+                 (fun s -> match skind s with
+                           | S_py_raise None -> Keep {s with skind=(S_py_raise (Some (mk_var except_var range)))}
+                           | _ -> VisitParts s)
+                 excpt.py_excpt_body
+             in
+             debug "except flow1 =@ @[%a@]" (format (Flow.print man.lattice.print)) flow1;
+             let flow = man.exec except_body flow1
+             >>% man.exec clean_except_var >>%
+               (fun flow ->
+                 Post.return
+                   (if not @@ man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+                      List.fold_left (fun flow name ->
+                          Flow.add_safe_check (Alarms.py_name_to_check name) except_body.srange flow) flow caught_excs
+                    else
+                      flow)) in
+             post_to_flow man flow, Flow.bottom_from flow1
+          | Uncaught ->
+
+             Flow.bottom_from flow1, flow1
+        )
+        ~join:(fun (c, u) (c', u') -> Flow.join man.lattice c c', Flow.join man.lattice u u')
+        ~meet:(fun (c, u) (c', u') -> Flow.meet man.lattice c c', Flow.meet man.lattice u u')
+        ~bottom:(Flow.bottom_from flow, Flow.bottom_from flow)
+        cases
 
 
     let ask _ _ _ = None

@@ -33,8 +33,6 @@ open Common
 let opt_show_callstacks = ref false
 
 
-(** Command-line option to show safe checks *)
-let opt_show_safe_checks = ref false
 
 let print out fmt =
   let formatter =
@@ -287,7 +285,7 @@ let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
   if is_sound_report rep
   then print out "%a@." (Debug.color_str Debug.green) "Analysis terminated successfully"
-  else print out "%a@." (Debug.color_str Debug.orange) "Unsound analysis";
+  else print out "%a@." (Debug.color_str Debug.orange) "Analysis terminated successfully (with assumptions)";
 
   if !opt_display_lastflow then
     print out "Last flow =@[@\n%a@]@\n"

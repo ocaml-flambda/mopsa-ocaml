@@ -1281,6 +1281,10 @@ let find_c_fundec_by_name name flow =
   let prog = get_c_program flow in
   List.find (fun f -> f.c_func_org_name = name) prog.c_functions
 
+let find_c_fundec_by_uid uid flow =
+  let prog = get_c_program flow in
+  List.find (fun f -> f.c_func_uid = uid) prog.c_functions
+
 (** Check if a pointer points to a nul-terminated array *)
 let assert_valid_string (p:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_assert_valid_string" flow in

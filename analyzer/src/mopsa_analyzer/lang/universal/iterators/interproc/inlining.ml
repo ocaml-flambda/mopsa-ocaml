@@ -59,17 +59,18 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let ret = find_ctx return_key (Flow.get_ctx flow) in
+      let call = find_ctx return_key (Flow.get_ctx flow) in
+      let ret = mk_return call (Some range) in
       man.exec (mk_add_var ret range) flow >>%? fun flow ->
       man.exec (mk_assign (mk_var ret range) e range) flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range)) cur man.lattice flow |>
+      Flow.add (T_return range) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> OptionExt.return
 
     | S_return None ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return (range)) cur man.lattice flow |>
+      Flow.add (T_return range) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> OptionExt.return
 
@@ -89,14 +90,15 @@ struct
       else
 
       let params, locals, body, post = init_fun_params f args range man flow in
-      let ret = match f.fun_return_type with
+      let call_oexp = match f.fun_return_type with
         | None -> None
-        | Some _ -> Some (mk_return_var exp)
+        | Some _ -> Some exp
       in
       Some (
-        let post' = post >>% inline f params locals body ret range man in
-        (* FIXME: we only keep intra-procedural effects for the moment *)
-        Cases.set_effects empty_teffect post'
+          post >>% fun flow ->
+                   inline f params locals body call_oexp range man flow |>
+                     (* FIXME: we only keep intra-procedural effects for the moment *)
+                     Cases.set_effects empty_teffect
       )
 
     | _ -> None

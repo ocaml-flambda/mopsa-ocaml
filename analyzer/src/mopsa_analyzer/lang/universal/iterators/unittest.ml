@@ -152,7 +152,7 @@ struct
   (* Computation of post-conditions *)
   (* ============================== *)
 
-  let execute_test_functions tests man flow =
+  let execute_test_functions ?(flow_cleaner = fun man flow -> Flow.remove T_cur flow) tests man flow =
     let tests = match !unittest_filter with
       | [] | ["all"] -> tests
       | _ -> List.filter (fun (t, _) -> List.mem t !unittest_filter) tests
@@ -165,6 +165,8 @@ struct
         let flow = Flow.copy_ctx acc flow in
         (* Call the function *)
         let flow1 = man.exec test flow |> post_to_flow man in
+        let flow1 = flow_cleaner man flow1 in
+        (* let info_flow1 = Flow.bottom (Flow.get_ctx flow1) (Flow.get_report flow1) in *)
         Flow.join man.lattice acc flow1
       )
       (Flow.bottom ctx report)

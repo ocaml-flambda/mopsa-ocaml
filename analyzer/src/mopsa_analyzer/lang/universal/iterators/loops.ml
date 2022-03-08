@@ -171,7 +171,6 @@ let () =
     default = "disabled";
   }
 
-
 (*==========================================================================*)
 (**                            {2 Domain}                                   *)
 (*==========================================================================*)
@@ -274,6 +273,15 @@ struct
   let init prog man flow =
     Flow.map_ctx (add_ctx LastFixpointCtx.key LoopHeadMap.empty) flow
 
+  let decr_iteration cond body man flow_init flow =
+    Flow.remove T_continue flow |>
+    Flow.remove T_break |>
+    Flow.remove_report |>
+    man.exec (mk_assume cond cond.erange) >>%
+    man.exec body >>% fun flow ->
+    merge_cur_and_continue man flow |>
+    Flow.join man.lattice flow_init |>
+    Post.return
 
   let rec lfp count delay cond body man flow_init flow =
     debug "lfp called, range = %a, count = %d" pp_range body.srange count;
@@ -332,15 +340,6 @@ struct
       else
         unroll (OptionExt.lift (fun ii -> (ii - 1)) i) cond body man (Flow.copy_ctx flow2 flow1) >>$ fun (flag, flow2') flow1' ->
         Cases.singleton (flag, Flow.join man.lattice flow2 flow2') flow1'
-
-  let decr_iteration cond body man flow_init flow =
-    Flow.remove T_continue flow |>
-    Flow.remove T_break |>
-    man.exec (mk_assume cond cond.erange) >>%
-    man.exec body >>% fun flow ->
-    let flow = merge_cur_and_continue man flow |>
-               Flow.join man.lattice flow_init in
-    Post.return flow
 
 
   let rec exec stmt man flow =

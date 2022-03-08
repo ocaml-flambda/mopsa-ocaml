@@ -33,6 +33,9 @@ type command =
   | Continue
   (** Stop at next breakpoint *)
 
+  | MopsaBackTrace
+  (* Returns the current backtrace of Mopsa *)
+
   | Next
   (** Stop at next statement and skip function calls *)
 
@@ -104,6 +107,7 @@ and set_command =
 (** Print a command *)
 let pp_command fmt = function
   | Break loc   -> Format.fprintf fmt "break %s" loc
+  | MopsaBackTrace -> Format.fprintf fmt "mopsa_bt"
   | Continue    -> Format.pp_print_string fmt "continue"
   | Next        -> Format.pp_print_string fmt "next"
   | Finish      -> Format.pp_print_string fmt "finish"
@@ -168,6 +172,7 @@ let print_usage () =
   printf "  s[et] d[ebug] <d>     set debug channels@.";
   printf "  u[nset] d[ebug]       unset debug channels@.";
   printf "  save <file>           save the abstract state in a file@.";
+  printf "  mopsa_bt              shows the current backtrace of the analyzer";
   printf "  help                  print this message@.";
   ()
 
@@ -230,6 +235,7 @@ let rec read_command () =
   in
   match parts with
   | ["continue" | "c"]   -> Continue
+  | ["mopsa_bt"]         -> MopsaBackTrace
   | ["next"     | "n"]   -> Next
   | ["step"     | "s"]   -> Step
   | ["finish"   | "f"]   -> Finish

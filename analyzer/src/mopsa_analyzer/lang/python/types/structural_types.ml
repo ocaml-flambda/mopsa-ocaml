@@ -77,12 +77,7 @@ struct
 
   let checks = []
 
-  let merge pre (a, e) (a', e') =
-    if a == a' then a
-    else if is_empty_effect e' then a
-    else if is_empty_effect e then a'
-    else assert false
-
+  let merge pre (a, e) (a', e') = assert false
 
   let init progr man flow =
     set_env T_cur empty man flow
@@ -157,7 +152,10 @@ struct
                  | None -> newa, remove a' cur, stmts
                  | Some va' ->
                     AttrSet.join newa va', remove a' cur,
-                    AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
+                    if AttrSet.is_top va' then
+                      AttrSet.fold_o (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
+                    else
+                      AttrSet.fold_u (fun attr stmts -> mk_fold_var (mk_addr_attr a attr (T_py None)) [mk_addr_attr a' attr (T_py None)] range :: stmts) va' stmts
                 end
              | _ -> assert false
            ) (old_a, cur, []) addrs in
@@ -266,6 +264,8 @@ struct
                   man.eval   (mk_py_false range) flow
             end
 
+        (* FIXME: addr_kind_find_structural_type should have a flag for default behavior *)
+        | A_py_c_module _ | A_py_c_class _
         | A_py_instance _ ->
           let cur = get_env T_cur man flow in
           let oaset = AMap.find_opt addr cur in
@@ -285,6 +285,7 @@ struct
               else
                 man.eval   (mk_py_false range) flow
           end
+
 
         | ak ->
            man.eval   (mk_py_bool (addr_kind_find_structural_type ak attr) range) flow
@@ -358,6 +359,7 @@ struct
               man.eval   (mk_var attr_var range) flow
           end
 
+        | A_py_c_module _ | A_py_c_class _
         | A_py_instance _ ->
           (* there should be a positive hasattr before, so we just evaluate the addr_attr var *)
           let attr_var = mk_addr_attr addr attr (T_py None) in
@@ -447,7 +449,7 @@ struct
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr (a, _)} as e) ->
-       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings] then Some VarSet.empty
+       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings; !Addr_env.addr_bytes] then Some VarSet.empty
        else
        let range = erange e in
        let cur = get_env T_cur man flow in
@@ -520,7 +522,21 @@ struct
   let print_state printer d =
     pprint ~path:[Key "attributes"] printer (pbox AMap.print d)
 
-  let print_expr _ _ _ _ = ()
+  let print_expr man flow printer exp =
+    if not (is_py_exp exp) then () else
+      match ekind exp with
+      | E_addr (addr, _) when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
+         let cur = get_env T_cur man flow in
+         let attrset = AMap.find_opt addr cur in
+         if attrset = None then () else
+         let attrset = OptionExt.none_to_exn attrset in
+         AttrSet.fold_u (fun attr () -> debug "%s" attr) attrset ();
+         pprint printer ~path:[Key "attributes"; fkey "%a" pp_addr addr] (pbox AttrSet.print attrset);
+         AttrSet.fold_u (fun attr () ->
+             man.print_expr flow printer (mk_var (mk_addr_attr addr attr (T_py None)) exp.erange)
+           ) attrset ();
+
+      | _ -> ()
 
 end
 

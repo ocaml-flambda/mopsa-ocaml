@@ -23,7 +23,7 @@
 
     When a reduced product contains only domains with the simplified signature,
     reductions rules operate on the product of abstract environments instead
-    of flows. 
+    of flows.
 
     This simplifies the formulation of reductions and gives direct
     access to the non-relational abstraction (if any).
@@ -79,3 +79,6 @@ val register_simplified_reduction : (module SIMPLIFIED_REDUCTION) -> unit
 
 val find_simplified_reduction : string -> (module SIMPLIFIED_REDUCTION)
 (** Find an simplified reduction by its name *)
+
+(** List all simplified reductions *)
+val simplified_reductions : unit -> string list

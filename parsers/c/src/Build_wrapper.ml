@@ -439,7 +439,7 @@ let ar db args =
 
 (** {1 Printing} *)
 
-                  
+
 let print dbfile args =
   (* db loading *)
   let db = try load_db dbfile with Unix.Unix_error _ -> empty_db in
@@ -516,8 +516,11 @@ let main () =
   if !log then Printf.fprintf !logfile "DB: db file is %s\n%!" dbfile;
   if !log then Printf.fprintf !logfile "DB: got %s %a\n%!" tool (print_list " " output_string) args;
 
-  (* cut suffix after - *)
-  let tool_normalized = List.hd (Str.split (Str.regexp "-") tool) in
+  (* keep only the tool name, remove prefixes such as x86_64-linux-gnu and suffixes (such as version numbers) *)
+  let tool_normalized =
+    let tool_split = String.split_on_char '-' tool in
+    if List.length tool_split > 3 then List.nth tool_split 3 else List.hd tool_split
+    in
 
   (* executes action f on database *)
   let apply f =
@@ -527,7 +530,7 @@ let main () =
     write_db d db;
     close_db d;
   in
-  
+
   (* action to database *)
   (match tool_normalized with
     | "cc" | "clang" | "gcc" -> apply (compile C)
@@ -539,7 +542,8 @@ let main () =
     | "cp" -> apply cp
     | "ln" -> apply ln
     | "mopsa" -> print dbfile args; exit 0
-    | _ -> () (* unknown -> nothing to do! *)
+    | _ ->
+       Mopsa_utils.Debug.warn "unrecognized tool %s, skipped" tool
   );
 
   (* now execute the original command *)

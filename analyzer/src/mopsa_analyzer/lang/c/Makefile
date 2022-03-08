@@ -27,7 +27,7 @@ mopsa_analyzer.lang.c = ast pp visitor frontend common soundness libs iterators 
 	 hooks packing
 mopsa_analyzer.lang.c.common = builtins base alarms points_to quantified_offset scope_update
 mopsa_analyzer.lang.c.iterators = program switch loops goto interproc intraproc
-mopsa_analyzer.lang.c.memory = aggregates variable_length_array protection lowlevel scalars \
+mopsa_analyzer.lang.c.memory = aggregates variable_length_array protection scalars lowlevel \
 	        reductions
 mopsa_analyzer.lang.c.memory.lowlevel = cells string_length smashing pointer_sentinel
 mopsa_analyzer.lang.c.memory.scalars = pointers machine_numbers
@@ -38,7 +38,7 @@ mopsa_analyzer.lang.c.libs = libc libmopsa compiler_builtins
 mopsa_analyzer.lang.c.libs.libc.formatted_io = placeholder parser lexer format_string fscanf fprintf
 mopsa_analyzer.lang.c.libs.libc.file_descriptor = slot table domain
 mopsa_analyzer.lang.c.hooks = disj analysis_bugs coverage
-mopsa_analyzer.lang.c.packing = static_scope reductions
+mopsa_analyzer.lang.c.packing = static_scope
 
 
 

@@ -60,3 +60,6 @@ val register_exec_reduction : (module EXEC_REDUCTION) -> unit
 
 (** Find an exec reduction by its name *)
 val find_exec_reduction : string -> (module EXEC_REDUCTION)
+
+(** List all exec reductions *)
+val exec_reductions : unit -> string list

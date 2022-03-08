@@ -115,6 +115,9 @@ val init : unit -> unit
 val init_hook : string -> 'a ctx -> 'a ctx
 (** Initialize an active hook *)
 
+val is_hook_active : string -> bool
+(** Check wether a hook is active *)
+
 val init_active_hooks : 'a ctx -> 'a ctx
 (** Initialize all active hooks *)
 

@@ -38,7 +38,13 @@ let () = register_addr_kind_nominal_type (fun default ak ->
              match ak with
              | A_py_staticmethod ->  "staticmethod"
              | A_py_classmethod ->  "classmethod"
-             | _ -> default ak)
+             | _ -> default ak);
+         register_addr_kind_structural_type (fun default ak attr ->
+             match ak with
+             | A_py_staticmethod
+               | A_py_classmethod -> List.mem attr ["__new__"; "__init__"; "__get__"]
+             | _ -> default ak attr
+           )
 
 let () =
   register_is_data_container (fun default ak -> match ak with
@@ -195,35 +201,20 @@ module Domain =
           )
         |> OptionExt.return
 
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__get__", _))}, _)}, [self; instance; _], []) ->
-        man.eval   (mk_py_call (mk_py_attr self "fget" range) [instance] range) flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; mk_py_none range; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; mk_py_none range; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)} as called, [self; getter; setter; deleter], []) ->
-        man.eval   {exp with ekind = E_py_call(called, [self; getter; setter; deleter; mk_py_none range], [])} flow |> OptionExt.return
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("property.__init__", _))}, _)}, [self; getter; setter; deleter; doc], []) ->
-        let assignments = [("fget", getter); ("fset", setter); ("fdel", deleter); ("__doc__", doc)] in
-        man.exec (mk_block (List.map (fun (field, arg) -> mk_assign (mk_py_attr self field range) arg range)  assignments) range) flow >>%
-        man.eval   (mk_py_none range) |>
-        OptionExt.return
-
 
     (* 𝔼⟦ f() | isinstance(f, function) ⟧ *)
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function(F_user pyfundec)}, _)}, args, kwargs) ->
         debug "args: %a@\n" (Format.pp_print_list pp_expr) args;
         debug "kwargs: %a@\n" (Format.pp_print_list (fun fmt (so, e) -> Format.fprintf fmt "%a~>%a" (OptionExt.print Format.pp_print_string) so pp_expr e)) kwargs;
         debug "user-defined function call on %s@\n" pyfundec.py_func_var.vname;
-        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwonly_args = [] && pyfundec.py_func_kwarg = None) then
-          panic_at range "Calls using vararg, keyword-only args or kwargs are not supported";
+        if not (pyfundec.py_func_vararg = None && pyfundec.py_func_kwarg = None) then
+          panic_at range "Calls using vararg or kwargs are not supported";
+        let () = debug "defaults=%a kwonly_args=%a" (Format.pp_print_list (OptionExt.print ~none:"None" pp_expr)) pyfundec.py_func_defaults (Format.pp_print_list pp_var) pyfundec.py_func_kwonly_args in
         let param_and_args = List.combine
             (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_parameters)
             pyfundec.py_func_defaults in
+        let param_and_args = param_and_args @ List.combine (List.map (fun v -> match vkind v with | V_uniq (s, _) -> s | _ -> assert false) pyfundec.py_func_kwonly_args) pyfundec.py_func_kwonly_defaults in
+        let () = debug "param_and_args = %a" (Format.pp_print_list (fun fmt (s, oe) -> Format.fprintf fmt "%s: %a" s (OptionExt.print pp_expr) oe)) param_and_args in
         (* Replace default_args by kwargs *)
         let py_func_defaults = List.fold_left (fun acc (oname, e) ->
             match oname with
@@ -231,9 +222,11 @@ module Domain =
             | Some name ->
               List.map (fun (n, oe) -> if n = name then (n, Some e) else (n, oe)) acc
           ) param_and_args kwargs in
+        let () = debug "py_func_defaults = %a" (Format.pp_print_list (fun fmt (s, oe) -> Format.fprintf fmt "%s: %a" s (OptionExt.print ~none:"None" ~some:"Some " pp_expr) oe)) py_func_defaults in
         let py_func_defaults = List.map snd py_func_defaults in
         (* First check the correct number of arguments *)
         let default_args, nondefault_args = List.partition (function None -> false | _ -> true) py_func_defaults in
+        let () = debug "args %d default %d non default %d" (List.length args) (List.length default_args) (List.length nondefault_args) in
         OptionExt.return @@
         if List.length args < List.length nondefault_args then
           (
@@ -258,7 +251,7 @@ module Domain =
             debug "|default| = %d (%a)" (List.length default_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) default_args;
             debug "|non-default| = %d (%a)" (List.length nondefault_args) (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (OptionExt.print pp_expr)) nondefault_args;
             let args =
-              if List.length args = (List.length pyfundec.py_func_parameters) then
+              if List.length args = (List.length pyfundec.py_func_parameters + List.length pyfundec.py_func_kwonly_args) then
                 args
               else
                 (* Remove the first default parameters that are already specified *)
@@ -292,7 +285,8 @@ module Domain =
                 debug "|args'| = %d" (List.length args);
                 args
             in
-            if List.length args <> (List.length pyfundec.py_func_parameters) then
+            let () = debug "args = %a" (Format.pp_print_list pp_expr) args in
+            if List.length args <> (List.length pyfundec.py_func_parameters + List.length pyfundec.py_func_kwonly_args) then
               (
                 debug "The number of arguments is not good@\n";
                 let msg = Format.asprintf "%s() has too few arguments" pyfundec.py_func_var.vname in
@@ -302,6 +296,7 @@ module Domain =
             else
               (* Initialize local variables to undefined value and give the call to {!Universal} *)
               (
+                let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow in
                 let flow =
                   if pyfundec.py_func_locals = [] then Post.return flow else
                     man.exec
@@ -315,19 +310,39 @@ module Domain =
                          ) pyfundec.py_func_locals) range)
                       flow
                 in
-
+                (* for each cell variables, a cell value is created *)
+                (* then, these cell variables are replaced by the @cell.cell_contents *)
+                flow >>%
+                  bind_list pyfundec.py_func_cellvars (fun cellvar flow ->
+                    let range = tag_range exp.erange "cell %a" pp_var cellvar in
+                    man.eval (mk_py_call (mk_py_object (find_builtin "cell") range) [] range) flow
+                           ) >>$ fun cells flow ->
+                let cellmap = List.fold_left2 (fun map var cell -> VarMap.add var cell map) VarMap.empty pyfundec.py_func_cellvars cells in
+                let fun_body = Visitor.map_stmt
+                                 (fun e -> match ekind e with
+                                           | E_var (v, m) when List.mem v pyfundec.py_func_cellvars ->
+                                              let cell = VarMap.find v cellmap in
+                                              let e' = mk_py_attr cell "cell_contents" range in
+                                              Keep e' (* {e with ekind = E_var(v', m)}*)
+                                           | _ -> VisitParts e) (fun stmt -> VisitParts stmt) pyfundec.py_func_body in
+                (* if the closure variable is part of the param, we propagate the assignment *)
+                let pre_body = List.fold_left (fun stmts cellvar ->
+                                   if List.mem cellvar (pyfundec.py_func_parameters @ pyfundec.py_func_kwonly_args) then
+                                     (mk_assign (mk_py_attr (VarMap.find cellvar cellmap) "cell_contents" range) (mk_var cellvar range) range) :: stmts
+                                   else
+                                     stmts
+                                 ) [] pyfundec.py_func_cellvars in
                 let fundec = {
                   fun_orig_name = get_orig_vname pyfundec.py_func_var;
                   fun_uniq_name = pyfundec.py_func_var.vname;
-                  fun_parameters = pyfundec.py_func_parameters;
-                  fun_locvars = pyfundec.py_func_locals;
-                  fun_body = pyfundec.py_func_body;
+                  fun_parameters = pyfundec.py_func_parameters @ pyfundec.py_func_kwonly_args;
+                  fun_locvars = List.filter (fun x -> not @@ List.mem x pyfundec.py_func_cellvars) pyfundec.py_func_locals;
+                  fun_body = mk_block [mk_block pre_body range; fun_body] range;
                   fun_return_type = Some (T_py None);
                   fun_return_var = pyfundec.py_func_ret_var;
                   fun_range = pyfundec.py_func_range;
                 } in
-                flow >>%
-                man.eval (mk_call fundec args exp.erange) >>$
+                man.eval (mk_call fundec args exp.erange) flow >>$
                   (fun res flow -> man.eval res flow)
               )
           )

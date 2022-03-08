@@ -40,6 +40,7 @@ module Domain =
     let eval exp man flow =
       let range = erange exp in
       match ekind exp with
+      | E_constant (C_py_imag _)
       | E_constant (C_top (T_py (Some Complex))) ->
         T_string.Domain.allocate_builtin man range flow "complex" (Some exp) |> OptionExt.return
 
@@ -57,6 +58,86 @@ module Domain =
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("complex.__new__", _))}, _)}, args, []) ->
         man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
+           when is_arith_binop_fun "complex" f ->
+         bind_list [e1; e2] man.eval flow >>$ (fun el flow ->
+         let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+         assume (mk_py_isinstance_builtin e1 "complex" range) man flow
+           ~fthen:(fun flow ->
+             let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
+             assume (mk_py_isinstance_builtin e2 "complex" range) man flow
+               ~fthen:(fun flow ->
+                 let exp =
+                   let e1 = Utils.extract_oobject e1 in
+                   let e2 = Utils.extract_oobject e2 in
+                   let e1, e2 = if is_reverse_operator f then (e2, e1) else (e1, e2) in
+                   mk_binop e1 (Operators.methfun_to_binop f) e2 range in
+                 Eval.singleton (mk_py_object (addr_of_object @@ object_of_expr e1, Some exp) range) flow)
+               ~felse:(fun flow ->
+                 assume (mk_py_isinstance_builtin e2 "int" range) man flow
+                   ~fthen:(fun flow ->
+                     let exp =
+                       let e1 = Utils.extract_oobject e1 in
+                       let e2 = Utils.extract_oobject e2 in
+                       let e1, e2 = if is_reverse_operator f then (e2, e1) else (e1, e2) in
+                       mk_binop e1 (Operators.methfun_to_binop f) e2 range in
+                     Eval.singleton (mk_py_object (addr_of_object @@ object_of_expr e1, Some exp) range) flow)
+                   ~felse:(fun flow ->
+                     assume (mk_py_isinstance_builtin e2 "float" range) man flow
+                       ~fthen:(fun flow ->
+                         let exp =
+                           let e1 = Utils.extract_oobject e1 in
+                           let e2 = Utils.extract_oobject e2 in
+                           let e1, e2 = if is_reverse_operator f then (e2, e1) else (e1, e2) in
+                           mk_binop e1 (Operators.methfun_to_binop f) e2 range in
+                         Eval.singleton (mk_py_object (addr_of_object @@ object_of_expr e1, Some exp) range) flow)
+                       ~felse:(fun flow ->
+                         let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
+                         man.eval   expr flow
+                       )
+                   )
+               )
+           )
+           ~felse:(fun flow ->
+             let msg = Format.asprintf "descriptor '%s' requires a 'complex' object but received '%a'" f pp_expr e1 in
+             man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
+               Eval.empty)
+        ) |> OptionExt.return
+
+      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], [])
+           when is_compare_op_fun "complex" f ->
+        bind_list [e1; e2] (man.eval  ) flow |>
+        bind_result (fun el flow ->
+            let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
+            assume (mk_py_isinstance_builtin e1 "complex" range) man flow
+              ~fthen:(fun flow ->
+                  let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
+                  assume
+                    (mk_py_isinstance_builtin e2 "complex" range)
+                    man flow
+                    ~fthen:(fun flow ->
+                      man.eval (mk_py_top T_bool range) flow
+                    )
+                    ~felse:(fun flow ->
+                      assume (mk_py_isinstance_builtin e2 "int" range) man flow
+                        ~fthen:(fun flow ->
+                          man.eval (mk_py_top T_bool range) flow )
+                        ~felse:(fun flow ->
+                          assume (mk_py_isinstance_builtin e2 "float" range) man flow
+                            ~fthen:(fun flow ->
+                              man.eval (mk_py_top T_bool range) flow )
+                            ~felse:(fun flow ->
+                              let expr = mk_constant ~etyp:(T_py (Some NotImplemented)) C_py_not_implemented range in
+                              man.eval   expr flow)
+                        )
+                    )
+              )
+              ~felse:(fun flow ->
+                let msg = Format.asprintf "descriptor '%s' requires a 'float' object but received '%a'" f pp_expr e1 in
+                man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
+          )
+        |>  OptionExt.return
 
       | _ -> None
 

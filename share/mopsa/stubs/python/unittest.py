@@ -75,6 +75,7 @@ class TestCase:
     @mopsa.builtin("unittest.TestCase.fail")
     def fail(self, msg): pass
 
+
 #  ExceptionContext is NOT a mopsa.builtin, since __init__ and __enter__ are defined here
 class ExceptionContext(object):
     def __init__(self, exn, regex=None):
@@ -92,3 +93,12 @@ def main(): pass
 
 @mopsa.builtin("unittest.skipUnless")
 def skipUnless(): pass
+
+
+class SkipTest(Exception): pass
+
+@mopsa.stub
+def skip(f):
+    def bla(a):
+        raise SkipTest
+    return bla

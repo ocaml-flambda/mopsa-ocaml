@@ -59,10 +59,10 @@ let compare_base_kind b b' = match b, b' with
 
 let compare_base b b' =
   Compare.compose [
-    (fun () -> compare_base_kind b.base_kind b'.base_kind);
-    (fun () -> compare b.base_valid b'.base_valid);
-    (fun () -> Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range);
-  ]
+      (fun () -> compare_base_kind b.base_kind b'.base_kind);
+      (fun () -> compare b.base_valid b'.base_valid);
+      (fun () -> Compare.option compare_range b.base_invalidation_range b'.base_invalidation_range)
+    ]
 
 let mk_base ?(valid=true) ?(invalidation_range=None) kind =
   { base_kind = kind;
@@ -104,6 +104,15 @@ let base_mode b =
   | Addr a -> a.addr_mode
   | String _ -> STRONG
 
+
+type addr_opacity =
+  | NotOpaque
+  | OpaqueFrom of int (* offset *)
+
+let addr_opaque_chain : (addr_kind -> addr_opacity) ref =
+  ref (fun ak -> NotOpaque)
+let addr_opaque a = !addr_opaque_chain a
+let register_addr_opaque f = addr_opaque_chain := f !addr_opaque_chain
 
 let is_base_readonly b =
   match b.base_kind with
@@ -177,3 +186,19 @@ end
 
 module BaseSet = SetExt.Make(Base)
 module BaseMap = MapExt.Make(Base)
+
+let mk_lval base offset typ mode range =
+  let base_addr = match base.base_kind with
+    | Var v -> mk_c_address_of (mk_var v ~mode range) range
+    | Addr a -> mk_addr ~mode a range
+    | String (s,kind,t) -> mk_c_string s ~kind range in
+  let addr =
+    mk_c_cast
+      ( add
+          (mk_c_cast base_addr (T_c_pointer s8) range)
+          offset
+          ~typ:(T_c_pointer s8)
+          range )
+      (T_c_pointer typ)
+      range in
+  mk_c_deref addr range

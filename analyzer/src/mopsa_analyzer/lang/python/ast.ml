@@ -272,7 +272,9 @@ type py_fundec = {
   py_func_types_in: expr option list;
   py_func_type_out: expr option;
   py_func_range: range; (** range of the function *)
-  py_func_ret_var: var
+  py_func_ret_var: var;
+  py_func_cellvars: var list; (* list of cell vars, ie variables that may be part of function closures *)
+  py_func_freevars: var list;
 }
 
 type py_func_sig =
@@ -297,6 +299,11 @@ let pp_py_func_sig (fmt: Format.formatter) (sign: py_func_sig) =
   (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") (fun fmt (p, a) ->
        Format.fprintf fmt "%a: %a" pp_var p (OptionExt.print pp_expr) a))
     fmt (List.combine sign.py_funcs_parameters sign.py_funcs_types_in)
+
+let compare_py_func_sig s s' =
+  Compare.compose
+    [ (fun () -> Compare.list (OptionExt.compare compare_expr) s.py_funcs_types_in s'.py_funcs_types_in);
+      (fun () -> OptionExt.compare compare_expr s.py_funcs_type_out s'.py_funcs_type_out) ]
 
 let pp_py_func_annot (fmt:Format.formatter) (a:py_func_annot) =
   List.iter (fun sign ->
@@ -598,3 +605,16 @@ let builtin_type_name default fundec =
 
 let py_or e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_py_or e2 ~etyp range
 let py_and e1 e2 ?(etyp=T_py (Some Bool)) range = mk_binop e1 O_py_and e2 ~etyp range
+
+
+let mk_py_ll_hasattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_hasattr(instance, attr)) range
+
+let mk_py_ll_getattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_getattr(instance, attr)) range
+
+let mk_py_ll_setattr instance attr valu range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, Some valu)) range
+
+let mk_py_ll_delattr instance attr range =
+  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, None)) range

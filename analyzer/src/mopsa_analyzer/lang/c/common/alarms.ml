@@ -88,6 +88,10 @@ type alarm_kind +=
                         int_itv (** base size *) *
                         int_itv (** offset *) *
                         int_itv (** accessed bytes *)
+  | A_c_opaque_access of base (** accessed base *) *
+                        int (** opaque from *) *
+                        int_itv (** offset *) *
+                        int_itv (** accessed bytes *)
   | A_c_dangling_pointer_deref of expr (** pointer *) *
                                   var (** pointed variable *) *
                                   range (** return location *)
@@ -101,6 +105,7 @@ let () =
     check = (fun next -> function
         | A_c_null_deref _
         | A_c_out_of_bound _
+        | A_c_opaque_access _
         | A_c_invalid_deref _
         | A_c_dangling_pointer_deref _
         | A_c_use_after_free _
@@ -118,6 +123,12 @@ let () =
           Compare.compose
             [ (fun () -> compare_base b1 b2);
               (fun () -> compare_int_interval s1 s2);
+              (fun () -> compare_int_interval o1 o2);
+              (fun () -> compare_int_interval e1 e2); ]
+        | A_c_opaque_access(b1,i1,o1,e1), A_c_opaque_access(b2,i2,o2,e2) ->
+          Compare.compose
+            [ (fun () -> compare_base b1 b2);
+              (fun () -> compare i1 i2);
               (fun () -> compare_int_interval o1 o2);
               (fun () -> compare_int_interval e1 e2); ]
         | A_c_dangling_pointer_deref(p1,v1,r1), A_c_dangling_pointer_deref(p2,v2,r2) ->
@@ -142,6 +153,14 @@ let () =
             pp_base_verbose base
             pp_const_or_interval size
             pp_interval_plurial size
+        | A_c_opaque_access (base,i,offset,elm) ->
+          fprintf fmt "opaque access %a byte%a at offset%a %a of %a opaque from offset %d"
+            pp_const_or_interval elm
+            pp_interval_plurial elm
+            pp_interval_cardinal_plurial offset
+            pp_const_or_interval offset
+            pp_base_verbose base
+            i
         | A_c_dangling_pointer_deref(p,v,r) ->
           begin match v.vkind with
             | V_cvar { cvar_scope = Variable_local f }
@@ -201,6 +220,14 @@ let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_
   let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
   let alarm = mk_alarm (A_c_out_of_bound(base, size_itv, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
+
+let raise_c_opaque_access ?(bottom=true) base opaquefrom offset typ range man input_flow error_flow =
+  let cs = Flow.get_callstack error_flow in
+  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
+  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
+  let alarm = mk_alarm (A_c_opaque_access(base, opaquefrom, offset_itv, elm_itv)) cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice error_flow
+
 
 let raise_c_dangling_deref_alarm ?(bottom=true) ptr var ret_range ?(range=ptr.erange) man flow =
   let cs = Flow.get_callstack flow in
@@ -762,7 +789,7 @@ let raise_c_invalid_float_class_alarm ?(bottom=true) float msg range man input_f
 
 
 (** There are five IEEE 754 exceptions.
-    We only singal include invalid operation, division by zero and 
+    We only singal include invalid operation, division by zero and
     overflow. We don't care about underflow (rounding to 0) and
     inexact (rounding).
  *)
@@ -815,7 +842,7 @@ let () =
         | A_c_float_division_by_zero (e,i) ->
            fprintf fmt "floating-point division by zero on denominator '%a' with range '%a'"
              (Debug.bold pp_expr) e
-             (Debug.bold (F.fprint F.dfl_fmt)) i 
+             (Debug.bold (F.fprint F.dfl_fmt)) i
         | A_c_float_overflow (e,i,t) ->
            fprintf fmt "floating-point overflow in expression '%a' with range '%a' and type '%a'"
              (Debug.bold pp_expr) e

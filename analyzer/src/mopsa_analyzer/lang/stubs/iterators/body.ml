@@ -546,7 +546,7 @@ struct
             )
     in
     iter quants flow
-      
+
 
   (** Check if a condition contains an otherwise expression *)
   let rec otherwise_in_condition cond =
@@ -593,7 +593,7 @@ struct
       let return =
         match stub.stub_func_return_type with
         | None   -> None
-        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return_var exp)
+        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return exp None)
       in
       eval_stub_call stub args return exp.erange man flow |>
       OptionExt.return
@@ -747,7 +747,7 @@ struct
     | S_stub_requires cond ->
       exec_requires cond stmt.srange man flow |>
       OptionExt.return
-  
+
     | _ -> None
 
 

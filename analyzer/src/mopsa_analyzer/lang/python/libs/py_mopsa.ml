@@ -27,11 +27,7 @@ open Addr
 open Ast
 open Universal.Ast
 open Alarms
-
-
-let check man cond range flow =
-  man.exec (mk_assert cond range) flow >>%
-  man.eval (mk_py_none range)
+open Utils
 
 
 (*==========================================================================*)

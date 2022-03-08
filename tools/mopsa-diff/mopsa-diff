@@ -158,7 +158,10 @@ class Report:
             self.time = float(data["time"])
             if data["success"]:
                 self.success = True
-                self.alarms = { Alarm(a) for a in data["alarms"] }
+                if data["mopsa_version"] == "1.0~pre1":
+                    self.alarms = { Alarm(a) for a in data["alarms"] }
+                else:
+                    self.alarms = { Alarm(a) for a in data["checks"] if a["kind"] in ["error", "warning"]}
                 self.assumptions = { Assumption(w) for w in data["assumptions"] }
                 self.exception = None
             else:

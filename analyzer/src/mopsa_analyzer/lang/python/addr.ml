@@ -245,10 +245,6 @@ let is_builtin_class_function cls f =
 (**                      {2 Utility functions}                              *)
 (*==========================================================================*)
 
-let mro (obj: py_object) : py_object list =
-  match kind_of_object obj with
-  | A_py_class (c, b) -> b
-  | _ -> assert false
 
 let mk_py_z_interval l u range =
   mk_z_interval l u range
@@ -273,7 +269,7 @@ let mk_py_issubclass_builtin2 blt1 blt2 range =
   mk_py_issubclass (mk_py_object obj1 range) (mk_py_object obj2 range) range
 
 let mk_py_hasattr e attr range =
-  mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:T_string (C_string attr) range] range
+  mk_py_call (mk_py_object (find_builtin "hasattr") range) [e; mk_constant ~etyp:(T_py None) (C_string attr) range] range
 
 let mk_py_isinstance e1 e2 range =
   mk_py_call (mk_py_object (find_builtin "isinstance") range) [e1; e2] range
@@ -285,6 +281,29 @@ let mk_py_isinstance_builtin e builtin range =
 let mk_py_type e range =
   let obj = find_builtin "type" in
   mk_py_call (mk_py_object obj range) [e] range
+
+type py_c_function_kind =
+  | Builtin_function_or_method
+  | Wrapper_descriptor of string option (* optional wrapper: in that case name *)
+  | Method_descriptor
+
+let str_of_py_c_function_kind =
+  function
+  | Builtin_function_or_method -> "builtin_function_or_method"
+  | Wrapper_descriptor _ -> "wrapper_descriptor"
+  | Method_descriptor -> "method_descriptor"
+
+(* multilanguage *)
+type addr_kind +=
+   | A_py_c_module of string (** name *) (** Mopsa.program (* C program *)*)
+   | A_py_c_function of
+       string (** name *) *
+       int (** function uid *) *
+       py_c_function_kind *
+       int option (* ml_flags *) *
+       py_object (** self *)
+   | A_py_c_class of string (** name *)
+
 
 exception C3_lin_failure
 
@@ -330,7 +349,8 @@ let rec c3_lin (obj: py_object) : py_object list =
    *)
   match kind_of_object obj with
   | A_py_class (C_builtin "object", b) -> [obj]
-  | A_py_class (c, [])  -> [obj]
+  | A_py_class (_, [])
+  | A_py_c_class _  -> [obj; find_builtin "object"]
   | A_py_class (c, bases) ->
      let l_bases = List.map c3_lin bases in
      let bases = List.map (fun x -> [x]) bases in
@@ -386,9 +406,9 @@ let () =
       print =
         (fun default fmt a ->
            match a with
-           | A_py_class(C_user c, _) -> fprintf fmt "u{%a}" pp_var c.py_cls_var
-           | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "cb{%s}" c
-           | A_py_class(C_annot c, _) -> fprintf fmt "ua{%a}" pp_var c.py_cls_a_var;
+           | A_py_class(C_user c, _) -> fprintf fmt "%a" pp_var c.py_cls_var
+           | A_py_class((C_builtin c | C_unsupported c), _) -> fprintf fmt "%s" c
+           | A_py_class(C_annot c, _) -> fprintf fmt "%a" pp_var c.py_cls_a_var;
            | A_py_function(F_user f) -> fprintf fmt "function %a" pp_var f.py_func_var
            | A_py_function(F_annot f) -> fprintf fmt "f-annot %a" pp_var f.py_funca_var (* Ast.pp_py_func_annot f*)
            | A_py_function(F_builtin (f, t)) -> fprintf fmt "%s %s" t f
@@ -465,7 +485,10 @@ let () =
 
 let () = Universal.Heap.Policies.register_mk_addr
            (fun default ak -> match ak with
-                              | A_py_class _ | A_py_module _ | A_py_function _ -> Universal.Heap.Policies.mk_addr_all ak
+                              | A_py_function _ ->
+                                 Universal.Heap.Policies.mk_addr_stack_range ak
+                              | A_py_class _ | A_py_module _ ->
+                                 Universal.Heap.Policies.mk_addr_all ak
                               | _ -> default ak)
 
 let nominal_type_of_addr_kind : (addr_kind -> string) ref = ref (fun ak -> panic "unknown nominal type for addr_kind %a" pp_addr_kind ak)
@@ -476,3 +499,63 @@ let register_addr_kind_nominal_type f  = nominal_type_of_addr_kind := f !nominal
 let register_addr_kind_structural_type f  = structural_type_of_addr_kind := f !structural_type_of_addr_kind
 let addr_kind_find_nominal_type ak = !nominal_type_of_addr_kind ak
 let addr_kind_find_structural_type ak s  = !structural_type_of_addr_kind ak s
+
+
+
+let mro (obj: py_object) : py_object list =
+  match kind_of_object obj with
+  | A_py_class (c, b) -> b
+  | A_py_c_class _ ->  (* FIXME *) obj :: (find_builtin "object") :: []
+  | _ -> assert false
+
+let () =
+  Format.(
+    register_addr_kind {
+        print =
+          (fun default fmt a ->
+            match a with
+            | A_py_c_module(c(*, p*)) -> fprintf fmt "c module %s" c
+            | A_py_c_function (f, _, _, _, _) -> fprintf fmt "c function %s" f
+            | A_py_c_class v -> fprintf fmt "c class %s" v
+            | _ -> default fmt a);
+        compare =
+          (fun default a1 a2 ->
+            match a1, a2 with
+            | A_py_c_function (f1, i1, k1, of1, o1), A_py_c_function(f2, i2, k2, of2, o2) ->
+               Compare.compose
+                 [
+                   (fun () -> Stdlib.compare f1 f2);
+                   (fun () -> Stdlib.compare i1 i2);
+                   (fun () -> Stdlib.compare k1 k2);
+                   (fun () -> Stdlib.compare of1 of2);
+                   (fun () -> compare_py_object o1 o2);
+                 ]
+            | _ -> default a1 a2);
+      }
+  );
+  register_addr_kind_nominal_type (fun default ak ->
+      match ak with
+      | A_py_c_module _ -> "module"
+      | A_py_c_function (_, _, k, _, _) -> str_of_py_c_function_kind k
+      | A_py_c_class _ -> "type"
+      (* FIXME: we should/could call C's Py_TYPE? which currently assigns PyType_Type,  ~ ok up to reduction... *)
+      | _ -> default ak);
+  register_addr_kind_structural_type (fun default ak s ->
+      match ak with
+      | A_py_c_class _
+      | A_py_c_function _ -> false
+      | _ -> default ak s)
+
+
+let () = Universal.Heap.Policies.register_mk_addr
+           (fun default ak -> match ak with
+                              | A_py_c_module _ -> Universal.Heap.Policies.mk_addr_all ak
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "member_descriptor", _)} -> Universal.Heap.Policies.mk_addr_range ak
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "cell", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
+                              (* FIXME: only if cpython analysis. A bit expensive too... *)
+                              | A_py_instance {addr_kind = A_py_c_class _} -> Universal.Heap.Policies.mk_addr_stack_range ak
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)}
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
+                              | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} -> Universal.Heap.Policies.mk_addr_stack_range ak
+                              | _ -> default ak)

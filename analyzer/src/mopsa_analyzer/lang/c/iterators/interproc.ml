@@ -99,10 +99,14 @@ struct
   (** ============================= *)
 
   (** Check if there is a recursive call to a function *)
-  let is_recursive_call f flow =
-    let open Callstack in
-    let cs = Flow.get_callstack flow in
-    List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs
+  let is_recursive_call f range flow =
+     (* let open Callstack in
+      * let cs = Flow.get_callstack flow in
+      * List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs *)
+    let f_orig = f.c_func_org_name in
+    let f_uniq = f.c_func_unique_name in
+    Universal.Iterators.Interproc.Common.check_recursion f_orig f_uniq range
+    (Callstack.push_callstack f_orig ~uniq:f_uniq range (Flow.get_callstack flow))
 
 
   (** 𝔼⟦ alloca(size) ⟧ *)
@@ -164,7 +168,8 @@ struct
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
         (* We don't support recursive functions yet! *)
-        if is_recursive_call fundec flow then (
+        if is_recursive_call fundec range flow then (
+          warn_at range "recursive call on %s, returning top" fundec.c_func_org_name;
           let flow =
             Flow.add_local_assumption
               (Universal.Soundness.A_ignore_recursion_side_effect fundec.c_func_org_name)
@@ -176,8 +181,10 @@ struct
             man.eval (mk_top fundec.c_func_return range) flow
         )
         else
+          let () = debug "not a recursive call" in
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
+           debug "body = %a" pp_stmt body;
            let open Universal.Ast in
            let ret_var = mktmp ~typ:fundec.c_func_return () in
            let body' =
@@ -219,9 +226,12 @@ struct
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           let flow =
-            Flow.add_local_assumption
-              (Soundness.A_ignore_undefined_function c_func_org_name)
-              range flow
+            if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then flow
+            else
+              let () = warn_at range "%a" pp_assumption_kind (Soundness.A_ignore_undefined_function c_func_org_name) in
+              Flow.add_local_assumption
+                (Soundness.A_ignore_undefined_function c_func_org_name)
+                range flow
           in
           if is_c_void_type c_func_return then
             Eval.singleton (mk_unit range) flow
@@ -259,7 +269,7 @@ struct
       eval_call f args exp.erange man flow |>
       OptionExt.return
 
-    | E_call(f, args) ->
+    | E_call(f, args) when is_c_type (etyp f) ->
       resolve_pointer f man flow >>$? fun ff flow ->
 
       begin match ff with

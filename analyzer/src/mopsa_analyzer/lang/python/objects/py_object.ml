@@ -29,19 +29,6 @@ open Universal.Ast
 open Alarms
 
 
-let mk_py_ll_hasattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_hasattr(instance, attr)) range
-
-let mk_py_ll_getattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_getattr(instance, attr)) range
-
-let mk_py_ll_setattr instance attr valu range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, Some valu)) range
-
-let mk_py_ll_delattr instance attr range =
-  mk_expr ~etyp:(T_py None) (E_py_ll_setattr(instance, attr, None)) range
-
-
 module Domain =
 struct
 
@@ -66,29 +53,38 @@ struct
   let rec eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__", _))}, _)}, args, kwargs)
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__", _))}, _)}, args, kwargs) ->
-      bind_list args (man.eval   ) flow |>
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__new__" as f, _))}, _)}, args, kwargs)
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__new__" as f, _))}, _)}, args, kwargs) ->
+      bind_list args man.eval flow |>
       bind_result (fun args flow ->
           match args with
           | [] ->
             debug "Error during creation of a new instance@\n";
             man.exec (Utils.mk_builtin_raise "TypeError" range) flow >>% Eval.empty
           | cls :: tl ->
-            let c = fst @@ object_of_expr cls in
-            man.eval    (mk_alloc_addr (A_py_instance c) range) flow >>$
-              (fun eaddr flow ->
-                let addr = Addr.from_expr eaddr in
-                man.exec   (mk_add eaddr range) flow >>%
-                Eval.singleton (mk_py_object (addr, None) range)
-              )
+             let fcls = List.hd @@ String.split_on_char '.' f in
+             assume (mk_py_issubclass_builtin_r cls fcls range) man flow
+               ~fthen:(fun flow ->
+                 let c = fst @@ object_of_expr cls in
+                 man.eval (mk_alloc_addr (A_py_instance c) range) flow >>$ (fun eaddr flow ->
+                 let addr = Addr.from_expr eaddr in
+                 man.exec (mk_add eaddr range) flow >>% fun flow ->
+                 Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range flow |>
+                 Eval.singleton (mk_py_object (addr, None) range)
+                 )
+               )
+               ~felse:(fun flow ->
+                 man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "%s(%a)" f (Format.pp_print_list pp_expr) args) range) flow >>% Eval.empty
+               )
         )
       |> OptionExt.return
 
-    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init__", _))}, _)}, args, []) ->
-      man.eval    (mk_py_none range) flow |> OptionExt.return
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init__", _))}, _)}, args, kwargs) ->
+      man.eval (mk_py_none range) flow |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__getattribute__", _))}, _)}, [ptype; attribute], []) ->
+       assume (mk_py_isinstance_builtin attribute "str" range) man flow
+         ~fthen:(fun flow ->
       man.eval   (mk_py_type ptype range) flow >>$
         (fun metatype flow ->
           let lookintype o_meta_attribute o_meta_get flow =
@@ -97,6 +93,7 @@ struct
                 let mro_ptype = mro (object_of_expr ptype) in
                 search_mro man attribute
                   ~cls_found:(fun cls flow ->
+                      let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
                       man.eval
                         (mk_py_ll_getattr (mk_py_object cls range) attribute range) flow >>$
                         (fun attribute flow ->
@@ -117,11 +114,17 @@ struct
                   ~nothing_found:(fun flow ->
                       match o_meta_get, o_meta_attribute with
                       | Some meta_get, _ ->
-                        man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
+                         let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                         man.eval (mk_py_call meta_get [OptionExt.none_to_exn o_meta_attribute; ptype; metatype] range) flow
                       | None, Some meta_attribute ->
-                        Eval.singleton meta_attribute flow
+                         let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                         Eval.singleton meta_attribute flow
                       | None, None ->
-                         let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype (match ekind attribute with | E_constant (C_string attr) -> attr | _ -> assert false) in
+                         let msg = Format.asprintf "type object '%a' has no attribute '%s'" pp_expr ptype
+                                     (match ekind attribute with
+                                      | E_constant (C_string attr) -> attr
+                                      | E_py_object ({addr_kind = A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}}, Some {ekind = E_constant (C_string attr)}) -> attr
+                                      | _ -> assert false) in
                         man.exec (Utils.mk_builtin_raise_msg "AttributeError" msg range) flow >>%
                         Eval.empty
                     )
@@ -147,7 +150,9 @@ struct
                               assume
                                 (mk_py_hasattr (mk_py_type meta_attribute range) "__set__" range)
                                 man flow
-                                ~fthen:(man.eval (mk_py_call meta_get [meta_attribute; ptype; metatype] range))
+                                ~fthen:(fun flow ->
+                                  let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                                  man.eval (mk_py_call meta_get [meta_attribute; ptype; metatype] range) flow)
                                 ~felse:(lookintype (Some meta_attribute) (Some meta_get))
                             )
                         )
@@ -158,20 +163,31 @@ struct
             range mro_metatype flow
 
         )
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "attribute name must be string, not %a" pp_expr attribute) range) flow >>% Eval.empty
+         )
       |> OptionExt.return
 
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__getattribute__", _))}, _)}, [instance; attribute], []) ->
+       assume (mk_py_isinstance_builtin attribute "str" range) man flow
+         ~fthen:(fun flow ->
       man.eval   (mk_py_type instance range) flow >>$
- (fun class_of_exp flow ->
+        (fun class_of_exp flow ->
           let mro = mro (object_of_expr class_of_exp) in
           debug "mro of %a: %a" pp_expr class_of_exp (Format.pp_print_list (fun fmt (a, _) -> pp_addr fmt a)) mro;
+          man.eval attribute flow >>$ fun attribute flow ->
+          man.eval instance flow >>$ fun instance flow ->
           let tryinstance ~fother flow =
             assume (mk_py_ll_hasattr instance attribute range) man flow
-              ~fthen:(man.eval   (mk_py_ll_getattr instance attribute range))
+              ~fthen:(fun flow ->
+                let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
+                man.eval   (mk_py_ll_getattr instance attribute range) flow)
               ~felse:fother in
           search_mro man attribute
             ~cls_found:(fun cls flow ->
+                let flow = Flow.add_safe_check Alarms.CHK_PY_ATTRIBUTEERROR range flow in
                 man.eval
                   (mk_py_ll_getattr (mk_py_object cls range) attribute range)
                   flow >>$
@@ -206,6 +222,10 @@ struct
               )
             range mro flow
         )
+         )
+         ~felse:(fun flow ->
+           man.exec (Utils.mk_builtin_raise_msg "TypeError" (Format.asprintf "attribute name must be string, not %a" pp_expr attribute) range) flow >>% Eval.empty
+         )
       |> OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__setattr__", _))}, _)}, [lval; attr; rval], [])
@@ -267,6 +287,12 @@ struct
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__init_subclass__", _))}, _)}, cls::args, []) ->
       man.eval   (mk_py_none range) flow |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("type.__repr__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["object"]
+        (fun _ flow -> man.eval (mk_py_top T_string range) flow)
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__repr__" as f, _))}, _)}, args, [])
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__str__" as f, _))}, _)}, args, []) ->
       Utils.check_instances f man flow range args
@@ -274,6 +300,9 @@ struct
         (fun _ flow -> man.eval (mk_py_top T_string range) flow)
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("object.__hash__", _))}, _)}, args, []) ->
+        man.eval (mk_py_top T_int range) flow
+        |> OptionExt.return
 
     | _ -> None
 

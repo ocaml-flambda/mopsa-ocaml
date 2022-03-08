@@ -109,8 +109,21 @@ struct
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(fun flow ->
           man.eval   arg flow >>$
- (fun el flow ->
-                assume
+            (fun el flow ->
+              assume
+                (mk_py_isinstance_builtin el "bool" range) man flow
+                ~fthen:(fun flow ->
+                  let addr_e = addr_of_object @@ object_of_expr el in
+                  if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_bool_top) = 0 then
+                    man.eval (mk_int_interval 0 1 ~typ:(T_py None) range) flow
+                  else if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_true) = 0 then
+                    man.eval (mk_int 1 ~typ:(T_py None) range) flow
+                  else if compare_addr addr_e (OptionExt.none_to_exn !Addr_env.addr_false) = 0 then
+                    man.eval (mk_int 0 ~typ:(T_py None) range) flow
+                  else assert false
+                )
+                ~felse:(fun flow ->
+                  assume
                   (mk_py_isinstance_builtin el "int" range) man flow
                   ~fthen:(fun flow -> Eval.singleton el flow)
                   ~felse:(fun flow ->
@@ -122,12 +135,15 @@ struct
                       ~felse:(fun flow ->
                         man.eval   {exp with ekind = E_py_call(f, [cls; arg; mk_int 10 range], [])} flow)
                   )
-              )
+                )
+            )
         )
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__new__", _))}, _)}, [cls; str; base], []), _ ->
       Utils.new_wrapper man range flow "int" cls
         ~fthennew:(man.eval   (mk_py_top T_int range))
+
+
 
     (* 𝔼⟦ int.__op__(e1, e2) | op ∈ {==, !=, <, ...} ⟧ *)
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f,  _))}, _)}, [e1; e2], []), _
@@ -143,6 +159,7 @@ struct
             assume
               (mk_py_isinstance_builtin e1 "int" range)
               ~fthen:(fun true_flow ->
+                  let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
                   assume
                     (mk_py_isinstance_builtin e2 "int" range)
                     ~fthen:(fun true_flow ->
@@ -166,7 +183,7 @@ struct
       |>  OptionExt.return
 
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin (f, _))}, _)}, [e1; e2], []), _
-         when is_arith_binop_fun "int" f ->
+         when is_arith_binop_fun "int" f  ->
        (* FIXME: negative powers, 0 ** -1 *)
       bind_list [e1; e2] (man.eval ) flow |>
       bind_result (fun el flow ->
@@ -174,6 +191,7 @@ struct
           assume
             (mk_py_isinstance_builtin e1 "int" range)
             ~fthen:(fun true_flow ->
+                let true_flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange true_flow in
                 assume
                   (mk_py_isinstance_builtin e2 "int" range)
                   ~fthen:(fun true_flow ->
@@ -187,6 +205,7 @@ struct
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "division by zero" range) flow >>% Eval.empty
                            )
                            ~felse:(fun flow ->
+                             let flow = Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR range flow in
                              let casted_e1 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e1) range in
                              let casted_e2 = mk_unop ~etyp:(T_float F_DOUBLE) O_cast (Utils.extract_oobject e2) range in
                              if is_reverse_operator f then
@@ -210,7 +229,9 @@ struct
                              ~fthen:(fun flow ->
                                man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "integer division or modulo by zero" range) flow >>% Eval.empty
                              )
-                             ~felse:res
+                             ~felse:(fun flow ->
+                               Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR range flow |>
+                               res)
                          else res flow
 
                   )
@@ -248,6 +269,12 @@ struct
         (fun e flow -> man.eval (List.hd e) flow)
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__round__" as f, _))}, _)}, args, []), _ ->
+      Utils.check_instances f man flow range args
+        ["int"]
+        (fun e flow -> man.eval (List.hd e) flow)
+      |> OptionExt.return
+
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__bool__" as f, _))}, _)}, args, []), _ ->
       Utils.check_instances f man flow range args
         ["int"]
@@ -260,6 +287,7 @@ struct
         )
       |> OptionExt.return
 
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__repr__" as f, _))}, _)}, args, []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("bool.__str__" as f, _))}, _)}, args, []), _
     | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("int.__str__" as f, _))}, _)}, args, []), _
     (* todo: weird, tp_str set to 0 in longobject.c *)
@@ -281,11 +309,12 @@ struct
                (mk_binop ~etyp:T_bool (Utils.extract_oobject @@ List.hd e) O_le max_intfloat range)
                range)
             man flow
-          ~fthen:(fun flow ->
-            man.eval  (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
- (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
-          ~felse:(fun flow ->
-            man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty)
+            ~fthen:(fun flow ->
+              let flow = Flow.add_safe_check Alarms.CHK_PY_OVERFLOWERROR (List.hd e).erange flow in
+              man.eval  (mk_unop O_cast  ~etyp:(T_float F_DOUBLE) (Utils.extract_oobject @@ List.hd e) range) flow >>$
+                (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, Some e) range) flow))
+            ~felse:(fun flow ->
+              man.exec (Utils.mk_builtin_raise_msg "OverflowError" "int too large to convert to float" range) flow >>% Eval.empty)
         ) |> OptionExt.return
     | _ -> None
 

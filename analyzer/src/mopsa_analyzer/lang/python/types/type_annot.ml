@@ -284,7 +284,8 @@ struct
           in
           let msg = Format.asprintf "%a(%a) does not match any signature provided in the stubs" pp_var pyannot.py_funca_var (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
           Eval.join_list ~empty:(
-            fun () ->
+              fun () ->
+              debug "empty case!";
               man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>% Eval.empty)
             (let evals, remaining =
                (List.fold_left (fun (acc, remaining_flow) sign ->
@@ -296,6 +297,7 @@ struct
                       let nflow, flow_notok, ntypevars, ret_var = apply_sig remaining_flow sign in
                       let nflow = post_to_flow man nflow in
                       debug "nflow after apply_sig = %a@\n" (format (Flow.print man.lattice.print)) nflow;
+                      debug "flow_notok after apply_sig = %a@\n" (format (Flow.print man.lattice.print)) flow_notok;
                       let cur = get_env T_cur man nflow in
                       let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
                       let nflow = set_env T_cur ncur man nflow in
@@ -310,10 +312,14 @@ struct
                         if is_noreturn then
                           raised_exn @ acc, flow_notok
                         else
-                          let ret = (Eval.singleton (mk_var ret_var range) nflow ~cleaners:([mk_remove_var ret_var range]) >>$
+                          let ret = (
+                              Flow.add_global_assumption (Soundness.A_py_use_type_annot (pyannot.py_funca_range, pyannot.py_funca_var, sign)) nflow |>
+                              Flow.add_safe_check Alarms.CHK_PY_TYPEERROR range |>
+                              Eval.singleton (mk_var ret_var range) ~cleaners:([mk_remove_var ret_var range]) >>$
  (man.eval)) in
                           ret::raised_exn @ acc, flow_notok
                     with Invalid_sig ->
+                      debug "got invalid sig for %a" pp_py_func_sig sign;
                       (acc, remaining_flow)
                   ) ([], flow) sigs) in
              (man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) remaining >>% Eval.empty) :: evals)
@@ -333,6 +339,8 @@ struct
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_float, OptionExt.return @@ mk_top (T_float F_DOUBLE) range) range) flow
             | "str" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_strings, OptionExt.return @@ mk_top T_string range) range) flow
+            | "bytes" ->
+               Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_bytes, OptionExt.return @@ mk_top T_string range) range) flow
             | "NotImplementedType" ->
                Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_notimplemented, None) range) flow
             | "NoneType" ->
@@ -689,10 +697,12 @@ struct
                 flows_caught
               else
                 let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow in
-                man.exec (mk_assume {exp with ekind = E_py_check_annot (e, typ)} range) flow :: flows_caught)
+                let flow = man.exec (mk_assume {exp with ekind = E_py_check_annot (e, typ)} range) flow |> post_to_flow man in
+                if Flow.is_bottom man.lattice flow then flows_caught
+                else flow :: flows_caught)
               [] types in
           Eval.join_list ~empty:(fun () -> man.eval (mk_py_false range) flow)
-            (List.map (fun f -> f >>% man.eval (mk_py_true range)) flows_ok) |> OptionExt.return
+            (List.map (fun flow -> man.eval (mk_py_true range) flow) flows_ok) |> OptionExt.return
 
         | _ -> Exceptions.panic_at range "E_py_check_annot: %a not supported" pp_expr annot
       end
@@ -753,11 +763,7 @@ struct
 
   let ask _ _ _ = None
 
-  let merge pre (a, e) (a', e') =
-    if a == a' then a
-    else if is_empty_effect e' then a
-    else if is_empty_effect e then a'
-    else assert false
+  let merge pre (a, e) (a', e') = assert false
 
   let print_state printer m =
     pprint ~path:[Key "TypeVar annotations"] printer (pbox TVMap.print m)

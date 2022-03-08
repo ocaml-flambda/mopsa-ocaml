@@ -50,6 +50,7 @@ endif
 # Python domains
 ifneq (@disable_python@,yes)
 include src/mopsa_analyzer/lang/python/Makefile
+include src/mopsa_analyzer/lang/cpython/Makefile
 endif
 
 

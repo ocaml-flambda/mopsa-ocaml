@@ -68,18 +68,21 @@ module Domain =
                   assume
                     (mk_py_isinstance_builtin el "float" range)
                     ~fthen:(fun flow ->
-                      Eval.singleton el flow)
+                      Flow.add_safe_check Alarms.CHK_PY_TYPEERROR el.erange flow |>
+                      Eval.singleton el)
                     ~felse:(fun flow ->
                         assume
                           (mk_py_isinstance_builtin el "int" range)
                           ~fthen:(fun flow ->
-                            man.eval (mk_py_call (mk_py_object (find_builtin "int.__float__") range) [el] range) flow
+                            Flow.add_safe_check Alarms.CHK_PY_TYPEERROR el.erange flow |>
+                            man.eval (mk_py_call (mk_py_object (find_builtin "int.__float__") range) [el] range)
                           )
                           ~felse:(fun flow ->
                               assume
                                 (mk_py_isinstance_builtin el "str" range)
                                 ~fthen:(fun flow ->
-                                    man.eval   (mk_py_top (T_float F_DOUBLE) range) flow)
+                                    Flow.add_safe_check Alarms.CHK_PY_TYPEERROR el.erange flow |>
+                                      man.eval   (mk_py_top (T_float F_DOUBLE) range))
                                 ~felse:(fun flow ->
                                   let msg = Format.asprintf "float() argument must be a string or a number, not '%a'" pp_expr el in
                                     man.exec (Utils.mk_builtin_raise_msg "TypeError" msg range) flow >>%
@@ -99,6 +102,7 @@ module Domain =
             let e1, e2 = match el with [e1; e2] -> e1, e2 | _ -> assert false in
             assume (mk_py_isinstance_builtin e1 "float" range) man flow
               ~fthen:(fun flow ->
+                  let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
                   assume
                     (mk_py_isinstance_builtin e2 "float" range)
                     man flow
@@ -143,6 +147,7 @@ module Domain =
                assume
                  (mk_py_isinstance_builtin e1 "float" range) man flow
                  ~fthen:(fun flow ->
+                   let flow = Flow.add_safe_check Alarms.CHK_PY_TYPEERROR e1.erange flow in
                    assume
                      (mk_py_isinstance_builtin e2 "float" range) man flow
                      ~fthen:(fun flow ->
@@ -157,7 +162,8 @@ module Domain =
                            ~fthen:(fun flow ->
                              man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty
                            )
-                           ~felse:res
+                           ~felse:(fun flow ->
+                             Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR e2.erange flow |> res)
                        else
                          res flow
                      )
@@ -179,7 +185,10 @@ module Domain =
                                      ~fthen:(fun flow ->
                                        man.exec (Utils.mk_builtin_raise_msg "ZeroDivisionError" "float division by zero" range) flow >>% Eval.empty
                                      )
-                                     ~felse:res
+                                     ~felse:(fun flow ->
+                                       Flow.add_safe_check Alarms.CHK_PY_ZERODIVISIONERROR e2.erange flow |>
+                                       res
+                                     )
                                  else res flow
                                )
                          )
@@ -211,11 +220,6 @@ module Domain =
              )
          |> OptionExt.return
 
-
-      | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__hash__" as f, _))}, _)}, args, []) ->
-        Utils.check_instances f man flow range args ["float"] (fun _ -> man.eval (mk_py_top T_int range))
-        |> OptionExt.return
-
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__bool__" as f, _))}, _)}, args, []) ->
         Utils.check_instances f man flow range args ["float"]
           (fun e flow ->
@@ -236,6 +240,17 @@ module Domain =
             man.eval  (mk_unop O_cast  ~etyp:T_int (Utils.extract_oobject @@ List.hd e) range) flow >>$
  (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
         ) |> OptionExt.return
+
+    | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("float.__round__" as f, _))}, _)}, args, []) ->
+      Utils.check_instances f man flow range args
+        ["float"]
+        (fun e flow ->
+          let e = List.hd e in
+          man.eval (mk_binop e O_plus {(mk_float 0.5 range) with etyp=(T_py None)} ~etyp:(T_py None) range) flow >>$ fun e flow ->
+            man.eval (mk_unop O_cast ~etyp:T_int (Utils.extract_oobject e) range) flow >>$
+ (fun e flow -> Eval.singleton (mk_py_object (OptionExt.none_to_exn !Addr_env.addr_integers, Some e) range) flow)
+        ) |> OptionExt.return
+
 
       | _ -> None
       else None

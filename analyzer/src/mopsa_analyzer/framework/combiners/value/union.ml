@@ -183,7 +183,8 @@ struct
           (fun v1 v2 -> (V1.bottom,V2.meet v2 (man2.get v1)))
           rr1 r2
     else
-      assert false
+      failwith (Format.asprintf "not accepting type %a %b %b" pp_typ e.etyp accept1 accept2)
+      (* assert false *)
 
   (** Backward refinement of values in a comparison *)
   let compare man op b e1 v1 e2 v2 : t * t =

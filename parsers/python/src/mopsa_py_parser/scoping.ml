@@ -77,12 +77,17 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
     let func_types_in = List.map (translate_expr_option scope) f.func_types_in in
     let func_type_out = translate_expr_option scope f.func_type_out in
     let other_parameters = (match func_vararg with | None -> [] | Some v -> [v]) @ func_kwonly_args @ (match func_kwarg with | None -> [] | Some v -> [v]) in
-    let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_locals @ func_parameters @ other_parameters)) lscope in
-    let new_lscope = func_var :: func_parameters @ other_parameters @ func_locals @ func_nonlocals @ parent_scope in
+    let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (func_var :: func_locals @ func_parameters @ other_parameters)) lscope in
+    (* some issues with conflicting names. Example:
+       class date: pass
+       class datetime(date):
+          def date(self): return date() <- this date should be the class, not the function
+     *)
+    let new_lscope = func_parameters @ other_parameters @ func_locals @ func_nonlocals @ parent_scope in
     { stmt with
       skind = S_function {
           func_var;
-          func_body = translate_stmt (globals, new_lscope) f.func_body;
+          func_body = translate_stmt (globals @ [func_var], new_lscope) f.func_body;
           func_parameters;
           func_defaults;
           func_vararg;
@@ -100,12 +105,12 @@ and translate_stmt (scope: (var list) * (var list)) stmt =
         }
     }
 
-    | S_class cls ->
-      let cls_var = find_in_scope scope range cls.cls_var in
-      let cls_static_attributes = List.map create_new_uid cls.cls_static_attributes in
-      let cls_decors = List.map (translate_expr scope) cls.cls_decors in
-      let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (cls_var :: cls_static_attributes)) lscope in
-      let new_lscope = cls_var :: cls_static_attributes @ parent_scope in
+  | S_class cls ->
+     let cls_var = find_in_scope scope range cls.cls_var in
+     let cls_static_attributes = List.map create_new_uid cls.cls_static_attributes in
+     let cls_decors = List.map (translate_expr scope) cls.cls_decors in
+     let parent_scope = List.filter (fun v -> List.for_all (fun v' -> v.name != v'.name ) (cls_var :: cls_static_attributes)) lscope in
+     let new_lscope = cls_var :: cls_static_attributes @ parent_scope in
       {stmt with
        skind = S_class {
            cls_var = find_in_scope scope range cls.cls_var;

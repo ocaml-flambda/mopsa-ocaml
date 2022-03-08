@@ -49,3 +49,9 @@ let find_value_reduction name =
       let module V = (val v : VALUE_REDUCTION) in
       compare V.name name = 0
     ) !reductions
+
+let simplified_value_reductions () =
+  List.map (fun v ->
+      let module D = (val v : VALUE_REDUCTION) in
+      D.name
+    ) !reductions

@@ -54,10 +54,13 @@ let render_pos pos =
 
 
 let render_range range =
-  `Assoc [
-    "start", render_pos (Location.get_range_start range);
-    "end", render_pos (Location.get_range_end range)
-  ]
+  if not @@ is_orig_range @@ untag_range range then
+    `Assoc []
+  else
+    `Assoc [
+        "start", render_pos (Location.get_range_start range);
+        "end", render_pos (Location.get_range_end range)
+      ]
 
 let render_call (c:callsite)  =
   `Assoc [
@@ -95,7 +98,10 @@ let render_alarms report =
       CheckMap.fold
         (fun check diag acc ->
           match diag.diag_kind with
-          | Error | Warning ->
+          | Safe when not !opt_show_safe_checks ->
+             acc
+
+          | Safe | Error | Warning ->
               (* Get the set of alarms kinds and callstacks *)
               let kinds,callstacks =
                 AlarmSet.fold
@@ -123,6 +129,7 @@ let render_alarms report =
               let kinds' = iter (AlarmKindSet.elements kinds) in
               let json_diag =
                 `Assoc [
+                    "kind", `String (Format.asprintf "%a" pp_diagnostic_kind diag.diag_kind);
                     "title", render_check check;
                     "messages", render_alarm_messages kinds';
                     "range", render_range range;
@@ -171,7 +178,7 @@ let report man flow ~time ~files ~out : unit =
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "alarms", `List (render_alarms rep);
+      "checks", `List (render_alarms rep);
       "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in
