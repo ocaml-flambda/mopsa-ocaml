@@ -61,13 +61,13 @@ build_job:
 downstream-benchs 1/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/coreutils-benchmarks
-    PROJECT_BRANCH: ci_args
+    PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 2/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/juliet-benchmarks
-    PROJECT_BRANCH: fix/json
+    PROJECT_BRANCH: master
   extends: .downstream-benchs
 
 downstream-benchs 3/10:
