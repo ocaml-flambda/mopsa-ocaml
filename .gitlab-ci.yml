@@ -37,22 +37,25 @@ build_job:
 ###########################################################
 .downstream-benchs:
   stage: downstream_benchmarks
-  variables:
-    GIT_REPO: "gitlab.com/${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH}.git"
-    BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      variables:
+       GIT_REPO: "gitlab.com/${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH}.git"
+       BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    - if: $RUN_BENCHMARKS == "true"
+      when: manual
+      variables:
+        GIT_REPO: "gitlab.com/${CI_PROJECT_PATH}.git"
+        BRANCH: $CI_COMMIT_REF_NAME
   # trigger:
   #   project: $PROJECT_NAME
   #   branch: $PROJECT_BRANCH
   script:
     - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
-#    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
+    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
     - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
     - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" --form "variables[DISABLE_MOPSA_DIFF]=$DISABLE_MOPSA_DIFF" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
-    - if: $RUN_BENCHMARKS == "true"
-      when: manual
 
 
 downstream-benchs 1/10:
