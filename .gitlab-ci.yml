@@ -6,6 +6,8 @@ variables:
   MOPSA_PYVAL: "./bin/mopsa-python       -unittest -unittest-filter=test_values"
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
+  RUN_BENCHMARKS: "false"
+  DISABLE_MOPSA_DIFF : "false"
 
 image: mopsa/mopsa-build:latest
 
@@ -45,9 +47,11 @@ build_job:
     - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
 #    - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
     - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
-    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
+    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" -- form "variables[DISABLE_MOPSA_DIFF]=$DISABLE_MOPSA_DIFF" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - if: $RUN_BENCHMARKS == "true"
       when: manual
 
 
