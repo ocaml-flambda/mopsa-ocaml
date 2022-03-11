@@ -267,16 +267,8 @@ struct
     (* Translate the prenex encoding into an expression *)
     let cond' = prenex_to_expr quants cond f.range in
     (* Constrain the environment with the obtained condition *)
-    let flow = man.exec (cond_to_stmt cond' f.range) flow |>
-               post_to_flow man in
-    (* Remove bound variables *)
-    List.fold_left
-      (fun acc (_,v,s) ->
-         match s with
-         | S_interval _ -> man.exec (mk_remove_var v f.range) acc |>
-                           post_to_flow man
-         | S_resource _ -> acc)
-      flow quants
+    man.exec (cond_to_stmt cond' f.range) flow |>
+    post_to_flow man
 
 
   (** Initialize the parameters of the stubbed function *)
@@ -513,13 +505,24 @@ struct
 
   (* Remove flows where a quantification interval is empty *)
   let discard_empty_quantification_intervals quants cond range man flow =
-    let rec iter l flow =
+    let remove_quant_vars vars evl =
+      if vars = [] then evl
+      else
+        evl >>$ fun e flow ->
+        List.fold_left (fun acc v ->
+            acc >>% man.exec (mk_remove_var v range)
+          ) (Post.return flow) vars
+        >>% fun flow ->
+        Eval.singleton e flow
+    in
+    let rec iter added l flow =
       match l with
       | [] ->
-        man.eval ~route:(Below name) (mk_stub_quantified_formula quants cond range) flow
+        man.eval ~route:(Below name) (mk_stub_quantified_formula quants cond range) flow |>
+        remove_quant_vars added
 
       | (_,_,S_resource _)::tl ->
-        iter tl flow
+        iter added tl flow
 
       | (FORALL,v,S_interval(lo,hi))::tl ->
         assume
@@ -527,10 +530,11 @@ struct
           ~fthen:(fun flow ->
               man.exec (mk_add_var v range) flow >>%
               man.exec (mk_assume (mk_in (mk_var v range) lo hi range) range) >>%
-              iter tl
+              iter (v::added) tl
             )
           ~felse:(fun flow ->
-              Eval.singleton (mk_true range) flow
+              Eval.singleton (mk_true range) flow |>
+              remove_quant_vars added
             )
 
       | (EXISTS,v,S_interval(lo,hi))::tl ->
@@ -539,13 +543,14 @@ struct
           ~fthen:(fun flow ->
               man.exec (mk_add_var v range) flow >>%
               man.exec (mk_assume (mk_in (mk_var v range) lo hi range) range) >>%
-              iter tl
+              iter (v::added) tl
             )
           ~felse:(fun flow ->
-              Eval.singleton (mk_false range) flow
+              Eval.singleton (mk_false range) flow |>
+              remove_quant_vars added
             )
     in
-    iter quants flow
+    iter [] quants flow
 
 
   (** Check if a condition contains an otherwise expression *)
