@@ -442,6 +442,32 @@ struct
         in
         loop rep
 
+    let lift_pack_printer pack pp printer x =
+      let pobj = pbox pp x in
+      match pobj with
+      | Empty -> ()
+      | Map(map,sym) ->
+        let bindings = MapExtPoly.fold (fun k v acc ->
+            match v with
+            | Empty ->
+              acc
+            | Map (m,_) when MapExtPoly.is_empty m ->
+              acc
+            | Set (s,_) when SetExtPoly.is_empty s ->
+              acc
+            | _ ->
+              let k' =  fkey "%a(%a)" pp_print_object k (format Strategy.print) pack in
+              (k',v) :: acc
+          ) map []
+        in
+        List.iter
+          (fun (k,v) ->
+             pprint printer ~path:[k] v
+          ) bindings
+      | _ ->
+        let key = fkey "pack(%a)" (format Strategy.print) pack in
+        pprint printer ~path:[key]  pobj
+
     (** State pretty printer *)
     let print_state printer a =
       match a with
@@ -449,9 +475,10 @@ struct
       | BOT -> Domain.print_state printer Domain.bottom
       | _ ->
         Map.bindings a |>
-        pp_map
-          Strategy.print Domain.print_state printer
-          ~mopen:"" ~mclose:"" ~msep:"" ~mbind:":"
+        List.iter
+          (fun (pack,aa) ->
+             lift_pack_printer pack Domain.print_state printer aa
+          )
 
     (** Pretty printer *)
     let print_expr man ctx a printer exp =
@@ -461,9 +488,7 @@ struct
            match Map.find_opt pack a with
            | None -> ()
            | Some aa ->
-             let key = fkey "pack(%a)" (format Strategy.print) pack in
-             pprint printer ~path:[key]
-               (pbox (Domain.print_expr (pack_man pack man) ctx aa) exp)
+             lift_pack_printer pack (Domain.print_expr (pack_man pack man) ctx aa) printer exp
         ) packs
 
   end
