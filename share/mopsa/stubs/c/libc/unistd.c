@@ -421,7 +421,16 @@ int dup2 (int __fd, int __fd2);
 int dup3 (int __fd, int __fd2, int __flags);
 
 
-// TODO: environ / __environ
+// TODO: __environ
+
+char **environ;
+
+/*$!
+ * assigns: environ;
+ * local: char **addr = new Memory;
+ * ensures: size(addr) >= 1 and size(addr) <= INT_MAX - 1;
+ * ensures: environ' == addr;
+ */
 
 /*$
  * requires: valid_string(__path);
