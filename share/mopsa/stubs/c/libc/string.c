@@ -606,19 +606,25 @@ char *strerror_l (int __errnum, locale_t __l);
 void explicit_bzero (void *__s, size_t __n);
 
 /*$
- * requires: null_or_valid_ptr_or_fail(__stringp);
+ * requires: valid_ptr_or_fail(__stringp);
  *
  * case "nop" {
- *   assumes: __stringp == NULL;
+ *   assumes: *__stringp == NULL;
  *   ensures: return == NULL;
  * }
  *
  * case "op" {
- *   assumes: __stringp != NULL;
+ *   assumes: *__stringp != NULL;
  *   requires: valid_string_or_fail(__delim);
  *   local: size_t l = strlen(*__stringp);
+ *   assigns: *__stringp;
  *   assigns: (*__stringp)[0, l);
- *   ensures: (*__stringp)' == NULL or in_string((*__stringp)',*__stringp);
+ *   ensures:
+ *     (*__stringp)' == NULL
+ *     or exists size_t i in [0, l): (
+ *          ((*__stringp)[i])' == 0
+ *          and (*__stringp)' == *__stringp + i
+ *        );
  *   ensures: return == *__stringp;
  * }
  */
