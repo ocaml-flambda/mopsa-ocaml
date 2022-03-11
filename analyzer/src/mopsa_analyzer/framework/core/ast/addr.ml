@@ -65,32 +65,10 @@ let addr_partitioning_pp_chain : (Format.formatter -> addr_partitioning -> unit)
 (** Command line option to use hashes as address format *)
 let opt_hash_addr = ref false
 
-let base64_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!%"
-
-let char_base64 n = base64_alphabet.[n]
-
-let digest_to_base64 (d:Digest.t) : string =
-  if String.length d <> 16 then invalid_arg "digest_to_base64";
-  let result = Bytes.create 21 in
-  for i = 0 to 4 do
-    let x1 = Char.code d.[i*3] in
-    let x2 = Char.code d.[i*3+1] in
-    let x3 = Char.code d.[i*3+2] in
-    Bytes.unsafe_set result (i*4) (char_base64 (x1 lsr 2));
-    Bytes.unsafe_set result (i*4+1) (char_base64 (((x1 land 0x03) lsl 4) lor (x2 lsr 4)));
-    Bytes.unsafe_set result (i*4+2) (char_base64 (((x2 land 0x0f) lsl 2) lor (x3 lsr 2)));
-    Bytes.unsafe_set result (i*4+3) (char_base64 (x3 land 0x3f));
-  done;
-  let x = Char.code d.[15] in
-  Bytes.unsafe_set result (19) (char_base64 (x lsr 2));
-  Bytes.unsafe_set result (20) (char_base64 (x land 0x03));
-  Bytes.unsafe_to_string result
-
 let pp_addr_partitioning_hash fmt (g:addr_partitioning) =
   let s = Format.asprintf "%a" !addr_partitioning_pp_chain g in
-  let md5 = Digest.string s in
-  let base64 = digest_to_base64 md5 in
-  Format.pp_print_string fmt base64
+  let md5 = Digest.string s |> Digest.to_hex in
+  Format.pp_print_string fmt (String.sub md5 0 7)
 
 (** Print a partitioning policy. Flag [full] overloads the option
     [opt_hash_addr] and displays the full partitioning string (not its hash,
