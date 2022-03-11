@@ -179,89 +179,134 @@ struct
       let quants2,cond2 = formula_to_prenex f2 in
       quants@quants1@quants2, mk_stub_if cond cond1 cond2 f.range
 
-  (** Translate a prenex encoding (i.e. quantifiers and a condition) into an expression *)
-  let prenex_to_expr quants cond range =
-    (* Function to get variables in a condition (and avoid the alarm expression in `otherwise` *)
-    let rec vars_of_condition cond =
-      fold_expr
-        (fun acc e ->
-           match ekind e with
-           | E_var (v,_) -> Keep (VarSet.add v acc)
-           | E_stub_otherwise(ee, _) -> Keep (VarSet.union (vars_of_condition ee) acc)
-           | _ -> VisitParts acc
-        )
-        (fun acc s -> assert false)
-        VarSet.empty cond
+
+  (* Function to get variables in a condition (and avoid the alarm expression in `otherwise` *)
+  let rec vars_of_condition cond =
+    fold_expr
+      (fun acc e ->
+         match ekind e with
+         | E_var (v,_) -> Keep (VarSet.add v acc)
+         | E_stub_otherwise(ee, _) -> Keep (VarSet.union (vars_of_condition ee) acc)
+         | _ -> VisitParts acc
+      )
+      (fun acc s -> assert false)
+      VarSet.empty cond
+
+  (* Check if a variable is used in an expression *)
+  let var_in_expr v e =
+    exists_expr
+      (fun ee ->
+         match ekind ee with
+         | E_var (vv,_) -> compare_var v vv = 0
+         | _ -> false
+      )
+      (fun s -> false)
+      e
+
+  (* Function to remove unnecessary quantifiers not used in an expression *)
+  let remove_unnecessary_quantifiers quants e =
+    let vars = vars_of_condition e in
+    (* A quantified var is necessary if (i) it used in the condition, or (ii)
+       used in the bounds of an other necessary quantifier *)
+    let quants =
+      List.map
+        (fun ((_,v,_) as q) -> (q, VarSet.mem v vars))
+        quants
     in
-    (* Function to remove unnecessary quantifiers not used in an expression *)
-    let remove_unnecessary_quantifiers quants e =
-      let vars = vars_of_condition e in
+    let rec iter = function
+      | [] -> []
+      | (_,true) as hd::tl ->
+        (* Already used quantifier => keep it *)
+        hd::iter tl
+      | ((_,v,_) as q,false) as hd::tl ->
+        (* Check if this unused quantifier is present in the bounds of an
+           already used quantifier *)
+        if List.exists (function
+            | ((_,_,S_interval(lo,hi)),true) ->
+              var_in_expr v lo || var_in_expr v hi
+            | _ -> false
+          ) tl
+        then (q,true)::iter tl
+        else hd::iter tl
+    in
+    (* Iterate [iter] until no new used quantifier is found *)
+    let rec fp quants =
+      let quants' = iter quants in
+      if List.exists (fun ((_,b1),(_,b2)) -> b1 != b2) (List.combine quants quants') then
+        fp quants'
+      else
+        quants
+    in
+    fp quants |>
+    (* Keep only used quantifiers *)
+    List.filter (fun (_,b) -> b) |>
+    List.map fst
+
+  let common_quantifiers quants1 quants2 =
+    if quants1 = [] || quants2 = [] then []
+    else
       let rec iter = function
         | [] -> []
-        | ((_,v,_) as q)::tl ->
-          if VarSet.mem v vars then q :: iter tl else iter tl
+        | (_,v1,_) as hd::tl ->
+          if List.exists (fun (_,v2,_) -> compare_var v1 v2 = 0) quants2 then
+            hd :: iter tl
+          else
+            iter tl
       in
-      iter quants
-    in
-    (* Function to get a set of variables from a list of quantifiers *)
-    let rec vars_of_quantifiers = function
-      | []          -> VarSet.empty
-      | (_,v,_)::tl -> VarSet.add v (vars_of_quantifiers tl)
-    in
-    (* Loop to translate a prenex encoding into an expression *)
-    let rec doit quants cond range =
-      if quants = [] then cond
-      else
-        match ekind cond with
-        | E_binop(O_log_and, e1, e2) ->
-          let quants1 = remove_unnecessary_quantifiers quants e1 in
-          let quants2 = remove_unnecessary_quantifiers quants e2 in
-          let e1' = doit quants1 e1 e1.erange in
-          let e2' = doit quants2 e2 e2.erange in
+      iter quants1
+
+
+  (** Translate a prenex encoding (i.e. quantifiers and a condition) into an expression *)
+  let rec prenex_to_expr quants cond range =
+    if quants = [] then cond
+    else
+      match ekind cond with
+      | E_binop(O_log_and, e1, e2) ->
+        let quants1 = remove_unnecessary_quantifiers quants e1 in
+        let quants2 = remove_unnecessary_quantifiers quants e2 in
+        let common = common_quantifiers quants1 quants2 in
+        if List.for_all (fun (q,_,_) -> q = FORALL) common then
+          let e1' = prenex_to_expr quants1 e1 e1.erange in
+          let e2' = prenex_to_expr quants2 e2 e2.erange in
           mk_log_and e1' e2' range
+        else
+          mk_stub_quantified_formula quants cond range
 
-        | E_binop(O_log_or, e1, e2) ->
-          let quants1 = remove_unnecessary_quantifiers quants e1 in
-          let quants2 = remove_unnecessary_quantifiers quants e2 in
-          let vars1 = vars_of_quantifiers quants1 in
-          let vars2 = vars_of_quantifiers quants2 in
-          if VarSet.is_empty (VarSet.inter vars1 vars2) then
-            let e1' = doit quants1 e1 e1.erange in
-            let e2' = doit quants2 e2 e2.erange in
-            mk_log_or e1' e2' range
-          else
-            mk_stub_quantified_formula quants cond range
+      | E_binop(O_log_or, e1, e2) ->
+        let quants1 = remove_unnecessary_quantifiers quants e1 in
+        let quants2 = remove_unnecessary_quantifiers quants e2 in
+        let common = common_quantifiers quants1 quants2 in
+        if List.for_all (fun (q,_,_) -> q = EXISTS) common then
+          let e1' = prenex_to_expr quants1 e1 e1.erange in
+          let e2' = prenex_to_expr quants2 e2 e2.erange in
+          mk_log_or e1' e2' range
+        else
+          mk_stub_quantified_formula quants cond range
 
-        | E_stub_if(c,e1,e2) ->
-          let quants' = remove_unnecessary_quantifiers quants c in
-          let vars = vars_of_quantifiers quants' in
-          if VarSet.is_empty vars then
-            let e1' = doit quants e1 e1.erange in
-            let e2' = doit quants e2 e2.erange in
-            { cond with ekind = E_stub_if(c, e1', e2') }
-          else
-            mk_stub_quantified_formula quants cond range
+      | E_stub_if(c,e1,e2) ->
+        let quants' = remove_unnecessary_quantifiers quants c in
+        if quants' = [] then
+          let e1' = prenex_to_expr quants e1 e1.erange in
+          let e2' = prenex_to_expr quants e2 e2.erange in
+          { cond with ekind = E_stub_if(c, e1', e2') }
+        else
+          mk_stub_quantified_formula quants cond range
 
-        | E_stub_otherwise(e,a) ->
-          mk_stub_otherwise (doit quants e e.erange) a range
+      | E_stub_otherwise(e,a) ->
+        mk_stub_otherwise (prenex_to_expr quants e e.erange) a range
 
-        | _ ->
-          let quants' = remove_unnecessary_quantifiers quants cond in
-          let vars = vars_of_quantifiers quants' in
-          if VarSet.is_empty vars then
-            cond
-          else
-            mk_stub_quantified_formula quants cond range
-    in
-    doit quants cond range
-
+      | _ ->
+        let quants' = remove_unnecessary_quantifiers quants cond in
+        if quants' = [] then
+          cond
+        else
+          mk_stub_quantified_formula quants' cond range
 
   (** Evaluate a formula *)
   let eval_formula
       (cond_to_stmt: expr -> range -> stmt)
       (f: formula with_range)
       man flow =
-    debug "@[<hov>eval formula@ %a@]" pp_formula f;
     (* Write formula in prenex normal form *)
     let quants,cond = formula_to_prenex f in
     (* Translate the prenex encoding into an expression *)
@@ -454,11 +499,6 @@ struct
 
   (** Evaluate a call to a stub *)
   let eval_stub_call stub args return range man flow =
-      debug "call to stub %s:@\n @[%a@]"
-        stub.stub_func_name
-        pp_stub_func stub
-      ;
-
       (* Update the callstack *)
       let cs = Flow.get_callstack flow in
       let flow = Flow.push_callstack stub.stub_func_name range flow in
