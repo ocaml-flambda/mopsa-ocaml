@@ -218,7 +218,7 @@ let rec pp_print_object fmt = function
     Format.(
       fprintf fmt "%s @[<v>%a@] %s"
         sopen
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.ssep)
            (fun fmt (k,v) ->
               if is_leaf v then
                 fprintf fmt "@[<hov2>%a %s @,%a@]"
@@ -238,7 +238,7 @@ let rec pp_print_object fmt = function
     Format.(
       fprintf fmt "%s@[<hv>%a@]%s"
         sopen
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.ssep)
            pp_print_object
         ) l
         sclose
@@ -249,7 +249,7 @@ let rec pp_print_object fmt = function
     Format.(
       fprintf fmt "%s @[<hv>%a@] %s"
         sopen
-        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@," sym.ssep)
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " sym.ssep)
            pp_print_object
         ) (Set.elements s)
         sclose
