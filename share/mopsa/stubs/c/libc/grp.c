@@ -115,7 +115,7 @@ int fgetgrent_r (FILE *__restrict __stream,
                  struct group **__restrict __result);
 
 /*$
- * requires: valid_ptr_range(__groups, 0, __n - 1);
+ * requires: if (__n >= 1) then valid_ptr_range(__groups, 0, __n - 1) end;
  *
  * case "success" {
  *   ensures: return == 0;
