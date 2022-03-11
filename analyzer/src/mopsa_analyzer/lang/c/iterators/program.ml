@@ -524,8 +524,12 @@ struct
     if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
       | None, Some args   -> call_main_with_concrete_args main args man flow
-      | Some(lo,hi), None -> call_main_with_symbolic_args main lo hi man flow
-      | None, None        ->
+      | Some(lo,hi), None ->
+        if lo = 0 && (hi = Some 0 || hi = None) then
+          call_main_with_concrete_args main [] man flow
+        else
+          call_main_with_symbolic_args main lo hi man flow
+      | None, None ->
         let hi = rangeof s16 |> snd |> Z.to_int in
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
