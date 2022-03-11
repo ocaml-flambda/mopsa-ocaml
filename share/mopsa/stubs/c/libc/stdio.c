@@ -235,14 +235,10 @@ int fclose (FILE *__stream);
 
 
 /*$
- * requires: __stream != NULL implies __stream in File;
- *
  * case "success" {
  *   assumes:  __stream != NULL;
- *   local:   void* addr = _mopsa_find_file_resource(__stream->_fileno);
+ *   requires: __stream in File;
  *   ensures: return == 0;
- *   free:    __stream;
- *   free:    addr;
  * }
  *
  * case "flushall" {
