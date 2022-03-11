@@ -115,7 +115,9 @@ struct
           ) cons
       ) constraints
 
-  (** Get the list of variables with which [v] has numeric relations *)
+  (** Get the list of variables with which [v] has numeric relations. Note that
+     this function performs only one search iteration and doesn't return all
+     related variables. *)
   let related_vars v (a,bnd) =
     to_constraints (a,bnd) |>
     constraints_of_var v |>
@@ -152,6 +154,24 @@ struct
           end
         | _ -> acc
       ) []
+
+  (** Similar to [get_related_vars], but ensures that all related variables are returned. *)
+  let all_related_vars v a =
+    let rec iter acc wq =
+      if VarSet.is_empty wq then acc
+      else
+        let v = VarSet.choose wq in
+        let wq = VarSet.remove v wq in
+        if VarSet.mem v acc then iter acc wq
+        else
+          let acc = VarSet.add v acc in
+          let related = related_vars v a |> VarSet.of_list in
+          let new_related = VarSet.diff related acc in
+          let wq = VarSet.union wq new_related in
+          iter acc wq
+    in
+    iter VarSet.empty (VarSet.singleton v) |>
+    VarSet.elements
 
 
 
