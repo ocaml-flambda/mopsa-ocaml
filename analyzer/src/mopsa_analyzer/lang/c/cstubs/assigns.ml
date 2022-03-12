@@ -304,7 +304,25 @@ struct
 
   let ask _ _ _ = None
 
-  let print_expr _ _ _ _ = ()
+  let print_primed_expr e man prt flow =
+    let cases = resolve_pointer (mk_c_address_of e e.erange) man flow in
+    Cases.iter_result
+      (fun p flow ->
+         match p with
+         | P_block (base, offset, mode)  ->
+           let p = mk_primed_address base offset e.etyp e.erange in
+           man.print_expr flow prt (mk_c_deref p e.erange)
+
+         | _ -> ()
+      ) cases
+
+
+  let print_expr man flow prt exp =
+    match ekind exp with
+    | E_stub_primed e ->
+      print_primed_expr e man prt flow
+
+    | _ -> ()
 
 end
 

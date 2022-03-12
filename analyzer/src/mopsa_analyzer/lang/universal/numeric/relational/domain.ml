@@ -385,7 +385,7 @@ struct
     else
       let vars = expr_vars exp |> VarSet.of_list in
       let vars' = VarSet.fold (fun v acc ->
-          related_vars v a |>
+          all_related_vars v a |>
           VarSet.of_list |>
           VarSet.union acc
         ) vars vars in
