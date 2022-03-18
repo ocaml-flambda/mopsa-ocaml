@@ -229,12 +229,11 @@ let construct_checks_summary ?(print=false) rep out =
 
             | Error | Warning ->
               (* Get the set of alarms kinds and callstacks *)
-              let kinds,callstacks =
+              let kinds =
                 AlarmSet.fold
-                  (fun a (kinds,callstacks) ->
-                     AlarmKindSet.add a.alarm_kind kinds,
-                     CallstackSet.add a.alarm_callstack callstacks)
-                  diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
+                  (fun a kinds ->
+                     AlarmKindSet.add a.alarm_kind kinds
+                  ) diag.diag_alarms AlarmKindSet.empty in
               (* Join alarm kinds *)
               let rec iter = function
                 | [] -> []
@@ -253,7 +252,7 @@ let construct_checks_summary ?(print=false) rep out =
                     aa',tl'
               in
               let kinds' = iter (AlarmKindSet.elements kinds) in
-              if print then pp_diagnostic out i diag kinds' callstacks;
+              if print then pp_diagnostic out i diag kinds' diag.diag_callstacks;
               let error',warning' = if diag.diag_kind = Error then error+1,warning else error,warning+1 in
               i+1, safe, error', warning', checks_map'
          ) checks acc

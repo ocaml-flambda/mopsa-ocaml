@@ -30,7 +30,6 @@ open Location
 open Common
 
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
-module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
 
 
 let print out json =
@@ -103,12 +102,11 @@ let render_alarms report =
 
           | Safe | Error | Warning ->
               (* Get the set of alarms kinds and callstacks *)
-              let kinds,callstacks =
+              let kinds =
                 AlarmSet.fold
-                  (fun a (kinds,callstacks) ->
-                     AlarmKindSet.add a.alarm_kind kinds,
-                     CallstackSet.add a.alarm_callstack callstacks)
-                  diag.diag_alarms (AlarmKindSet.empty,CallstackSet.empty) in
+                  (fun a kinds ->
+                     AlarmKindSet.add a.alarm_kind kinds
+                  ) diag.diag_alarms AlarmKindSet.empty in
               (* Join alarm kinds *)
               let rec iter = function
                 | [] -> []
@@ -133,7 +131,7 @@ let render_alarms report =
                     "title", render_check check;
                     "messages", render_alarm_messages kinds';
                     "range", render_range range;
-                    "callstacks", `List (List.map render_callstack (CallstackSet.elements callstacks))
+                    "callstacks", `List (List.map render_callstack (CallstackSet.elements diag.diag_callstacks))
                   ]
               in
               json_diag :: acc
