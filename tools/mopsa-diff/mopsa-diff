@@ -88,6 +88,13 @@ class Location:
         self.start = Position(data["start"])
         self.end = Position(data["end"])
 
+    @classmethod
+    def from_range(cls, r):
+        if "start" in r and "end" in r:
+            return cls(r)
+        else:
+            return None
+
     def __hash__(self):
         return hash((self.start,self.end))
 
@@ -112,7 +119,7 @@ class Location:
 class Alarm:
     def __init__(self, data):
         self.title = data["title"]
-        self.loc = Location(data["range"])
+        self.loc = Location.from_range(data["range"])
 
     def __hash__(self):
         return hash((self.title,self.loc))
@@ -131,7 +138,7 @@ class Alarm:
 class Assumption:
     def __init__(self, data):
         self.message = data["message"]
-        self.loc = Location(data["range"]) if "range" in data else None
+        self.loc = Location.from_range(data["range"]) if "range" in data else None
 
     def __hash__(self):
         return hash((self.message,self.loc))
