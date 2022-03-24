@@ -242,19 +242,6 @@ struct
     List.filter (fun (_,b) -> b) |>
     List.map fst
 
-  let common_quantifiers quants1 quants2 =
-    if quants1 = [] || quants2 = [] then []
-    else
-      let rec iter = function
-        | [] -> []
-        | (_,v1,_) as hd::tl ->
-          if List.exists (fun (_,v2,_) -> compare_var v1 v2 = 0) quants2 then
-            hd :: iter tl
-          else
-            iter tl
-      in
-      iter quants1
-
 
   (** Translate a prenex encoding (i.e. quantifiers and a condition) into an expression *)
   let rec prenex_to_expr quants cond range =
@@ -264,24 +251,16 @@ struct
       | E_binop(O_log_and, e1, e2) ->
         let quants1 = remove_unnecessary_quantifiers quants e1 in
         let quants2 = remove_unnecessary_quantifiers quants e2 in
-        let common = common_quantifiers quants1 quants2 in
-        if List.for_all (fun (q,_,_) -> q = FORALL) common then
-          let e1' = prenex_to_expr quants1 e1 e1.erange in
-          let e2' = prenex_to_expr quants2 e2 e2.erange in
-          mk_log_and e1' e2' range
-        else
-          mk_stub_quantified_formula quants cond range
+        let e1' = prenex_to_expr quants1 e1 e1.erange in
+        let e2' = prenex_to_expr quants2 e2 e2.erange in
+        mk_log_and e1' e2' range
 
       | E_binop(O_log_or, e1, e2) ->
         let quants1 = remove_unnecessary_quantifiers quants e1 in
         let quants2 = remove_unnecessary_quantifiers quants e2 in
-        let common = common_quantifiers quants1 quants2 in
-        if List.for_all (fun (q,_,_) -> q = EXISTS) common then
-          let e1' = prenex_to_expr quants1 e1 e1.erange in
-          let e2' = prenex_to_expr quants2 e2 e2.erange in
-          mk_log_or e1' e2' range
-        else
-          mk_stub_quantified_formula quants cond range
+        let e1' = prenex_to_expr quants1 e1 e1.erange in
+        let e2' = prenex_to_expr quants2 e2 e2.erange in
+        mk_log_or e1' e2' range
 
       | E_stub_if(c,e1,e2) ->
         let quants' = remove_unnecessary_quantifiers quants c in
