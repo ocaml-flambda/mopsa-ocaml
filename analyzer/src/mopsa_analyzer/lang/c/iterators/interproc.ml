@@ -255,7 +255,19 @@ struct
     | P_fun f ->
       Eval.singleton (mk_expr (E_c_function f) ~etyp:(under_type p.etyp) range) flow
 
-    | _ -> panic_at range
+    | P_top ->
+      let flow =
+        Flow.add_local_assumption
+          (Soundness.A_ignore_undetermined_function_pointer p)
+          range flow
+      in
+      if under_type p.etyp |> is_c_void_type then
+        Eval.singleton (mk_unit range) flow
+      else
+        man.eval (mk_top (under_type p.etyp) range) flow
+
+    | _ ->
+      panic_at range
              "deref_function_pointer: pointer %a points to a non-function object %a"
              pp_expr p
              pp_points_to pt
