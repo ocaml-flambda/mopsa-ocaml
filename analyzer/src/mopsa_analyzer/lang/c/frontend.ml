@@ -66,6 +66,9 @@ let opt_target_triple = ref ""
 let opt_stubs_files = ref []
 (** Additional stub files to parse *)
 
+let opt_ignored_translation_units = ref []
+(** List of translation units to ignore during linking *)
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -135,6 +138,13 @@ let () =
     category = "C";
     doc = " target architecture to analyze, as a triple (host if left empty).";
     spec = ArgExt.Set_string opt_target_triple;
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-c-ignore-translation-units";
+    category = "C";
+    doc = " list of translation units ignored during linking.";
+    spec = ArgExt.Set_string_list opt_ignored_translation_units;
     default = "";
   };
   ()
@@ -217,6 +227,14 @@ let find_stubs_of_header header stubs =
       Str.string_match regexp header 0
     ) stubs
 
+(* Check if the source file is to be ignored *)
+let is_ignored_translation_unit file =
+  let n = String.length file in
+  List.exists
+    (fun file' ->
+       let n' = String.length file' in
+       n >= n' && (String.equal file' (String.sub file (n - n') n'))
+    ) !opt_ignored_translation_units
 
 (** {2 Entry point} *)
 (** =============== *)
@@ -327,7 +345,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub ignore ctx
+  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
 
 
 and parse_stubs ctx () =
