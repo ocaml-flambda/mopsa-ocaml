@@ -100,7 +100,7 @@ struct
     if b then bot_absorb1 C.meet_nonzero a
     else bot_absorb1 C.meet_zero a
 
-  let bwd_unop op t a tr r =
+  let backward_unop op t a tr r =
     try
       let a, r = bot_to_exn a, bot_to_exn r in
       let aa = match op with
@@ -111,7 +111,7 @@ struct
     with Found_BOT ->
       bottom
 
-  let bwd_binop op t1 a1 t2 a2 tr r =
+  let backward_binop op t1 a1 t2 a2 tr r =
     try
       let a1, a2, r = bot_to_exn a1, bot_to_exn a2, bot_to_exn r in
       let aa1, aa2 =

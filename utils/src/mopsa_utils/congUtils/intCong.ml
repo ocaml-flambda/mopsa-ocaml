@@ -532,8 +532,14 @@ let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
   bot_merge2 (meet a r) (meet b r)
 (** Backward join: both arguments and intersected with the result. *)
 
+let bwd_rem (a:t) ((b1,b2) as b:t) ((r1,r2):t) =
+  if b1 = Z.zero && r1 = Z.zero then
+    (* r = a % b => a = bℤ + r *)
+    bot_merge2 (meet a (b2,r2)) (Nb b)
+  else
+    Nb (a,b)
+
 let bwd_div (a:t) (b:t) (r:t) = Nb (a,b)
-let bwd_rem (a:t) (b:t) (r:t) = Nb (a,b)
 let bwd_wrap (a:t) range (r:t) : t_with_bot = Nb a
 let bwd_shift_left (a:t) (b:t) (r:t) = Nb (a,b)
 let bwd_shift_right (a:t) (b:t) (r:t) = Nb (a,b)
