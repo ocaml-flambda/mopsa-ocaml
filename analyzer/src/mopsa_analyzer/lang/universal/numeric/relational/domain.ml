@@ -372,8 +372,7 @@ struct
     let size = Apron.Environment.size (Apron.Abstract1.env (fst a)) in
     debug "%d variables in the env" size;
     pprint printer
-      (pbox (unformat (Apron.Abstract1.print)) (fst a))
-      (* (pbox (Apron_pp.pp_env ApronManager.man) a) *)
+      (pbox (Apron_pp.pp_env ApronManager.man) a)
       ~path:[Key "numeric-relations"]
 
   let print_expr man ctx a printer exp =

@@ -43,15 +43,19 @@ let coeff_cmp_0 (c: Coeff.t) = match c with
     else None
 
 let linexpr_to_list_pair env (x: Linexpr1.t) =
-  let envi, _ = Environment.vars env in
+  let envi, envf = Environment.vars env in
+  let process pos neg env =
   Array.fold_left (fun (pos, neg) var ->
       let c = Linexpr1.get_coeff x var in
-      if coeff_eq_0 c then (pos, neg)
+      if coeff_eq_0 c then
+        (pos, neg)
       else match coeff_cmp_0 c with
         | None -> (c, var) :: pos, neg
         | Some x when x > 0 -> (c, var) :: pos, neg
         | Some x -> pos, (c, var)::neg
-    ) ([], []) envi
+      ) (pos, neg) env in
+  let pos, neg = process [] [] envi in
+  process pos neg envf
 
 let pp_coef_var_list bnd fmt l =
   match l with
@@ -110,7 +114,8 @@ let pp_lincons_earray bnd pr ea =
   match l with
   | [] -> pp_string pr "⊤"
   | _  ->
-    let sl = List.map (fun c -> Format.asprintf "%a" (pp_lincons bnd) c) l in
+    let sl = List.map (fun c ->
+        Format.asprintf "%a" (pp_lincons bnd) c) l in
     pp_set pp_string pr (SetExtPoly.of_list String.compare sl)
 
 let pp_env man pr (x,bnd) =
