@@ -11,7 +11,7 @@ License
 --------
 
 Unless explicitly specified, the components of the MOPSA software are distributed under the terms of the GNU Lesser General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-See the accompanying COPYING file, or [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
+See the accompanying LICENSE file, or [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 
 The documentation and example files of the MOPSA software are distributed under a Creative Commons Attribution-ShareAlike 4.0 International License. See [https://creativecommons.org/licenses/by-sa/4.0/](https://creativecommons.org/licenses/by-sa/4.0/).
 

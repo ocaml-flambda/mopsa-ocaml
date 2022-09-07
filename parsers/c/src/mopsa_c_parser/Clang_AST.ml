@@ -1038,7 +1038,7 @@ and atomic_expr = {
  (** Different categories of type conversion *)
 
  and character_kind =
-   | Char_Ascii
+   | Char_Ascii (** aka Ordinary in Clang >= 15 *)
    | Char_Wide
    | Char_UTF8
    | Char_UTF16
@@ -1738,7 +1738,7 @@ and template_argument =
 and template_name =
   | Template_name_Template of decl (** a single template declaration *)
   | Template_name_OverloadedTemplate of decl list (** a set of overloaded template declarations *)
-  | Template_name_QualifiedTemplate of name_specifier list * decl (** a qualified template, where the qualification is kept to describe the source code as wrtten *)
+  | Template_name_QualifiedTemplate of name_specifier list * template_name (** a qualified template, where the qualification is kept to describe the source code as wrtten *)
   | Template_name_DependentTemplate of name_specifier list * string option * overloaded_operator option (** a dependent template name that has not been resolved to a template (or set of templates) *)
   | Template_name_SubstTemplateTemplateParm of decl * template_name (** a template template parameter that has been substituted for some other template name *)
   | Template_name_SubstTemplateTemplateParmPack of decl * template_argument (** a template template parameter pack that has been substituted for a template template argument pack, but has not yet been expanded into individual arguments *)

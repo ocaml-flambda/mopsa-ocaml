@@ -1103,7 +1103,7 @@ module P = struct
     | Template_name_OverloadedTemplate d ->
        p ch "overloaded[%a]" (bp_list decl_name ";") d
     | Template_name_QualifiedTemplate (b,d) ->
-       p ch "qual_template(%a,%a)" name_specifier b decl_name d
+       p ch "qual_template(%a,%a)" name_specifier b template_name d
     | Template_name_DependentTemplate (n,so,oo) ->
        p ch "dependent(%a,%s)" name_specifier n
          (match so,oo with Some x,_ -> x | _,Some y -> overloaded_operator_name y | _ -> "?")
