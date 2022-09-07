@@ -23,7 +23,7 @@
 /*
   Clang_to_ml - Parse C files with Clang into AST and extract the AST to OCaml values.
 
-  The functions from this file are indented to be called from OCaml.
+  The functions from this file are intended to be called from OCaml.
   See Clang_parser.mli
 */
 
@@ -471,6 +471,9 @@ public:
 
 #define GENERATE_CASE_PREFIX(RES, CPREFIX, MLPREFIX, CASE)      \
   case CPREFIX CASE: RES = MLTAG_##MLPREFIX##CASE; break
+
+#define GENERATE_CASE_PREFIX_ALT(RES, CPREFIX, MLPREFIX, CCASE, MLCASE)        \
+  case CPREFIX CCASE: RES = MLTAG_##MLPREFIX##MLCASE; break
 
 #define GENERATE_CASE_PREFIX_REV(RES, CPREFIX, MLPREFIX, CASE)          \
   case Val_int(MLTAG_##MLPREFIX##CASE): RES = CPREFIX CASE; break
@@ -2030,7 +2033,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateName(const TemplateName& x
       QualifiedTemplateName *a = x.getAsQualifiedTemplateName();
       ret = caml_alloc(2, MLTAG_Template_name_QualifiedTemplate);
       Store_field(ret, 0, TranslateNestedNameSpecifierList(a->getQualifier()));
-      Store_field(ret, 1, TranslateDecl(a->getDecl()));
+#if CLANG_VERSION_MAJOR < 15
+      Store_field(ret, 1, TranslateTemplateName(x.getUnderlying()));
+#else
+      Store_field(ret, 1, TranslateTemplateName(a->getUnderlyingTemplate()));
+#endif
     }
     break;
   case TemplateName::DependentTemplate:
@@ -2467,7 +2474,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           memcpy(const_cast<char*>String_val(tmp), x->getBytes().data(), x->getByteLength());
           Store_field(ret, 0, tmp);
           switch (x->getKind()) {
+#if CLANG_VERSION_MAJOR >= 15
+            GENERATE_CASE_PREFIX_ALT(r, StringLiteral::, Char_, Ordinary, Ascii);
+#else
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, Ascii);
+#endif
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, Wide);
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, UTF8);
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, UTF16);
@@ -4781,7 +4792,12 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   for (size_t i = 0; i < Wosize_val(args); i++) {
     a.push_back(String_val(Field(args, i)));
   }
-  std::shared_ptr<CompilerInvocation> invoke = std::move(createInvocationFromCommandLine(a));
+  std::shared_ptr<CompilerInvocation> invoke =
+#if CLANG_VERSION_MAJOR >= 15
+    std::move(createInvocation(a));
+#else
+    std::move(createInvocationFromCommandLine(a));
+#endif
   if (!invoke) caml_failwith("mlClangAST: failed to create clang::CompilerInvocation");
   ci.setInvocation(invoke);
 
