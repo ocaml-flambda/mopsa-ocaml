@@ -615,20 +615,20 @@ and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
                   (** {2 Sizes and alignments} *)
 (*==========================================================================*)
 
-let target_info = Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
+let target_info = ref (Clang_parser.get_target_info (Clang_parser.get_default_target_options ()))
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
 let rec sizeof_type (t : typ) : Z.t =
   match t with
-  | T_c_void -> C_utils.sizeof_type target_info C_AST.T_void
+  | T_c_void -> C_utils.sizeof_type !target_info C_AST.T_void
 
-  | T_c_bool -> C_utils.sizeof_type target_info C_AST.T_bool
+  | T_c_bool -> C_utils.sizeof_type !target_info C_AST.T_bool
 
-  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int target_info |> Z.of_int
+  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int !target_info |> Z.of_int
 
-  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float target_info |> Z.of_int
+  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float !target_info |> Z.of_int
 
-  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type target_info
+  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type !target_info
 
   | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
 
@@ -930,7 +930,7 @@ let extract_multibyte_integer (s:string) (off:int) t =
   (* get bytes in right order according to endianess *)
   let rec doit acc i =
     if i >= n then acc else
-      let off' = if target_info.target_big_endian then off+i else off+n-i-1 in
+      let off' = if !target_info.target_big_endian then off+i else off+n-i-1 in
       doit (Z.add (Z.mul (Z.of_int 256) acc) (Z.of_int (int_of_char s.[off']))) (i+1)
   in
   let v = doit Z.zero 0 in
@@ -962,7 +962,7 @@ let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
 let size_type =
-  let t = C_utils.size_type target_info |>
+  let t = C_utils.size_type !target_info |>
           from_clang_int_type in
   T_c_integer t
 

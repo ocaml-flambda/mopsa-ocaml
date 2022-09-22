@@ -33,7 +33,7 @@
 #include "mopsa_libc_utils.h"
 
 
-static wint_t _weof = WEOF;
+static wint_t _weof = ((wint_t)-1);
 
 
 #define no_overlap_wide(s1, n1, s2, n2)              \

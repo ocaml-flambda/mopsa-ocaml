@@ -245,7 +245,10 @@ let rec parse_program (files: string list) =
 
   if files = [] then panic "no input file";
 
-  let target = get_target_info (get_default_target_options ()) in
+  (* let's initialize target from the option *)
+  if !opt_target_triple <> "" then 
+    Ast.target_info := get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple });
+  let target = !Ast.target_info in
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
   input_files := [];
