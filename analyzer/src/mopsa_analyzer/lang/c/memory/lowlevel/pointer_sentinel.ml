@@ -108,7 +108,8 @@ struct
 
 
   (** Size of a pointer cell *)
-  let ptr_size = sizeof_type void_ptr
+  (** /!\ Currently, sizeof_type is initialized *after* options are parsed. It cannot be used to initialize a constant here *)
+  (** let ptr_size = sizeof_type void_ptr *)
 
 
   (** Create the auxiliary variable sentinel(base) *)
@@ -408,7 +409,7 @@ struct
     (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
        optional as the domain does not raise out-of-bound alarms *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
       ~fthen:(fun flow ->
           if not (is_interesting_base base)
           then Post.return flow
@@ -417,7 +418,7 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
-            let ptr = mk_z ptr_size range in
+            let ptr = mk_z (sizeof_type void_ptr) range in
 
             switch ~route:universal [
               (* Case 1: set after
@@ -595,7 +596,7 @@ struct
 
     (* Safety condition: offset ∈ [0, size - pointer_size] *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z ptr_size range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
       ~fthen:(fun flow ->
           if is_scalar_base base then Cases.not_handled flow else
           if not (is_interesting_base base) then Eval.singleton (mk_top typ range) flow
@@ -603,7 +604,7 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
-            let ptr = mk_z ptr_size range in
+            let ptr = mk_z (sizeof_type void_ptr) range in
             let top = mk_top void_ptr range in
 
 
@@ -679,7 +680,7 @@ struct
     let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
     let sentinel = mk_sentinel_var_expr base ~mode range in
     let before = mk_before_var_expr base ~mode range in
-    let ptr = mk_z ptr_size range in
+    let ptr = mk_z (sizeof_type void_ptr) range in
 
     (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
     assume
