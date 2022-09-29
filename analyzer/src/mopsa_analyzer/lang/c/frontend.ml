@@ -835,6 +835,7 @@ and from_float_type : C_AST.float_type -> Ast.c_float_type = function
   | C_AST.FLOAT -> Ast.C_float
   | C_AST.DOUBLE -> Ast.C_double
   | C_AST.LONG_DOUBLE -> Ast.C_long_double
+  | C_AST.FLOAT128 -> Ast.C_float128
 
 and from_array_length ctx al = match al with
   | C_AST.No_length -> Ast.C_array_no_length

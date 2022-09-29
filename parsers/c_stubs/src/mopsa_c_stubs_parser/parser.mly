@@ -77,7 +77,7 @@
 %token PREDICATE
 
 (* Types *)
-%token VOID CHAR INT LONG FLOAT DOUBLE SHORT
+%token VOID CHAR INT LONG FLOAT DOUBLE FLOAT128 SHORT
 %token SIGNED UNSIGNED CONST VOLATILE RESTRICT
 %token STRUCT UNION ENUM
 
@@ -374,6 +374,7 @@ type_specifier_except_typedef:
   | FLOAT              { T_float }
   | DOUBLE             { T_double }
   | LONG DOUBLE        { T_long_double }
+  | FLOAT128           { T_float128 }
   | STRUCT var         { T_struct($2) }
   | UNION var          { T_union($2) }
   | ENUM var           { T_enum($2) }

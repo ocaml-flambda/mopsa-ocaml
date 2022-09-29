@@ -83,7 +83,8 @@ let compare_float_interval itv1 itv2 = F.compare itv1 itv2
 let prec : Ast.float_prec -> ItvUtils.FloatItvNan.prec = function
     | F_SINGLE -> `SINGLE
     | F_DOUBLE -> `DOUBLE
-    | F_LONG_DOUBLE -> `LONG_DOUBLE
+    | F_LONG_DOUBLE -> `EXTRA
+    | F_FLOAT128 -> `EXTRA
     | F_REAL -> `REAL
 
 let round () : ItvUtils.FloatItvNan.round =
@@ -218,7 +219,8 @@ let () =
             begin match p with
                 | F_SINGLE -> F.single_special
                 | F_DOUBLE -> F.double_special
-                | F_LONG_DOUBLE -> F.long_double_special
+                | F_LONG_DOUBLE -> F.extra
+                | F_FLOAT128 -> F.extra
                 | F_REAL -> F.real
             end
           | _ -> next.pool_top avk
