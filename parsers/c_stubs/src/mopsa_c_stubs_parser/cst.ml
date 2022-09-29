@@ -219,7 +219,7 @@ and c_typ =
   | T_signed_long | T_unsigned_long
   | T_signed_long_long | T_unsigned_long_long
   | T_signed_int128 | T_unsigned_int128
-  | T_float | T_double | T_long_double
+  | T_float | T_double | T_long_double | T_float128
   | T_array of c_qual_typ * array_length
   | T_struct of var
   | T_union of var
@@ -388,6 +388,7 @@ and pp_c_typ fmt =
   | T_float -> pp_print_string fmt "float"
   | T_double  -> pp_print_string fmt "double"
   | T_long_double  -> pp_print_string fmt "long double"
+  | T_float128  -> pp_print_string fmt "__float128"
   | T_array(t, A_no_length) -> fprintf fmt "%a[]" pp_c_qual_typ t
   | T_array(t, A_constant_length len) -> fprintf fmt "%a[%a]" pp_c_qual_typ t Z.pp_print len
   | T_struct(s) -> fprintf fmt "struct %a" pp_var s

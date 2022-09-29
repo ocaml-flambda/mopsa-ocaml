@@ -124,12 +124,14 @@ let string_of_float_type = function
   | FLOAT -> "float"
   | DOUBLE -> "double"
   | LONG_DOUBLE -> "long double"
+  | FLOAT128 -> "__float128"
 
 let float_suffix = function
   | FLOAT -> "F"
   | DOUBLE -> ""
   | LONG_DOUBLE -> "L"
-                     
+  | FLOAT128 -> "Q"
+
 let string_of_record_kind = function
   | STRUCT -> "struct"
   | UNION -> "union"

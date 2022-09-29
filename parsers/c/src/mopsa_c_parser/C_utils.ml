@@ -93,6 +93,7 @@ let sizeof_float target t : int =
   | FLOAT -> target.C.target_float_width / 8
   | DOUBLE -> target.C.target_double_width / 8
   | LONG_DOUBLE -> target.C.target_long_double_width / 8
+  | FLOAT128 -> target.C.target_float128_width / 8
 (** Size (in bytes) of a float type. *)
 
 let alignof_float target t : int =
@@ -100,6 +101,7 @@ let alignof_float target t : int =
   | FLOAT -> target.C.target_float_align / 8
   | DOUBLE -> target.C.target_double_align / 8
   | LONG_DOUBLE -> target.C.target_long_double_align / 8
+  | FLOAT128 -> target.C.target_float128_align / 8
 (** Alignment (in bytes) of a float type. *)
 
 

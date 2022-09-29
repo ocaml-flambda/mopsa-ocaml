@@ -66,7 +66,7 @@ let is_valid (a:t) : bool =
 type prec =
   [ `SINGLE      (** 32-bit single precision *)
   | `DOUBLE      (** 64-bit double precision *)
-  | `LONG_DOUBLE (** anything larger than 64-bit double precision floats *)
+  | `EXTRA       (** anything larger than 64-bit double precision floats *)
   | `REAL        (** real arithmetic *)
   ]
 (** Precision.
@@ -153,9 +153,9 @@ let double : t =
   of_float (-. F.Double.max_normal) F.Double.max_normal
 (** Non-special double precision floats. *)  
 
-let long_double : t =
+let extra : t =
   of_float neg_infinity infinity
-(** Non-special long doubles. *)
+(** Non-special extra (> double) precision. *)
 
 let real : t =
   of_float neg_infinity infinity
@@ -169,9 +169,9 @@ let double_special : t =
   add_special double
 (** Double precision floats with specials. *)
 
-let long_double_special : t =
-  add_special long_double
-(** Long double precision floats with specials. *)
+let extra_special : t =
+  add_special extra
+(** Extra (> double) precision floats with specials. *)
 
 
 
@@ -482,7 +482,7 @@ let fix_itv (prec:prec) (x:t) : t =
           pinf = x.pinf || pinf;
         })
 
-  | `LONG_DOUBLE ->
+  | `EXTRA ->
      (* keep infinite bounds to infinity and set flags *)
      (match x.itv with
       | BOT -> x
@@ -533,7 +533,7 @@ let abs (x:t) : t =
 let fix_prec (prec:prec) : FI.prec = match prec with
   | `SINGLE -> `SINGLE
   | `DOUBLE ->  `DOUBLE
-  | `REAL | `LONG_DOUBLE -> `REAL
+  | `REAL | `EXTRA -> `REAL
      
 let add (prec:prec) (round:round) (x:t) (y:t) =
   fix_itv
@@ -658,7 +658,7 @@ let of_int_itv (prec:prec) (round:round) ((lo,up):II.t) : t =
   let prec,round = match prec with
     | `SINGLE -> `SINGLE, round
     | `DOUBLE -> `DOUBLE, round
-    | `REAL | `LONG_DOUBLE -> `DOUBLE, `ANY
+    | `REAL | `EXTRA -> `DOUBLE, `ANY
   in
   let lo = match lo, round with
     | B.Finite l, `NEAR -> F.of_z prec `NEAR l

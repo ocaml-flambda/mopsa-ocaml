@@ -119,7 +119,7 @@ type integer_type =
   | SIGNED_INT128 | UNSIGNED_INT128
 (** Integer types. *)
 
-type float_type = FLOAT | DOUBLE | LONG_DOUBLE
+type float_type = FLOAT | DOUBLE | LONG_DOUBLE | FLOAT128
 (** Floating-point types. *)
 
 type record_kind = STRUCT | UNION
