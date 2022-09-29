@@ -68,6 +68,7 @@ let _ =
      "long", LONG;     
      "double", DOUBLE;
      "float", FLOAT;
+     "__float128", FLOAT128;
      "signed", SIGNED;
      "unsigned", UNSIGNED;
      "const", CONST;
@@ -215,6 +216,7 @@ let _ =
         | ENSURES -> "ensures"
         | END_DELIM -> "*/"
         | DOUBLE -> "double"
+        | FLOAT128 -> "__float128"
         | DOT -> "."
         | DIV -> "/"
         | CONST -> "const"

@@ -172,6 +172,7 @@ struct
       | T_c_float C_float -> T_float F_SINGLE
       | T_c_float C_double -> T_float F_DOUBLE
       | T_c_float C_long_double -> T_float F_LONG_DOUBLE
+      | T_c_float C_float128 -> T_float F_FLOAT128
       | _ -> panic ~loc:__LOC__ "non integer type %a" pp_typ t
 
   let mk_num_var v =

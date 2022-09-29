@@ -32,6 +32,7 @@ type float_prec =
   | F_SINGLE      (** IEEE single-precision 32-bit *)
   | F_DOUBLE      (** IEEE double-precision 64-bit *)
   | F_LONG_DOUBLE (** extended precision, abstracted as double *)
+  | F_FLOAT128    (** quadruple precision, abstracted as double *)
   | F_REAL        (** no rounding, abstracted as double *)
 
 type typ +=
@@ -47,12 +48,14 @@ let pp_float_prec fmt = function
   | F_SINGLE      -> pp_print_string fmt "float"
   | F_DOUBLE      -> pp_print_string fmt "double"
   | F_LONG_DOUBLE -> pp_print_string fmt "long double"
+  | F_FLOAT128    -> pp_print_string fmt "__float128"
   | F_REAL        -> pp_print_string fmt "real"
 
 let pp_float_op opreal opfloat fmt = function
   | F_SINGLE      -> fprintf fmt "%sf" opfloat
   | F_DOUBLE      -> fprintf fmt "%sd" opfloat
   | F_LONG_DOUBLE -> fprintf fmt "%sl" opreal
+  | F_FLOAT128    -> fprintf fmt "%sq" opreal
   | F_REAL        -> pp_print_string fmt opreal
 
 let () =

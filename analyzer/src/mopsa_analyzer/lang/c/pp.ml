@@ -44,6 +44,7 @@ let rec pp_c_type_short fmt =
   | T_c_float(C_float) -> pp_print_string fmt "f"
   | T_c_float(C_double) -> pp_print_string fmt "d"
   | T_c_float(C_long_double) -> pp_print_string fmt "ld"
+  | T_c_float(C_float128) -> pp_print_string fmt "q"
   | T_c_pointer(t) -> fprintf fmt "%a*" pp_c_type_short t
   | T_c_array(t, C_array_no_length) -> fprintf fmt "%a[]" pp_c_type_short t
   | T_c_array(t, C_array_length_cst n) -> fprintf fmt "%a[%s]" pp_c_type_short t (Z.to_string n)
@@ -103,6 +104,7 @@ let () =
       | T_c_float(C_float) -> pp_print_string fmt "float"
       | T_c_float(C_double) -> pp_print_string fmt "double"
       | T_c_float(C_long_double) -> pp_print_string fmt "long double"
+      | T_c_float(C_float128) -> pp_print_string fmt "__float128"
 
       | T_c_pointer(t) -> fprintf fmt "%a *" pp_typ t
 
