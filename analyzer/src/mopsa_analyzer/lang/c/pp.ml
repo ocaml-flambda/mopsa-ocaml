@@ -67,8 +67,9 @@ let rec pp_c_type_short fmt =
 let rec pp_c_init fmt = function
   | C_init_expr(e) -> pp_expr fmt e
   | C_init_list([], Some filler) -> fprintf fmt "{%a ...}" pp_c_init filler
-  | C_init_list(l, _) -> fprintf fmt "{%a}"
-                           (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+  | C_init_list(l, filler) -> fprintf fmt "{%a, filler=%a}"
+                                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ", ") pp_c_init) l
+                                (OptionExt.print pp_c_init) filler
   | C_init_implicit t -> assert false
 
 let pp_character_kind fmt = function
