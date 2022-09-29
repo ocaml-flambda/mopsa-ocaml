@@ -300,6 +300,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         | C.Type_Float -> T_float FLOAT, no_qual
         | C.Type_Double -> T_float DOUBLE, no_qual
         | C.Type_LongDouble -> T_float LONG_DOUBLE, no_qual
+        | C.Type_Float128 -> T_float FLOAT128, no_qual
         | C.Type_BuiltinFn -> T_builtin_fn, no_qual
         | _ -> error range "unhandled builtin type" (C.string_of_type t)
        )
@@ -599,7 +600,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
             prev.var_type <- t;
             prev.var_com <- !c
           with Invalid_argument msg ->
-            error range "incompatible variable types" (Printf.sprintf "variable %s, type1 %s, type2 %s, %s" org_name (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
+            warning range "incompatible variable types" (Printf.sprintf "variable %s, type1 %s, type2 %s, %s" org_name (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
       );
       (* make variable *)
       let var = match prev with

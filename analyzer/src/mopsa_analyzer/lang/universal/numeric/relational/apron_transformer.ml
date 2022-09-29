@@ -194,6 +194,7 @@ struct
     | T_float F_SINGLE -> Apron.Texpr1.Single
     | T_float F_DOUBLE -> Apron.Texpr1.Double
     | T_float F_LONG_DOUBLE -> Apron.Texpr1.Extended
+    | T_float F_FLOAT128 -> Apron.Texpr1.Extended
     | T_float F_REAL -> Apron.Texpr1.Real
     | t -> panic ~loc:__LOC__ "typ_to_apron: unsupported type %a" pp_typ t
 

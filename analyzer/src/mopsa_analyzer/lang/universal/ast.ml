@@ -55,7 +55,7 @@ let pp_float_op opreal opfloat fmt = function
   | F_SINGLE      -> fprintf fmt "%sf" opfloat
   | F_DOUBLE      -> fprintf fmt "%sd" opfloat
   | F_LONG_DOUBLE -> fprintf fmt "%sl" opreal
-  | F_FLOAT128    -> fprintf fmt "%sl" opreal
+  | F_FLOAT128    -> fprintf fmt "%sq" opreal
   | F_REAL        -> pp_print_string fmt opreal
 
 let () =
