@@ -28,7 +28,7 @@
   Nevertheless, we currenty implement pthread_once to ensure that the
   init_routine function is correctly called in sequential analyses.
 */
-
+#include <stddef.h>
 #include <pthread.h>
 #include "mopsa_libc_utils.h"
 

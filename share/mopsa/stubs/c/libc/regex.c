@@ -19,9 +19,9 @@
 /*                                                                          */
 /****************************************************************************/
 
+#include <stddef.h>
 #include <regex.h>
 #include <string.h>
-
 
 // POSIX regular expressions
 

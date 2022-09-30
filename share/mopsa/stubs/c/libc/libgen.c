@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
-
+#include <stddef.h>
 #include <libgen.h>
 #include <string.h> // for strlen
 #include <limits.h> // for PATH_MAX

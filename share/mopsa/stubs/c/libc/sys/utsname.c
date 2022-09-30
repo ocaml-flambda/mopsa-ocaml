@@ -23,7 +23,7 @@
 /*
  * Stubs for sys/utsname.h
  */
-
+#include <stddef.h>
 #include <sys/utsname.h>
 
 /*$

@@ -20,7 +20,7 @@
 /****************************************************************************/
 
 /* Stubs for the extension of stdio as found in Sun's Solaris OS */
-
+#include <stddef.h>
 #include <stdio_ext.h>
 
 /*$

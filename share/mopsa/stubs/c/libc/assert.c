@@ -23,9 +23,9 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+#include <stddef.h>
 #include <assert.h>
 #include "mopsa_libc_utils.h"
-
 
 /*$
  * requires: valid_string(__assertion);

@@ -334,7 +334,7 @@ and parse_db (dbfile: string) ctx : unit =
 and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string) enable_cache ignore ctx =
   if not (Sys.file_exists file) then panic "file %s not found" file;
   debug "parsing file %s" file;
-  (* clang does not link -MT and -MD options *)
+  (* clang does not like -MT and -MD options *)
   let opts = List.filter (fun x -> x != "-MT" && x != "-MD") opts in
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::

@@ -24,7 +24,7 @@
 
 #define __MOPSA__
 
-#include <stddef.h>
+typedef unsigned long long _mopsa_size_t;
 
 // Generators of typed random values
 extern signed char _mopsa_rand_s8();
@@ -96,21 +96,21 @@ extern void _mopsa_assert_unsafe();
 
 // Memory
 extern void _mopsa_assert_valid_ptr(void *p);
-extern void _mopsa_assert_valid_bytes(void *p, size_t n);
-extern void _mopsa_memrand(char *s, size_t i, size_t j);
-extern void _mopsa_memset(char *s, char c, size_t i, size_t j);
-extern void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
+extern void _mopsa_assert_valid_bytes(void *p, _mopsa_size_t n);
+extern void _mopsa_memrand(char *s, _mopsa_size_t i, _mopsa_size_t j);
+extern void _mopsa_memset(char *s, char c, _mopsa_size_t i, _mopsa_size_t j);
+extern void _mopsa_memcpy(char *dst, char *src, _mopsa_size_t i, _mopsa_size_t j);
 
 // Strings
 extern void _mopsa_assert_valid_string(char *s);
-extern void _mopsa_assert_valid_substring(char *s, size_t n);
+extern void _mopsa_assert_valid_substring(char *s, _mopsa_size_t n);
 extern char *_mopsa_new_valid_string();
 extern char **_mopsa_new_valid_string_array();
 extern char *_mopsa_new_readonly_string();
-extern char *_mopsa_new_valid_string_max(size_t max);
-extern char *_mopsa_new_readonly_string_max(size_t max);
+extern char *_mopsa_new_valid_string_max(_mopsa_size_t max);
+extern char *_mopsa_new_readonly_string_max(_mopsa_size_t max);
 extern void _mopsa_strrand(char *s);
-extern void _mopsa_strnrand(char *s, size_t n);
+extern void _mopsa_strnrand(char *s, _mopsa_size_t n);
 
 // Files
 extern void _mopsa_assert_valid_stream(void* stream);
