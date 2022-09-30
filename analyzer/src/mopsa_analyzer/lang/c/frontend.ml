@@ -335,7 +335,7 @@ and parse_db (dbfile: string) ctx : unit =
 and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string) enable_cache ignore ctx =
   if not (Sys.file_exists file) then panic "file %s not found" file;
   debug "parsing file %s" file;
-  (* clang does not link -MT and -MD options *)
+  (* clang does not like -MT and -MD options *)
   let opts = List.filter (fun x -> x != "-MT" && x != "-MD") opts in
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
@@ -836,6 +836,7 @@ and from_float_type : C_AST.float_type -> Ast.c_float_type = function
   | C_AST.FLOAT -> Ast.C_float
   | C_AST.DOUBLE -> Ast.C_double
   | C_AST.LONG_DOUBLE -> Ast.C_long_double
+  | C_AST.FLOAT128 -> Ast.C_float128
 
 and from_array_length ctx al = match al with
   | C_AST.No_length -> Ast.C_array_no_length

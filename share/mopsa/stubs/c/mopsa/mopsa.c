@@ -65,10 +65,10 @@
  *   if p != NULL then valid_ptr_or_fail(p) end;
  *
  * predicate valid_ptr_range(p, i, j):
- *   forall size_t k in [i, j]: valid_ptr(p+k);
+ *   forall _mopsa_size_t k in [i, j]: valid_ptr(p+k);
  *
  * predicate valid_ptr_range_or_fail(p, i, j):
- *   forall size_t k in [i, j]: valid_ptr_or_fail(p+k);
+ *   forall _mopsa_size_t k in [i, j]: valid_ptr_or_fail(p+k);
  */
 
 /*******************/
@@ -98,7 +98,7 @@
  *   if n > 0 then valid_bytes_or_fail(p, n) end;
  *
  * predicate in_bytes(r, x, n):
- *   exists size_t _i in [0, n]: r == x + _i;
+ *   exists _mopsa_size_t _i in [0, n]: r == x + _i;
  */
 
 /*********************/
@@ -108,11 +108,11 @@
 /*$=
  * predicate valid_string(s):
  *   valid_ptr(s) and
- *   exists size_t _i in [0, bytes(s) - offset(s)): s[_i] == 0;
+ *   exists _mopsa_size_t _i in [0, bytes(s) - offset(s)): s[_i] == 0;
  *
  * predicate valid_string_or_fail(s):
  *   valid_ptr_or_fail(s) and
- *   ( (exists size_t _i in [0, bytes(s) - offset(s)): s[_i] == 0) otherwise raise("Non-terminating string") );
+ *   ( (exists _mopsa_size_t _i in [0, bytes(s) - offset(s)): s[_i] == 0) otherwise raise("Non-terminating string") );
  *
  * predicate null_or_valid_string(s):
  *   if s != NULL then valid_string(s) end;
@@ -122,30 +122,30 @@
  *
  * predicate valid_primed_string(s):
  *   valid_ptr(s) and
- *   exists size_t _i in [0, (bytes(s) - offset(s)) ): (s[_i])' == 0;
+ *   exists _mopsa_size_t _i in [0, (bytes(s) - offset(s)) ): (s[_i])' == 0;
  *
  * predicate valid_substring(s, n):
  *   if n > 0 then
  *     ( valid_ptr(s) and
- *     exists size_t _i in [0, n): s[_i] == 0 )
+ *     exists _mopsa_size_t _i in [0, n): s[_i] == 0 )
  *   end;
  *
  * predicate valid_substring_or_fail(s, n):
  *   if n > 0 then
  *     valid_ptr_or_fail(s) and
- *     exists size_t _i in [0, n): s[_i] == 0
+ *     exists _mopsa_size_t _i in [0, n): s[_i] == 0
  *   end;
  *
  * predicate valid_primed_substring(s, n):
  *   if n > 0 then
  *     valid_ptr(s) and
- *     exists size_t _i in [0, n): (s[_i])' == 0
+ *     exists _mopsa_size_t _i in [0, n): (s[_i])' == 0
  *   end;
  *
  * predicate in_string(x,s):
- *   exists size_t _i in [0, (bytes(s) - offset(s))):
+ *   exists _mopsa_size_t _i in [0, (bytes(s) - offset(s))):
  *     ( x == s + _i and
- *       forall size_t _j in [0, _i): s[_j] != 0 );
+ *       forall _mopsa_size_t _j in [0, _i): s[_j] != 0 );
  */
 
 /***************************/
@@ -156,32 +156,32 @@
  * predicate valid_wide_string(s):
  *   valid_ptr(s) and
  *   bytes(s) >= 1 and
- *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0;
+ *   exists _mopsa_size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0;
  *
  * predicate valid_wide_string_or_fail(s):
  *   valid_ptr_or_fail(s) and
  *   bytes(s) >= 1 and
- *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0;
+ *   exists _mopsa_size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): s[_i] == 0;
  *
  * predicate valid_wide_substring(s, n):
  *   if n > 0 then valid_ptr(s) end and
- *   exists size_t _i in [0, n): s[_i] == 0;
+ *   exists _mopsa_size_t _i in [0, n): s[_i] == 0;
  *
  * predicate null_or_valid_wide_string(s):
  *   if s != NULL then valid_wide_string(s) end;
  *
  * predicate valid_primed_wide_string(s):
  *   valid_ptr(s) and
- *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): (s[_i])' == 0;
+ *   exists _mopsa_size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))): (s[_i])' == 0;
  *
  * predicate valid_primed_wide_substring(s, n):
  *   if n > 0 then valid_ptr(s) end and
- *   exists size_t _i in [0, n): (s[_i])' == 0;
+ *   exists _mopsa_size_t _i in [0, n): (s[_i])' == 0;
  *
  * predicate in_wide_string(x,s):
- *   exists size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))):
+ *   exists _mopsa_size_t _i in [0, ((bytes(s) - offset(s)) / sizeof_type(wchar_t))):
  *     ( x == s + _i and
- *       forall size_t _j in [0, _i): s[_j] != 0 );
+ *       forall _mopsa_size_t _j in [0, _i): s[_j] != 0 );
  *
  * predicate valid_wchars(s, n):
  *   if n > 0 then
@@ -204,7 +204,7 @@
  *   end;
  *
  *  predicate in_wchars(r, x, n):
- *    exists size_t _i in [0, n]: r == x + _i;
+ *    exists _mopsa_size_t _i in [0, n]: r == x + _i;
  */
 
 /***********************/
@@ -254,7 +254,7 @@ char *_mopsa_new_readonly_string();
  * ensures: valid_string(str);
  * ensures: return == str;
  */
-char *_mopsa_new_valid_string_max(size_t max);
+char *_mopsa_new_valid_string_max(_mopsa_size_t max);
 
 /*$
  * local:   char * str = new ReadOnlyMemory;
@@ -262,7 +262,7 @@ char *_mopsa_new_valid_string_max(size_t max);
  * ensures: valid_string(str);
  * ensures: return == str;
  */
-char *_mopsa_new_readonly_string_max(size_t max);
+char *_mopsa_new_readonly_string_max(_mopsa_size_t max);
 
 
 /*$
@@ -273,7 +273,7 @@ void _mopsa_assert_valid_ptr(void *p);
 /*$
  * requires: valid_bytes_or_fail(p, n);
  */
-void _mopsa_assert_valid_bytes(void *p, size_t n);
+void _mopsa_assert_valid_bytes(void *p, _mopsa_size_t n);
 
 /*$
 
@@ -284,14 +284,14 @@ void _mopsa_assert_valid_string(char *s);
 /*$
  * requires: valid_substring(s,n);
  */
-void _mopsa_assert_valid_substring(char *s, size_t n);
+void _mopsa_assert_valid_substring(char *s, _mopsa_size_t n);
 
 
 /*$
  * requires: valid_ptr_range_or_fail(s, i, j);
  * assigns: s[i, j];
  */
-void _mopsa_memrand(char *s, size_t i, size_t j);
+void _mopsa_memrand(char *s, _mopsa_size_t i, _mopsa_size_t j);
 
 
 /*$
@@ -313,7 +313,7 @@ void _mopsa_strrand(char *s);
  *   assumes: n == 0;
  * }
  */
-void _mopsa_strnrand(char *s, size_t n);
+void _mopsa_strnrand(char *s, _mopsa_size_t n);
 
 
 /*$
@@ -332,17 +332,17 @@ void _mopsa_assert_valid_file_descriptor(int fd);
 /*$
  * requires: valid_ptr_range_or_fail(s, i, j);
  * assigns: s[i, j];
- * ensures: forall size_t k in [i,j]: (s[k])' == c;
+ * ensures: forall _mopsa_size_t k in [i,j]: (s[k])' == c;
  */
-void _mopsa_memset(char *s, char c, size_t i, size_t j);
+void _mopsa_memset(char *s, char c, _mopsa_size_t i, _mopsa_size_t j);
 
 /*$
  * requires: valid_ptr_range_or_fail(dst, i, j);
  * requires: valid_ptr_range_or_fail(src, i, j);
  * assigns: dst[i, j];
- * ensures: forall size_t k in [i,j]: (dst[k])' == src[k];
+ * ensures: forall _mopsa_size_t k in [i,j]: (dst[k])' == src[k];
  */
-void _mopsa_memcpy(char *dst, char *src, size_t i, size_t j);
+void _mopsa_memcpy(char *dst, char *src, _mopsa_size_t i, _mopsa_size_t j);
 
 /*$
  * requires: valid_wide_string_or_fail(s);
@@ -362,7 +362,7 @@ void _mopsa_assert_valid_wide_string(wchar_t *s);
  *   assumes: n == 0;
  * }
  */
-void _mopsa_wcsnrand(wchar_t *s, size_t n);
+void _mopsa_wcsnrand(wchar_t *s, _mopsa_size_t n);
 
 /*$
  * ensures: valid_float(return);

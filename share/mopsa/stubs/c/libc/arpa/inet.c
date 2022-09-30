@@ -24,10 +24,10 @@
   based on header from glibc-2.27-r6
 */
 
+#include <stddef.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include "../mopsa_libc_utils.h"
-
 
 /*$
  * requires: valid_string(__cp);

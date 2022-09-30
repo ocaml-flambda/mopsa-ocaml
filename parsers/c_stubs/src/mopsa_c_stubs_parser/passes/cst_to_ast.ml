@@ -131,6 +131,7 @@ and visit_typ t prj func =
   | T_float -> C_AST.(T_float FLOAT)
   | T_double -> C_AST.(T_float DOUBLE)
   | T_long_double -> C_AST.(T_float LONG_DOUBLE)
+  | T_float128 -> C_AST.(T_float FLOAT128)
   | T_array(t, len) -> C_AST.T_array (visit_qual_typ t prj func , visit_array_length len prj func )
   | T_struct(s) -> C_AST.T_record (find_record s prj)
   | T_union(u) -> C_AST.T_record (find_record u prj)
@@ -313,6 +314,7 @@ let rank_float =
   | FLOAT -> 0
   | DOUBLE -> 1
   | LONG_DOUBLE -> 2
+  | FLOAT128 -> 3
 
 let is_int_binop = function
   | EQ | NEQ | LT | LE | GT | GE | LAND | LOR -> true

@@ -98,7 +98,7 @@ and c_integer_type =
   | C_unsigned_int128
   (** Integer types. *)
 
-and c_float_type = C_float | C_double | C_long_double
+and c_float_type = C_float | C_double | C_long_double | C_float128
 (** Floating-point types. *)
 
 
@@ -452,6 +452,7 @@ let to_clang_float_type : c_float_type -> C_AST.float_type = function
   | C_float -> C_AST.FLOAT
   | C_double -> C_AST.DOUBLE
   | C_long_double -> C_AST.LONG_DOUBLE
+  | C_float128 -> C_AST.FLOAT128
 
 let from_clang_int_type : C_AST.integer_type -> c_integer_type = function
   | C_AST.(Char SIGNED) -> C_signed_char
@@ -473,6 +474,7 @@ let from_clang_float_type : C_AST.float_type -> c_float_type = function
   | C_AST.FLOAT -> C_float
   | C_AST.DOUBLE -> C_double
   | C_AST.LONG_DOUBLE -> C_long_double
+  | C_AST.FLOAT128 -> C_float128
 
     (* NOTE: this may cause issue with recutsive types
 
@@ -781,6 +783,7 @@ let get_c_float_precision t =
   | C_float -> F_SINGLE
   | C_double -> F_DOUBLE
   | C_long_double -> F_LONG_DOUBLE
+  | C_float128 -> F_FLOAT128
 
 
 (** [is_c_int_type t] tests whether [t] is a numeric type *)

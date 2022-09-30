@@ -18,11 +18,11 @@
 /* along with this program.  If not, see <http://www.gnu.org/licenses/>.    */
 /*                                                                          */
 /****************************************************************************/
-
 /*
   libc stub
   based on header from glibc-2.33-r1
 */
+#include <stddef.h>
 #include <sys/syslog.h>
 
 /*$

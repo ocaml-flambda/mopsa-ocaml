@@ -21,10 +21,10 @@
 
 /* Stubs for <sys/socket.h> */
 
+#include <stddef.h>
 #include <sys/socket.h>
 #include <errno.h>
 #include "../mopsa_libc_utils.h"
-
 
 /*
  * TODO: sendmsg, sendmmsg, recvmsg, recvmmsg

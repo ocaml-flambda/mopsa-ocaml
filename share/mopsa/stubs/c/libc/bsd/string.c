@@ -23,7 +23,7 @@
   libc stub
   utility functions from BSD system (libbsd)
 */
-
+#include <stddef.h>
 #include <bsd/string.h>
 #include "mopsa_libc_utils.h"
 

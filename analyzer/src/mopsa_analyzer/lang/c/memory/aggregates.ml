@@ -156,7 +156,11 @@ struct
             | Some (C_init_expr e) ->
               acc1, (Some e, remain, o,under_typ)::acc2
 
-            | Some x -> panic_at range "initialization filler %a not supported" Pp.pp_c_init x
+            | Some (C_init_list(l, None)) ->
+              aux i [C_init_list (l, None)] acc1 acc2
+
+            | Some x ->
+              panic_at range "initialization filler %a not supported" Pp.pp_c_init x
       in
       let l1,l2 = aux 0 l [] [] in
       List.rev l1, List.rev l2

@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.27-r6
 */
-
+#include <stddef.h>
 #include <sys/sysmacros.h>
 
 /*$

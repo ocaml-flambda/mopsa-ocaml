@@ -69,7 +69,8 @@ struct
   let top_of_prec = function
     | F_SINGLE -> I.single_special
     | F_DOUBLE -> I.double_special
-    | F_LONG_DOUBLE -> I.long_double_special
+    | F_LONG_DOUBLE -> I.extra
+    | F_FLOAT128 -> I.extra
     | F_REAL -> I.real
 
   let top = top_of_prec F_LONG_DOUBLE

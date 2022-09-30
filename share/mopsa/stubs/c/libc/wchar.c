@@ -23,6 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
+#include <stddef.h>
 #include <stdarg.h>
 #include <wchar.h>
 #include <limits.h>
@@ -31,7 +32,6 @@
 #include <errno.h>
 #include <time.h> // for struct tm needed by wcsftime
 #include "mopsa_libc_utils.h"
-
 
 static wint_t _weof = ((wint_t)-1);
 

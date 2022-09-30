@@ -23,12 +23,12 @@
   libc stub
   based on header from glibc-2.27-r6
 */
+#include <stddef.h>
 #include <math.h>
 #include <stdint.h>
 #include <errno.h>
 #include <limits.h>
 #include "mopsa_libc_utils.h"
-
 
 /*$
  * requires: valid_float(__x) and __x >= -1. and __x <= 1.;

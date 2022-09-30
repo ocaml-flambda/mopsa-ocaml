@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
-
+#include <stddef.h>
 #include <utime.h>
 #include <errno.h> // for _errno
 
