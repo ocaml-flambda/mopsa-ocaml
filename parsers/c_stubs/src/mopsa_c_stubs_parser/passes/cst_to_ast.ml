@@ -502,14 +502,12 @@ let rec visit_expr e prj func : Ast.expr with_range =
       let typ = match unroll_type e.content.typ |> fst with
         | C_AST.T_void -> C_AST.(T_integer SIGNED_CHAR)
         | t -> t in
-      let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
-      let size = C_utils.sizeof_type target typ in
+      let size = C_utils.sizeof_type !target_info typ in
       Ast.E_int(size), int_type
 
     | E_sizeof_type(t) ->
       let typ, _ = visit_qual_typ t.content prj func in
-      let target = Clang_parser.get_target_info (Clang_parser.get_default_target_options ()) in
-      let size = C_utils.sizeof_type target typ in
+      let size = C_utils.sizeof_type !target_info typ in
       Ast.E_int(size), int_type
 
     | E_builtin_call(f,args) ->

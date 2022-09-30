@@ -249,6 +249,7 @@ let rec parse_program (files: string list) =
   if !opt_target_triple <> "" then 
     Ast.target_info := get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple });
   let target = !Ast.target_info in
+  Mopsa_c_stubs_parser.Cst.target_info := target;
   let ctx = Clang_to_C.create_context "project" target in
   let nb = List.length files in
   input_files := [];
