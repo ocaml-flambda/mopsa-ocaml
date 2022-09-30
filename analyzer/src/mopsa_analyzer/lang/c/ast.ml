@@ -961,7 +961,7 @@ let ull = T_c_integer(C_unsigned_long_long)
 let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
-let size_type =
+let size_type () =
   let t = C_utils.size_type !target_info |>
           from_clang_int_type in
   T_c_integer t
