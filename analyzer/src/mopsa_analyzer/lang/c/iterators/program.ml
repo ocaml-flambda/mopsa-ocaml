@@ -306,7 +306,7 @@ struct
     eval_bytes arg range man flow >>$ fun arg0_bytes flow ->
     let program_name = "a.out" in
     let min = mk_int (String.length program_name + 1) range in
-    let max = mk_z (snd (rangeof size_type)) range in
+    let max = mk_z (snd (rangeof (size_type ()))) range in
     man.exec (mk_assume (mk_in arg0_bytes min max range) range) flow >>% fun flow ->
     init_concrete_arg arg program_name range man flow >>% fun flow ->
     let argv0 = mk_c_subscript_access argv (mk_zero range) range in
@@ -448,7 +448,7 @@ struct
 
     (* Initialize the size of arguments *)
     let min_size = mk_one range in
-    let max_size = mk_z (rangeof size_type |> snd) range in
+    let max_size = mk_z (rangeof (size_type ()) |> snd) range in
     let init_size arg flow =
       eval_bytes arg range man flow >>$ fun bytes flow ->
       man.exec (mk_assume (mk_in bytes min_size max_size range) range) flow
@@ -481,7 +481,7 @@ struct
         cvar_uid = 0;
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
-      }) size_type in
+      }) (size_type ()) in
     List.fold_left
       (fun acc arg -> acc >>% assume_valid_string arg qi range man)
       (Post.return flow) args

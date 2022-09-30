@@ -22,6 +22,7 @@
 (** Concrete syntax tree for C stubs *)
 
 open Mopsa_utils
+open Mopsa_c_parser
 open Location
 
 type stub = section list with_range
@@ -242,6 +243,9 @@ and array_length =
 
 (** {2 Utility functions} *)
 (** ********************* *)
+
+(* fixed by MOPSA's frontend with the real target *)
+let target_info = ref (Clang_parser.get_target_info (Clang_parser.get_default_target_options ()))
 
 let compare_var v1 v2 =
   Compare.compose [

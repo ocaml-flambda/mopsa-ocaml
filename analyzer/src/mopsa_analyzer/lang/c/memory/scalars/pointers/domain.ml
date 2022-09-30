@@ -1001,7 +1001,7 @@ struct
             (* Check if an overflow is possible by comparing the size of the
                cast type and the size of `size_t` (which is the size of a pointer). *)
             let s = sizeof_type exp.etyp in
-            let st = sizeof_type size_type in
+            let st = sizeof_type (size_type ()) in
             let flow =
               if Z.(s < st) then
                 raise_c_pointer_to_integer_overflow_alarm ~warning:true p exp.etyp exp.erange man flow
