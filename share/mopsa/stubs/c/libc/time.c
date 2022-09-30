@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
-
+#include <stddef.h>
 #include <time.h>
 #include <errno.h>
 #include <signal.h> // for struct sigevent needed by time_create

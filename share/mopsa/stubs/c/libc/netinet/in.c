@@ -24,8 +24,8 @@
   based on header from glibc-2.27-r6
 */
 
+#include <stddef.h>
 #include <netinet/in.h>
-
 
 /*$
  * // empty contract

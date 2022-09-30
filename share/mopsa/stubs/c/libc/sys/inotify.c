@@ -23,7 +23,7 @@
   libc stub
   based on header from glibc-2.29-r7
 */
-
+#include <stddef.h>
 #include <sys/inotify.h>
 #include <errno.h>
 #include "../mopsa_libc_utils.h"

@@ -18,7 +18,7 @@
 /* along with this program.  If not, see <http://www.gnu.org/licenses/>.    */
 /*                                                                          */
 /****************************************************************************/
-
+#include <stddef.h>
 #include <termios.h>
 #include <errno.h>
 #include "mopsa_libc_utils.h"

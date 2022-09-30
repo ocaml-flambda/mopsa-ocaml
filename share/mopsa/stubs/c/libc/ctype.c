@@ -23,10 +23,10 @@
   libc stub
   based on header from glibc-2.29-r7
 */
+#include <stddef.h>
 #include <ctype.h>
 #include <stdio.h> // for EOF
 #include "mopsa_libc_utils.h"
-
 
 /*$!
  * assigns: _ctype_b_buf[0,383];
