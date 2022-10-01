@@ -221,6 +221,9 @@ module type S =
 
     (** {2 Additional functions} *)
 
+    val is_singleton: 'a t -> bool
+    (** [is_singleton m] checks whether a map contains only one binding *)
+
     val of_list: (key * 'a) list -> 'a t
     (** [of_list l] converts an association list to a map. *)
 

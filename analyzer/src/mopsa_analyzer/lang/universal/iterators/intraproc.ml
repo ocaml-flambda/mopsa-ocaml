@@ -115,6 +115,18 @@ struct
       man.exec (mk_assume e' stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
+    (* Skip the analysis of the block if there is no indirect flow and the
+       current environment is empty *)
+    | S_block (b, cleaner)
+      when Flow.is_empty flow ||
+           (* no indirect flow *)
+           ( Flow.is_singleton flow && Flow.mem T_cur flow &&
+             (* empty environment *)
+             man.lattice.is_bottom (Flow.get T_cur man.lattice flow) ) ->
+      Post.return flow |>
+      OptionExt.return
+
+
     | S_block(block,local_vars) ->
       Some (
         let post = List.fold_left (fun acc stmt -> acc >>% man.exec stmt) (Post.return flow) block in
@@ -125,6 +137,21 @@ struct
         let post = List.fold_left (fun acc var -> acc >>% man.exec (mk_remove_var var end_range)) post local_vars in
         post
       )
+
+    (* Skip the analysis of if there is no flow *)
+    | S_if(cond, s1, s2) when Flow.is_empty flow ->
+      Post.return flow |>
+      OptionExt.return
+
+    (* Use [assume], that skips the analyis of a branch if its input environment is empty. *)
+    (* This is sound if there is no inderct flow, because [assume] will not
+       execute the branch if its [cur] environment is empty, while an indirect
+       flow may have an empty [cur] environment. *)
+    | S_if(cond, s1, s2) when Flow.is_singleton flow && Flow.mem T_cur flow ->
+      assume cond man flow
+        ~fthen:(man.exec s1)
+        ~felse:(man.exec s2) |>
+      OptionExt.return
 
     | S_if(cond, s1, s2) ->
       (* First, evaluate the condition *)

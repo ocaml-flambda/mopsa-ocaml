@@ -312,6 +312,9 @@ module Make(Ord: OrderedType) =
     (* [MOPSA] additions *)
     (* ***************** *)
 
+    let is_singleton = function
+      | Node (Empty, _, _, Empty, _) -> true
+      | _ -> false
 
     let of_list l =
       List.fold_left (fun acc (k,x) -> add k x acc) empty l
