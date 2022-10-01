@@ -56,6 +56,8 @@ sig
 
   val is_empty : 'a t -> bool
 
+  val is_singleton : 'a t -> bool
+
   val is_top : 'a lattice -> 'a t -> bool
 
   val subset : 'a lattice -> 'a ctx -> 'a t -> 'a t -> bool

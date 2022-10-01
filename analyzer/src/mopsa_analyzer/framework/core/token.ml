@@ -83,6 +83,9 @@ struct
         Map.for_all (fun _ v -> lattice.is_bottom v) m
       ) tmap
 
+  let is_singleton tmap =
+    top_dfl1 false Map.is_singleton tmap
+
   let is_empty (tmap: 'a t) : bool =
     top_dfl1 false Map.is_empty tmap
 
