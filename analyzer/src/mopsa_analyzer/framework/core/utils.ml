@@ -86,9 +86,9 @@ let assume
     cond ?(route=toplevel) ?(translate=any_semantic)
     ~fthen ~felse
     ?(fboth=(fun then_flow else_flow ->
-        Cases.join
-          (fthen then_flow)
-          (felse else_flow)
+        let ret1 = fthen then_flow in
+        let ret2 = felse else_flow in
+        Cases.join ret1 ret2
       ))
     ?(fnone=(fun flow ->
         Cases.empty flow
