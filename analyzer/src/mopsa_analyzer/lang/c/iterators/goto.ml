@@ -111,9 +111,12 @@ struct
         let f1, f1' = get_gotos f, get_gotos f' in
         if Flow.subset man.lattice f1' f1 then
           None
-        else if i >= wid_limit then
-          Some (Flow.widen man.lattice f1 (Flow.join man.lattice f1 f1'))
-        else Some (Flow.join man.lattice f1 f1')
+        else
+          (* Join the input with the new goto flows *)
+          let f2' = Flow.join man.lattice f f1' in
+          if i >= wid_limit
+          then Some (Flow.widen man.lattice f f2')
+          else Some f2'
       in
       let rec stabilization f i wid_limit =
         let f = Flow.set_report init_report f in
