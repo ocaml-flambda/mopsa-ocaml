@@ -115,6 +115,18 @@ struct
       man.exec (mk_assume e' stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
 
+    (* Skip the analysis of the block if there is no indirect flow and the
+       current environment is empty *)
+    | S_block (b, cleaner)
+      when Flow.is_empty flow ||
+           (* no indirect flow *)
+           ( Flow.is_singleton flow && Flow.mem T_cur flow &&
+             (* empty environment *)
+             man.lattice.is_bottom (Flow.get T_cur man.lattice flow) ) ->
+      Post.return flow |>
+      OptionExt.return
+
+
     | S_block(block,local_vars) ->
       Some (
         let post = List.fold_left (fun acc stmt -> acc >>% man.exec stmt) (Post.return flow) block in
