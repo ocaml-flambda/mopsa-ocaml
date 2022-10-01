@@ -138,6 +138,21 @@ struct
         post
       )
 
+    (* Skip the analysis of if there is no flow *)
+    | S_if(cond, s1, s2) when Flow.is_empty flow ->
+      Post.return flow |>
+      OptionExt.return
+
+    (* Use [assume], that skips the analyis of a branch if its input environment is empty. *)
+    (* This is sound if there is no inderct flow, because [assume] will not
+       execute the branch if its [cur] environment is empty, while an indirect
+       flow may have an empty [cur] environment. *)
+    | S_if(cond, s1, s2) when Flow.is_singleton flow && Flow.mem T_cur flow ->
+      assume cond man flow
+        ~fthen:(man.exec s1)
+        ~felse:(man.exec s2) |>
+      OptionExt.return
+
     | S_if(cond, s1, s2) ->
       (* First, evaluate the condition *)
       let evl = man.eval cond flow in
