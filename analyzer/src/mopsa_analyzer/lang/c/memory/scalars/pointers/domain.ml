@@ -620,6 +620,7 @@ struct
       Post.return flow
 
 
+
   (** Fold pointers ql in p *)
   let fold_pointer_var p ql range man flow =
     let a = get_env T_cur man flow in
@@ -635,7 +636,11 @@ struct
     (* Fold the offset if present *)
     if PointerSet.is_valid value' then
       let o = mk_offset p None range in
-      let ol = List.map (fun q -> mk_offset q None range) ql in
+      let ol = ListExt.map_filter (fun q ->
+          if PointerSet.is_valid (Map.find q a) then 
+            Some (mk_offset q None range)
+          else None
+        ) ql in
       let stmt = mk_fold o ol range in
       man.exec stmt ~route:universal flow
     else
