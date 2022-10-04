@@ -183,9 +183,10 @@ struct
       base;
       offset;
       typ =
-        if is_c_num_type typ then Numeric (remove_typedef_qual typ)
+        if is_c_num_type typ || is_c_bitfield typ then Numeric (remove_typedef_qual typ)
         else if is_c_pointer_type typ then Pointer
-        else panic "cell can not be created with type %a" pp_typ typ;
+        else
+          panic "cell can not be created with type %a" pp_typ typ;
     }
 
 
@@ -279,7 +280,7 @@ struct
   let mk_cell_var c : var =
     match c.base.base_kind with
     (* Don't create new variables for cells representing scalar variables *)
-    | Var v when is_c_scalar_type v.vtyp &&
+    | Var v when (is_c_scalar_type v.vtyp || is_c_bitfield v.vtyp) &&
                  Z.(c.offset = zero) &&
                  (c.typ = Pointer || compare_typ (remove_typedef_qual v.vtyp) (cell_type c) = 0)
       -> v

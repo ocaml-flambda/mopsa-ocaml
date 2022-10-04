@@ -54,6 +54,7 @@ let rec pp_c_type_short fmt =
   | T_c_typedef(typedef) -> pp_c_type_short fmt typedef.c_typedef_def
   | T_c_record({c_record_kind = C_struct} as record) -> fprintf fmt "s %s" record.c_record_org_name
   | T_c_record({c_record_kind = C_union} as record) -> fprintf fmt "u %s" record.c_record_org_name
+  | T_c_bitfield(t, s) -> fprintf fmt "bf(%a:%d)" pp_c_type_short t s
   | T_c_qualified(qual, t) ->
     let l =
       (if qual.c_qual_is_const then ["c"] else []) @
@@ -132,7 +133,8 @@ let () =
 
       | T_c_enum(enum) -> fprintf fmt "enum %s" enum.c_enum_org_name
 
-      | T_c_bitfield(t, size) -> assert false
+      | T_c_bitfield(t, size) -> fprintf fmt "bf %a:%d" pp_typ t size
+
       | T_c_builtin_fn -> fprintf fmt "builtin_fn"
       | T_c_block_object tt -> Format.fprintf fmt "block-object(%a)" pp_typ tt
       | _ -> default fmt typ
