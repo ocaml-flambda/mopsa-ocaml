@@ -7,6 +7,7 @@
                 "switch": [
                     // C iterators
                     "c.iterators.program",
+                    "c.memory.stackframe",
                     "c.iterators.interproc",
                     "c.iterators.goto",
                     "c.iterators.switch",
