@@ -276,7 +276,7 @@ struct
 
     | E_unop(O_cast, e) ->
       let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron e.etyp in
+      let typ' = typ_to_apron exp.etyp in
       let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
       Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', round), abs, bnd, l
 
