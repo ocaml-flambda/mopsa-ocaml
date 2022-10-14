@@ -59,7 +59,7 @@ let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : sta
 
   | Eval (p, mode, oo) -> Eval (p, mode, advance oo)
 
-  | Null -> Null
+  | Null -> Top
 
   | Invalid -> Invalid
 
