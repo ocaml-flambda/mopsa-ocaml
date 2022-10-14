@@ -33,7 +33,7 @@ let debug fmt = Debug.debug ~channel:name fmt
 let opt_continue_on_recursive_call : bool ref = ref true
 
 let () =
-  register_domain_option name {
+  register_shared_option name {
     key = "-stop-rec";
     category = "Interprocedural Analysis";
     doc = "";
@@ -51,6 +51,17 @@ let () =
       spec = ArgExt.Set opt_split_return_variables_by_range;
       default = " split return variables by their location in the program"
     }
+
+let opt_rename_local_variables_on_recursive_call : bool ref = ref true
+
+let () =
+  register_shared_option (name ^ ".renaming") {
+    key = "-disable-var-renaming-recursive-call";
+    category = "Interprocedural Analysis";
+    doc = " disable renaming of local variables when detecting recursive calls";
+    spec = ArgExt.Clear opt_rename_local_variables_on_recursive_call;
+    default = ""
+  }
 
 (** {2 Return flow token} *)
 (** ===================== *)
@@ -161,7 +172,9 @@ let init_fun_params f args range man flow =
   if f.fun_parameters = [] then
     [], f.fun_locvars, f.fun_body, Post.return flow
   else
-  if check_nested_calls f.fun_uniq_name (Flow.get_callstack flow) then
+  if !opt_rename_local_variables_on_recursive_call &&
+     check_nested_calls f.fun_uniq_name (Flow.get_callstack flow)
+  then
     begin
       debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)

@@ -43,6 +43,14 @@ struct
 
   let checks = []
 
+  (** Command-line options *)
+  (** ==================== *)
+
+  let () =
+    import_shared_option
+      "universal.iterators.interproc.common.renaming"
+      name
+
   (** Initialization *)
   (** ============== *)
 
