@@ -24,6 +24,7 @@
 
 open Mopsa
 open Sig.Abstraction.Stateless
+open Stubs.Ast
 open Ast
 
 
@@ -49,7 +50,7 @@ struct
 
   (** Create a stack variable *)
   let mk_stack_var cs v =
-    let uniq_name = Format.asprintf "stack_var(%a, %s)" pp_callstack cs v.vname in
+    let uniq_name = Format.asprintf "stack(%a, %s)" pp_callstack cs v.vname in
     mkv uniq_name (V_c_stack_var (cs, v)) v.vtyp
 
   let () = register_var {
@@ -217,6 +218,33 @@ struct
     let e = rewrite_expr e flow in
     man.eval (mk_c_address_of e range) ~route:(Below name) flow
 
+  (** Evaluate quantified formulas *)
+  let eval_stub_quantified_formula quants body typ range man flow =
+    let cs = Flow.get_callstack flow in
+    let quants' =
+      List.map
+        (fun (quant, var, set) ->
+           let var' =
+             if is_local_variable var flow then
+               mk_stack_var cs var
+             else
+               var
+           in
+           let set' =
+             match set with
+             | S_interval(lo, hi) ->
+               let lo' = rewrite_expr lo flow in
+               let hi' = rewrite_expr hi flow in
+               S_interval(lo', hi')
+             | S_resource _ ->
+               set
+           in
+           (quant, var', set')
+        ) quants
+    in
+    let body' = rewrite_expr body flow in
+    man.eval (mk_stub_quantified_formula quants' body' ~etyp:typ range) ~route:(Below name) flow
+
   (*****************)
   (** Entry points *)
   (*****************)
@@ -266,6 +294,10 @@ struct
 
     | E_c_address_of e ->
       eval_address_of e exp.erange man flow |>
+      Option.some
+
+    | E_stub_quantified_formula(quants, body) ->
+      eval_stub_quantified_formula quants body exp.etyp exp.erange man flow |>
       Option.some
 
     | _ -> None
