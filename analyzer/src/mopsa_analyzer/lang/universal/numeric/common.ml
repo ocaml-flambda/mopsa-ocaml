@@ -72,9 +72,12 @@ module F = ItvUtils.FloatItvNan
 (** Float intervals *)
 type float_itv = F.t
 
-type _ avalue_kind += V_float_interval : float_prec -> float_itv avalue_kind (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+type _ avalue_kind +=
+  | V_float_interval : float_prec -> float_itv avalue_kind (** Query to evaluate the float interval of an expression, with infinities and NaN *)
+  | V_float_maybenan : float_prec -> bool avalue_kind
 
 let mk_float_interval_query ?(prec=F_DOUBLE) e = Q_avalue (e,V_float_interval prec)
+let mk_float_maybenan_query ?(prec=F_DOUBLE) e = Q_avalue (e,V_float_maybenan prec)
 
 let pp_float_interval fmt itv = F.fprint F.dfl_fmt fmt itv
 

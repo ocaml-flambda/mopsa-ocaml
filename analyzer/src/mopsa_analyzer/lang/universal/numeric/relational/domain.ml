@@ -234,7 +234,7 @@ struct
       let a, bnd = add_missing_vars (a,bnd) (var :: (Visitor.expr_vars e)) in
       let v, bnd = Binding.mopsa_to_apron_var var bnd in
       begin try
-          let e, a, bnd, l = exp_to_apron e (a,bnd) [] in
+          let e, a, bnd, l = exp_to_apron (fun exp -> man.ask (Common.mk_float_maybenan_query exp)) e (a,bnd) [] in
           let aenv = Apron.Abstract1.env a in
           let texp = Apron.Texpr1.of_expr aenv e in
           let a' = Apron.Abstract1.assign_texpr ApronManager.man a v texp None |>
@@ -287,7 +287,7 @@ struct
         let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
 
         try
-          let dnf, a, bnd, l = bexp_to_apron e (a,bnd) [] in
+          let dnf, a, bnd, l = bexp_to_apron (fun exp -> man.ask (Common.mk_float_maybenan_query exp)) e (a,bnd) [] in
           let env = Apron.Abstract1.env a in
           let a' =
             Dnf.reduce_conjunction
@@ -334,13 +334,13 @@ struct
       Values.Intervals.Integer.Value.top
 
 
-  let eval_interval e (abs,bnd) =
+  let eval_interval man e (abs,bnd) =
     match ekind e with
     | E_var (v,_) -> Some (bound_var v (abs,bnd))
     | _ ->
       try
         let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in
-        let e, abs, bnd, _ = exp_to_apron e (abs,bnd) [] in
+        let e, abs, bnd, _ = exp_to_apron (fun exp -> man.ask (Common.mk_float_maybenan_query exp)) e (abs,bnd) [] in
         let env = Apron.Abstract1.env abs in
         let e = Apron.Texpr1.of_expr env e in
         Apron.Abstract1.bound_texpr ApronManager.man abs e |>
@@ -354,7 +354,7 @@ struct
     fun query man ctx (abs,bnd) ->
       match query with
       | Q_avalue(e, Common.V_int_interval) ->
-        eval_interval e (abs,bnd)
+        eval_interval man e (abs,bnd)
 
       | Q_related_vars v ->
         related_vars v (abs,bnd) |>

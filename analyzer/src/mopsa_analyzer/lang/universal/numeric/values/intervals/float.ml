@@ -178,6 +178,7 @@ struct
   let avalue : type r. r avalue_kind -> t -> r option = fun aval a ->
     match aval with
     | V_float_interval _ -> Some a
+    | V_float_maybenan _ -> Some a.nan
     | _ -> None
 
 
