@@ -228,6 +228,9 @@ struct
       | T_c_record{c_record_fields} -> c_record_fields
       | t -> panic_at ~loc:__LOC__ range "type %a is not a record" pp_typ t
     in
+    let pp_record_field fmt f =
+      Format.fprintf fmt "%s@+%d,%d:%a" f.c_field_name f.c_field_offset f.c_field_bit_offset pp_typ f.c_field_type in
+    debug "fields of %a: %a" pp_typ typ (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_record_field) fields;
     match init with
     | None ->
       let rec aux offset acc1 acc2 = function
@@ -246,13 +249,34 @@ struct
         | [] -> acc1,acc2
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          match l with
-          | [] ->
-            let l1,l2 = flatten_init None o field.c_field_type range in
-            aux l (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
-          | init :: tll ->
-            let l1,l2 = flatten_init (Some init) o field.c_field_type range in
-            aux tll (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
+          if is_c_bitfield field.c_field_type then
+            (* skip all fields at that offset and put to T *)
+            (* FIXME: use bitmasks to actually encode the real value *)
+            let rec discard_same_offsets l r =
+              match l, r with
+              | lhd:: ltl, f :: rtl ->
+                if f.c_field_offset = field.c_field_offset then
+                  discard_same_offsets ltl rtl
+                else
+                  let (new_l, new_r) = discard_same_offsets ltl rtl in
+                  lhd::new_l, f::new_r
+              | [], [] -> [], []
+              | _ -> assert false in
+            let under_bitfield_typ = match field.c_field_type with
+              | T_c_bitfield (t, _) -> t
+              | _ -> assert false in 
+            let new_l, new_r = discard_same_offsets l records in
+            let init_top = C_init_expr (mk_top under_bitfield_typ range) in 
+            let l1,l2 = flatten_init (Some init_top) o under_bitfield_typ range in
+            aux new_l (List.rev_append l1 acc1) (List.rev_append l2 acc2) new_r
+          else 
+            match l with
+            | [] ->
+              let l1,l2 = flatten_init None o field.c_field_type range in
+              aux l (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
+            | init :: tll ->
+              let l1,l2 = flatten_init (Some init) o field.c_field_type range in
+              aux tll (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
       let l1,l2 = aux l [] [] fields in
       List.rev l1, List.rev l2
