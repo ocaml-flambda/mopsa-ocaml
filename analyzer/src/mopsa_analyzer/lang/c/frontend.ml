@@ -258,7 +258,7 @@ let rec parse_program (files: string list) =
       ListExt.iteri
         (fun i file ->
           match file, Filename.extension file with
-          | _, (".c" | ".h") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
+          | _, (".c" | ".h" | ".i") -> parse_file "clang" ~nb:(i,nb) [] file false false ctx
           | _, (".cpp" | ".cc" | ".c++") -> parse_file "clang++" ~nb:(i,nb) [] file false true ctx
           | _, ".db" | ".db", _ -> parse_db file ctx
           | _, x -> Exceptions.panic "unknown C extension %s" x
@@ -599,7 +599,8 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     (* atomic builtins are stubbed in .h header and should not be encountered
        here
      *)
-    | C_AST.E_atomic (_,_,_) -> Exceptions.panic_at erange "E_atomic not supported"
+    | C_AST.E_atomic (op,e1,e2) ->
+       Ast.E_c_atomic (op, from_expr ctx e1, from_expr ctx e2)
 
     (* vector builtins are not supported
        we display a warning but output an AST so that we can analyzer programs
