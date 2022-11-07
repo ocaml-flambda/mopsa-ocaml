@@ -174,7 +174,7 @@ let () =
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e
       | E_c_predefined _ -> assert false
-      | E_c_atomic _ -> assert false
+      | E_c_atomic (op,e1,e2) -> fprintf fmt "__atomic(%i,%a,%a)" op pp_expr e1 pp_expr e2
       | _ -> default fmt expr
     );
   register_stmt_pp (fun default fmt stmt ->
