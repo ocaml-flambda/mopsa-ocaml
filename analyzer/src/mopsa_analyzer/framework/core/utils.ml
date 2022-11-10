@@ -87,7 +87,11 @@ let assume
     ~fthen ~felse
     ?(fboth=(fun then_flow else_flow ->
         let ret1 = fthen then_flow in
-        let ret2 = felse else_flow in
+        let ctx1 = Cases.get_ctx ret1 in
+        let ret2 = Flow.set_ctx ctx1 else_flow |>
+                   felse
+        in
+        let ret1 = Cases.copy_ctx ret2 ret1 in
         Cases.join ret1 ret2
       ))
     ?(fnone=(fun flow ->

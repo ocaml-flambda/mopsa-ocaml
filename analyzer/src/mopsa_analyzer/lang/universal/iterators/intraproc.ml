@@ -154,29 +154,31 @@ struct
       OptionExt.return
 
     | S_if(cond, s1, s2) ->
-      (* First, evaluate the condition *)
-      let evl = man.eval cond flow in
-      (* Filter flows that satisfy the condition.
-         Note that cleaners returned by the evaluation should be removed just after
-         applying the filter and before executing the body of the branch. *)
-      let then_post = ( evl >>$ fun cond flow ->
-                        man.exec (mk_assume cond cond.erange) flow
-                      ) |>
-                      (* Execute the cleaners of the evaluation here *)
-                      exec_cleaners man >>%
-                      man.exec s1
+      (* Use this function to execute a branch when the other one is not
+         reachable. In addition to the execution of the body of the reachable branch,
+         this function executes the unreachable branch with an empty T_cur
+         environment. This ensures that indirect flows in the branch are
+         executed. *)
+      let exec_one_branch stmt other flow =
+        let post1 = man.exec stmt flow in
+        let ctx1 = Cases.get_ctx post1 in
+        let flow2 = Flow.set_ctx ctx1 flow |>
+                    Flow.remove T_cur
+        in
+        let post2 = man.exec other flow2 in
+        Post.join post1 post2
       in
-      (* Propagate the flow-insensitive context to the other branch *)
-      let then_ctx = Cases.get_ctx then_post in
-      let evl' = Cases.set_ctx then_ctx evl in
-      let else_post = ( evl' >>$ fun cond flow ->
-                        man.exec (mk_assume (mk_not cond cond.erange) cond.erange) flow
-                      ) |>
-                      (* Execute the cleaners of the evaluation here *)
-                      exec_cleaners man >>%
-                      man.exec s2
-      in
-      Post.join then_post else_post |>
+      assume cond man flow
+        ~fthen:(exec_one_branch s1 s2)
+        ~felse:(exec_one_branch s2 s1)
+        ~fboth:(fun flow1 flow2 ->
+            let post1 = man.exec s1 flow1 in
+            let ctx1 = Cases.get_ctx post1 in
+            let flow2 = Flow.set_ctx ctx1 flow2 in
+            let post2 = man.exec s2 flow2 in
+            Post.join post1 post2
+          )
+      |>
       OptionExt.return
 
     | S_print_state ->
