@@ -101,7 +101,10 @@ module Domain =
            man flow
            ~fthen:(check man (mk_true range) range)
            ~felse:(check man (mk_false range) range)
-           ~fnone:(check man (mk_false range) range)
+           ~fnone:(fun fflow eflow ->
+               Flow.join man.lattice fflow eflow |>
+               check man (mk_false range) range
+             )
          |> OptionExt.return
 
       (* Calls to mopsa assert function *)
@@ -110,7 +113,10 @@ module Domain =
          assume x man flow
            ~fthen:(check man (mk_true range) range)
            ~felse:(check man (mk_false range) range)
-           ~fnone:(check man (mk_false range) range)
+           ~fnone:(fun fflow eflow ->
+               Flow.join man.lattice fflow eflow |>
+               check man (mk_false range) range
+             )
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("mopsa.assert_exists", _))}, _)}, [cond], [])  ->
