@@ -94,8 +94,10 @@ let assume
         let ret1 = Cases.copy_ctx ret2 ret1 in
         Cases.join ret1 ret2
       ))
-    ?(fnone=(fun flow ->
-        Cases.empty flow
+    ?(fnone=(fun then_flow else_flow ->
+        Cases.join
+          (Cases.empty then_flow)
+          (Cases.empty else_flow)
       ))
     ?(eval=true)
     man flow
@@ -126,7 +128,7 @@ let assume
   with
   | false,true  -> fthen then_flow
   | true,false  -> felse else_flow
-  | true,true   -> fnone (Flow.join man.lattice then_flow else_flow)
+  | true,true   -> fnone then_flow else_flow
   | false,false -> fboth then_flow else_flow
 
 
