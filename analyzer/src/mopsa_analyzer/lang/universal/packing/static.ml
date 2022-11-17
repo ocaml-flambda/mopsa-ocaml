@@ -192,12 +192,14 @@ struct
 
     (** Get the packs of a variable *)
     let packs_of_var ctx v =
+      let r = 
       try Cache.find cache v
       with Not_found ->
         let packs = Strategy.packs_of_var ctx v in
         let packs' = List.sort_uniq Strategy.compare packs in
-        let () = Cache.add cache v packs' in
-        packs'
+        let () = Cache.replace cache v packs' in
+        packs' in
+      let () = Debug.debug ~channel:name "packs_of_var %a = %a" pp_var v (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") (format Strategy.print)) r in r
 
     (** Get the packs of the variables present in an expression *)
     let rec packs_of_expr ctx e =
@@ -295,8 +297,9 @@ struct
         | S_add { ekind = E_var (v,_) } -> v
         | _ -> assert false
       in
+      let () = Cache.remove cache v in 
       let packs = packs_of_var ctx v in
-      let () = Cache.add cache v packs in
+      let () = Cache.replace cache v packs in
       List.fold_left (fun acc pack ->
           let aa = try Map.find pack acc with Not_found -> Domain.top in
           let aa' = Domain.exec stmt (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
@@ -331,7 +334,7 @@ struct
         | _ -> assert false
       in
       let packs = packs_of_var ctx v in
-      let () = Cache.add cache v packs in
+      let () = Cache.replace cache v packs in
       List.fold_left (fun acc pack ->
           let aa = try Map.find pack acc with Not_found -> Domain.top in
           let aa' = Domain.exec stmt (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
@@ -346,7 +349,7 @@ struct
         | _ -> assert false
       in
       let packs = packs_of_var ctx v1 in
-      let () = Cache.add cache v1 packs in
+      let () = Cache.replace cache v1 packs in
       List.fold_left (fun acc pack ->
           let aa = try Map.find pack acc with Not_found -> Domain.top in
           let aa' = Domain.exec stmt (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
