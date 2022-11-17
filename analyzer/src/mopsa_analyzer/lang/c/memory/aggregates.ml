@@ -230,14 +230,14 @@ struct
     in
     match init with
     | None ->
-      let rec aux offset acc1 acc2 = function
+      let rec aux acc1 acc2 = function
         | [] -> acc1,acc2
         | field :: tl ->
-          let l1,l2 = flatten_init None offset field.c_field_type range in
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          aux o (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
+          let l1,l2 = flatten_init None o field.c_field_type range in
+          aux (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
-      let l1,l2 = aux offset [] [] fields in
+      let l1,l2 = aux [] [] fields in
       List.rev l1, List.rev l2
 
     | Some (C_init_list(l, None)) ->
