@@ -377,7 +377,7 @@ struct
     match skind stmt with
     | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr, _)}) ->
       remove addr man flow |>
-      Post.return |>
+      man.exec ~route:(Below name) stmt |>
       OptionExt.return
 
     | _ -> None
