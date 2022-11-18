@@ -99,12 +99,82 @@ struct
     | Pointer -> Format.fprintf fmt "ptr"
 
 
+  (** Pretty printer of cells in a low-level format: base{offset}:type *)
+  let pp_cell_lowlevel fmt c =
+    Format.fprintf fmt "%a{%a}:%a"
+        pp_base c.base
+        Z.pp_print c.offset
+        pp_cell_typ c.typ
+
+
   (** Pretty printer of cells *)
   let pp_cell fmt c =
-    Format.fprintf fmt "%a[%a]:%a"
-      pp_base c.base
-      Z.pp_print c.offset
-      pp_cell_typ c.typ
+    match c.base.base_kind with
+    | Addr _ | String _ ->
+      pp_cell_lowlevel fmt c
+
+    | Var v ->
+      (* Try to detect the access path that corresponds to the offset *)
+      (* The function [get_access_path] creates a new access path given
+         a past access path, a candidate accessor and its offset and typ.
+         The candidate accessor is accepted (appended to the access path)
+         if the accessed cell (offset+type) corresponds to a valid access path. *)
+      let rec get_access_path path candidate offset typ =
+        let typ = remove_typedef_qual typ in
+        (* Scalar case *)
+        if is_c_scalar_type typ then
+          (* Accept the candidate accessor if offset = 0 && the type of the cell
+             corresponds to the type of the candidate *)
+          let regular_access =
+            Z.(offset = zero) &&
+            match c.typ with
+            | Numeric t -> compare_typ typ t = 0
+            | Pointer   -> is_c_pointer_type typ
+          in
+          if regular_access then
+            candidate::path
+          else
+            let access =
+              if Z.(offset = zero) then
+                Format.asprintf "%s:%a" candidate pp_cell_typ c.typ
+              else
+                Format.asprintf "%s{%a}:%a" candidate Z.pp_print offset pp_cell_typ c.typ
+            in
+            access::path
+        else
+          (* For aggregate types, accept automatically the candidate and re-call
+             [get_access_path] on the accessed region *)
+          let path' = candidate::path in
+          match typ with
+          (* Array case *)
+          | T_c_array (t, _) ->
+            (* new candiate: [index] *)
+            let size = sizeof_type t in
+            let index, offset' = Z.div_rem offset size in
+            let candidate' = Format.asprintf "[%a]" Z.pp_print index in
+            get_access_path path' candidate' offset' t
+
+          (* Record case *)
+          | T_c_record r ->
+            (* new candiate: .field *)
+            let field = List.find (fun f ->
+                Z.(of_int f.c_field_offset <= offset) &&
+                Z.(offset < of_int f.c_field_offset + sizeof_type f.c_field_type)
+              ) r.c_record_fields
+            in
+            let candidate' = Format.asprintf ".%s" field.c_field_org_name in
+            let offset' = Z.(offset - of_int field.c_field_offset) in
+            get_access_path path' candidate' offset' field.c_field_type
+
+          |_ -> assert false
+      in
+      let path = get_access_path [] (Format.asprintf "%a" pp_var v) c.offset v.vtyp in
+      (* Paths were build in reverse order *)
+      let path = List.rev path in
+      Format.pp_print_list
+        ~pp_sep:(fun fmt () -> ())
+        Format.pp_print_string
+        fmt path
 
 
   (** Create a cell *)
