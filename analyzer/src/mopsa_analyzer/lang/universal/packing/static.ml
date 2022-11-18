@@ -346,7 +346,8 @@ struct
         | _ -> assert false
       in
       let packs = packs_of_var ctx v1 in
-      let () = Cache.add cache v1 packs in
+      let () = Cache.replace cache v2 packs in
+      let () = Cache.remove cache v1 in 
       List.fold_left (fun acc pack ->
           let aa = try Map.find pack acc with Not_found -> Domain.top in
           let aa' = Domain.exec stmt (pack_man pack man) ctx aa |> OptionExt.none_to_exn in
