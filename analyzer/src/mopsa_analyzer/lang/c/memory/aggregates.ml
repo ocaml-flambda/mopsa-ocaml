@@ -322,46 +322,52 @@ struct
         ) (Post.return flow) initl
       >>% fun flow ->
 
-      (* Initialize the uninitialized parts with 0 if the aggregate is global *)
+      (* For uninitialized parts, do nothing if the variable is local *)
       if not (is_c_global_scope scope) then
         Post.return flow
       else
-        List.fold_left
-          (fun acc (e, n, o, t) ->
-             match e with
-             | Some ee -> panic_at range "unsupported filler expression '%a'" pp_expr ee
-             | None ->
-               let base =
-                 (* base : (char * )&v + o *)
-                 add
-                   (mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range)
-                   (mk_z o range)
-                   ~typ:(pointer_type s8) range
+        (* Global variable => initialize with zero *)
+        fill |> List.fold_left
+          (fun acc (filler, n, o, t) ->
+             (* Initialisation expression *)
+             let init =
+               match filler with
+               | Some e -> e
+               | None -> mk_zero range (* global + uninitialized *)
+             in
+             let base =
+               (* base : (char * )&v + o *)
+               add
+                 (mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range)
+                 (mk_z o range)
+                 ~typ:(pointer_type s8) range
+             in
+             let bytes = Z.(n * sizeof_type t) in
+             (* Use memset if the size is greater than the threshold *)
+             if Z.(bytes >= of_int !opt_init_memset_threshold) then
+               let i = mk_zero range in
+               let j = mk_z Z.(pred bytes) range in
+               memset base (mk_zero range) i j range man flow
+             else
+               (* Otherwise, use assignments *)
+               let rec aux i acc =
+                 if Z.(i = n) then acc
+                 else
+                   let stmt =
+                     (* *(( t* )base + i) = init; *)
+                     mk_assign
+                       (mk_c_deref
+                          (add
+                             (mk_c_cast base (pointer_type t) range)
+                             (mk_z i range) range) range)
+                       init range
+                   in
+                   acc >>% fun flow ->
+                   man.exec stmt flow |>
+                   aux (Z.succ i)
                in
-               let bytes = Z.(n * sizeof_type t) in
-               if Z.(bytes >= of_int !opt_init_memset_threshold) then
-                 let i = mk_zero range in
-                 let j = mk_z Z.(pred bytes) range in
-                 memset base (mk_zero range) i j range man flow
-               else
-                 let rec aux i acc =
-                   if Z.(i = n) then acc
-                   else
-                     let stmt =
-                       (* *(( t* )base + i) = 0; *)
-                       mk_assign
-                         (mk_c_deref
-                            (add
-                               (mk_c_cast base (pointer_type t) range)
-                               (mk_z i range) range) range)
-                         (mk_zero range) range
-                     in
-                     acc >>% fun flow ->
-                     man.exec stmt flow |>
-                     aux (Z.succ i)
-                 in
-                 aux Z.zero acc
-          ) (Post.return flow) fill
+               aux Z.zero acc
+          ) (Post.return flow)
 
 
   (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
