@@ -81,13 +81,16 @@ struct
 
   (** Create a stack variable *)
   let mk_stack_var cs v =
-    let uniq_name = Format.asprintf "stack(%a, %s)" pp_callstack_short cs v.vname in
-    mkv uniq_name (V_c_stack_var (cs, v)) v.vtyp
+    match vkind v with
+    | V_c_stack_var _ -> v
+    | _ ->
+      let uniq_name = Format.asprintf "stack(%a, %s)" pp_callstack_short cs v.vname in
+      mkv uniq_name (V_c_stack_var (cs, v)) v.vtyp
 
   let () = register_var {
       print = (fun next fmt v ->
           match vkind v with
-          | V_c_stack_var (cs, vv) -> Format.fprintf fmt "stack(%a, %a)" pp_callstack_short cs pp_var vv
+          | V_c_stack_var (cs, vv) -> pp_var fmt vv
           | _ -> next fmt v
         );
       compare = (fun next v1 v2 ->
