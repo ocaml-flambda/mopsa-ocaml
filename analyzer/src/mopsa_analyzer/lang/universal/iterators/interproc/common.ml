@@ -255,7 +255,12 @@ let exec_fun_body f params locals body call_oexp range man flow =
       Cases.set_ctx
         (add_ctx return_key ret (Cases.get_ctx post2)) post2 in
 
-  post3 >>% fun flow3 ->
+  (* Restore call stack *)
+  let _,cs = Cases.get_callstack post3 |>
+             Callstack.pop_callstack in
+  let post4 = Cases.set_callstack cs post3 in
+
+  post4 >>% fun flow3 ->
 
   (* Copy the new context and report from flow3 to original flow flow1 *)
   let flow4 = Flow.copy_ctx flow3 flow1 |> Flow.copy_report flow3 in
@@ -277,18 +282,22 @@ let exec_fun_body f params locals body call_oexp range man flow =
   let mk_return tk_orange range =
     match call_oexp with
     | None ->
-      mk_unit range
+       mk_unit range
     | Some call ->
-      mk_var (mk_return call tk_orange) range in
-
+       mk_var (mk_return call tk_orange) range in
+  (* Create a separate post-state for each return flow in flow3 *)
   let remove_locals =
+    (* Remove local variables from the environment. Remove of parameters is
+              postponed after finishing the statement, to keep relations between
+                        the passed arguments and the return value. *)
     man.exec
-      (mk_block (List.map (fun v -> mk_remove_var v range) (locals @ params)) range) in
-
-  let add_cleaners return cases =
-    match call_oexp with
-    | None -> cases
-    | Some _ -> Cases.add_cleaners [mk_remove return range] cases in
+      (mk_block (List.map (fun v -> mk_remove_var v range) locals) range) in
+  let add_cleaners return =
+    Cases.add_cleaners
+      (List.map (fun v -> mk_remove_var v range) params @
+         (match call_oexp with
+          | None -> []
+          | Some _ -> [mk_remove return range])) in
 
   let evals =
     Flow.fold (fun acc tk env ->
@@ -311,17 +320,10 @@ let exec_fun_body f params locals body call_oexp range man flow =
       [] flow3
   in
 
-  let ret =
-    Eval.join_list ~empty:(fun () ->
-        let return = mk_return None range in
-        Post.return flow5 >>% remove_locals >>% man.eval return |> add_cleaners return
+  Eval.join_list ~empty:(fun () ->
+      let return = mk_return None range in
+      Post.return flow5 >>% remove_locals >>% man.eval return |> add_cleaners return
       ) evals
-  in
-
-  (* Restore call stack *)
-  let _,cs = Cases.get_callstack ret |>
-             Callstack.pop_callstack in
-  Cases.set_callstack cs ret
 
 (** Inline a function call *)
 let inline f params locals body call_oexp range man flow =
@@ -345,11 +347,21 @@ let inline f params locals body call_oexp range man flow =
        post >>% fun flow ->
                 match call_oexp with
                 | None ->
-                   Eval.singleton (mk_unit range) flow
+                   Eval.singleton (mk_unit range) flow ~cleaners:(
+                       List.map (fun v ->
+                           mk_remove_var v range
+                         ) params
+                     )
 
                 | Some e ->
                    let v = mk_return e None in
                    man.eval (mk_var v range) flow
+                   |> Cases.add_cleaners (
+                          mk_remove_var v range ::
+                            List.map (fun v ->
+                                mk_remove_var v range
+                              ) params
+                        )
      end
 
   | false ->

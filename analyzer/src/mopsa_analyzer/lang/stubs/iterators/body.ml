@@ -398,13 +398,6 @@ struct
     in
     man.exec (mk_block block range) flow |> post_to_flow man
 
-  let clean_params params range man flow =
-    let block =
-      List.fold_left (fun block v ->
-          mk_remove_var v range :: block
-        ) [] params
-    in
-    man.exec (mk_block block range) flow |> post_to_flow man
 
   let exec_free free man flow =
     let e = free.content in
@@ -501,21 +494,21 @@ struct
       (* Evaluate the body of the stb *)
       let flow = exec_body ~stub:(Some stub) stub.stub_func_body return range man flow in
       (* Clean locals *)
-      let flow = clean_post stub.stub_func_locals (tag_range stub.stub_func_range "clean-locals") man flow in
+      let flow = clean_post stub.stub_func_locals (tag_range stub.stub_func_range "clean") man flow in
       (* Clean assignments *)
-      let flow = clean_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "clean-assign") man flow in
-      (* Clean parameters *)
-      let flow = clean_params stub.stub_func_params (tag_range range "clean-params") man flow in
+      let flow = clean_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "clean") man flow in
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
+      let clean_range = tag_range range "clean" in
+      let cleaners = List.map (fun param -> mk_remove_var param clean_range) stub.stub_func_params in
 
       match return with
       | None ->
-        Eval.singleton (mk_unit range) flow
+        Eval.singleton (mk_unit range) flow ~cleaners
 
       | Some v ->
         man.eval (mk_var v range) flow |>
-        Cases.add_cleaners [mk_remove_var v range]
+        Cases.add_cleaners (mk_remove_var v range :: cleaners)
 
   (** Evaluate an otherwise expression *)
   let eval_otherwise cond alarm range man flow =

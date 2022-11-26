@@ -217,11 +217,12 @@ struct
     with Not_found -> Post.return flow
 
 
-  let exec_entry_body f args man flow =
+  let exec_entry_body f man flow =
     match f.c_func_body with
     | None -> panic "entry function %s is not defined" f.c_func_org_name
     | Some stmt ->
-      let stmt = mk_c_call_stmt f args f.c_func_name_range in
+      let f' = { f with c_func_parameters = [] } in
+      let stmt = mk_c_call_stmt f' [] f.c_func_name_range in
       man.exec stmt flow
 
 
@@ -332,8 +333,16 @@ struct
     let last = mk_c_subscript_access argv argc range in
     man.exec (mk_assign last (mk_c_null range) range) flow >>% fun flow ->
 
-    (* Call main *)
-    exec_entry_body main [argc; argv] man flow
+    (* assign main parameters and call the body *)
+    let argcv, argvv = match main.c_func_parameters with
+      | [v1;v2] -> mk_var v1 range, mk_var v2 range
+      | _ -> assert false
+    in
+    man.exec (mk_add argcv range) flow >>% fun flow ->
+    man.exec (mk_assign argcv argc range) flow >>% fun flow ->
+    man.exec (mk_add argvv range) flow >>% fun flow ->
+    man.exec (mk_assign argvv argv range) flow >>% fun flow ->
+    exec_entry_body main man flow
 
 
   (** Allocate addresses for symbolic arguments *)
@@ -395,13 +404,18 @@ struct
     let report = Flow.get_report flow in
     let range = main.c_func_name_range in
 
+    let argc_var, argv_var = match main.c_func_parameters with
+      | [v1;v2] -> v1,v2
+      | _ -> assert false
+    in
+
     (* Add the symbolic variable argc representing the number of
        arguments. It should greater than 1 due to the presence of the
        program name. Also, it should not exceed INT_MAX - 1, because
        the argument argv[argc + 1] contains terminating NULL pointer
        (i.e. to avoid integer overflow).
     *)
-    let argc = mk_var (mktmp ~typ:s32 ()) range in
+    let argc = mk_var argc_var range in
     man.exec (mk_add argc range) flow >>% fun flow ->
     let lo' = lo + 1 in
     let hi' =
@@ -416,6 +430,9 @@ struct
 
     (* Create the memory block pointed by argv. *)
     alloc_argv range man flow >>$ fun argv flow ->
+    let argvv = mk_var argv_var range in
+    man.exec (mk_add argvv range) flow >>% fun flow ->
+    man.exec (mk_assign argvv argv range) flow >>% fun flow ->
 
     (* Initialize its size to argc + 1 *)
     eval_bytes argv range man flow >>$ fun argv_bytes flow ->
@@ -499,7 +516,7 @@ struct
     (* Put the initial alarms report *)
     let flow = Flow.set_report report flow in
 
-    exec_entry_body main [argc; argv] man flow
+    exec_entry_body main man flow
 
 
 
@@ -517,7 +534,7 @@ struct
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main [] man flow >>% fun flow ->
+      exec_entry_body main man flow >>% fun flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
@@ -545,7 +562,7 @@ struct
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
-        exec_entry_body entry [] man flow |>
+        exec_entry_body entry man flow |>
         OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name

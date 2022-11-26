@@ -72,6 +72,33 @@ struct
 
   let init prog man flow = set_env T_cur empty man flow
 
+  (************************)
+  (** Auxiliary variables *)
+  (************************)
+
+  (** This vkind is used to attach the callstack to local variables *)
+  type var_kind += V_c_stack_var of callstack * var
+
+  (** Create a stack variable *)
+  let mk_stack_var cs v =
+    let uniq_name = Format.asprintf "stack(%a, %s)" pp_callstack_short cs v.vname in
+    mkv uniq_name (V_c_stack_var (cs, v)) v.vtyp
+
+  let () = register_var {
+      print = (fun next fmt v ->
+          match vkind v with
+          | V_c_stack_var (cs, vv) -> Format.fprintf fmt "stack(%a, %a)" pp_callstack_short cs pp_var vv
+          | _ -> next fmt v
+        );
+      compare = (fun next v1 v2 ->
+          match vkind v1, vkind v2 with
+          | V_c_stack_var (cs1, vv1), V_c_stack_var (cs2, vv2) ->
+            Compare.pair compare_callstack compare_var
+              (cs1, vv1) (cs2, vv2)
+          | _ ->
+            next v1 v2
+        );
+    }
 
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
@@ -108,6 +135,80 @@ struct
     Universal.Iterators.Interproc.Common.check_recursion f_orig f_uniq range
     (Callstack.push_callstack f_orig ~uniq:f_uniq range (Flow.get_callstack flow))
 
+  (** Rename the variables of a function's body by attaching the callstack to them *)
+  let rename_function_variables_body cs body =
+    let is_local_scope = function
+      | Variable_local _ | Variable_parameter _ ->
+        true
+      | _ ->
+        false
+    in
+    let rec visit_expr e =
+      map_expr
+        (fun e ->
+           match ekind e with
+           | E_var(v, mode) ->
+             begin match vkind v with
+               | V_cvar cv when is_local_scope cv.cvar_scope ->
+                 let v' = mk_stack_var cs v in
+                 let e' = { e with ekind = E_var(v', mode) } in
+                 Keep e'
+               | _ ->
+                 Keep e
+             end
+           | _ ->
+             VisitParts e
+        )
+        (fun s ->
+           let s' = visit_stmt s in
+           Keep s'
+        ) e
+    and visit_stmt s =
+      map_stmt
+        (fun e ->
+           let e' = visit_expr e in
+           Keep e'
+        )
+        (fun s ->
+           match skind s with
+           | S_c_declaration(v, init, scope) when is_local_scope scope ->
+             let v' = mk_stack_var cs v in
+             let init' = OptionExt.lift visit_init init in
+             let s' = { s with skind = S_c_declaration(v', init', scope) } in
+             Keep s'
+           | S_block(block, vars) ->
+             let block' = List.map visit_stmt block in
+             let vars' = List.map (mk_stack_var cs) vars in
+             let s' = { s with skind = S_block(block', vars') } in
+             Keep s'
+           | _ ->
+             VisitParts s
+        ) s
+    and visit_init = function
+      | C_init_expr e ->
+        C_init_expr (visit_expr e)
+      | C_init_list(inits, filler) ->
+        C_init_list(List.map visit_init inits, OptionExt.lift visit_init filler)
+      | C_init_implicit t ->
+        C_init_implicit t
+    in
+    visit_stmt body
+
+  (** Renamve local variables in a stub body by attaching the callstack to them *)
+  let rename_function_variables_stub cs stub =
+    assert false
+
+  (** Rename the variables of a function by attaching the callstack to them *)
+  let rename_function_variables cs fundec =
+    if is_empty_callstack cs then
+      fundec
+    else
+      { fundec with
+        c_func_parameters = List.map (mk_stack_var cs) fundec.c_func_parameters;
+        c_func_local_vars = List.map (mk_stack_var cs) fundec.c_func_local_vars;
+        c_func_body = OptionExt.lift (rename_function_variables_body cs) fundec.c_func_body;
+        c_func_stub = OptionExt.lift (rename_function_variables_stub cs) fundec.c_func_stub;
+      }
 
   (** 𝔼⟦ alloca(size) ⟧ *)
   let eval_alloca_call size range man flow =
@@ -181,7 +282,8 @@ struct
             man.eval (mk_top fundec.c_func_return range) flow
         )
         else
-          let () = debug "not a recursive call" in
+         let () = debug "not a recursive call" in
+         let fundec = rename_function_variables (Flow.get_callstack flow) fundec in
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
            debug "body = %a" pp_stmt body;
