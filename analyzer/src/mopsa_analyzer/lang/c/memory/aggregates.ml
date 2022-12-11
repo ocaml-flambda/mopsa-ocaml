@@ -72,6 +72,7 @@ struct
          (mk_c_cast p (pointer_type s8) range)
          O_plus
          align
+         ~etyp:(pointer_type s8)
          range
       )
       (pointer_type t)

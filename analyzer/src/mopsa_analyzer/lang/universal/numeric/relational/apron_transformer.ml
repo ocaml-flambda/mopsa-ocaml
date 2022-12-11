@@ -215,140 +215,133 @@ struct
     Apron.Abstract1.change_environment ApronManager.man abs env true
 
 
-  let rec exp_to_apron exp (abs,bnd) l =
+  let rec exp_to_apron isnan exp (abs,bnd) l =
     if not (is_numeric_type (etyp exp)) then raise UnsupportedExpression else
+      match ekind exp with
+      | E_constant (C_int_interval (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi)) when Z.(lo = hi) ->
+        Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string lo)),
+        abs, bnd, l
+
+      | E_constant C_top _
+      | E_constant C_int_interval _
+      | E_constant C_float_interval _
+      | E_unop (O_wrap _, _) ->
+        raise ImpreciseExpression
+
+      | E_constant(C_bool true) ->
+        Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 1)),
+        abs, bnd, l
+
+      | E_constant(C_bool false) ->
+        Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 0)),
+        abs, bnd, l
+
+      | E_constant(C_int n) ->
+        Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),
+        abs, bnd, l
+
+      | E_constant(C_float f) ->
+        Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)),
+        abs, bnd, l
+
+      | E_var (x, mode) when var_mode x mode = STRONG ->
+        let xx, bnd = Binding.mopsa_to_apron_var x bnd in
+        Apron.Texpr1.Var(xx), abs, bnd, l
+
+      | E_var (x, mode) when var_mode x mode = WEAK ->
+        let x' = mktmp ~typ:exp.etyp () in
+        let x_apr, bnd = Binding.mopsa_to_apron_var x bnd in
+        let x_apr', _ = Binding.mopsa_to_apron_var x' bnd in
+        let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
+        (Apron.Texpr1.Var x_apr', abs, bnd, x_apr' :: l)
+
+      | E_binop((O_ediv|O_erem) as binop, e1, e2) ->
+        let binop' = binop_to_apron binop in
+        let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
+        let e2', abs, bnd, l = exp_to_apron isnan e2 (abs,bnd) l in
+        let typ' = typ_to_apron exp.etyp in
+        let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Down else !opt_float_rounding in
+        Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
+
+      | E_binop(binop, e1, e2) ->
+        let binop' = binop_to_apron binop in
+        let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
+        let e2', abs, bnd, l = exp_to_apron isnan e2 (abs,bnd) l in
+        let typ' = typ_to_apron exp.etyp in
+        let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+        Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
+
+      | E_unop (O_plus, e) ->
+        exp_to_apron isnan e (abs,bnd) l
+
+      | E_unop(O_cast, e) ->
+        let e', abs, bnd, l = exp_to_apron isnan e (abs,bnd) l in
+        let typ' = typ_to_apron exp.etyp in
+        let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+        Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', round), abs, bnd, l
+
+      | E_unop(O_minus, e) ->
+        let e', abs, bnd, l = exp_to_apron isnan e (abs,bnd) l in
+        let typ' = typ_to_apron e.etyp in
+        let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+        Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', round), abs, bnd, l
+
+      | E_unop(O_sqrt, e) ->
+        let e', abs, bnd, l = exp_to_apron isnan e (abs,bnd) l in
+        let typ' = typ_to_apron exp.etyp in
+        Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
+
+      | _ ->
+        raise ImpreciseExpression
+
+
+  and bexp_to_apron isnan exp (abs,bnd) l =
     match ekind exp with
-    | E_constant (C_int_interval (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi)) when Z.(lo = hi) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string lo)),
-      abs, bnd, l
-
-    | E_constant C_top _
-    | E_constant C_int_interval _
-    | E_constant C_float_interval _
-    | E_unop (O_wrap _, _) ->
-      raise ImpreciseExpression
-
-    | E_constant(C_bool true) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 1)),
-      abs, bnd, l
-
-    | E_constant(C_bool false) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_int 0)),
-      abs, bnd, l
-
-    | E_constant(C_int n) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_mpq @@ Mpq.of_string @@ Z.to_string n)),
-      abs, bnd, l
-
-    | E_constant(C_float f) ->
-      Apron.Texpr1.Cst(Apron.Coeff.Scalar(Apron.Scalar.of_float f)),
-      abs, bnd, l
-
-    | E_var (x, mode) when var_mode x mode = STRONG ->
-      let xx, bnd = Binding.mopsa_to_apron_var x bnd in
-      Apron.Texpr1.Var(xx), abs, bnd, l
-
-    | E_var (x, mode) when var_mode x mode = WEAK ->
-      let x' = mktmp ~typ:exp.etyp () in
-      let x_apr, bnd = Binding.mopsa_to_apron_var x bnd in
-      let x_apr', _ = Binding.mopsa_to_apron_var x' bnd in
-      let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
-      (Apron.Texpr1.Var x_apr', abs, bnd, x_apr' :: l)
-
-    | E_binop((O_ediv|O_erem) as binop, e1, e2) ->
-      let binop' = binop_to_apron binop in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      let e2', abs, bnd, l = exp_to_apron e2 (abs,bnd) l in
-      let typ' = typ_to_apron exp.etyp in
-      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Down else !opt_float_rounding in
-      Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
-
-    | E_binop(binop, e1, e2) ->
-      let binop' = binop_to_apron binop in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      let e2', abs, bnd, l = exp_to_apron e2 (abs,bnd) l in
-      let typ' = typ_to_apron exp.etyp in
-      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
-      Apron.Texpr1.Binop(binop', e1', e2', typ', round), abs, bnd, l
-
-    | E_unop (O_plus, e) ->
-      exp_to_apron e (abs,bnd) l
-
-    | E_unop(O_cast, e) ->
-      let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron e.etyp in
-      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
-      Apron.Texpr1.Unop(Apron.Texpr1.Cast, e', typ', round), abs, bnd, l
-
-    | E_unop(O_minus, e) ->
-      let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron e.etyp in
-      let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
-      Apron.Texpr1.Unop(Apron.Texpr1.Neg, e', typ', round), abs, bnd, l
-
-    | E_unop(O_sqrt, e) ->
-      let e', abs, bnd, l = exp_to_apron e (abs,bnd) l in
-      let typ' = typ_to_apron exp.etyp in
-      Apron.Texpr1.Unop(Apron.Texpr1.Sqrt, e', typ', !opt_float_rounding), abs, bnd, l
-
-    | _ ->
-      raise ImpreciseExpression
-
-
-  and bexp_to_apron exp (abs,bnd) l =
-    match ekind exp with
-    | E_binop(O_gt, e0 , e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp), abs, bnd, l
-
-    | E_binop(O_ge, e0 , e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      Dnf.singleton (Apron.Tcons1.SUPEQ, e0', e0.etyp, e1', e1.etyp), abs, bnd, l
-
-    | E_binop(O_lt, e0 , e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp), abs, bnd, l
-
-    | E_binop(O_le, e0 , e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      Dnf.singleton (Apron.Tcons1.SUPEQ, e1', e1.etyp, e0', e0.etyp), abs, bnd, l
-
-    | E_binop(O_eq, e0 , e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
-      Dnf.singleton (Apron.Tcons1.EQ, e0', e0.etyp, e1', e1.etyp), abs, bnd, l
+    | E_binop((O_gt | O_ge | O_lt | O_le | O_eq) as comp_op, e0 , e1) ->
+      if (is_float_type (etyp e0) && isnan e0) || (is_float_type (etyp e1) && isnan e1) then raise ImpreciseExpression;
+      let e0', abs, bnd, l = exp_to_apron isnan e0 (abs,bnd) l in
+      let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
+      let rev, apron_comp_op = match comp_op with
+        | O_gt -> false, Apron.Tcons1.SUP 
+        | O_ge -> false, Apron.Tcons1.SUPEQ 
+        | O_lt -> true, Apron.Tcons1.SUP
+        | O_le -> true, Apron.Tcons1.SUPEQ 
+        | O_eq -> false, Apron.Tcons1.EQ 
+        | _ -> assert false
+      in
+      let e0', t0, e1', t1 =
+        if rev then e1', e1.etyp, e0', e0.etyp
+        else e0', e0.etyp, e1', e1.etyp in
+      Dnf.singleton (apron_comp_op, e0', t0, e1', t1), abs, bnd, l
 
     | E_binop(O_ne, e0, e1) ->
-      let e0', abs, bnd, l = exp_to_apron e0 (abs,bnd) l in
-      let e1', abs, bnd, l = exp_to_apron e1 (abs,bnd) l in
+      if (is_float_type (etyp e0) && isnan e0) || (is_float_type (etyp e1) && isnan e1) then raise ImpreciseExpression;
+      let e0', abs, bnd, l = exp_to_apron isnan e0 (abs,bnd) l in
+      let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
       Dnf.mk_or
         (Dnf.singleton (Apron.Tcons1.SUP, e0', e0.etyp, e1', e1.etyp))
         (Dnf.singleton (Apron.Tcons1.SUP, e1', e1.etyp, e0', e0.etyp)),
       abs, bnd, l
 
     | E_binop(O_log_or, e1, e2) ->
-      let e1', abs, bnd, l = bexp_to_apron e1 (abs,bnd) l in
-      let e2', abs, bnd, l = bexp_to_apron e2 (abs,bnd) l in
+      let e1', abs, bnd, l = bexp_to_apron isnan e1 (abs,bnd) l in
+      let e2', abs, bnd, l = bexp_to_apron isnan e2 (abs,bnd) l in
       Dnf.mk_or e1' e2', abs, bnd, l
 
     | E_binop(O_log_and,e1, e2) ->
-      let e1', abs, bnd, l = bexp_to_apron e1 (abs,bnd) l in
-      let e2', abs, bnd, l = bexp_to_apron e2 (abs,bnd) l in
+      let e1', abs, bnd, l = bexp_to_apron isnan e1 (abs,bnd) l in
+      let e2', abs, bnd, l = bexp_to_apron isnan e2 (abs,bnd) l in
       Dnf.mk_and e1' e2', abs, bnd, l
 
     | E_binop(O_log_xor, e1, e2) ->
       let e1' = mk_binop ~etyp:T_bool e1 O_eq (mk_zero ~typ:T_int exp.erange) exp.erange in
       let e2' = mk_binop ~etyp:T_bool e1 O_eq (mk_zero ~typ:T_int exp.erange) exp.erange in
-      let e1', abs, bnd, l = exp_to_apron e1' (abs,bnd) l in
-      let e2', abs, bnd, l = exp_to_apron e2' (abs,bnd) l in
+      let e1', abs, bnd, l = exp_to_apron isnan e1' (abs,bnd) l in
+      let e2', abs, bnd, l = exp_to_apron isnan e2' (abs,bnd) l in
       Dnf.singleton (Apron.Tcons1.DISEQ, e1', T_bool, e2', T_bool), abs, bnd, l
 
     | E_unop(O_log_not, exp') ->
-      let dnf, abs, bnd, l = bexp_to_apron exp' (abs,bnd) l in
+      let dnf, abs, bnd, l = bexp_to_apron isnan exp' (abs,bnd) l in
       Dnf.mk_neg (fun (op, e1, t1, e2, t2) ->
           match op with
           | Apron.Tcons1.EQ ->
@@ -364,7 +357,7 @@ struct
       abs, bnd, l
 
     | _ ->
-      let e0', abs, bnd, l = exp_to_apron exp (abs,bnd) l in
+      let e0', abs, bnd, l = exp_to_apron isnan exp (abs,bnd) l in
       let e1' = Apron.Texpr1.Cst(Apron.Coeff.s_of_int 0) in
       Dnf.mk_or
         (Dnf.singleton (Apron.Tcons1.SUP, e0', exp.etyp, e1', T_int))

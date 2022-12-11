@@ -122,7 +122,7 @@ int listen (int __fd, int __n);
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: alive_resource(f, FileRes);
  * requires: __addr_ptr != NULL implies valid_ptr(__addr_len);
- * requires: null_or_valid_bytes(__addr_ptr, *__addr_len);
+ * requires: __addr_ptr != NULL implies null_or_valid_bytes(__addr_ptr, *__addr_len);
  *
  * case "valid-addr" {
  *   assumes: __addr_ptr != NULL;

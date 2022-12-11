@@ -327,7 +327,6 @@ struct
     match bo with
     | None -> Post.return flow
     | Some (base,boffset,mode) ->
-    if is_scalar_base base then Cases.not_handled flow else
     if not (is_interesting_base base) || not (is_c_int_type e.etyp) then
       Post.return flow
     else

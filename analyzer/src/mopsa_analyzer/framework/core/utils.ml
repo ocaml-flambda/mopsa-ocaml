@@ -87,11 +87,17 @@ let assume
     ~fthen ~felse
     ?(fboth=(fun then_flow else_flow ->
         let ret1 = fthen then_flow in
-        let ret2 = felse else_flow in
+        let ctx1 = Cases.get_ctx ret1 in
+        let ret2 = Flow.set_ctx ctx1 else_flow |>
+                   felse
+        in
+        let ret1 = Cases.copy_ctx ret2 ret1 in
         Cases.join ret1 ret2
       ))
-    ?(fnone=(fun flow ->
-        Cases.empty flow
+    ?(fnone=(fun then_flow else_flow ->
+        Cases.join
+          (Cases.empty then_flow)
+          (Cases.empty else_flow)
       ))
     ?(eval=true)
     man flow
@@ -122,7 +128,7 @@ let assume
   with
   | false,true  -> fthen then_flow
   | true,false  -> felse else_flow
-  | true,true   -> fnone (Flow.join man.lattice then_flow else_flow)
+  | true,true   -> fnone then_flow else_flow
   | false,false -> fboth then_flow else_flow
 
 
