@@ -124,7 +124,8 @@ struct
                 let vars' = VarSet.diff vars past in
                 (* Refine the interval of these variables *)
                 let acc' = VarSet.fold (fun var' acc ->
-                    refine_var_interval var' man ctx acc
+                    try refine_var_interval var' man ctx acc
+                    with Not_found -> acc
                   ) vars' acc
                 in
                 acc', VarSet.union vars' past
