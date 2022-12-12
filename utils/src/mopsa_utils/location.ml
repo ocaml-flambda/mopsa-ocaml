@@ -174,7 +174,7 @@ let is_program_range = function
   | _ -> false
 
 let match_range_file file r =
-  let pred f = Str.string_match (Str.regexp (".*" ^ file ^ "$")) f 0 in
+  let pred f = Str.string_match (Str.regexp (".*" ^ (Str.quote file) ^ "$")) f 0 in
   match untag_range r with
   | R_orig(p, _) -> pred p.pos_file
   | R_program pl -> List.exists pred pl
