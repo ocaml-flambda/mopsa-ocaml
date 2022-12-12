@@ -50,6 +50,23 @@ struct
 
   let checks = []
 
+
+  (** {2 Command-line options} *)
+  (** ======================== *)
+
+  (** Size threshold (in bytes) for using memset to initialize memory blocks
+      instead of a sequence of assignments *)
+  let opt_init_memset_threshold = ref 50
+
+  let () = register_domain_option name {
+      key  = "-c-init-memset-threshold";
+      doc  = " Size threshold (in bytes) for using memset to initialize memory blocks instead of a sequence of assignments";
+      spec = ArgExt.Set_int opt_init_memset_threshold;
+      category = "C";
+      default = string_of_int !opt_init_memset_threshold;
+    }
+
+
   (** {2 Initialization procedure} *)
   (** ============================ *)
 
@@ -233,14 +250,14 @@ struct
     debug "fields of %a: %a" pp_typ typ (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_record_field) fields;
     match init with
     | None ->
-      let rec aux offset acc1 acc2 = function
+      let rec aux acc1 acc2 = function
         | [] -> acc1,acc2
         | field :: tl ->
-          let l1,l2 = flatten_init None offset field.c_field_type range in
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          aux o (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
+          let l1,l2 = flatten_init None o field.c_field_type range in
+          aux (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
-      let l1,l2 = aux offset [] [] fields in
+      let l1,l2 = aux [] [] fields in
       List.rev l1, List.rev l2
 
     | Some (C_init_list(l, None)) ->
@@ -309,33 +326,72 @@ struct
       | _ ->
         Post.return flow
     else
-      (* Initialization of aggregate types is decomposed into sequence of assignments *)
-      match initl, fill with
-      (* Uninitialized global variables are filled with 0 *)
-      | [], _ when is_c_global_scope scope ->
-        let i = mk_zero range in
-        let j = mk_z (sizeof_type v.vtyp |> Z.pred) range in
-        let p = mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range in
-        memset p (mk_zero range) i j range man flow 
+      (* Create a sequence of assignments for initializers *)
+      List.fold_left
+        (fun acc (e,o,t) ->
+           (* Execute the assignment on the range of the expression *)
+           let erange = e.erange in
+           (* *(( t* )( char* )(&v) + o)) = e; *)
+           let stmt = mk_assign (mk_c_deref (mk_c_cast
+                                               (mk_binop
+                                                  (mk_c_cast (mk_c_address_of (mk_var v erange) erange) (pointer_type s8) erange)
+                                                  O_plus
+                                                  (mk_z o erange)
+                                                  ~etyp:(pointer_type s8) erange
+                                               )
+                                               (pointer_type t) erange
+                                            ) erange) e erange
+           in
+           acc >>% man.exec stmt
+        ) (Post.return flow) initl
+      >>% fun flow ->
 
-      (* Create a block of low-level assignments *)
-      | _ ->
-        let stmt = mk_block (List.map (fun (e,o,t) ->
-            (* Execute the assignment on the range of the expression *)
-            let erange = e.erange in
-            (* *(( t* )( char* )(&v) + o)) = e; *)
-            mk_assign (mk_c_deref (mk_c_cast
-                                     (mk_binop
-                                        (mk_c_cast (mk_c_address_of (mk_var v erange) erange) (pointer_type s8) erange)
-                                        O_plus
-                                        (mk_z o erange)
-                                        ~etyp:(pointer_type s8) erange
-                                     )
-                                     (pointer_type t) erange
-                                  ) erange) e erange
-          ) initl) range
-        in
-        man.exec stmt flow
+      (* For uninitialized parts, do nothing if the variable is local *)
+      if not (is_c_global_scope scope) then
+        Post.return flow
+      else
+        (* Global variable => initialize with zero *)
+        fill |> List.fold_left
+          (fun acc (filler, n, o, t) ->
+             (* Initialisation expression *)
+             let init =
+               match filler with
+               | Some e -> e
+               | None -> mk_zero range (* global + uninitialized *)
+             in
+             let base =
+               (* base : (char * )&v + o *)
+               add
+                 (mk_c_cast (mk_c_address_of (mk_var v range) range) (pointer_type s8) range)
+                 (mk_z o range)
+                 ~typ:(pointer_type s8) range
+             in
+             let bytes = Z.(n * sizeof_type t) in
+             (* Use memset if the size is greater than the threshold *)
+             if Z.(bytes >= of_int !opt_init_memset_threshold) then
+               let i = mk_zero range in
+               let j = mk_z Z.(pred bytes) range in
+               memset base (mk_zero range) i j range man flow
+             else
+               (* Otherwise, use assignments *)
+               let rec aux i acc =
+                 if Z.(i = n) then acc
+                 else
+                   let stmt =
+                     (* *(( t* )base + i) = init; *)
+                     mk_assign
+                       (mk_c_deref
+                          (add
+                             (mk_c_cast base (pointer_type t) range)
+                             (mk_z i range) range) range)
+                       init range
+                   in
+                   acc >>% fun flow ->
+                   man.exec stmt flow |>
+                   aux (Z.succ i)
+               in
+               aux Z.zero acc
+          ) (Post.return flow)
 
 
   (** 𝕊⟦ lval = rval; ⟧ when lval is a record *)
