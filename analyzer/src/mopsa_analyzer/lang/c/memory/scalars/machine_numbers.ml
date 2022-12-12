@@ -166,6 +166,7 @@ struct
     | T_bool | T_int | T_float _ | T_any -> t
     | _ ->
       match remove_typedef_qual t with
+      | T_c_bitfield(t, d) -> T_int 
       | T_c_bool -> T_bool
       | T_c_integer _ -> T_int
       | T_c_enum _ -> T_int
