@@ -222,7 +222,12 @@ struct
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
-          man.eval exp' flow
+          man.eval exp' flow >>$ fun exp' flow ->
+          let flow =
+            if List.mem fundec.c_func_org_name ["sqrt"; "sqrtf"; "sqrtl"] then
+              man.exec (mk_assume (eq ~etyp:T_bool exp' (mk_unop O_sqrt ~etyp:fundec.c_func_return (List.hd args) range) range) range) flow
+            else Post.return flow in
+          Eval.singleton exp' (post_to_flow man flow)
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           let flow =
