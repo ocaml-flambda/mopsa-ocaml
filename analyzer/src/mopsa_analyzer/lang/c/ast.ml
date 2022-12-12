@@ -636,7 +636,8 @@ let rec sizeof_type (t : typ) : Z.t =
 
   | T_c_array (_, (C_array_no_length | C_array_length_expr _)) -> panic ~loc:__LOC__ "%a has no length information" pp_typ t
 
-  | T_c_bitfield(t, size) -> panic ~loc:__LOC__ "%a is a bitfield" pp_typ t
+  | T_c_bitfield(t, size) -> Z.of_int size
+                               (* panic ~loc:__LOC__ "%a is a bitfield" pp_typ t *)
 
   | T_c_function _ | T_c_builtin_fn -> panic ~loc:__LOC__ "%a is a function" pp_typ t
 
@@ -785,10 +786,13 @@ let get_c_float_precision t =
   | C_long_double -> F_LONG_DOUBLE
   | C_float128 -> F_FLOAT128
 
+let is_c_bitfield typ = match typ with
+  | T_c_bitfield _ -> true
+  | _ -> false
 
 (** [is_c_int_type t] tests whether [t] is a numeric type *)
 let is_c_num_type (t:typ) =
-  is_c_int_type t || is_c_float_type t
+  is_c_int_type t || is_c_float_type t || is_c_bitfield t
 
 (** [is_c_scalar_type t] tests whether [t] is a scalar type *)
 let is_c_scalar_type ( t : typ) =

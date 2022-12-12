@@ -378,76 +378,83 @@ struct
   (** Unique range for expressions/statements constructed by the interactive engine *)
   let interactive_range = tag_range (mk_fresh_range ()) "interactive"
 
+  (** Get the variables appearing in an action *)
+  let action_line_vars : type a. a action -> var list = fun action ->
+    let range = action_range action in
+    if not (is_orig_range range) then []
+    else
+      let line = get_range_line range in
+      let visit_expr acc e =
+        if not (is_orig_range e.erange) then VisitParts acc
+        else
+          let line' = get_range_line e.erange in
+          if line = line' then Keep (acc@expr_vars e) else VisitParts acc
+      in
+      let visit_stmt acc s = VisitParts acc in
+      match action with
+      | Exec (stmt, _) ->
+        fold_stmt visit_expr visit_stmt [] stmt
+
+      | Eval (expr, _, _, _) ->
+        fold_expr visit_expr visit_stmt [] expr
+
+
   (** Print value of variables *)
-  let pp_vars names man flow =
-    match names with
-    | [] ->
-      printf "%a@." (format (Flow.print man.lattice.print)) flow
-    | _ ->
-      let vars = man.ask Q_defined_variables flow in
-      let addrs = man.ask Q_allocated_addresses flow in
-      let vmap =
-        List.fold_left
-          (fun acc v ->
-             let vname = asprintf "%a" pp_var v in
-             MapExt.StringMap.add vname v acc)
-          MapExt.StringMap.empty vars
-      in
-      let amap =
-        List.fold_left
-          (fun acc a ->
-             let aname = asprintf "%a" pp_addr a in
-             MapExt.StringMap.add aname a acc)
-          MapExt.StringMap.empty addrs
-      in
-      let vfound,afound,not_found =
-        List.fold_left
-          (fun (vfound,afound,not_found) name ->
-             match MapExt.StringMap.find_opt name vmap with
-             | Some var -> var::vfound,afound,not_found
-             | None     ->
-               match MapExt.StringMap.find_opt name amap with
-               | Some addr -> vfound,addr::afound,not_found
-               | None      -> vfound,afound,name::not_found
-          ) ([],[],[]) names
-      in
-      let not_found' =
-        let printer = empty_printer () in
-        let found,not_found =
-          List.fold_left
-            (fun (found,not_found) v ->
-               try
-                 let () = man.print_expr flow printer (mk_var v interactive_range) in
-                 true,not_found
-               with Not_found ->
+  let pp_vars action names man flow =
+    if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
+      printf "⊥@."
+    else
+      let vars, addrs, not_found =
+        match names with
+        | [] ->
+          action_line_vars action, [], []
+        | _ ->
+          let vars = man.ask Q_defined_variables flow in
+          let addrs = man.ask Q_allocated_addresses flow in
+          let vmap =
+            List.fold_left
+              (fun acc v ->
                  let vname = asprintf "%a" pp_var v in
-                 found,vname::not_found
-            ) (false,[]) vfound
-        in
-        let found,not_found =
-          List.fold_left
-            (fun (found,not_found) a ->
-               try
-                 let () = man.print_expr flow printer (mk_addr a interactive_range) in
-                 true,not_found
-               with Not_found ->
+                 MapExt.StringMap.add vname v acc)
+              MapExt.StringMap.empty vars
+          in
+          let amap =
+            List.fold_left
+              (fun acc a ->
                  let aname = asprintf "%a" pp_addr a in
-                 found,aname::not_found
-            ) (found,not_found) afound
-        in
-        if found then printf "%a@." pflush printer;
-        not_found
+                 MapExt.StringMap.add aname a acc)
+              MapExt.StringMap.empty addrs
+          in
+          List.fold_left
+            (fun (vfound,afound,not_found) name ->
+               match MapExt.StringMap.find_opt name vmap with
+               | Some var -> var::vfound,afound,not_found
+               | None     ->
+                 match MapExt.StringMap.find_opt name amap with
+                 | Some addr -> vfound,addr::afound,not_found
+                 | None      -> vfound,afound,name::not_found
+            ) ([],[],[]) names
       in
-      ( match not_found@not_found' with
-        | [] -> ()
-        | l  ->
-          printf "Variable%a %a not found@."
-            Debug.plurial_list not_found
-            (pp_print_list
-               ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-               (fun fmt vname -> fprintf fmt "'%s'" vname)
-            ) l
-      )
+      let printer = empty_printer () in
+      List.iter
+        (fun v ->
+           try man.print_expr flow printer (mk_var v interactive_range)
+           with Not_found -> ()
+        ) vars;
+      List.iter
+        (fun a ->
+           try man.print_expr flow printer (mk_addr a interactive_range)
+           with Not_found -> ()
+        ) addrs;
+      printf "%a@." pflush printer;
+      if not_found <> [] then
+        printf "Variable%a %a not found@."
+          Debug.plurial_list not_found
+          (pp_print_list
+             ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+             (fun fmt vname -> fprintf fmt "'%s'" vname)
+          ) not_found
+
 
   (** {2 Interactive engine} *)
   (** ********************** *)
@@ -505,7 +512,7 @@ struct
       interact action flow
 
     | Print names ->
-      pp_vars names man flow;
+      pp_vars action names man flow;
       interact action flow
 
     | Env [] ->

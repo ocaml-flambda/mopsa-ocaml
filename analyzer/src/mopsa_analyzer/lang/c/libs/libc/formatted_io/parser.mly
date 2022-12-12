@@ -109,6 +109,7 @@ output_width:
 
 output_precision:
   | DOT n=NUM { Some n, false }
+  | DOT       { Some 0, false }
   | DOT STAR  { None, true }
   |           { None, false }
 

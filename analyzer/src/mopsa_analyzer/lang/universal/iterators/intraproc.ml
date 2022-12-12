@@ -168,16 +168,21 @@ struct
         let post2 = man.exec other flow2 in
         Post.join post1 post2
       in
+      (* Execute both branches and ensure proper propagation of the context *)
+      let exec_both_branches flow1 flow2 =
+        let post1 = man.exec s1 flow1 in
+        let ctx1 = Cases.get_ctx post1 in
+        let flow2 = Flow.set_ctx ctx1 flow2 in
+        let post2 = man.exec s2 flow2 in
+        Post.join post1 post2
+      in
       assume cond man flow
         ~fthen:(exec_one_branch s1 s2)
         ~felse:(exec_one_branch s2 s1)
-        ~fboth:(fun flow1 flow2 ->
-            let post1 = man.exec s1 flow1 in
-            let ctx1 = Cases.get_ctx post1 in
-            let flow2 = Flow.set_ctx ctx1 flow2 in
-            let post2 = man.exec s2 flow2 in
-            Post.join post1 post2
-          )
+        ~fboth:(exec_both_branches)
+        (* When both environment are empty, we still need to execute both
+           branches because of eventual indirect flows *)
+        ~fnone:(exec_both_branches)
       |>
       OptionExt.return
 
