@@ -60,7 +60,7 @@ else
   QUIET = @
 endif
 
-#PKGS += unix str
+PKGS += unix str
 INCLUDES := \
   $(INCLUDES) \
   -I $(BUILD) \

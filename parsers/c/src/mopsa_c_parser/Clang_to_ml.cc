@@ -106,12 +106,8 @@ static const bool log_unknown = true;
 CAML_EXPORT value caml_gc_full_major(value);
 
 /* add support for defining CAMLlocals inside blocks */
-
-#define CAMLenterblock()                                        \
-  struct caml__roots_block *caml__frameBLK = caml_local_roots
-
-#define CAMLexitblock()                         \
-  caml_local_roots = caml__frameBLK
+#define CAMLenterblock() CAMLparam0()
+#define CAMLexitblock()  CAMLdrop
 
 
 /* dumps a OCaml block, for debugging */
