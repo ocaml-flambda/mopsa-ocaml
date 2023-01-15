@@ -30,15 +30,15 @@ open Soundness
 let name = "universal.iterators.interproc.common"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_continue_on_recursive_call : bool ref = ref true
+let opt_allow_recursive_calls : bool ref = ref false
 
 let () =
   register_shared_option name {
-    key = "-stop-rec";
+    key = "-allow-recursive-calls";
     category = "Interprocedural Analysis";
     doc = "";
-    spec = ArgExt.Clear opt_continue_on_recursive_call;
-    default = " continue with top during recursive calls"
+    spec = ArgExt.Set opt_allow_recursive_calls;
+    default = " allow recursive calls"
   }
 
 let opt_split_return_variables_by_range : bool ref = ref false
@@ -327,42 +327,38 @@ let exec_fun_body f params locals body call_oexp range man flow =
 
 (** Inline a function call *)
 let inline f params locals body call_oexp range man flow =
-  match check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow) with
-  | true ->
-     begin
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_recursion_side_effect f.fun_orig_name)
-           range flow
-       in
-       let post = match call_oexp with
-         | None -> Post.return flow
-         | Some e ->
-            if !opt_continue_on_recursive_call then
-              let v = mk_return e None in
-              man.exec (mk_add_var v range) flow >>%
-                man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
-            else
-              panic_at range "recursive call on function %s" f.fun_orig_name in
-       post >>% fun flow ->
-                match call_oexp with
-                | None ->
-                   Eval.singleton (mk_unit range) flow ~cleaners:(
-                       List.map (fun v ->
-                           mk_remove_var v range
-                         ) params
-                     )
+  if check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow)
+  && not !opt_allow_recursive_calls
+  then
+    let flow =
+      Flow.add_local_assumption
+        (A_ignore_recursion_side_effect f.fun_orig_name)
+        range flow
+    in
+    let post = match call_oexp with
+      | None -> Post.return flow
+      | Some e ->
+        let v = mk_return e None in
+        man.exec (mk_add_var v range) flow >>%
+        man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+    in
+    post >>% fun flow ->
+    match call_oexp with
+    | None ->
+      Eval.singleton (mk_unit range) flow ~cleaners:(
+        List.map (fun v ->
+            mk_remove_var v range
+          ) params
+      )
 
-                | Some e ->
-                   let v = mk_return e None in
-                   man.eval (mk_var v range) flow
-                   |> Cases.add_cleaners (
-                          mk_remove_var v range ::
-                            List.map (fun v ->
-                                mk_remove_var v range
-                              ) params
-                        )
-     end
-
-  | false ->
-     exec_fun_body f params locals body call_oexp range man flow
+    | Some e ->
+      let v = mk_return e None in
+      man.eval (mk_var v range) flow
+      |> Cases.add_cleaners (
+        mk_remove_var v range ::
+        List.map (fun v ->
+            mk_remove_var v range
+          ) params
+      )
+  else
+    exec_fun_body f params locals body call_oexp range man flow
