@@ -100,13 +100,10 @@ struct
 
   (** Check if there is a recursive call to a function *)
   let is_recursive_call f range flow =
-     (* let open Callstack in
-      * let cs = Flow.get_callstack flow in
-      * List.exists (fun c -> c.call_fun_uniq_name = f.c_func_unique_name) cs *)
     let f_orig = f.c_func_org_name in
     let f_uniq = f.c_func_unique_name in
-    Universal.Iterators.Interproc.Common.check_recursion f_orig f_uniq range
-    (Callstack.push_callstack f_orig ~uniq:f_uniq range (Flow.get_callstack flow))
+    let cs = Callstack.push_callstack f_orig ~uniq:f_uniq range (Flow.get_callstack flow) in
+    Universal.Iterators.Interproc.Common.check_recursion f_orig f_uniq range cs
 
   let is_local_scope = function
     | Variable_local _ | Variable_parameter _ ->
@@ -343,7 +340,6 @@ struct
       let ret =
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
-        (* We don't support recursive functions yet! *)
         if is_recursive_call fundec range flow then (
           warn_at range "recursive call on %s, returning top" fundec.c_func_org_name;
           let flow =
@@ -357,11 +353,9 @@ struct
             man.eval (mk_top fundec.c_func_return range) flow
         )
         else
-         let () = debug "not a recursive call" in
          let fundec = rename_variables_in_fundec (Flow.get_callstack flow) fundec in
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
-           debug "body = %a" pp_stmt body;
            let open Universal.Ast in
            let ret_var = mktmp ~typ:fundec.c_func_return () in
            let body' =

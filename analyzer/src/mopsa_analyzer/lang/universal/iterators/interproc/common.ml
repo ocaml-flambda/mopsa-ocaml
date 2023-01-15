@@ -30,16 +30,16 @@ open Soundness
 let name = "universal.iterators.interproc.common"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_allow_recursive_calls : bool ref = ref false
+  (** Option to limit recursion depth *)
+  let opt_recursion_limit = ref 2
 
-let () =
-  register_shared_option name {
-    key = "-allow-recursive-calls";
-    category = "Interprocedural Analysis";
-    doc = "";
-    spec = ArgExt.Set opt_allow_recursive_calls;
-    default = " allow recursive calls"
-  }
+  let () = register_domain_option name {
+      key = "-recursion-limit";
+      doc = "Limit of recursive calls";
+      category = "Interprocedural Analysis";
+      spec = ArgExt.Set_int opt_recursion_limit;
+      default = string_of_int !opt_recursion_limit;
+    }
 
 let opt_split_return_variables_by_range : bool ref = ref false
 
@@ -150,9 +150,19 @@ let get_last_call_site flow =
 
 (** Check that no recursion is happening *)
 let check_recursion f_orig f_uniq range cs =
-  if cs = [] then false
-  else
-    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} = 0) (List.tl cs)
+  let site = {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} in
+  let rec iter i = function
+    | [] -> false
+    | site'::tl ->
+      if compare_callsite site site' = 0 then
+        if i < !opt_recursion_limit then
+          iter (i + 1) tl
+        else
+          true
+      else
+        iter i tl
+  in
+  iter 0 cs
 
 let check_nested_calls f cs =
   if cs = [] then false
@@ -328,7 +338,6 @@ let exec_fun_body f params locals body call_oexp range man flow =
 (** Inline a function call *)
 let inline f params locals body call_oexp range man flow =
   if check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow)
-  && not !opt_allow_recursive_calls
   then
     let flow =
       Flow.add_local_assumption
