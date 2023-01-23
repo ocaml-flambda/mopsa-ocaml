@@ -30,16 +30,16 @@ open Soundness
 let name = "universal.iterators.interproc.common"
 let debug fmt = Debug.debug ~channel:name fmt
 
-let opt_continue_on_recursive_call : bool ref = ref true
+  (** Option to limit recursion depth *)
+  let opt_recursion_limit = ref 2
 
-let () =
-  register_domain_option name {
-    key = "-stop-rec";
-    category = "Interprocedural Analysis";
-    doc = "";
-    spec = ArgExt.Clear opt_continue_on_recursive_call;
-    default = " continue with top during recursive calls"
-  }
+  let () = register_domain_option name {
+      key = "-recursion-limit";
+      doc = "Limit of recursive calls";
+      category = "Interprocedural Analysis";
+      spec = ArgExt.Set_int opt_recursion_limit;
+      default = string_of_int !opt_recursion_limit;
+    }
 
 let opt_split_return_variables_by_range : bool ref = ref false
 
@@ -51,6 +51,17 @@ let () =
       spec = ArgExt.Set opt_split_return_variables_by_range;
       default = " split return variables by their location in the program"
     }
+
+let opt_rename_local_variables_on_recursive_call : bool ref = ref true
+
+let () =
+  register_shared_option (name ^ ".renaming") {
+    key = "-disable-var-renaming-recursive-call";
+    category = "Interprocedural Analysis";
+    doc = " disable renaming of local variables when detecting recursive calls";
+    spec = ArgExt.Clear opt_rename_local_variables_on_recursive_call;
+    default = ""
+  }
 
 (** {2 Return flow token} *)
 (** ===================== *)
@@ -139,9 +150,19 @@ let get_last_call_site flow =
 
 (** Check that no recursion is happening *)
 let check_recursion f_orig f_uniq range cs =
-  if cs = [] then false
-  else
-    List.exists (fun cs -> compare_callsite cs {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} = 0) (List.tl cs)
+  let site = {call_fun_orig_name=f_orig; call_fun_uniq_name=f_uniq; call_range=range} in
+  let rec iter i = function
+    | [] -> false
+    | site'::tl ->
+      if compare_callsite site site' = 0 then
+        if i < !opt_recursion_limit then
+          iter (i + 1) tl
+        else
+          true
+      else
+        iter i tl
+  in
+  iter 0 cs
 
 let check_nested_calls f cs =
   if cs = [] then false
@@ -161,7 +182,9 @@ let init_fun_params f args range man flow =
   if f.fun_parameters = [] then
     [], f.fun_locvars, f.fun_body, Post.return flow
   else
-  if check_nested_calls f.fun_uniq_name (Flow.get_callstack flow) then
+  if !opt_rename_local_variables_on_recursive_call &&
+     check_nested_calls f.fun_uniq_name (Flow.get_callstack flow)
+  then
     begin
       debug "nested calls detected on %s, performing parameters and locvar renaming" f.fun_orig_name;
       (* Add parameters and local variables to the environment *)
@@ -314,42 +337,37 @@ let exec_fun_body f params locals body call_oexp range man flow =
 
 (** Inline a function call *)
 let inline f params locals body call_oexp range man flow =
-  match check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow) with
-  | true ->
-     begin
-       let flow =
-         Flow.add_local_assumption
-           (A_ignore_recursion_side_effect f.fun_orig_name)
-           range flow
-       in
-       let post = match call_oexp with
-         | None -> Post.return flow
-         | Some e ->
-            if !opt_continue_on_recursive_call then
-              let v = mk_return e None in
-              man.exec (mk_add_var v range) flow >>%
-                man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
-            else
-              panic_at range "recursive call on function %s" f.fun_orig_name in
-       post >>% fun flow ->
-                match call_oexp with
-                | None ->
-                   Eval.singleton (mk_unit range) flow ~cleaners:(
-                       List.map (fun v ->
-                           mk_remove_var v range
-                         ) params
-                     )
+  if check_recursion f.fun_orig_name f.fun_uniq_name range (Flow.get_callstack flow)
+  then
+    let flow =
+      Flow.add_local_assumption
+        (A_ignore_recursion_side_effect f.fun_orig_name)
+        range flow
+    in
+    let post = match call_oexp with
+      | None -> Post.return flow
+      | Some e ->
+        let v = mk_return e None in
+        man.exec (mk_add_var v range) flow >>%
+        man.exec (mk_assign (mk_var v range) (mk_top v.vtyp range) range)
+    in
+    post >>% fun flow ->
+    match call_oexp with
+    | None ->
+      Eval.singleton (mk_unit range) flow ~cleaners:(
+        List.map (fun v ->
+            mk_remove_var v range
+          ) params
+      )
 
-                | Some e ->
-                   let v = mk_return e None in
-                   man.eval (mk_var v range) flow
-                   |> Cases.add_cleaners (
-                          mk_remove_var v range ::
-                            List.map (fun v ->
-                                mk_remove_var v range
-                              ) params
-                        )
-     end
-
-  | false ->
-     exec_fun_body f params locals body call_oexp range man flow
+    | Some e ->
+      let v = mk_return e None in
+      man.eval (mk_var v range) flow
+      |> Cases.add_cleaners (
+        mk_remove_var v range ::
+        List.map (fun v ->
+            mk_remove_var v range
+          ) params
+      )
+  else
+    exec_fun_body f params locals body call_oexp range man flow

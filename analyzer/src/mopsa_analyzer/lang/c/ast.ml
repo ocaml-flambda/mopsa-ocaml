@@ -1016,11 +1016,6 @@ let mk_c_null range =
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
-let var_scope v =
-  match v.vkind with
-  | V_cvar { cvar_scope } -> cvar_scope
-  | _ -> assert false
-
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true
   | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
@@ -1379,3 +1374,44 @@ let asprintf_stub (dst:expr) range man flow =
   let f = find_c_fundec_by_name "_mopsa_asprintf" flow in
   let exp = mk_c_call f [dst] range in
   man.eval exp flow
+
+
+(********************)
+(** Stack variables *)
+(********************)
+
+(** This vkind is used to attach the callstack to local variables *)
+type var_kind += V_c_stack_var of callstack * var
+
+(** Create a stack variable *)
+let mk_stack_var cs v =
+  match vkind v with
+  | V_c_stack_var _ ->
+    v
+  | _ ->
+    let uniq_name = Format.asprintf "stack(%a, %s)" pp_callstack_short cs v.vname in
+    mkv uniq_name (V_c_stack_var (cs, v)) v.vtyp
+
+let () = register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_c_stack_var (cs, vv) -> pp_var fmt vv
+        | _ -> next fmt v
+      );
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_c_stack_var (cs1, vv1), V_c_stack_var (cs2, vv2) ->
+          Compare.pair compare_callstack compare_var
+            (cs1, vv1) (cs2, vv2)
+        | _ ->
+          next v1 v2
+      );
+  }
+
+
+let rec var_scope v =
+  match v.vkind with
+  | V_cvar { cvar_scope } -> cvar_scope
+  | V_c_stack_var(_, vv)  -> var_scope vv
+  | _ -> assert false
+

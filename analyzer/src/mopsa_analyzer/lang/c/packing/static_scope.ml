@@ -296,6 +296,7 @@ struct
     | Memory.Scalars.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
     | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (mk_addr_base a)
     | Cstubs.Aux_vars.V_c_primed_base b -> packs_of_base ctx b
+    | V_c_stack_var(_, vv) -> packs_of_var ctx vv
     | _ -> packs_of_base ctx (mk_var_base v)
 
 end
