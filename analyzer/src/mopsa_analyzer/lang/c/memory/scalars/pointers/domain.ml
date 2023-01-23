@@ -286,7 +286,35 @@ struct
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
         let vq = Map.find q a in
-        vq, if PointerSet.is_valid vq then Some offset' else None
+        let vq, offset = 
+          match PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_valid vq) > 0,
+                PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_non_valid vq) > 0,
+                expr_to_z offset with
+          (* Invalid pointer without arithmetic) *)
+          | false, true, Some n when Z.(n = zero) ->
+            vq, None
+
+          (* Invalid pointer with arithmetic *)
+          | false, true, _ ->
+            PointerSet.top, Some (mk_top T_int range)
+
+          (* Valid pointer *)
+          | true, false, _ ->
+            vq, Some offset'
+
+          (* Mixed pointer without arithmetic *)
+          | true, true, Some n when Z.(n = zero) ->
+            vq, Some offset'
+
+          (* Mixed pointer with arithmetic *)
+          | true, true, _ ->
+            PointerSet.top, Some (mk_top T_int range)
+
+          (* Bottom *)
+          | false, false, _ ->
+            vq, None
+        in
+        vq, offset 
 
       | Fun f ->
         PointerSet.cfun f, None
