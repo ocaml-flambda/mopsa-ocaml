@@ -343,7 +343,8 @@ let rem ((a,b):t) ((a',b'):t) : t_with_bot =
 
 let wrap ((a,b):t) (lo:Z.t) (up:Z.t) : t =
   let w = Z.succ (Z.sub up lo) in 
-  of_z (gcd a w) (Z.add lo (Z.erem (Z.sub b lo) w))
+  if a = Z.zero then of_z Z.zero (Z.add lo (Z.erem (Z.sub b lo) w)) (* singleton *)
+  else of_z (gcd a w) (Z.add lo (Z.erem (Z.sub b lo) w)) (* non-singleton *)
 (** Put back inside [lo,up] by modular arithmetics. *)
 
 let to_bool (can_be_zero:bool) (can_be_one:bool) : t =
