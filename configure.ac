@@ -24,16 +24,8 @@ AC_INIT([mopsa], [1.0])
 
 
 AC_CONFIG_FILES([
- Makefile
- make/constants.mk
- make/target.mk
- utils/Makefile
- parsers/universal/Makefile
- parsers/c/Makefile
- parsers/c_stubs/Makefile
- parsers/python/Makefile
- analyzer/Makefile
- utils/src/mopsa_utils/version.ml
+ parsers/c/lib/parser/dune
+ utils/core/version.ml
  META
 ])
 

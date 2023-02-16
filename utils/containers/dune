@@ -1,0 +1,5 @@
+(library
+ (name containers)
+ (public_name mopsa.mopsa_utils.containers)
+ (libraries utils_core zarith)
+ (flags (:standard -open Utils_core)))

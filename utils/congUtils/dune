@@ -1,0 +1,5 @@
+(library
+ (name congUtils)
+ (public_name mopsa.mopsa_utils.congUtils)
+ (libraries utils_core itvUtils)
+ (flags (:standard -open Utils_core)))

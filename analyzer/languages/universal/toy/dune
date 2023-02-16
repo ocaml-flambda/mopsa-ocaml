@@ -1,0 +1,5 @@
+(library
+ (name universal_toy)
+ (package mopsa)
+ (libraries mopsa lang)
+ (flags :standard -open Lang))

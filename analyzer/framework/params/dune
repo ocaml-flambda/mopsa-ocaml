@@ -1,0 +1,4 @@
+(library
+ (name params)
+ (public_name mopsa.mopsa_analyzer.framework.params)
+ (libraries config output))

@@ -1,0 +1,4 @@
+(library
+ (name lattices)
+ (public_name mopsa.mopsa_analyzer.framework.lattices)
+ (libraries core mopsa_utils))

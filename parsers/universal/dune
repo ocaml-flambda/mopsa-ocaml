@@ -1,0 +1,9 @@
+(ocamllex U_lexer)
+
+(menhir
+ (modules U_parser))
+
+(library
+ (name mopsa_universal_parser)
+ (public_name mopsa.mopsa_universal_parser)
+ (libraries mopsa_utils))

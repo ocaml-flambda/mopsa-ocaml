@@ -1,0 +1,4 @@
+(library
+ (name python_lang)
+ (public_name mopsa.mopsa_analyzer.pyhton.lang)
+ (libraries mopsa framework universal mopsa_py_parser))

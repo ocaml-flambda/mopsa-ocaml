@@ -1,0 +1,4 @@
+(library
+ (name c_lang)
+ (public_name mopsa.mopsa_analyzer.c.lang)
+ (libraries mopsa framework mopsa_c_parser mopsa_c_stubs_parser mopsa_build_db universal stubs))

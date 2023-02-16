@@ -1,0 +1,4 @@
+(library
+ (name universal)
+ (public_name mopsa.mopsa_analyzer.universal)
+ (libraries framework mopsa lang heap hooks universal_iterators universal_numeric universal_packing universal_strings universal_toy mopsa_utils mopsa_universal_parser))

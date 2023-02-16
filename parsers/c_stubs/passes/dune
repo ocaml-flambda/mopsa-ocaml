@@ -1,0 +1,5 @@
+(library
+ (name passes)
+ (public_name mopsa.mopsa_c_stubs_parser.passes)
+ (libraries parsing mopsa_utils mopsa_c_parser zarith)
+ (flags -open Parsing))

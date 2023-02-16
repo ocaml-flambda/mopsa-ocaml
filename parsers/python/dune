@@ -1,0 +1,9 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
+
+(library
+ (name mopsa_py_parser)
+ (public_name mopsa.mopsa_py_parser)
+ (libraries mopsa_utils))

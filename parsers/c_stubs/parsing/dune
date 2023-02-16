@@ -1,0 +1,10 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser)
+ (flags --unused-token ALIAS --unused-token SHARP --unused-token PREDICATE))
+
+(library
+ (name parsing)
+ (public_name mopsa.mopsa_c_stubs_parser.parsing)
+ (libraries mopsa_utils mopsa_c_parser zarith))

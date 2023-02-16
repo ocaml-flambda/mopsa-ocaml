@@ -1,0 +1,5 @@
+(library
+ (name numeric_values)
+ (public_name mopsa.mopsa_analyzer.universal.numeric.values)
+ (libraries intervals)
+ (flags :standard -open Lang -open Numeric_common))

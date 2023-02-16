@@ -1,0 +1,4 @@
+(library
+ (name mopsa)
+ (public_name mopsa.mopsa_analyzer.mopsa)
+ (libraries framework))

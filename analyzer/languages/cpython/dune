@@ -1,0 +1,4 @@
+(library
+ (name cpython)
+ (public_name mopsa.mopsa_analyzer.cpyton)
+ (libraries mopsa framework c python))

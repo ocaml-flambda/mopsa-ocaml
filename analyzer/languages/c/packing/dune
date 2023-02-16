@@ -1,0 +1,5 @@
+(library
+ (name c_packing)
+ (package mopsa)
+ (libraries mopsa framework c_lang c_common cstubs c_memory)
+ (flags :standard -open C_lang.Lang -open C_common -open C_memory))
