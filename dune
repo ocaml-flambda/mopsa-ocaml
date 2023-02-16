@@ -1,0 +1,1 @@
+(dirs :standard \ bin benchmarks docker release share)

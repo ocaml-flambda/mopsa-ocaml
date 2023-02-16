@@ -1,0 +1,5 @@
+(executable
+ (name build_wrapper)
+ (public_name build_wrapper.exe)
+ (package mopsa)
+ (libraries mopsa_build_db mopsa_utils unix))

@@ -1,0 +1,4 @@
+(library
+ (name c)
+ (public_name mopsa.mopsa_analyzer.c)
+ (libraries c_common cstubs c_hooks c_iterators c_lang c_libs c_memory c_packing))

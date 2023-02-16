@@ -1,0 +1,8 @@
+(ocamllex lexer)
+(menhir (modules parser))
+
+(library
+ (name formatted_io)
+ (package mopsa)
+ (libraries mopsa framework c_lang c_common)
+ (flags :standard -open C_lang.Lang -open C_common))

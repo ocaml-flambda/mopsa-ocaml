@@ -1,0 +1,39 @@
+(library
+ (name mopsa_c_parser)
+ (public_name mopsa.mopsa_c_parser)
+ (libraries mopsa_utils zarith)
+ (foreign_stubs
+  (language cxx)
+  (names Clang_to_ml)
+  (flags
+    :standard
+    -I %{ocaml_where}
+    -Wno-strict-aliasing -Wall -Wno-comment
+   (:include clang_flags)
+   (:include clang_resource)))
+ (c_library_flags (:include library_flags)))
+
+(rule
+ (targets clang_flags)
+ (action (with-stdout-to %{targets} (progn
+                                     (echo "(")
+                                     (run @LLVMCONFIG@ --cxxflags)
+                                     (echo ")")))))
+
+(rule
+ (targets clang_resource)
+ (action (with-stdout-to %{targets} (pipe-stdout
+                                     (progn
+                                      (echo "(\"-DCLANGRESOURCE=\\\"")
+                                      (run @CLANG@ -print-resource-dir)
+                                      (echo "\\\"\")"))
+                                     (run tr -d "\n")))))
+
+(rule
+ (targets library_flags)
+ (action (with-stdout-to %{targets} (progn
+                                     (echo "(")
+                                     (run @LLVMCONFIG@ --ldflags)
+                                     (echo "@LLVM_CCLIBS@ -lclang -lstdc++ ")
+                                     (run @LLVMCONFIG@ --libs --system-libs)
+                                     (echo ")")))))

@@ -1,0 +1,1 @@
+module Strings = Strings

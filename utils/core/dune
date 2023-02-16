@@ -1,0 +1,4 @@
+(library
+ (name utils_core)
+ (public_name mopsa.mopsa_utils.core)
+ (libraries str unix))

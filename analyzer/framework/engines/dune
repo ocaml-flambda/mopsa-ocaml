@@ -1,0 +1,4 @@
+(library
+ (name engines)
+ (public_name mopsa.mopsa_analyzer.framework.engines)
+ (libraries interactive core))

@@ -1,0 +1,5 @@
+(library
+ (name relational)
+ (public_name mopsa.mopsa_analyzer.universal.numeric.relational)
+ (libraries numeric_common numeric_values lang apron apron.boxMPQ apron.octMPQ apron.polkaMPQ )
+ (flags :standard -open Lang -open Numeric_common -open Numeric_values))

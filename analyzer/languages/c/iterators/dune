@@ -1,0 +1,5 @@
+(library
+ (name c_iterators)
+ (package mopsa)
+ (libraries mopsa framework universal stubs c_common c_lang)
+ (flags :standard -open C_common -open C_lang.Lang))

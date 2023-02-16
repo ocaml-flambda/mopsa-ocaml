@@ -1,0 +1,5 @@
+(library
+ (name python_packing)
+ (package mopsa)
+ (libraries python_lang python_objects mopsa framework universal)
+ (flags :standard -open Python_lang.Lang -open Python_objects))

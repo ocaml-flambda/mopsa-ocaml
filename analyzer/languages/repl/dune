@@ -1,0 +1,4 @@
+(library
+ (name repl)
+ (public_name mopsa.mopsa_analyzer.repl)
+ (libraries mopsa framework mopsa_universal_parser universal))

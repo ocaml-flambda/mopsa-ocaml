@@ -1,0 +1,4 @@
+(library
+ (name abstraction)
+ (public_name mopsa.mopsa_analyzer.framework.sig.abstraction)
+ (libraries core))

@@ -1,0 +1,4 @@
+(library
+ (name framework)
+ (public_name mopsa.mopsa_analyzer.framework)
+ (libraries combiners params core engines lattices output sig mopsa_utils))

@@ -1,0 +1,4 @@
+(library
+ (name output)
+ (public_name mopsa.mopsa_analyzer.framework.output)
+ (libraries core))

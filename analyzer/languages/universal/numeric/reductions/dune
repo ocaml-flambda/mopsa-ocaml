@@ -1,0 +1,5 @@
+(library
+ (name numeric_reductions)
+ (public_name mopsa.mopsa_analzyer.universal.numeric.reductions)
+ (libraries mopsa_utils framework mopsa numeric_values relational numeric_common lang)
+ (flags :standard -open Numeric_values -open Numeric_common -open Lang))

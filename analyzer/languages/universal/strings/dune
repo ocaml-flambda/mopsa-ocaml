@@ -1,0 +1,5 @@
+(library
+ (name universal_strings)
+ (package mopsa)
+ (libraries mopsa lang universal_numeric)
+ (flags :standard -open Lang -open Universal_numeric))

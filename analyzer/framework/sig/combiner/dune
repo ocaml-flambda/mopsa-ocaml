@@ -1,0 +1,4 @@
+(library
+ (name combiner)
+ (public_name mopsa.mopsa_analyzer.framework.sig.combiner)
+ (libraries abstraction core))

@@ -26,9 +26,8 @@ build_job:
   artifacts:
     paths:
     - ./bin/
-    - ./parsers/c/_build/wrapper.native
-    - ./analyzer/_build/mopsa.native
-    - ./analyzer/share
+    - ./_build/default/parsers/c/bin/build_wrapper.exe
+    - ./_build/default/analyzer/mopsa.exe
     expire_in: 2h
 
 

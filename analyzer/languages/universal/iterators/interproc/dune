@@ -1,0 +1,5 @@
+(library
+ (name universal_interproc)
+ (public_name mopsa.mopsa_analyzer.universal.iterators.interproc)
+ (libraries lang framework mopsa)
+ (flags :standard -open Lang))

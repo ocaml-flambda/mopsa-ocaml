@@ -1814,7 +1814,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-ac_config_files="$ac_config_files Makefile make/constants.mk make/target.mk utils/Makefile parsers/universal/Makefile parsers/c/Makefile parsers/c_stubs/Makefile parsers/python/Makefile analyzer/Makefile utils/src/mopsa_utils/version.ml META"
+ac_config_files="$ac_config_files parsers/c/lib/parser/dune utils/core/version.ml META"
 
 
 # Version
@@ -4692,16 +4692,8 @@ cat >>$CONFIG_STATUS <<\_ACEOF || ac_write_fail=1
 for ac_config_target in $ac_config_targets
 do
   case $ac_config_target in
-    "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "make/constants.mk") CONFIG_FILES="$CONFIG_FILES make/constants.mk" ;;
-    "make/target.mk") CONFIG_FILES="$CONFIG_FILES make/target.mk" ;;
-    "utils/Makefile") CONFIG_FILES="$CONFIG_FILES utils/Makefile" ;;
-    "parsers/universal/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/universal/Makefile" ;;
-    "parsers/c/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/c/Makefile" ;;
-    "parsers/c_stubs/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/c_stubs/Makefile" ;;
-    "parsers/python/Makefile") CONFIG_FILES="$CONFIG_FILES parsers/python/Makefile" ;;
-    "analyzer/Makefile") CONFIG_FILES="$CONFIG_FILES analyzer/Makefile" ;;
-    "utils/src/mopsa_utils/version.ml") CONFIG_FILES="$CONFIG_FILES utils/src/mopsa_utils/version.ml" ;;
+    "parsers/c/lib/parser/dune") CONFIG_FILES="$CONFIG_FILES parsers/c/lib/parser/dune" ;;
+    "utils/core/version.ml") CONFIG_FILES="$CONFIG_FILES utils/core/version.ml" ;;
     "META") CONFIG_FILES="$CONFIG_FILES META" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;

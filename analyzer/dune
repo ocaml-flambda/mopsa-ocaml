@@ -1,0 +1,15 @@
+(library
+ (name mopsa_analyzer)
+ (public_name mopsa.mopsa_analyzer)
+ (libraries framework mopsa universal stubs cfg repl c python cpython)
+ (modules mopsa_analyzer))
+
+(executable
+ (name mopsa)
+ (public_name mopsa.exe)
+ (package mopsa)
+ (libraries mopsa_analyzer mopsa_c_parser)
+ (modules mopsa)
+ (link_flags -linkall))
+
+(dirs * \ tests)

@@ -1,0 +1,5 @@
+(library
+ (name desugar)
+ (package mopsa)
+ (libraries python_lang python_common python_objects mopsa framework universal c)
+ (flags :standard -open Python_lang.Lang -open Python_common.Common -open Python_objects))

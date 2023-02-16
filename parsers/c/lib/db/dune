@@ -1,0 +1,4 @@
+(library
+ (name mopsa_build_db)
+ (public_name mopsa.mopsa_build_db)
+ (libraries unix))
