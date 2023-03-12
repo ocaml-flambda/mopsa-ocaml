@@ -36,13 +36,19 @@ Before compiling MOPSA, ensure that you have the following dependencies:
 * Zarith
 * zlib
 
+The OCaml dependencies can be installed on any system with opam with:
+
+```shell
+opam install --deps-only --with-doc --with-test . 
+```
+
 For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
 
 ```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev
+sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf
 opam init
 eval $(opam env)
-opam install apron zarith menhir yojson
+opam install --deps-only --with-doc --with-test . 
 ```
 
 ## Compilation
@@ -66,21 +72,22 @@ After compilation, the binaries are available in the `bin` sub-directory.
 
 The standard command:
 ```
-sudo make install
+make install
 
 ```
-will install the binaries in the default prefix (`/usr/local`), which you can change with the `--prefix DIR` configure option.
-The OCaml libraries are installed by `ocamlfind` in its default directory (see `ocamlfind printconf destdir`).
-
+will install MOPSA in your opam switch.
+The OCaml libraries are installed by `ocamlfind` in its default directory (see `ocamlfind printconf destdir`)
 
 ## Opam-based compilation & installation
 
-Assuming that dependencies are installed, you can replace `./configure`, `make`, `sudo make install` with simply:
+Assuming that dependencies are installed, you can replace `./configure`, `make`,
+`make install` with simply:
 
 ```shell
 opam pin add mopsa .
 ```
-which compiles MOPSA and install the binaries and libraries in your opam switch.
+which compiles MOPSA and installs the binaries and libraries in your opam
+switch.
 
 
 ## Linking against the MOPSA library
