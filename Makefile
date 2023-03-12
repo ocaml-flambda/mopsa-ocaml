@@ -22,10 +22,13 @@
 ##############################################################################
 
 
-.PHONY: all tests clean distclean
+.PHONY: all tests install clean distclean
 
 all:
 	opam exec -- dune build --profile release -p mopsa
+
+install:
+	opam exec -- dune install --profile release
 
 clean:
 	opam exec -- dune clean -p mopsa
