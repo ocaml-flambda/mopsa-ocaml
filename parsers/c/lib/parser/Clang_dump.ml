@@ -1020,9 +1020,9 @@ module P = struct
     | RValueReferenceType t -> p ch "rvalue_ref(%a)" type_qual t
     | SubstTemplateTypeParmPackType (s,t1,t2) ->
        p ch "subst_template_type_parm_pack(%s,%a,%a)"
-         s template_type_param_type t1 template_argument t2
+         s name t1.template_type_param_name template_argument t2
     | SubstTemplateTypeParmType (t1,t2) ->
-       p ch "subst_template_type_parm(%a,%a)" template_type_param_type t1 type_qual t2
+       p ch "subst_template_type_parm(%a,%a)" name t1.template_type_param_name type_qual t2
     | TemplateSpecializationType (t1,t2,t3) ->
        p ch "template_specialization(%a,%a,{%a})"
          (bp_option "<none>" type_qual) t1 template_name t2 (bp_array template_argument ",") t3
@@ -1381,7 +1381,7 @@ module P = struct
     p ch "capture(%s,%B,%B,%a,%B,%B)"
       (lambda_capture_kind_name l.lambda_capture_kind)
       l.lambda_capture_this l.lambda_capture_VLA_type
-      (bp_option "<none>" var_decl_name) l.lambda_capture_captured_var
+      (bp_option "<none>" decl_name) l.lambda_capture_captured_var
       l.lambda_capture_is_implicit l.lambda_capture_is_pack_expansion
   and stmt indent ch s =
     sync ch;
