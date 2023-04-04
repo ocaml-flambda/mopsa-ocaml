@@ -386,10 +386,10 @@ type name = {
    | RValueReferenceType of type_qual
    (** (C++) An rvalue reference type, per C++11 [dcl.ref].  *)
 
-   | SubstTemplateTypeParmPackType of string * template_type_param_type * template_argument
+   | SubstTemplateTypeParmPackType of string * template_type_param_decl * template_argument
    (** (C++) Represents the result of substituting a set of types for a template type parameter pack. *)
 
-   | SubstTemplateTypeParmType of template_type_param_type * type_qual
+   | SubstTemplateTypeParmType of template_type_param_decl * type_qual
    (** (C++) Represents the result of substituting a type for a template type parameter. *)
 
    | TemplateSpecializationType of type_qual option (** aliased type *) * template_name * template_argument array
@@ -1173,7 +1173,7 @@ and atomic_expr = {
      lambda_capture_kind: lambda_capture_kind;
      lambda_capture_this: bool; (** whether this capture handles the C++ this pointer *)
      lambda_capture_VLA_type: bool; (** whether this captures a variable length array bound expressio *)
-     lambda_capture_captured_var: var_decl option; (** declaration of the local variable being captured, if any *)
+     lambda_capture_captured_var: decl option; (** declaration of the local variable being captured, if any *)
      lambda_capture_is_implicit: bool; (** whether this was an implicit capture (not written between the square brackets introducing the lambda) *)
      lambda_capture_is_pack_expansion: bool; (** whether this capture is a pack expansion, which captures a function parameter pack *)
    }

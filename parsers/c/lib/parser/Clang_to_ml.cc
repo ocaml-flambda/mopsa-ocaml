@@ -2439,7 +2439,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentKind() << DEBUG_SOURCE_RANGE(node) << std::endl; }
 #else            
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentType() << DEBUG_SOURCE_RANGE(node) << std::endl; }
-#endif            
+#endif
             caml_failwith("mlClangAST: unknown ident type");
           }
           Store_field(ret, 0, Val_int(r));
@@ -2584,7 +2584,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateQualType(x->getAllocatedType()));
           Store_field_option(ret, 1, x->getOperatorNew(), TranslateFunctionDecl(x->getOperatorNew()));
           Store_field_option(ret, 2, x->getOperatorDelete(), TranslateFunctionDecl(x->getOperatorDelete()));
-#if CLANG_VERSION_MAJOR >= 9
+#if CLANG_VERSION_MAJOR >= 16
+          Store_field_option(ret, 3, x->isArray() && x->getArraySize().has_value(), TranslateExpr(x->getArraySize().value()));
+#elif CLANG_VERSION_MAJOR >= 9
           Store_field_option(ret, 3, x->isArray() && x->getArraySize().hasValue(), TranslateExpr(x->getArraySize().getValue()));
 #else
           Store_field_option(ret, 3, x->isArray(), TranslateExpr(x->getArraySize()));
@@ -2706,7 +2708,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
       GENERATE_NODE_INDIRECT(PackExpansionExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateExpr(x->getPattern()));
           const Optional<unsigned> num = x->getNumExpansions();
+#if CLANG_VERSION_MAJOR >= 16
+          Store_field_option(ret, 1, num.has_value(), Val_int(num.value()));
+#else
           Store_field_option(ret, 1, num.hasValue(), Val_int(num.getValue()));
+#endif
         });
 
       GENERATE_NODE_INDIRECT(SizeOfPackExpr, ret, node, 4, {
@@ -2814,7 +2820,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
 
-#endif        
+#endif
 
       // Default
       if (ret == Val_int(-1)) {
@@ -3402,7 +3408,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateLambdaCapture(const LambdaCapture&
   Store_field(ret, 0, Val_int(r));
   Store_field(ret, 1, Val_bool(x.capturesThis()));
   Store_field(ret, 2, Val_bool(x.capturesVLAType()));
-  Store_field_option(ret, 3, x.capturesVariable(), TranslateVarDecl(x.getCapturedVar()));
+  Store_field_option(ret, 3, x.capturesVariable(), TranslateDecl(x.getCapturedVar()));
   Store_field(ret, 4, Val_bool(x.isImplicit()));
   Store_field(ret, 5, Val_bool(x.isPackExpansion()));
 
@@ -4019,7 +4025,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
     });
 
   GENERATE_NODE_CACHED(cacheType,TypeOfType, ret, node, 1, {
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field(ret, 0, TranslateQualType(x->desugar()));
+#else
       Store_field(ret, 0, TranslateQualType(x->getUnderlyingType()));
+#endif
     });
 
   GENERATE_NODE_CACHED(cacheType, DecltypeType, ret, node, 2, {
@@ -4051,7 +4061,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
       Store_field(ret, 1, Val_unit);
 #endif
       Store_field(ret, 2, TranslateRecordDecl(x->getDecl()));
+#if CLANG_VERSION_MAJOR >= 16
+      ArrayRef<TemplateArgument> d = t->template_arguments();
+      Store_field_array(ret, 3, d.size(), TranslateTemplateArgument(d[i]));
+#else
       Store_field_array(ret, 3, t->getNumArgs(), TranslateTemplateArgument(t->getArg(i)));
+#endif
     });
 
   GENERATE_NODE_CACHED(cacheType, MemberPointerType, ret, node, 2, {
@@ -4062,7 +4077,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
   GENERATE_NODE_CACHED(cacheType, PackExpansionType, ret, node, 2, {
       Store_field(ret, 0, TranslateQualType(x->getPattern()));
       const Optional<unsigned> num = x->getNumExpansions();
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field_option(ret, 1, num.has_value(), Val_int(num.value()));
+#else
       Store_field_option(ret, 1, num.hasValue(), Val_int(num.getValue()));
+#endif
     });
 
   GENERATE_NODE_CACHED(cacheType, LValueReferenceType, ret, node, 1, {
@@ -4075,19 +4094,80 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
 
   GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmPackType, ret, node, 3, {
       Store_field(ret, 0, caml_copy_string(x->getIdentifier()->getNameStart()));
-      Store_field(ret, 1, TranslateTemplateTypeParmType(x->getReplacedParameter()));
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field(ret, 1, TranslateTemplateTypeParmDecl(x->getReplacedParameter()));
+#else
+      Store_field(ret, 1, TranslateTemplateTypeParmDecl(x->getReplacedParameter()->getDecl()));
+#endif
       Store_field(ret, 2, TranslateTemplateArgument(x->getArgumentPack()));
     });
 
   GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmType, ret, node, 2, {
-      Store_field(ret, 0, TranslateTemplateTypeParmType(x->getReplacedParameter()));
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field(ret, 0, TranslateTemplateTypeParmDecl(x->getReplacedParameter()));
+#else
+      Store_field(ret, 0, TranslateTemplateTypeParmDecl(x->getReplacedParameter()->getDecl()));
+#endif
       Store_field(ret, 1, TranslateQualType(x->getReplacementType()));
     });
 
   GENERATE_NODE_CACHED(cacheType, TemplateSpecializationType, ret, node, 3, {
       Store_field_option(ret, 0, x->isTypeAlias(), TranslateQualType(x->getAliasedType()));
       Store_field(ret, 1, TranslateTemplateName(x->getTemplateName()));
+
+    });
+
+  GENERATE_NODE_CACHED(cacheType, MemberPointerType, ret, node, 2, {
+      Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
+      Store_field(ret, 1, TranslateType(x->getClass()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType, PackExpansionType, ret, node, 2, {
+      Store_field(ret, 0, TranslateQualType(x->getPattern()));
+      const Optional<unsigned> num = x->getNumExpansions();
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field_option(ret, 1, num.has_value(), Val_int(num.value()));
+#else
+      Store_field_option(ret, 1, num.hasValue(), Val_int(num.getValue()));
+#endif
+    });
+
+  GENERATE_NODE_CACHED(cacheType, LValueReferenceType, ret, node, 1, {
+      Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType, RValueReferenceType, ret, node, 1, {
+      Store_field(ret, 0, TranslateQualType(x->getPointeeType()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmPackType, ret, node, 3, {
+      Store_field(ret, 0, caml_copy_string(x->getIdentifier()->getNameStart()));
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field(ret, 1, TranslateTemplateTypeParmDecl(x->getReplacedParameter()));
+#else
+      Store_field(ret, 1, TranslateTemplateTypeParmDecl(x->getReplacedParameter()->getDecl()));
+#endif
+      Store_field(ret, 2, TranslateTemplateArgument(x->getArgumentPack()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType, SubstTemplateTypeParmType, ret, node, 2, {
+#if CLANG_VERSION_MAJOR >= 16
+      Store_field(ret, 0, TranslateTemplateTypeParmDecl(x->getReplacedParameter()));
+#else
+      Store_field(ret, 0, TranslateTemplateTypeParmDecl(x->getReplacedParameter()->getDecl()));
+#endif
+      Store_field(ret, 1, TranslateQualType(x->getReplacementType()));
+    });
+
+  GENERATE_NODE_CACHED(cacheType, TemplateSpecializationType, ret, node, 3, {
+      Store_field_option(ret, 0, x->isTypeAlias(), TranslateQualType(x->getAliasedType()));
+      Store_field(ret, 1, TranslateTemplateName(x->getTemplateName()));
+#if CLANG_VERSION_MAJOR >= 16
+      ArrayRef<TemplateArgument> d = x->template_arguments();
+      Store_field_array(ret, 2, d.size(), TranslateTemplateArgument(d[i]));
+#else
       Store_field_array(ret, 2, x->getNumArgs(), TranslateTemplateArgument(x->getArg(i)));
+#endif
     });
 
   GENERATE_NODE_CACHED(cacheType, TemplateTypeParmType, ret, node, 1, {
@@ -4102,7 +4182,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateType(const Type * node) {
   GENERATE_NODE_CACHED(cacheType, DependentTemplateSpecializationType, ret, node, 3, {
       Store_field(ret, 0, TranslateNestedNameSpecifierList(x->getQualifier()));
       Store_field(ret, 1, caml_copy_string(x->getIdentifier()->getNameStart()));
+#if CLANG_VERSION_MAJOR >= 16
+      ArrayRef<TemplateArgument> d = x->template_arguments();
+      Store_field_array(ret, 2, d.size(), TranslateTemplateArgument(d[i]));
+#else
       Store_field_array(ret, 2, x->getNumArgs(), TranslateTemplateArgument(x->getArg(i)));
+#endif
     });
 
   GENERATE_NODE_CACHED(cacheType, UnresolvedUsingType, ret, node, 1, {
@@ -4610,7 +4695,11 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
   // we only expose pointer info for address space 0
   Store_field(ret,  1, GENERATE_TARGET_INFO_INT_TYPE(t.getSizeType()));
   Store_field(ret,  2, GENERATE_TARGET_INFO_INT_TYPE(t.getIntMaxType()));
+#if CLANG_VERSION_MAJOR >= 16
+  Store_field(ret,  3, GENERATE_TARGET_INFO_INT_TYPE(t.getPtrDiffType(clang::LangAS::Default)));
+#else
   Store_field(ret,  3, GENERATE_TARGET_INFO_INT_TYPE(t.getPtrDiffType(0)));
+#endif
   Store_field(ret,  4, GENERATE_TARGET_INFO_INT_TYPE(t.getIntPtrType()));
   Store_field(ret,  5, GENERATE_TARGET_INFO_INT_TYPE(t.getWCharType()));
   Store_field(ret,  6, GENERATE_TARGET_INFO_INT_TYPE(t.getWIntType()));
@@ -4622,8 +4711,13 @@ CAMLprim value TargetInfoToML(const TargetInfo& t) {
 
   // The width/align methods return a uint64_t, but the class attribute
   // show this data to be unsigned char! -> it will fit in an OCaml int
+#if CLANG_VERSION_MAJOR >= 16
+  Store_field(ret, 12, Val_int(t.getPointerWidth(clang::LangAS::Default)));
+  Store_field(ret, 13, Val_int(t.getPointerAlign(clang::LangAS::Default)));
+#else
   Store_field(ret, 12, Val_int(t.getPointerWidth(0)));
   Store_field(ret, 13, Val_int(t.getPointerAlign(0)));
+#endif
   Store_field(ret, 14, Val_int(t.getBoolWidth()));
   Store_field(ret, 15, Val_int(t.getBoolAlign()));
   Store_field(ret, 16, Val_int(t.getCharWidth()));
