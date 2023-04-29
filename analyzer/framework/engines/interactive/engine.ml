@@ -330,17 +330,17 @@ struct
     (* Read lines before and after a target line *)
     and read_lines_around ch line =
       let rec iter before at after i =
-        try
-          let l = input_line ch in
+        let lo = try Some (input_line ch) with End_of_file -> None in
+        match lo with
+        | Some l ->
           if i < line - 5 then iter before at after (i+1) else
           if i > line + 5 then (before,at,after)
           else
           if i < line then iter ((i,l)::before) at after (i+1) else
           if i = line then iter before (i,l) after (i+1)
           else iter before at ((i,l)::after) (i+1)
-        with End_of_file -> (before,at,after)
-      in
-      let before,at,after = iter [] (0,"") [] 1 in
+        | None -> (before,at,after) in
+      let before, at, after = iter [] (0,"") [] 1 in
       List.rev before, at, List.rev after
     (* Print a surrounding line *)
     and pp_surrounding_line max_line fmt (i,l) =
