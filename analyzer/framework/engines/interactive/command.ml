@@ -34,7 +34,7 @@ type command =
   (** Stop at next breakpoint *)
 
   | MopsaBackTrace
-  (* Returns the current backtrace of Mopsa *)
+  (** Returns the current backtrace of Mopsa *)
 
   | Next
   (** Stop at next statement and skip function calls *)
@@ -75,6 +75,8 @@ type command =
 
   | Unset of set_command
   (** Unset an option *)
+
+  | LoadScript of string
 
   | BackTrace
   (** Print the callstack *)
@@ -137,6 +139,7 @@ let pp_command fmt = function
   | Disable (Hook h) -> Format.fprintf fmt "disable hook %s" h
   | Set (Debug, d)   -> Format.fprintf fmt "set debug %s" d
   | Set (Script, d)  -> Format.fprintf fmt "set script %s" d
+  | LoadScript s     -> Format.fprintf fmt "load script %s" s
   | Unset Debug      -> Format.pp_print_string fmt "unset debug"
   | Unset Script     -> Format.pp_print_string fmt "unset script"
   | BackTrace        -> Format.pp_print_string fmt "backtrace"
@@ -173,10 +176,11 @@ let print_usage () =
   printf "  d[isable] h[hook] <h> disable a hook@.";
   printf "  s[et] d[ebug] <d>     set debug channels@.";
   printf "  u[nset] d[ebug]       unset debug channels@.";
-  printf "  s[et] script <file>   store commands into a file@.To be used in combination with cat file - | mopsa -engine=interactive ...";
+  printf "  s[et] script <file>   store commands into a file@.To be used in combination with load script <file>@.";
   printf "  u[nset] script        do not store commands in file anymore@.";
+  printf "  load script <file>    reads script command from <file>@.";
   printf "  save <file>           save the abstract state in a file@.";
-  printf "  mopsa_bt              shows the current backtrace of the analyzer";
+  printf "  mopsa_bt              shows the current backtrace of the analyzer@.";
   printf "  help                  print this message@.";
   ()
 
@@ -294,6 +298,8 @@ let rec read_command logger =
 
   | ["set"  |"s";  "script"| "s"; d] | ["sc"; d] -> Set (Script, d)
   | ["unset"|"u";  "script"| "s"] | ["uc"] -> Unset Script
+
+  | ["load"; "script"; s] | ["ls"; s] -> LoadScript s
 
   | ["save"; file] -> Save file
 

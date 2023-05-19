@@ -640,6 +640,20 @@ struct
         state.script <- None in
       interact action flow
 
+    | LoadScript s ->
+      let ch = open_in s in
+      let lines =
+        let rec process res =
+          try
+            process ((input_line ch) :: res)
+          with End_of_file ->
+            List.rev res
+        in process []
+      in
+      List.iter (fun l -> Queue.add l Command.commands_buffer) lines;
+      close_in ch;
+      interact action flow
+
     | Save file ->
       let ch = open_out file in
       let file_fmt = formatter_of_out_channel ch in
