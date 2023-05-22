@@ -61,7 +61,6 @@ let () =
       );
     }
 
-
 (** Factory functor *)
 
 module Make(ApronManager : APRONMANAGER) =
@@ -186,6 +185,46 @@ struct
 
   let is_var_numeric_type v = is_numeric_type (vtyp v)
 
+  let assume stmt ask (a, bnd) =
+    let () = debug "%a" pp_stmt stmt in
+    match skind stmt with
+    | S_assume e -> 
+      begin
+        let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
+
+        try
+          let dnf, a, bnd, l = bexp_to_apron (fun exp -> ask (Common.mk_float_maybenan_query exp)) e (a,bnd) [] in
+          let env = Apron.Abstract1.env a in
+          let a' =
+            Dnf.reduce_conjunction
+              (fun conj ->
+                 let tcons_list =
+                   List.map
+                     (fun (op,e1,typ1,e2,typ2) ->
+                        let typ =
+                          if is_float_type typ1 || is_float_type typ2 then Apron.Texpr1.Real else
+                          if is_int_type typ1 && is_int_type typ2 then Apron.Texpr1.Int
+                          else Exceptions.panic_at (srange stmt)
+                              "Unsupported case (%a, %a) in stmt @[%a@]"
+                              pp_typ typ1 pp_typ typ2 pp_stmt stmt
+                        in
+                        let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
+                        let diff_texpr = Apron.Texpr1.of_expr env diff in
+                        Apron.Tcons1.make diff_texpr op
+                     ) conj
+                 in
+                 tcons_array_of_tcons_list env tcons_list |>
+                 Apron.Abstract1.meet_tcons_array ApronManager.man a
+              ) ~join:(Apron.Abstract1.join ApronManager.man) dnf |>
+            remove_tmp l
+          in
+          Some (a', bnd)
+        with ImpreciseExpression -> Some (a,bnd)
+           | UnsupportedExpression ->
+             let () = debug "unsupported" in None
+      end
+    | _ -> assert false
+
   let rec exec stmt man ctx (a,bnd) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } when is_var_numeric_type var ->
@@ -283,39 +322,8 @@ struct
       in
       Some (abs', bnd)
 
-    | S_assume(e) when is_numeric_type (etyp e) -> begin
-        let a, bnd = add_missing_vars (a,bnd) (Visitor.expr_vars e) in
-
-        try
-          let dnf, a, bnd, l = bexp_to_apron (fun exp -> man.ask (Common.mk_float_maybenan_query exp)) e (a,bnd) [] in
-          let env = Apron.Abstract1.env a in
-          let a' =
-            Dnf.reduce_conjunction
-              (fun conj ->
-                 let tcons_list =
-                   List.map
-                     (fun (op,e1,typ1,e2,typ2) ->
-                        let typ =
-                          if is_float_type typ1 || is_float_type typ2 then Apron.Texpr1.Real else
-                          if is_int_type typ1 && is_int_type typ2 then Apron.Texpr1.Int
-                          else Exceptions.panic_at (srange stmt)
-                              "Unsupported case (%a, %a) in stmt @[%a@]"
-                              pp_typ typ1 pp_typ typ2 pp_stmt stmt
-                        in
-                        let diff = Apron.Texpr1.Binop(Apron.Texpr1.Sub, e1, e2, typ, !opt_float_rounding) in
-                        let diff_texpr = Apron.Texpr1.of_expr env diff in
-                        Apron.Tcons1.make diff_texpr op
-                     ) conj
-                 in
-                 tcons_array_of_tcons_list env tcons_list |>
-                 Apron.Abstract1.meet_tcons_array ApronManager.man a
-              ) ~join:(Apron.Abstract1.join ApronManager.man) dnf |>
-            remove_tmp l
-          in
-          Some (a', bnd)
-        with ImpreciseExpression -> Some (a,bnd)
-           | UnsupportedExpression -> None
-      end
+    | S_assume(e) when is_numeric_type (etyp e) ->
+      assume stmt man.ask (a, bnd)
 
     | _ -> None
 
@@ -332,7 +340,6 @@ struct
       Values.Intervals.Integer.Value.of_apron
     else
       Values.Intervals.Integer.Value.top
-
 
   let eval_interval man e (abs,bnd) =
     match ekind e with
@@ -363,7 +370,6 @@ struct
       | Q_constant_vars ->
         constant_vars (abs,bnd) |>
         OptionExt.return
-
 
       | _ -> None
 

@@ -25,7 +25,7 @@
 
 open Mopsa
 open Sig.Reduction.Simplified
-
+open Ast
 
 module Reduction =
 struct
@@ -38,7 +38,6 @@ struct
 
   (** Get a list of variables related numerically to [v] *)
   let get_related_vars v man ctx a = man.ask (R.Q_related_vars v) ctx a
-
 
   (** Get the list of modified variables *)
   let get_modified_vars stmt man ctx a =
@@ -54,10 +53,10 @@ struct
 
     | _ -> []
 
-
-
   (** Reduction operator *)
   let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
+    let (module CR : Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
+
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man ctx pre in
 
@@ -66,12 +65,39 @@ struct
         (* Get the interval of var in the box domain *)
         let itv = man.get_value I.id var post in
 
-        (* Get the interval in all domain *)
-        let itv' = man.ask (Common.mk_int_interval_query ~fast:false (mk_var var stmt.srange)) ctx post in
+        (* Get the interval in the relational domain *)
+        let itv' = CR.bound_var var (man.get_env CR.id post) in
+
+        (* Combine data *)
+        let itv'' = I.meet itv itv' in
+
+        let () = debug "%a %a %a %a" pp_var var (format I.print) itv (format I.print) itv' (format I.print) itv'' in
 
         (* Check if box is less precise *)
-        if not (I.subset itv itv')
-        then man.set_value I.id var itv' post
+        let post = if not (I.subset itv itv')
+          then man.set_value I.id var itv'' post
+          else
+            post
+        in
+
+        (* Check if rel is less precise *)
+        if not (I.subset itv' itv)
+        then
+          let range = stmt.srange in
+          let ev = mk_var var range in
+          match itv'' with
+          | Bot.BOT -> man.set_env CR.id CR.bottom post
+          | Bot.Nb _ ->
+            let ol, oh = I.bounds_opt itv'' in
+            let assume s post =
+              let oenv = CR.assume s (fun q -> man.ask q ctx post) (man.get_env CR.id post) in
+              OptionExt.apply (fun env -> man.set_env CR.id env post) post oenv in
+            let post =
+              OptionExt.apply (fun l ->
+                  assume (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) post) post ol in
+            let post =
+              OptionExt.apply (fun h -> assume (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range) post) post oh in
+            post
         else post
 
       ) post vars
