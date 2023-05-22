@@ -102,6 +102,9 @@ struct
 
     mutable print_welcome : bool;
     (** Flag to print welcome message at the beginning *)
+
+    mutable script: out_channel option;
+    (** Optional file where all recorded commands will be written down *)
   }
 
 
@@ -118,6 +121,7 @@ struct
     trace = [];
     call_preamble = false;
     print_welcome = true;
+    script = None;
   }
 
   (* Copy a state *)
@@ -132,7 +136,9 @@ struct
       locstack = state.locstack;
       trace = state.trace;
       call_preamble = state.call_preamble;
-      print_welcome = state.print_welcome; }
+      print_welcome = state.print_welcome;
+      script = state.script
+    }
 
 
   (** {2 Interaction detection} *)
@@ -476,7 +482,17 @@ struct
 
 (** Wait for user input and process it *)
   and interact: type a. a action -> t flow -> a = fun action flow ->
-    let cmd = try read_command ()
+    let logger = fun cmd_str ->
+      if List.mem cmd_str ["us"; "unset script"; "unset s"] then () else
+      (* todo: currently logs unset script, whoops *)
+        match state.script with
+        | None -> ()
+        | Some ch ->
+          let file_fmt = formatter_of_out_channel ch in
+          Format.fprintf file_fmt "%s@." cmd_str
+          (* todo: remove last @. ... *)
+    in
+    let cmd = try read_command logger
               with Exit -> exit 0
     in
     state.command <- cmd;
@@ -609,6 +625,33 @@ struct
 
     | Unset Debug ->
       Debug.set_channels "";
+      interact action flow
+
+    | Set (Script, filename) ->
+      let ch = open_out filename in 
+      state.script <- Some ch;
+      interact action flow
+
+    | Unset Script ->
+      let () = match state.script with
+      | None -> ()
+      | Some ch ->
+        close_out ch;
+        state.script <- None in
+      interact action flow
+
+    | LoadScript s ->
+      let ch = open_in s in
+      let lines =
+        let rec process res =
+          try
+            process ((input_line ch) :: res)
+          with End_of_file ->
+            List.rev res
+        in process []
+      in
+      List.iter (fun l -> Queue.add l Command.commands_buffer) lines;
+      close_in ch;
       interact action flow
 
     | Save file ->

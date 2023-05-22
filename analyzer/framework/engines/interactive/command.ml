@@ -34,7 +34,7 @@ type command =
   (** Stop at next breakpoint *)
 
   | MopsaBackTrace
-  (* Returns the current backtrace of Mopsa *)
+  (** Returns the current backtrace of Mopsa *)
 
   | Next
   (** Stop at next statement and skip function calls *)
@@ -76,6 +76,8 @@ type command =
   | Unset of set_command
   (** Unset an option *)
 
+  | LoadScript of string
+
   | BackTrace
   (** Print the callstack *)
 
@@ -84,7 +86,6 @@ type command =
 
   | Save of string
   (** Save the environment in a file *)
-
 
 (** Information sub-commands *)
 and info_command =
@@ -102,6 +103,7 @@ and enable_command =
 (** Set/Unset sub-commands *)
 and set_command =
   | Debug
+  | Script
 
 
 (** Print a command *)
@@ -136,7 +138,10 @@ let pp_command fmt = function
   | Enable (Hook h)  -> Format.fprintf fmt "enable hook %s" h
   | Disable (Hook h) -> Format.fprintf fmt "disable hook %s" h
   | Set (Debug, d)   -> Format.fprintf fmt "set debug %s" d
+  | Set (Script, d)  -> Format.fprintf fmt "set script %s" d
+  | LoadScript s     -> Format.fprintf fmt "load script %s" s
   | Unset Debug      -> Format.pp_print_string fmt "unset debug"
+  | Unset Script     -> Format.pp_print_string fmt "unset script"
   | BackTrace        -> Format.pp_print_string fmt "backtrace"
   | Save file        -> Format.fprintf fmt "save %s" file
   | Trace            -> Format.pp_print_string fmt "trace"
@@ -171,8 +176,11 @@ let print_usage () =
   printf "  d[isable] h[hook] <h> disable a hook@.";
   printf "  s[et] d[ebug] <d>     set debug channels@.";
   printf "  u[nset] d[ebug]       unset debug channels@.";
+  printf "  s[et] script <file>   store commands into a file@.To be used in combination with load script <file>@.";
+  printf "  u[nset] script        do not store commands in file anymore@.";
+  printf "  load script <file>    reads script command from <file>@.";
   printf "  save <file>           save the abstract state in a file@.";
-  printf "  mopsa_bt              shows the current backtrace of the analyzer";
+  printf "  mopsa_bt              shows the current backtrace of the analyzer@.";
   printf "  help                  print this message@.";
   ()
 
@@ -226,8 +234,9 @@ let rec read_command_string () =
       read_command_string ()
 
 (** Read the next command *)
-let rec read_command () =
+let rec read_command logger =
   let s = read_command_string () in
+  logger s;
   (* Get command's parts *)
   let parts = String.split_on_char ' ' s |>
               List.map String.trim |>
@@ -272,7 +281,7 @@ let rec read_command () =
 
   | ["help" | "h"]   ->
     print_usage ();
-    read_command ()
+    read_command logger
 
   | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
   | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
@@ -287,9 +296,14 @@ let rec read_command () =
   | ["set"  |"s";  "debug"| "d"; d] | ["sd"; d] -> Set (Debug, d)
   | ["unset"|"u";  "debug"| "d"] | ["ud"] -> Unset Debug
 
+  | ["set"  |"s";  "script"| "s"; d] | ["sc"; d] -> Set (Script, d)
+  | ["unset"|"u";  "script"| "s"] | ["uc"] -> Unset Script
+
+  | ["load"; "script"; s] | ["ls"; s] -> LoadScript s
+
   | ["save"; file] -> Save file
 
   | _ ->
     printf "Unknown command %s@." s;
     print_usage ();
-    read_command ()
+    read_command logger
