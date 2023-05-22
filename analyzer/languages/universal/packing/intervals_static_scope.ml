@@ -37,38 +37,19 @@ struct
 
   module I = Numeric.Values.Intervals.Integer.Value
   module M = Framework.Lattices.Partial_map
-  module O = Numeric.Relational.Instances.Octagon
-  module P = Numeric.Relational.Instances.Polyhedra
 
   (** Signature of relational numeric domains with the additional functions
       [related_vars], [bound_var] and [vars] functions.
   *)
-  module type REL =
-  sig
-    include SIMPLIFIED
-    val related_vars : var -> t -> var list
-    val bound_var : var -> t -> I.t
-    val vars : t -> var list
-  end
 
   (** Packing map with its underlying relational domain *)
-  type pack_map = PM : (S.pack,'a) M.map * (module REL with type t = 'a) -> pack_map
-
+  type pack_map = PM : (S.pack,'a) M.map * (module Relational.Instances.RELATIONAL with type t = 'a) -> pack_map
 
   (** Get the packing map and the underlying relational domain *)
   let get_pack_map man a : pack_map =
-    match !Numeric.Relational.Instances.opt_numeric with
-    | "octagon" ->
-      let aa = man.get_env (D_static_packing (S.id,O.id)) a in
-      PM (aa, (module O))
-
-    | "polyhedra" ->
-      let aa = man.get_env (D_static_packing (S.id,P.id)) a in
-      PM (aa, (module P))
-
-    | _ -> assert false
-
-
+    let (module R: Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
+    let aa = man.get_env (D_static_packing (S.id,R.id)) a in
+    PM (aa, (module R))
 
   (** Get the interval of a variable in all packs *)
   let get_var_interval_in_packs var man ctx post =

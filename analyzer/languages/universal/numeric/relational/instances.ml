@@ -44,6 +44,17 @@ module LinEqualities =
 
 let opt_numeric = ref "polyhedra"
 
+module type RELATIONAL =
+sig
+  include Sig.Abstraction.Simplified.SIMPLIFIED
+  val bound_var : var -> t -> Intervals.Integer.Value.t
+  val assume : stmt -> (('a, bool) Core.Query.query -> bool) -> t -> t option
+  val related_vars : var -> t -> var list
+  val vars : t -> var list
+end
+
+let numeric_domain : (module RELATIONAL) ref = ref (module Polyhedra : RELATIONAL)
+
 let () =
   register_domain_option "universal.numeric.relational" {
     key = "-numeric";
@@ -54,14 +65,17 @@ let () =
         (function
           | "octagon"   ->
             opt_numeric := "octagon";
+            numeric_domain := (module Octagon : RELATIONAL);
             register_simplified_domain (module Octagon)
 
           | "polyhedra" ->
             opt_numeric := "polyhedra";
+            numeric_domain := (module Polyhedra : RELATIONAL);
             register_simplified_domain (module Polyhedra)
 
           | "lineq" ->
             opt_numeric := "lineq";
+            numeric_domain := (module LinEqualities : RELATIONAL);
             register_simplified_domain (module LinEqualities)
 
           | _ -> assert false
