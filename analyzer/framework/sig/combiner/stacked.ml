@@ -73,7 +73,7 @@ struct
   let merge pre (a1,te1) (a2,te2) =
     let e1 = get_root_effect te1 in
     let e2 = get_root_effect te2 in
-    if e1 == e2 then a1 else
+    if compare_effect e1 e2 = 0 then a1 else
     if is_empty_effect e1 then a2 else
     if is_empty_effect e2 then a1
     else D.merge pre (a1,e1) (a2,e2)
