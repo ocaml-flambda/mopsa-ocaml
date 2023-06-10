@@ -1,0 +1,20 @@
+(dirs :standard)
+
+(install
+ (files
+  mopsa.bin
+  mopsa-c
+  mopsa-cfg
+  mopsa-cpython
+  mopsa-diff
+  mopsa-python
+  mopsa-python-types
+  mopsa
+  mopsa-build
+  mopsa-c-emacs
+  mopsa-configure
+  mopsa-db
+  mopsa-make
+  mopsa-python-polytypes
+  mopsa-universal)
+ (section bin))

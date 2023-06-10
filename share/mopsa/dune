@@ -1,0 +1,4 @@
+(install
+ (files
+  (glob_files_rec *))
+ (section share))

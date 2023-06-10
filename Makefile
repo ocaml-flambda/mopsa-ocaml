@@ -28,6 +28,7 @@ all:
 	opam exec -- dune build --profile release -p mopsa
 
 install:
+	opam exec -- dune build --profile release -p mopsa @install
 	opam exec -- dune install --profile release
 
 clean:
