@@ -109,7 +109,13 @@ let analyze_files (files:string list) (args:string list option) : int =
 
     let flow = Engine.init prog in
     let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
-    let res = Engine.exec stmt flow |> post_to_flow Engine.man in
+    let res =
+      try Engine.exec stmt flow |> post_to_flow Engine.man
+      with Toplevel.SysBreak flow ->
+        (* let () = warn "Early termination, hooks will yield partial information only" in  *)
+        let () = Hook.on_finish Engine.man flow in
+        raise (Toplevel.SysBreak flow)
+    in
     let t = Timing.stop t in
     Hook.on_finish Engine.man res;
     Output.Factory.report Engine.man res ~time:t ~files
