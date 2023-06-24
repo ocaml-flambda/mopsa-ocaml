@@ -67,11 +67,11 @@ type arg = {
 (** Replacement for [Arg.parse].
     Adds delayed Unit arguments.
  *)
-let parse (args:arg list) (handler:string -> unit) (rest:string list -> unit) (msg:string) (help:unit -> unit) : unit =
+let parse (argv: string array) (args:arg list) (handler:string -> unit) (rest:string list -> unit) (msg:string) (help:unit -> unit) : unit =
   (* separate arg into program name and actual command-line arguments *)
   let progname, opts =
-    if Array.length Sys.argv < 1 then "?", []
-    else Sys.argv.(0), List.tl (Array.to_list Sys.argv)
+    if Array.length argv < 1 then "?", []
+    else argv.(0), List.tl (Array.to_list argv)
   in
   (* Unit_delayed actions are delayed into everything is parsed *)
   let delayed = ref [] in

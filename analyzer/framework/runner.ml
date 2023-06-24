@@ -51,10 +51,11 @@ let () =
 
 (** Parse command line arguments and apply [f] on the list of target
    source files *)
-let parse_options f () =
+let parse_options passed_args f () =
   let files = ref [] in
   let args  = ref None in
-  ArgExt.parse (Params.Options.get_options ())
+  ArgExt.parse passed_args
+               (Params.Options.get_options ())
                (fun filename -> files := filename :: !files)
                (fun rest -> args := Some rest)
                "Modular Open Platform for Static Analysis"
@@ -119,4 +120,4 @@ let analyze_files (files:string list) (args:string list option) : int =
 
 
 let run () =
-  exit @@ parse_options analyze_files ()
+  exit @@ parse_options Sys.argv analyze_files ()
