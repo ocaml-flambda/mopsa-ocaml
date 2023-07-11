@@ -39,7 +39,7 @@ Before compiling MOPSA, ensure that you have the following dependencies:
 The OCaml dependencies can be installed on any system with opam with:
 
 ```shell
-opam install --deps-only --with-doc --with-test . 
+opam install --deps-only --with-doc --with-test .
 ```
 
 For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
@@ -48,7 +48,7 @@ For instance, on Ubuntu, you can use these commands to install the dependencies 
 sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf
 opam init
 eval $(opam env)
-opam install --deps-only --with-doc --with-test . 
+opam install --deps-only --with-doc --with-test .
 ```
 
 ## Compilation
@@ -68,26 +68,21 @@ Note that the script `configure` accepts the usual configuration options (e.g. `
 
 ## Installation
 
-After compilation, the binaries are available in the `bin` sub-directory.
+After compilation, the binaries are available in the `_build/install/default/bin` sub-directory.
 
 The standard command:
-```
+```shell
 make install
-
 ```
 will install MOPSA in your opam switch.
-The OCaml libraries are installed by `ocamlfind` in its default directory (see `ocamlfind printconf destdir`)
 
 ## Opam-based compilation & installation
 
-Assuming that dependencies are installed, you can replace `./configure`, `make`,
-`make install` with simply:
-
+Assuming that dependencies are installed, you can replace `./configure`, `make`, `make install` with simply:
 ```shell
 opam pin add mopsa .
 ```
-which compiles MOPSA and installs the binaries and libraries in your opam
-switch.
+which compiles MOPSA and installs the binaries and libraries in your opam switch.
 
 
 ## Linking against the MOPSA library
@@ -95,15 +90,25 @@ switch.
 MOPSA can also be used as a library to develop further tools.
 
 It is installed as a `mopsa` ocamlfind package by `make install` or `opam`.
-It contains several sub-packages, including various utilities (`mopsa.utils`) and front-ends (`mopsa.clang_parser`, `mopsa.cstub_parser`, `mopsa.python_parser`, `mopsa.universal_parser`, depending on which languages are enabled) and the toplevel `mopsa.analyzer` package containing all the analysis logic and support for all compiled-in languages.
+It contains several sub-packages, including various utilities (`mopsa.mopsa_utils`) and front-ends (`mopsa.mopsa_c_parser`, `mopsa.mopsa_c_stubs_parser`, `mopsa.mopsa_py_parser`, `mopsa.mopsa_universal_parser`, depending on which languages are enabled) and the toplevel `mopsa.mopsa_analyzer` package containing all the analysis logic and support for all compiled-in languages.
 
 Consider the simple program `test.ml` that simulates the effect of the `mopsa` binary:
 ```ocaml
 let _ = Mopsa_analyzer.Framework.Runner.run()
 ```
-It can be compiled with:
+Add the following `dune` file in the same directory:
+```dune
+(executable
+ (name test)
+ (libraries mopsa.mopsa_analyzer))
+```
+Add also the file `dune-project`:
+```dune
+(lang dune 3.7)
+```
+Then, the project can be compiled with:
 ```shell
-ocamlfind ocamlopt -package mopsa.analyzer -linkpkg test.ml
+dune build
 ```
 
 ## Additional resources

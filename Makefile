@@ -22,13 +22,12 @@
 ##############################################################################
 
 
-.PHONY: all tests install clean distclean
+.PHONY: all tests install clean
 
 all:
 	opam exec -- dune build --profile release -p mopsa
 
 install:
-	opam exec -- dune build --profile release -p mopsa @install
 	opam exec -- dune install --profile release
 
 clean:
@@ -71,5 +70,5 @@ $(TESTS):
 	@ - $(foreach test, $(shell find $($@.directory) -name "*tests.$($@.extension)"), \
 		echo ""; \
 		echo "Running test $($@.analyzer) $(test)"; \
-		./bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
+		./_build/install/default/bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)

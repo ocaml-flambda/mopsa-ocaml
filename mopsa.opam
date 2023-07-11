@@ -27,17 +27,16 @@ depends: [
   "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
-  [
-    "dune"
-    "build"
-    "-p"
-    name
-    "-j"
-    jobs
-    "@install"
-    "@runtest" {with-test}
-    "@doc" {with-doc}
-  ]
+  ["./configure"]
+  [make]
+  [make "tests"] {with-test}
 ]
+install: [
+  [make "install"]
+]
+run-test: [
+  [make "tests"]
+]
+
+
 dev-repo: "https://gitlab.com/mopsa/mopsa-analyzer"
