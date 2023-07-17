@@ -255,18 +255,21 @@ struct
            function, because the return variable is used after the function
            returns
         *)
-        let f1, cs' = pop_callstack cs in
         let fname = match ekind call with
           | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
-        if is_empty_callstack cs'
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else if f1.call_fun_uniq_name <> fname
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else
-          let f2, _ = pop_callstack cs' in
+        let f1, f2 =
+          let rec process cs = match cs with
+            | f :: f' :: tl -> if f.call_fun_uniq_name = fname then f, Some f' else process (f'::tl)
+            | [f] -> f, None
+            | [] -> assert false 
+          in
+          process cs in
+        match f2 with
+        | None -> packs_of_function ~user_only f1.call_fun_uniq_name
+        | Some f2 ->
           packs_of_function ~user_only f1.call_fun_uniq_name @
           packs_of_function ~user_only f2.call_fun_uniq_name
 
