@@ -1,1 +1,1 @@
-(dirs :standard \ bin benchmarks docker release share)
+(dirs :standard \ benchmarks docker release)

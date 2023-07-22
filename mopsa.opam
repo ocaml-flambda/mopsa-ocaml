@@ -15,7 +15,7 @@ doc: "https://mopsa.lip6.fr/mopsa/doc"
 bug-reports: "https://gitlab.com/mopsa/mopsa-analyzer/issues"
 depends: [
   "ocaml"
-  "dune" {>= "2.9"}
+  "dune" {>= "3.7"}
   "conf-autoconf"
   "ocamlfind"
   "apron"
@@ -27,19 +27,16 @@ depends: [
   "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
-  [
-    "dune"
-    "build"
-    "-p"
-    name
-    "-j"
-    jobs
-    "--promote-install-files=false"
-    "@install"
-    "@runtest" {with-test}
-    "@doc" {with-doc}
-  ]
-  ["dune" "install" "-p" name "--create-install-files" name]
+  ["./configure"]
+  [make]
+  [make "tests"] {with-test}
 ]
+install: [
+  [make "install"]
+]
+run-test: [
+  [make "tests"]
+]
+
+
 dev-repo: "https://gitlab.com/mopsa/mopsa-analyzer"
