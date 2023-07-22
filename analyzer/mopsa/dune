@@ -1,4 +1,5 @@
 (library
  (name mopsa)
  (public_name mopsa.mopsa_analyzer.mopsa)
+ (library_flags -linkall)
  (libraries framework))

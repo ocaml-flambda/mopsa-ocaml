@@ -1,4 +1,5 @@
 (library
  (name repl)
  (public_name mopsa.mopsa_analyzer.repl)
+ (library_flags -linkall)
  (libraries mopsa framework mopsa_universal_parser universal))

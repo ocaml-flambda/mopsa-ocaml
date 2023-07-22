@@ -2,4 +2,5 @@
  (name universal_numeric)
  (public_name mopsa.mopsa_analyzer.universal.numeric)
  (libraries lang numeric_common numeric_values numeric_reductions relational framework mopsa mopsa_utils)
+ (library_flags -linkall)
  (flags :standard -open Lang -open Numeric_common))

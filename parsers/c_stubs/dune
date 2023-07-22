@@ -2,4 +2,5 @@
  (name mopsa_c_stubs_parser)
  (public_name mopsa.c_stubs_parser)
  (libraries parsing passes)
+ (library_flags -linkall)
  (flags -open Parsing))

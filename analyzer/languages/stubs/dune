@@ -1,4 +1,5 @@
 (library
  (name stubs)
  (public_name mopsa.mopsa_analyzer.stubs)
+ (library_flags -linkall)
  (libraries mopsa framework universal mopsa_c_stubs_parser))

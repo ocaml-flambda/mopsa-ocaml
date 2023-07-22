@@ -6,4 +6,5 @@
 (library
  (name mopsa_py_parser)
  (public_name mopsa.mopsa_py_parser)
+ (library_flags -linkall)
  (libraries mopsa_utils))

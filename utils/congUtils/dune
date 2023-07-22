@@ -2,4 +2,5 @@
  (name congUtils)
  (public_name mopsa.mopsa_utils.congUtils)
  (libraries utils_core itvUtils)
+ (library_flags -linkall)
  (flags (:standard -open Utils_core)))

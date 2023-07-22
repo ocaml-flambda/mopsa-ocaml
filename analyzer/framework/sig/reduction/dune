@@ -1,4 +1,5 @@
 (library
  (name reduction)
  (public_name mopsa.mopsa_analyzer.framework.sig.reduction)
+ (library_flags -linkall)
  (libraries core))

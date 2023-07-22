@@ -1,4 +1,5 @@
 (library
  (name sig)
  (public_name mopsa.mopsa_analyzer.framework.sig)
+ (library_flags -linkall)
  (libraries abstraction combiner reduction))
