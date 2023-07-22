@@ -27,9 +27,8 @@
   This allows extracting from an actual build a database of the sources
   we need to consider to analyze a specific binary or library.
 
-  Note: we generate a single binary to wrap a bunch of tools.
-  The name used to invoke the tool, argv.(0), tells which tool to
-  emulate.
+  The name of the wrapped binary is passed as first argument,
+  followed by the binary arguments.
  *)
 
 
@@ -445,11 +444,12 @@ let print dbfile args =
   let db = try load_db dbfile with Unix.Unix_error _ -> empty_db in
 
   (* argument parsing *)
-  let tool = Filename.basename (Sys.argv.(0)) in
+  let tool = wrapper_name in
   let verbose = ref false
   and json = ref false
   and files = ref [] in
-  Arg.parse
+  Arg.parse_argv
+    (Array.of_list ("mopsa-db"::args))
     ["-v", Arg.Set verbose, "textual dump of all targets";
      "-json", Arg.Set json, "JSON dump of all targets"
     ]
@@ -510,8 +510,10 @@ let main () =
   let logname = Filename.concat (Filename.dirname dbfile) "mopsa.log" in
   if !log then logfile := open_out_gen [Open_wronly;Open_creat;Open_append] 0o644 logname;
 
-  let tool = Filename.basename (Sys.argv.(0))
-  and args = List.tl (Array.to_list Sys.argv) in
+  let tool, args =
+    if Array.length Sys.argv < 2 then "mospa-db", []
+    else Sys.argv.(1), (List.tl (List.tl (Array.to_list Sys.argv)))
+  in
 
   if !log then Printf.fprintf !logfile "DB: db file is %s\n%!" dbfile;
   if !log then Printf.fprintf !logfile "DB: got %s %a\n%!" tool (print_list " " output_string) args;
@@ -547,8 +549,8 @@ let main () =
   );
 
   (* now execute the original command *)
-  exec_unwrapped Sys.argv (* note: this does not return *)
-
+  let argv = Array.sub Sys.argv 1 (Array.length Sys.argv - 1) in
+  exec_unwrapped argv (* note: this does not return *)
 
 
 let _ = main ()
