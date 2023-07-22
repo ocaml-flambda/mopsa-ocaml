@@ -1,1 +1,4 @@
-mopsa-wrapper
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/../.."
+exec -a "$0" ${MOPSADIR}/bin/build_wrapper.exe
