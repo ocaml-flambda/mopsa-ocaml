@@ -14,7 +14,7 @@ ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
              python3-dev python3-setuptools python3-pip python3-requests \
              rsync m4 curl wget
 
-ENV OPAM_DEPS apron zarith menhir yojson
+ENV OPAM_DEPS dune apron zarith menhir yojson
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -46,6 +46,8 @@ ENV LC_ALL C.UTF-8
 
 RUN \
     opam init --disable-sandboxing -y && \
+    eval $(opam env) && \
+    opam switch create 4.14.0 && \
     eval $(opam env) && \
     opam update -y && \
     opam install -y -j 8 $OPAM_DEPS
