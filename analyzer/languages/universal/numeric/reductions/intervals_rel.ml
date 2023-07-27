@@ -54,6 +54,7 @@ struct
     | _ -> []
 
   (** Reduction operator *)
+  (* TODO: factor with universal.numeric.packing.intervals_static_scope.ml *)
   let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
     let (module CR : Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
 

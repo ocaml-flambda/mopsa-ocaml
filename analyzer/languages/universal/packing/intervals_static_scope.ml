@@ -27,6 +27,7 @@ open Mopsa
 open Sig.Reduction.Simplified
 open Sig.Abstraction.Simplified
 open Static
+open Ast
 open Bot_top
 
 module ReductionMake(S : Static.STRATEGY) : SIMPLIFIED_REDUCTION =
@@ -73,16 +74,43 @@ struct
 
 
   (** Refine the interval of a variable in the box domain *)
-  let refine_var_interval var man ctx a =
+  let refine_var_interval var man ctx post range =
     (* Get the interval of the variable in the box domain *)
-    let itv = man.get_value I.id var a in
-    (** Get the interval of the variable in all packs *)
-    let itv' = get_var_interval_in_packs var man ctx a in
-    if I.subset itv itv' then a
-    else
-      let itv'' = I.meet itv itv' in
-      man.set_value I.id var itv'' a
+    let itv = man.get_value I.id var post in
 
+    (** Get the interval of the variable in all packs *)
+    let itv' = get_var_interval_in_packs var man ctx post in
+
+    (* Combine data *)
+    let itv'' = I.meet itv itv' in
+
+    (* Check if box is less precise *)
+    let post = if not (I.subset itv itv')
+      then man.set_value I.id var itv'' post
+      else
+        post
+    in
+
+    (* Check if rel is less precise *)
+    if not (I.subset itv' itv)
+    then
+      let PM (a, domain) = get_pack_map man post in
+      let module CR = (val domain) in
+      let ev = mk_var var range in
+      match itv'' with
+      | Bot.BOT -> man.set_env CR.id CR.bottom post
+      | Bot.Nb _ ->
+        let ol, oh = I.bounds_opt itv'' in
+        let assume s post =
+          let oenv = CR.assume s (fun q -> man.ask q ctx post) (man.get_env CR.id post) in
+          OptionExt.apply (fun env -> man.set_env CR.id env post) post oenv in
+        let post =
+          OptionExt.apply (fun l ->
+              assume (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) post) post ol in
+        let post =
+          OptionExt.apply (fun h -> assume (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range) post) post oh in
+        post
+    else post
 
   (** Reduction after a test *)
   let reduce_assume cond man ctx pre post =
@@ -105,7 +133,7 @@ struct
                 let vars' = VarSet.diff vars past in
                 (* Refine the interval of these variables *)
                 let acc' = VarSet.fold (fun var' acc ->
-                    try refine_var_interval var' man ctx acc
+                    try refine_var_interval var' man ctx acc cond.erange
                     with Not_found -> acc
                   ) vars' acc
                 in
@@ -121,7 +149,7 @@ struct
   let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
     match skind stmt with
     | S_assign ({ ekind = E_var (v,_) },_) ->
-      refine_var_interval v man ctx post
+      refine_var_interval v man ctx post stmt.srange
 
     | S_assume cond ->
       reduce_assume cond man ctx pre post
