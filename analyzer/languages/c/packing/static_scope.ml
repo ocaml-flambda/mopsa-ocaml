@@ -245,10 +245,31 @@ struct
           packs_of_function ~user_only f.c_func_unique_name @
           packs_of_function ~user_only caller.call_fun_uniq_name
 
+    (* Parameters are part of the caller and the callee packs *)
+    (* Subcase to avoid many distinctions, cf c/iterators/interproc.ml, function *)
+    (*    eval_calls_in_args a *)
+    | Var { vkind = V_range_attr(range, "arg"); vtyp }
+      when is_c_scalar_type vtyp ->
+      let prog = find_ctx Ast.c_program_ctx ctx in
+      let o_f = List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions in
+      OptionExt.apply (fun f ->
+          let cs = find_ctx Context.callstack_ctx_key ctx in
+          if is_empty_callstack cs
+          then packs_of_function ~user_only f.c_func_unique_name
+          else
+            let _, cs' = pop_callstack cs in
+            if is_empty_callstack cs'
+            then packs_of_function ~user_only f.c_func_unique_name
+            else
+              let caller, _ = pop_callstack cs' in
+              packs_of_function ~user_only f.c_func_unique_name @
+              packs_of_function ~user_only caller.call_fun_uniq_name
+        ) [] o_f
+
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return (call, _) } ->
       let cs = find_ctx Context.callstack_ctx_key ctx in
-      if is_empty_callstack cs
+      let r = if is_empty_callstack cs
       then []
       else
         (* Note that the top of the callstack is not always the callee
@@ -271,7 +292,8 @@ struct
         | None -> packs_of_function ~user_only f1.call_fun_uniq_name
         | Some f2 ->
           packs_of_function ~user_only f1.call_fun_uniq_name @
-          packs_of_function ~user_only f2.call_fun_uniq_name
+          packs_of_function ~user_only f2.call_fun_uniq_name in
+      r
 
     (* Primed bases are in the same pack as the original ones *)
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
