@@ -74,6 +74,7 @@ struct
 
 
   (** Refine the interval of a variable in the box domain *)
+  (* TODO: factor with universal.numeric.reductions.intervals_rels.ml *)
   let refine_var_interval var man ctx post range =
     (* Get the interval of the variable in the box domain *)
     let itv = man.get_value I.id var post in
@@ -94,22 +95,37 @@ struct
     (* Check if rel is less precise *)
     if not (I.subset itv' itv)
     then
-      let PM (a, domain) = get_pack_map man post in
-      let module CR = (val domain) in
-      let ev = mk_var var range in
-      match itv'' with
-      | Bot.BOT -> man.set_env CR.id CR.bottom post
-      | Bot.Nb _ ->
+      let (module R: Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
+      let packing_id = (D_static_packing (S.id,R.id)) in
+      let rel_packs  = man.get_env packing_id post in
+      match itv'', rel_packs with
+      | Bot.BOT, _ -> man.set_env packing_id BOT post
+      | Bot.Nb _, (BOT | TOP) -> post 
+      | Bot.Nb _, Nbt rel_packs ->
         let ol, oh = I.bounds_opt itv'' in
-        let assume s post =
-          let oenv = CR.assume s (fun q -> man.ask q ctx post) (man.get_env CR.id post) in
-          OptionExt.apply (fun env -> man.set_env CR.id env post) post oenv in
-        let post =
-          OptionExt.apply (fun l ->
-              assume (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) post) post ol in
-        let post =
-          OptionExt.apply (fun h -> assume (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range) post) post oh in
-        post
+        let packs = S.packs_of_var ctx var in
+        let ev = mk_var var range in
+        (* FIXME: shall this really be done in ALL packs? *)
+        let new_rel_packs =
+          List.fold_left (fun m pack ->
+            try
+              let a_pack = M.PMap.find pack m in
+              let assume s p =
+                OptionExt.default p
+                  (R.assume s (fun q -> man.ask q ctx post) p) in
+              let a_pack =
+                OptionExt.apply
+                  (fun l -> assume
+                      (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) a_pack)
+                  a_pack ol in
+              let a_pack =
+                OptionExt.apply
+                  (fun h -> assume
+                      (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range)
+                      a_pack) a_pack oh in
+              M.PMap.add pack a_pack m
+            with Not_found -> m) rel_packs packs in
+        man.set_env packing_id (Nbt new_rel_packs) post 
     else post
 
   (** Reduction after a test *)
