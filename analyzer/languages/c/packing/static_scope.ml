@@ -300,7 +300,7 @@ struct
       packs_of_base ~user_only ctx b
 
     | Var ({ vkind = V_c_stack_var(_, v)}) ->
-      packs_of_base ctx {b with base_kind = Var v}
+      packs_of_base ~user_only ctx {b with base_kind = Var v}
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
       user_packs_of_resource r
