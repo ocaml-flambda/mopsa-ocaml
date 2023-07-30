@@ -74,8 +74,12 @@ struct
 
 
   (** Refine the interval of a variable in the box domain *)
-  (* TODO: factor with universal.numeric.reductions.intervals_rels.ml *)
+  (* TODO:
+     - factor with universal.numeric.reductions.intervals_rels.ml
+     - handle floating point
+  *)
   let refine_var_interval var man ctx post range =
+    if compare_typ (vtyp var) T_int <> 0 then post else
     (* Get the interval of the variable in the box domain *)
     let itv = man.get_value I.id var post in
 

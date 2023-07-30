@@ -54,12 +54,16 @@ struct
     | _ -> []
 
   (** Reduction operator *)
-  (* TODO: factor with universal.numeric.packing.intervals_static_scope.ml *)
+  (* TODO: 
+     - factor with universal.numeric.packing.intervals_static_scope.ml
+     - float reduction
+  *)
   let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
     let (module CR : Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
 
     (* Get the modified variables *)
-    let vars = get_modified_vars stmt man ctx pre in
+    let vars = get_modified_vars stmt man ctx pre |>
+               List.filter (fun v -> compare_typ (vtyp v) T_int = 0) in
 
     (* Refine the interval of each variable *)
     List.fold_left (fun post var ->
@@ -72,7 +76,7 @@ struct
         (* Combine data *)
         let itv'' = I.meet itv itv' in
 
-        let () = debug "%a %a %a %a" pp_var var (format I.print) itv (format I.print) itv' (format I.print) itv'' in
+        let () = debug "%a %a %a %a %a" pp_var var pp_typ (vtyp var) (format I.print) itv (format I.print) itv' (format I.print) itv'' in
 
         (* Check if box is less precise *)
         let post = if not (I.subset itv itv')
