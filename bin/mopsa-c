@@ -3,4 +3,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 CONFIG=c/default.json
 
-${MOPSADIR}/bin/mopsa -config=${CONFIG} -hash-heap-address=true -disable-var-renaming-recursive-call $@ #-clean-cur-only
+${MOPSADIR}/bin/mopsa -config=${CONFIG} -clean-cur-only -hash-heap-address=true -disable-var-renaming-recursive-call $@
