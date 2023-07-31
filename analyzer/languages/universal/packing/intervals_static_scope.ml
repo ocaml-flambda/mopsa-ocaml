@@ -52,6 +52,11 @@ struct
     let aa = man.get_env (D_static_packing (S.id,R.id)) a in
     PM (aa, (module R))
 
+  let packs_of_var ctx var = 
+    let r = S.packs_of_var ctx var in
+    let () = debug "packs_of_var %a = %a" pp_var var (Format.pp_print_list (format S.print)) r in
+    r
+
   (** Get the interval of a variable in all packs *)
   let get_var_interval_in_packs var man ctx post =
     (* Get the packing map and the underlying rel domain *)
@@ -62,7 +67,7 @@ struct
     | TOP -> I.top
     | Nbt m ->
       (* Get the packs of the variable *)
-      let packs = S.packs_of_var ctx var in
+      let packs = packs_of_var ctx var in
       (* Fold over the packs to compute the meet of the intervals *)
       packs |> List.fold_left (fun acc pack ->
           try
@@ -79,6 +84,7 @@ struct
      - handle floating point
   *)
   let refine_var_interval var man ctx post range =
+    (* FIXME: int or bool *)
     if compare_typ (vtyp var) T_int <> 0 then post else
     (* Get the interval of the variable in the box domain *)
     let itv = man.get_value I.id var post in
@@ -107,7 +113,7 @@ struct
       | Bot.Nb _, (BOT | TOP) -> post 
       | Bot.Nb _, Nbt rel_packs ->
         let ol, oh = I.bounds_opt itv'' in
-        let packs = S.packs_of_var ctx var in
+        let packs = packs_of_var ctx var in
         let ev = mk_var var range in
         (* FIXME: shall this really be done in ALL packs? *)
         let new_rel_packs =
@@ -144,7 +150,7 @@ struct
       let vars = Visitor.expr_vars cond in
       let post', _ = vars |> List.fold_left (fun (acc,past) var ->
           (* Fold over the packs of var and search for the variables in the same pack *)
-          let packs = S.packs_of_var ctx var in
+          let packs = packs_of_var ctx var in
           packs |> List.fold_left (fun (acc,past) pack ->
               try
                 let aa = M.PMap.find pack m in

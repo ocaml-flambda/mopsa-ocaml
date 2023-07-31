@@ -283,11 +283,11 @@ struct
         in
         let f1, f2 =
           let rec process cs = match cs with
-            | f :: f' :: tl -> if f.call_fun_uniq_name = fname then f, Some f' else process (f'::tl)
+            | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then f, Some f' else process (f'::tl)
             | [f] -> f, None
             | [] -> assert false 
           in
-          process cs in
+          process (List.rev cs) in
         match f2 with
         | None -> packs_of_function ~user_only f1.call_fun_uniq_name
         | Some f2 ->
