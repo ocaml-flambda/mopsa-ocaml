@@ -74,15 +74,22 @@ struct
        man.exec body flow |> OptionExt.return
 
     | S_c_do_while(body, cond) ->
-      let range = stmt.srange in
-      let stmt = Universal.Ast.(
-          mk_block [
+      (*
+         The basic idea is to rewrite a do while into:
+         ```
             body;
             mk_stmt (S_while (cond, body)) range
-          ] range
-        )
-      in
-      man.exec stmt flow |> OptionExt.return
+         ```
+         However we have to handle break statements from the unrolled first body...
+      *)
+      let range = stmt.srange in
+      let open Universal_iterators__.Loops in 
+      man.exec body flow >>%? fun after_one ->
+      let break, others = Flow.partition (fun tk _ -> tk = T_break) after_one in
+      Post.join
+        (Post.return (Flow.rename T_break T_cur man.lattice break))
+        (man.exec (mk_stmt (S_while (cond, body)) range) others)
+      |> OptionExt.return
 
     | S_c_break upd ->
       update_scope upd stmt.srange man flow >>%? fun flow' ->
