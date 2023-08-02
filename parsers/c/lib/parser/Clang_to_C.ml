@@ -737,7 +737,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       *)
       if f.C.function_body <> None ||
          (func.func_parameters = [||] &&  params <> [||]) ||
-         has_stub_comment f.C.function_com then (
+         (has_stub_comment f.C.function_com &&
+          (match func.func_body with
+           | None -> true
+           | Some b -> List.length b.blk_stmts = 0)) then (
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
       );
