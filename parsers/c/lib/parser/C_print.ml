@@ -666,7 +666,7 @@ let builtin_typedef =
 (* some built-in typedef we should not print *)
 
 let builtin_funcs =
-  ["__builtin_va_start"; "__builtin_va_end"; "__sigsetjmp";
+  ["__builtin_va_start"; "__builtin_va_end"; "__builtin_va_copy"; "__sigsetjmp";
    "_gl_verify_function2"; "_gl_verify_function3"; "_gl_verify_function4";
    "_gl_verify_function5"; "_gl_verify_function6"; "_gl_verify_function7";
    "_gl_verify_function8"; "_gl_verify_function9"; "_gl_verify_function10";
