@@ -581,7 +581,6 @@ struct
       if PointerSet.is_bottom v1_invalid && PointerSet.is_bottom v2_invalid
       then []
       else
-        let flow = raise_c_invalid_pointer_compare p q range man flow in
         [ Post.return flow ]
     in
 
@@ -620,7 +619,6 @@ struct
         let flow = set_value_opt p1 vv1 man flow |>
                    set_value_opt p2 vv2 man
         in
-        let flow = raise_c_invalid_pointer_compare p q range man flow in
         [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
@@ -868,7 +866,7 @@ struct
         | Some e -> [man.eval e flow ~translate:"Universal"]
     in
 
-    (* Case 2: different base => undefined behavior *)
+    (* Case 2: different base => arbitrary integer *)
     let case2 =
       let v1 = PointerSet.diff v1 v2 in
       let v2 = PointerSet.diff v2 v1 in
@@ -878,8 +876,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
-        let flow = raise_c_invalid_pointer_sub p q range man flow in
-        [Eval.empty flow]
+        [man.eval (mk_top T_int range) flow]
     in
 
     Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)
