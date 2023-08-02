@@ -737,6 +737,12 @@ struct
 
         let nb = Z.div Z.((uo + step) - lo) step in
         Debug.debug ~channel:"assignments" "cell, still expanding lower bound %a, upper bound %a, step %a, number of elements in interval %a" Z.pp_print lo Z.pp_print uo Z.pp_print step Z.pp_print nb;
+        if uo < lo then
+          (* guanranteed to be out of bounds, we set the location to top *)
+          let region = Region (base, Z.zero, Z.sub us elm,step) in
+          Debug.debug ~channel:"assignments" "cell, negative range %a %a" Z.pp_print us Z.pp_print elm;
+            Cases.singleton region flow
+        else if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
           (* too many cases -> top *)
           let region = Region (base, lo, uo ,step) in
           man.exec (mk_assume (mk_binop offset O_ge (mk_z lo range) range) range) flow >>% fun flow ->
@@ -1077,11 +1083,6 @@ struct
       Debug.debug ~channel:"assignments" "cell, post expansion";
     match expansion with
     | Top ->
-      let flow =
-        Flow.add_local_assumption
-          (Soundness.A_ignore_modification_undetermined_pointer ptr)
-          range flow
-      in
       Post.return flow
 
     | Cell (c,mode) ->
