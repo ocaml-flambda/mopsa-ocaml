@@ -120,20 +120,24 @@ struct
           List.fold_left (fun m pack ->
             try
               let a_pack = M.PMap.find pack m in
-              let assume s p =
-                OptionExt.default p
-                  (R.assume s (fun q -> man.ask q ctx post) p) in
-              let a_pack =
-                OptionExt.apply
-                  (fun l -> assume
-                      (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) a_pack)
-                  a_pack ol in
-              let a_pack =
-                OptionExt.apply
-                  (fun h -> assume
-                      (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range)
-                      a_pack) a_pack oh in
-              M.PMap.add pack a_pack m
+              (* in you suspect your packing is buggy, you may want to uncomment the condition below: we previously encountered a case where the assume below introduced var in new packs besides the one it was defined in, which is clearly not the point *)
+              (* if List.exists (fun v -> compare_var var v = 0) (R.vars a_pack) then *)
+                let assume s p =
+                  OptionExt.default p
+                    (R.assume s (fun q -> man.ask q ctx post) p) in
+                let a_pack =
+                  OptionExt.apply
+                    (fun l -> assume
+                        (mk_assume (mk_binop ~etyp:T_bool (mk_constant ~etyp:T_int (C_int l) range) O_le ev range) range) a_pack)
+                    a_pack ol in
+                let a_pack =
+                  OptionExt.apply
+                    (fun h -> assume
+                        (mk_assume (mk_binop ~etyp:T_bool ev O_le (mk_constant ~etyp:T_int (C_int h) range) range) range)
+                        a_pack) a_pack oh in
+                M.PMap.add pack a_pack m
+              (* else *)
+              (*   m *)
             with Not_found -> m) rel_packs packs in
         man.set_env packing_id (Nbt new_rel_packs) post 
     else post

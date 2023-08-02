@@ -283,14 +283,20 @@ struct
         in
         let f1, f2 =
           let rec process cs = match cs with
-            | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then f, Some f' else process (f'::tl)
-            | [f] -> f, None
+            | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then Some f, Some f' else process (f'::tl)
+            | [f] ->
+              if f.call_fun_orig_name = fname then
+                Some f, None
+              else None, None
             | [] -> assert false 
           in
           process (List.rev cs) in
-        match f2 with
-        | None -> packs_of_function ~user_only f1.call_fun_uniq_name
-        | Some f2 ->
+        let () = debug "cs = %a@.fname = %s@.f1 = %a@.f2 = %a" Callstack.pp_callstack_short cs fname  (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f1 (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f2 in
+        match f2, f1 with
+        | None, None -> []
+        | Some _, None -> assert false
+        | None, Some f1 -> packs_of_function ~user_only f1.call_fun_uniq_name
+        | Some f2, Some f1 ->
           packs_of_function ~user_only f1.call_fun_uniq_name @
           packs_of_function ~user_only f2.call_fun_uniq_name in
       r
