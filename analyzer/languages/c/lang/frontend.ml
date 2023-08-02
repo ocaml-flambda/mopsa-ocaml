@@ -267,6 +267,10 @@ let rec parse_program (files: string list) =
       panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es in
   let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
+  let () =
+    let outch = open_out "preprocessed.i" in
+    C_print.print_project outch prj;
+    close_out outch in
   {
     prog_kind = from_project prj;
     prog_range = mk_program_range files;
