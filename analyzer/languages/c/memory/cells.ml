@@ -689,13 +689,15 @@ struct
       Cases.singleton None flow
 
     | _ ->
-      Cases.empty flow
+      Debug.debug ~channel:"assignments" "assigning cell, pointer is neither block nor top";
+      Cases.singleton None flow
 
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) cases =
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
+      Debug.debug ~channel:"assignments" "assigning cell, evaluate base to top";
       Cases.singleton Top flow
 
     | Some (base,offset,mode) ->
@@ -1080,7 +1082,7 @@ struct
   let exec_assign lval e range man flow =
     let ptr = mk_c_address_of lval range in
     expand ptr range man flow >>$ fun expansion flow ->
-      Debug.debug ~channel:"assignments" "cell, post expansion";
+    Debug.debug ~channel:"assignments" "cell, post expansion";
     match expansion with
     | Top ->
       Post.return flow
