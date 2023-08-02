@@ -704,7 +704,7 @@ struct
 
       (* Get the size of the base *)
       eval_base_size base range man flow >>$ fun size flow ->
-
+        Debug.debug ~channel:"assignments" "assigning cell, expanding";
       (* Compute the interval and create a finite number of cells *)
       let offset_itv, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       match c with
@@ -736,7 +736,7 @@ struct
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
-        if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+        Debug.debug ~channel:"assignments" "cell, still expanding lower bound %a, upper bound %a, step %a, number of elements in interval %a" Z.pp_print lo Z.pp_print uo Z.pp_print step Z.pp_print nb;
           (* too many cases -> top *)
           let region = Region (base, lo, uo ,step) in
           man.exec (mk_assume (mk_binop offset O_ge (mk_z lo range) range) range) flow >>% fun flow ->
@@ -1074,6 +1074,7 @@ struct
   let exec_assign lval e range man flow =
     let ptr = mk_c_address_of lval range in
     expand ptr range man flow >>$ fun expansion flow ->
+      Debug.debug ~channel:"assignments" "cell, post expansion";
     match expansion with
     | Top ->
       let flow =
@@ -1088,6 +1089,7 @@ struct
 
     | Region (base,lo,hi,step) ->
       man.eval e flow >>$ fun _ flow ->
+      Debug.debug ~channel:"assignments" "cell, assign region %a %a %a" pp_base base Z.pp_print lo Z.pp_print hi;
       assign_region base lo hi step range man flow
 
 
@@ -1263,6 +1265,7 @@ struct
       OptionExt.return
 
     | S_assign(x, e) when is_c_scalar_type x.etyp ->
+      Debug.debug ~channel:"assignments" "cells, assigning %a = %a" pp_expr x pp_expr e;
       exec_assign x e stmt.srange man flow |>
       OptionExt.return
 
