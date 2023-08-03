@@ -190,8 +190,11 @@ struct
     | S_c_switch(e, body) ->
        (
          (* Evaluate e once in case of side-effects *)
-         man.eval e flow >>$ fun e flow ->
-         exec_switch e body stmt.srange man flow
+         let range = srange stmt in
+         let guard_var = mk_range_attr_var range "switch-guard" (etyp e) in
+         man.exec (mk_assign (mk_var guard_var range) e range) flow
+         |> Cases.add_cleaners [mk_remove_var guard_var range] >>% fun flow ->
+         exec_switch (mk_var guard_var range) body stmt.srange man flow
        ) |>
       OptionExt.return
 
