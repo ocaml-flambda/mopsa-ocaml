@@ -13,11 +13,23 @@ domain should be the right entry point. We can intercept the creation of variabl
 reads and writes of them. The most important information that we can get out of this domain 
 is the list of currently available variables (called "cells"). For an example, see `exec_havoc`.
 
+The list of cells can be obtained with:
+```OCaml
+let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
+let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells []
+```
+
+
 **Pointers**
 `c.memory.scalars.pointer` corresponds to the actual abstraction for pointer variables 
 (tracked by cells). It tracks their contents and it introduces an auxillary variable 
 `offset(p)` that tracks the offset of a pointer into a block. This domain can function 
 as a source of inspiration how we can create auxillary variables.
+
+The list of pointers tracked by this domain can be obtained with:
+```OCaml
+let dom = Map.fold (fun v x c -> v :: c) env []
+```
 
 **Machine Integers**
 `c.memory.scalars.machine_numbers` performs number checking and then effectively forwards
@@ -36,3 +48,7 @@ The variables can be auxillary variables or program variables.
 This is probably not the right entry point to see which variables are currently around, since 
 the domain (in the map sense) could contain arbitrary variables including auxillary variables.
 
+The domain (in the map sense) can be accessed with:
+```OCaml
+let dom = VarMap.fold (fun v a c -> v :: c) map []
+```

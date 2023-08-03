@@ -716,10 +716,6 @@ struct
       man.exec (mk_assign vv top stmt.srange) flow ~route:universal |>
       OptionExt.return
 
-    | S_havoc ->
-      let () = Debug.debug ~channel:"havoc" "machine numbers, forwarding to universal" in
-      man.exec (mk_havoc stmt.srange) flow ~route:universal |>
-      OptionExt.return
     | _ -> None
 
 

@@ -812,13 +812,6 @@ struct
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
 
-    | S_havoc ->
-      let env = get_env T_cur man flow in
-      let dom = Map.fold (fun v x c -> v :: c) env [] in
-      let () = Debug.debug ~channel:"havoc" "pointers: %a" (pp_bracketed_list pp_var) dom in
-      man.exec ~route:(Below name) stmt flow |> 
-      OptionExt.return
-
     | _ -> None
 
 
