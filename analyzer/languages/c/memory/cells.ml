@@ -1101,6 +1101,7 @@ struct
     let () = Debug.debug ~channel:"declare" "declaring base %a" pp_base b in
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
+      let () = Debug.debug ~channel:"declare" "declaring scalar %a" pp_base b in
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow |>
       add_cell c range man
