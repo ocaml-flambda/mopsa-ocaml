@@ -142,36 +142,34 @@ struct
         man.set_env packing_id (Nbt new_rel_packs) post 
     else post
 
+
   (** Reduction after a test *)
   let reduce_assume cond man ctx pre post =
     let PM (a, domain) = get_pack_map man post in
     let module Domain = (val domain) in
-    match a with
+        match a with
     | BOT -> post
     | TOP -> post
     | Nbt m ->
       (* Get the variables in the condition *)
       let vars = Visitor.expr_vars cond in
-      let post', _ = vars |> List.fold_left (fun (acc,past) var ->
-          (* Fold over the packs of var and search for the variables in the same pack *)
-          let packs = packs_of_var ctx var in
-          packs |> List.fold_left (fun (acc,past) pack ->
-              try
-                let aa = M.PMap.find pack m in
-                (* Get the variables in this pack that were not handled before *)
-                let vars = Domain.vars aa |> VarSet.of_list in
-                let vars' = VarSet.diff vars past in
-                (* Refine the interval of these variables *)
-                let acc' = VarSet.fold (fun var' acc ->
-                    try refine_var_interval var' man ctx acc cond.erange
-                    with Not_found -> acc
-                  ) vars' acc
-                in
-                acc', VarSet.union vars' past
-              with Not_found -> (acc,past)
-            ) (acc,past)
-        ) (post,VarSet.empty)
-      in
+      let vars =
+        (* Find all variables related to vars in all packs *)
+        let packs = List.fold_left (fun acc var -> packs_of_var ctx var @ acc) [] vars |>
+                    List.sort_uniq S.compare in
+        List.fold_left (fun acc pack ->
+            let aa = M.PMap.find pack m in
+            List.fold_left (fun acc v -> Domain.related_vars v aa @ acc) acc vars
+          ) vars packs |>
+        List.sort_uniq compare_var |>
+        List.filter (fun v -> compare_typ (vtyp v) T_int = 0) in
+      let post' =
+        List.fold_left (fun acc var ->
+            try
+              refine_var_interval var man ctx acc cond.erange
+            with Not_found -> acc
+          ) post vars in
+      let () = debug "end reduce assume" in 
       post'
 
 
