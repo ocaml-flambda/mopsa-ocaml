@@ -1307,6 +1307,15 @@ struct
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
+    | S_c_havoc -> 
+      let env = get_env T_cur man flow in
+      let pp_pair pp_fst pp_snd fmt (a, b) = Format.fprintf fmt "(%a, %a)" pp_fst a pp_snd b in
+      let pp_bracketed_list pp_elem fmt xs = Format.fprintf fmt "[%a]" (pp_list pp_elem ", ") xs in
+      let cells_of c = OffCells.fold (fun z c a -> ((z, Cells.elements c) :: a)) c [] in
+      let cells = CellSet.fold (fun a b c -> (a, cells_of b) :: c ) env.cells [] in
+      Debug.debug ~channel:"havoc" "cells: %a" (pp_bracketed_list (pp_pair pp_base (pp_bracketed_list (pp_pair Z.pp_print (pp_bracketed_list pp_cell))))) cells; 
+      OptionExt.return (Post.return flow)
+
     | _ -> None
 
 

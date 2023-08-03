@@ -412,10 +412,11 @@ struct
                 (Soundness.A_ignore_undefined_function c_func_org_name)
                 range flow
           in
+          man.exec (mk_c_havoc range) flow >>$ (fun _ flow -> 
           if is_c_void_type c_func_return then
             Eval.singleton (mk_unit range) flow
           else
-            man.eval (mk_top c_func_return range) flow
+            man.eval (mk_top c_func_return range) flow)
       in
       (* free alloca addresses *)
       ret >>$ fun e flow ->

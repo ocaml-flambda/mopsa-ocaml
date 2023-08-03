@@ -400,6 +400,7 @@ type stmt_kind +=
 
   | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
+  | S_c_havoc       (* statement corresponding to an unknown function call*)
 
 
 type c_program = {
@@ -1015,6 +1016,10 @@ let mk_c_null range =
 
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
+
+let mk_c_havoc range =
+  mk_stmt (S_c_havoc) range
+
 
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true
