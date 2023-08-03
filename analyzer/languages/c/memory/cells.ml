@@ -1098,6 +1098,7 @@ struct
 
 
   let exec_add b range man flow =
+    let () = Debug.debug ~channel:"declare" "declaring base %a" pp_base b in
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
       let c = mk_cell b Z.zero v.vtyp in
@@ -1221,6 +1222,26 @@ struct
 
 
 
+  (** havoc *)
+  let exec_havoc stmt range man flow = 
+    let env = get_env T_cur man flow in
+    let havoc_cell (c: cell) flow = 
+      match c.base with
+      | { base_kind = Var v; base_valid = true; } when is_numeric_cell c  ->
+        Debug.debug ~channel:"havoc" "cell: %a: %a, base: %a" pp_cell c pp_cell_typ c.typ pp_base c.base;
+        man.exec ~route:scalar (mk_remove_var v range) flow
+      (* | { base_kind = Var v; base_valid = true; } when is_c_pointer_type v.vtyp ->
+          man.exec (mk_remove_var v range) flow *)
+ 
+      | _ -> Post.return flow 
+    in
+    let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in
+    let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
+    let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells [] in
+    (* Debug.debug ~channel:"havoc" "cells: %a" (pp_bracketed_list (pp_pair pp_base (pp_bracketed_list (pp_pair Z.pp_print (pp_bracketed_list pp_cell))))) cells;  *)
+    havoc_cells cells
+    (* man.exec ~route:(Below name) stmt flow  *)
+
 
   (** Forget the value of an lval *)
   let exec_forget lval range man flow =
@@ -1264,6 +1285,7 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
+      (* this is not executed if aggregates is enabled *)
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
@@ -1308,12 +1330,7 @@ struct
       OptionExt.return
 
     | S_havoc -> 
-      let env = get_env T_cur man flow in
-      let cells_of c = OffCells.fold (fun z c a -> ((z, Cells.elements c) :: a)) c [] in
-      let cells = CellSet.fold (fun a b c -> (a, cells_of b) :: c ) env.cells [] in
-      Debug.debug ~channel:"havoc" "cells: %a" (pp_bracketed_list (pp_pair pp_base (pp_bracketed_list (pp_pair Z.pp_print (pp_bracketed_list pp_cell))))) cells; 
-      man.exec ~route:(Below name) stmt flow |> 
-      OptionExt.return
+      exec_havoc stmt stmt.srange man flow |> OptionExt.return
 
     | _ -> None
 

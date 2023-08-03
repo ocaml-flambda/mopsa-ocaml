@@ -161,7 +161,7 @@ type stmt_kind +=
       The folded dimensions are removed *)
 
   | S_block of stmt list (** Sequence block of statements *) * var list (** local variables declared within the block *)
-
+  | S_havoc (** statment to represent external function call *)
 
 (** Utility functions to create various statements for dimension management *)
 val mk_rename : expr -> expr -> range -> stmt
@@ -176,6 +176,7 @@ val mk_project : expr list -> range -> stmt
 val mk_project_vars : var list -> range -> stmt
 val mk_forget : expr -> range -> stmt
 val mk_forget_var : var -> range -> stmt
+val mk_havoc : range -> stmt
 val mk_expand : expr -> expr list -> range -> stmt
 val mk_expand_var : var -> var list -> range -> stmt
 val mk_fold : expr -> expr list -> range -> stmt
