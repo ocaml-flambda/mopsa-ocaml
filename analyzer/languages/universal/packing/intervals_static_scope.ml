@@ -54,7 +54,7 @@ struct
 
   let packs_of_var ctx var = 
     let r = S.packs_of_var ctx var in
-    let () = debug "packs_of_var %a = %a" pp_var var (Format.pp_print_list (format S.print)) r in
+    let () = debug "packs_of_var %a = %a@.%a" pp_var var (Format.pp_print_list (format S.print)) r pp_callstack (find_ctx Context.callstack_ctx_key ctx) in
     r
 
   (** Get the interval of a variable in all packs *)
@@ -103,7 +103,8 @@ struct
     in
 
     (* Check if rel is less precise *)
-    if not (I.subset itv' itv)
+    (* Currently disabled: creates major performance regressions in coreutils (200x analysis time on base64 *)
+    if false (* not (I.subset itv' itv) *)
     then
       let (module R: Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
       let packing_id = (D_static_packing (S.id,R.id)) in
@@ -180,6 +181,7 @@ struct
       refine_var_interval v man ctx post stmt.srange
 
     | S_assume cond ->
+      let () = debug "reduce_assume %a" pp_expr cond in
       reduce_assume cond man ctx pre post
 
     | _ ->
