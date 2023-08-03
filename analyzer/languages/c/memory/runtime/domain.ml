@@ -92,6 +92,9 @@ struct
     Map.meet aa aa'
 
 
+  let set p v a = Map.set p (Top.Nt (Map.ValueSet.singleton v)) a
+
+  let remove p a = Map.remove p a
 
   (** {2 Initialization} *)
   (** ================== *)
@@ -108,6 +111,20 @@ struct
   (** {2 Utility functions for symbolic evaluations} *)
   (** ============================================== *)
 
+  let exec_add var man flow =
+    let m = get_env T_cur man flow in
+    let m' = set var false m in
+    let flow = set_env T_cur m' man flow in
+    let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
+    Some (Post.return flow) 
+
+  let exec_remove var man flow =
+    let m = get_env T_cur man flow in
+    let m' = remove var m in
+    let flow = set_env T_cur m' man flow in
+    let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
+    Some (Post.return flow) 
+
 
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
@@ -115,9 +132,11 @@ struct
   (** Entry point of abstract transformers *)
   let exec stmt man flow = 
     match skind stmt with 
-    | S_add var ->
-      (Format.printf "here %a\n" pp_expr var;
-      None)
+    | S_add { ekind = E_var (var, _) } -> exec_add var man flow      
+    | S_remove { ekind = E_var (var, _) } -> exec_remove var man flow
+    | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow
+    | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
+
     | _ -> None
 
 
