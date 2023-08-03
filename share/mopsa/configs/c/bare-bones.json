@@ -36,6 +36,7 @@
                             {
                                 "semantic": "C/Scalar",
                                 "switch": [
+                                    "c.memory.runtime",
                                     "c.memory.scalars.pointer",
                                     "c.memory.scalars.machine_numbers"
                                 ]

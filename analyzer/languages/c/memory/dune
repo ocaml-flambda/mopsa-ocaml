@@ -1,5 +1,14 @@
 (library
  (name c_memory)
  (package mopsa)
- (libraries pointers mopsa framework c_lang c_common universal cstubs c_iterators)
+ (libraries
+  pointers
+  runtime
+  mopsa
+  framework
+  c_lang
+  c_common
+  universal
+  cstubs
+  c_iterators)
  (flags :standard -open C_lang.Lang -open C_common -open C_iterators))
