@@ -1227,12 +1227,12 @@ struct
     let env = get_env T_cur man flow in
     let havoc_cell (c: cell) flow = 
       match c.base with
-      | { base_kind = Var v; base_valid = true; } when is_numeric_cell c  ->
+      | { base_kind = Var v; base_valid = true; }  ->
         Debug.debug ~channel:"havoc" "cell: %a: %a, base: %a" pp_cell c pp_cell_typ c.typ pp_base c.base;
-        man.exec ~route:scalar (mk_remove_var v range) flow
-      (* | { base_kind = Var v; base_valid = true; } when is_c_pointer_type v.vtyp ->
-          man.exec (mk_remove_var v range) flow *)
- 
+        begin match c.typ with
+        | Numeric ty -> assign_cell c (mk_top ty range) None range man flow
+        | Pointer -> assign_cell c (mk_top (T_c_pointer T_c_void) range) None range man flow
+        end
       | _ -> Post.return flow 
     in
     let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in

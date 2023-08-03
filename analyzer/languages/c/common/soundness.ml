@@ -32,6 +32,7 @@ type assumption_kind +=
   | A_ignore_undetermined_function_pointer of expr
   | A_ignore_modification_undetermined_pointer of expr
   | A_ignore_undetermined_exit_functions
+  | A_havoc_undefined_function of string
 
 let () =
   register_assumption {
@@ -54,6 +55,8 @@ let () =
         | A_ignore_undetermined_exit_functions ->
           fprintf fmt "ignoring side-effect of undetermined exit functions"
 
+        | A_havoc_undefined_function f ->
+          fprintf fmt "unknown function '%a'" (Debug.bold pp_print_string) f
         | a -> next fmt a
       );
     compare = (fun next a1 a2 ->
@@ -71,6 +74,8 @@ let () =
 
         | A_ignore_undetermined_exit_functions, A_ignore_undetermined_exit_functions -> 0
 
+        | A_havoc_undefined_function f1, A_havoc_undefined_function f2 ->
+          String.compare f1 f2
         | _ -> next a1 a2
       );
   }
