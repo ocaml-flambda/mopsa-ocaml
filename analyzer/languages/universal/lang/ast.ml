@@ -406,6 +406,9 @@ type stmt_kind +=
    | S_free of addr
    (** Release a heap address *)
 
+   | S_havoc 
+   (** Unknown external function call *)
+
 
 let () =
   register_stmt_with_visitor {
@@ -439,6 +442,8 @@ let () =
 
         | S_print_expr el1, S_print_expr el2 -> Compare.list compare_expr el1 el2
 
+        | S_havoc, S_havoc -> 0
+
         | _ -> next s1 s2
       );
 
@@ -459,6 +464,7 @@ let () =
         | S_print_state -> fprintf fmt "print();"
         | S_print_expr el -> fprintf fmt "print_expr(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
+        | S_havoc -> fprintf fmt "havoc;" 
         | _ -> default fmt stmt
       );
 
@@ -510,6 +516,8 @@ let () =
           (function {exprs} -> {stmt with skind = S_print_expr exprs})
 
         | S_free _ -> leaf stmt
+
+        | S_havoc -> leaf stmt
 
         | _ -> default stmt
       );
@@ -708,6 +716,9 @@ let mk_expr_stmt e =
 
 let mk_free addr range =
   mk_stmt (S_free addr) range
+
+let mk_havoc range =
+  mk_stmt S_havoc range
 
 let mk_remove_addr a range =
   mk_remove (mk_addr a range) range
