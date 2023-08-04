@@ -43,7 +43,8 @@ struct
   (** ================= *)
 
   (** Map from variables to set of pointer values *)
-  module Map = Framework.Lattices.Partial_inversible_map.Make(Var)(BoolValue)
+  module Val = Framework.Lattices.Const.Make(Value)
+  module Map = Framework.Lattices.Partial_map.Make(Var)(Val)
 
   type t = Map.t
 
@@ -74,7 +75,7 @@ struct
   let merge pre (a,e) (a',e') =
     let aa,aa' =
       generic_merge (a,e) (a',e')
-        ~add:Map.set ~find:Map.find ~remove:Map.remove
+        ~add:Map.add ~find:Map.find ~remove:Map.remove
         ~custom:(fun stmt ->
             match skind stmt with
             | S_c_declaration (var,init,scope) ->
@@ -92,8 +93,7 @@ struct
     Map.meet aa aa'
 
 
-  let set p v a = Map.set p (Top.Nt (Map.ValueSet.singleton v)) a
-
+  let set p v a = Map.add p (Val.embed v) a
   let remove p a = Map.remove p a
 
   (** {2 Initialization} *)
@@ -113,7 +113,7 @@ struct
 
   let exec_add var man flow =
     let m = get_env T_cur man flow in
-    let m' = set var true m in
+    let m' = set var Untracked m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Some (Post.return flow) 
@@ -127,8 +127,8 @@ struct
 
   let exec_garbage_collect man flow =
     let m  = get_env T_cur man flow in 
-    let upd_set s = Map.ValueSet.singleton false in 
-    let m' = Map.map (fun m -> match m with TOP -> TOP | Nt s -> Nt (upd_set s)) m in
+    let upd_set s = if Val.is_const s Alive then Val.embed Collected else s in 
+    let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "garbage collect" in
     Some (Post.return flow)
@@ -146,6 +146,9 @@ struct
     | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
     | S_c_garbage_collect -> exec_garbage_collect man flow
+    | S_assign ({ ekind= E_var (var, mode) }, e) ->
+      let () = Debug.debug ~channel:"runtime" "assigning %a = %a" pp_var var pp_expr e in 
+      None
     | _ -> None
 
 
@@ -176,13 +179,8 @@ struct
                       && not (is_c_array_type var.vtyp) ->
       let a = get_env T_cur man flow in
       let v = Map.find var a in 
-      let str = begin match v with 
-      | Top.TOP -> "⊤"
-      | Top.Nt s -> 
-        if Map.ValueSet.is_empty s then "∅"
-        else Map.ValueSet.to_string SetExt.printer_default (BoolValue.to_string) s
-      end in
-        pprint printer ~path:[ Key "runtime"; fkey "%a" pp_var var ] (String str)
+      let po : print_object = String (Val.to_string v) in
+        pprint printer ~path:[ Key "runtime"; fkey "%a" pp_var var ] po
     | _ -> ()
 
 end
