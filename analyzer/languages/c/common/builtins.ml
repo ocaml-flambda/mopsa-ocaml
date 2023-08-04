@@ -103,6 +103,8 @@ let _ =
       "exit";
       "quick_exit";
 
+      "_ffi_garbage_collect";
+
       "__builtin_isfinite";
       "__builtin_isnormal";
       "__builtin_isnan";

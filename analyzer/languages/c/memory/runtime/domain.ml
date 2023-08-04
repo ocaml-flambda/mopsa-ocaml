@@ -113,7 +113,7 @@ struct
 
   let exec_add var man flow =
     let m = get_env T_cur man flow in
-    let m' = set var false m in
+    let m' = set var true m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Some (Post.return flow) 
@@ -124,6 +124,15 @@ struct
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
     Some (Post.return flow) 
+
+  let exec_garbage_collect man flow =
+    let m  = get_env T_cur man flow in 
+    let upd_set s = Map.ValueSet.singleton false in 
+    let m' = Map.map (fun m -> match m with TOP -> TOP | Nt s -> Nt (upd_set s)) m in
+    let flow = set_env T_cur m' man flow in
+    let () = Debug.debug ~channel:"runtime" "garbage collect" in
+    Some (Post.return flow)
+
 
 
   (** {2 Computation of post-conditions} *)
@@ -136,7 +145,7 @@ struct
     | S_remove { ekind = E_var (var, _) } -> exec_remove var man flow
     | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
-
+    | S_c_garbage_collect -> exec_garbage_collect man flow
     | _ -> None
 
 

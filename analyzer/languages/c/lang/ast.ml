@@ -401,6 +401,11 @@ type stmt_kind +=
   | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
+  (* runtime primtives *)
+  | S_c_garbage_collect
+
+
+
 
 type c_program = {
   c_globals : (var * c_var_init option) list; (** global variables of the program *)
@@ -1015,6 +1020,11 @@ let mk_c_null range =
 
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
+
+let mk_c_garbage_collect range =
+    mk_stmt (S_c_garbage_collect) range
+  
+
 
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true

@@ -328,6 +328,12 @@ struct
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_ffi_garbage_collect", []) ->
+      let stmt = mk_c_garbage_collect exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
+
     | _ -> None
 
   let ask _ _ _  = None
