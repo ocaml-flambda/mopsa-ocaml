@@ -102,7 +102,7 @@ struct
   (** ============================== *)
 
   (** 𝕊⟦ switch (e) body ⟧ *)
-  let exec_switch e body range man flow =
+  let exec_switch e body guard_cleaner range man flow =
     (* Save initial state before removing the break flows *)
     let flow0 = flow in
     let flow = Flow.remove T_break flow in
@@ -121,6 +121,7 @@ struct
         let cond = mk_binop e O_eq e' ~etyp:u8 switch_range in
         assume cond
           ~fthen:(fun flow ->
+              man.exec guard_cleaner flow >>% fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
               let cur = Flow.get T_cur man.lattice flow in
               Flow.set (T_c_switch_case (e',r)) cur man.lattice flow |>
@@ -139,7 +140,7 @@ struct
     (* Merge all cases in one, so that we will execute the body only once *)
     Post.remove_duplicates man.lattice
     >>% fun flow ->
-
+    man.exec guard_cleaner flow >>% fun flow ->
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)
     let flow, no_default =
@@ -184,7 +185,6 @@ struct
     Flow.remove (T_c_switch_default range) |>
     Common.Scope_update.update_scope upd range man
 
-
   let exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
@@ -192,9 +192,8 @@ struct
          (* Evaluate e once in case of side-effects *)
          let range = srange stmt in
          let guard_var = mk_range_attr_var range "switch-guard" (etyp e) in
-         man.exec (mk_assign (mk_var guard_var range) e range) flow
-         |> Cases.add_cleaners [mk_remove_var guard_var range] >>% fun flow ->
-         exec_switch (mk_var guard_var range) body stmt.srange man flow
+         man.exec (mk_assign (mk_var guard_var range) e range) flow >>% fun flow ->
+         exec_switch (mk_var guard_var range) body (mk_remove_var guard_var range) stmt.srange man flow
        ) |>
       OptionExt.return
 
