@@ -68,12 +68,22 @@ struct
     | Nbt c1, Nbt c2 -> compare c1 c2 = 0
     | _ -> false 
 
-  let join x y : t =
-    if subset x y then y else TOP
-
-  let meet x y : t =
-    if subset x y then x else BOT
-
+  let join (x: t) (y: t) : t =
+    match x, y with 
+    | TOP, _ -> TOP 
+    | _, TOP -> TOP
+    | BOT, y -> y
+    | x, BOT -> x
+    | Nbt c1, Nbt c2 -> if compare c1 c2 = 0 then Nbt c1 else TOP
+    
+  let meet (x: t) (y: t) : t =
+    match x, y with 
+    | TOP, y -> y 
+    | x, TOP -> x
+    | BOT, _ -> BOT
+    | _, BOT -> BOT
+    | Nbt c1, Nbt c2 -> if compare c1 c2 = 0 then Nbt c1 else BOT
+      
   let widen ctx x y : t = join x y
 
   let print (printer: Print.printer) (x: t) : unit =
