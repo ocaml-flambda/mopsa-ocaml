@@ -83,12 +83,21 @@ struct
          However we have to handle break statements from the unrolled first body...
       *)
       let range = stmt.srange in
-      let open Universal_iterators__.Loops in 
+      let open Universal_iterators__.Loops in
+      (* backup previous break and continue flows *)
+      let continue_before, break_before = Flow.get T_continue man.lattice flow, Flow.get T_break man.lattice flow in
+      let flow = Flow.remove T_continue flow |> Flow.remove T_break in
       man.exec body flow >>%? fun after_one ->
+      (* break at first unrolling: will be added after the loop
+         continue at first unrolling: added into the state entering the loop *)
       let break, others = Flow.partition (fun tk _ -> tk = T_break) after_one in
+      let others = Flow.rename T_continue T_cur man.lattice others in
       Post.join
         (Post.return (Flow.rename T_break T_cur man.lattice break))
-        (man.exec (mk_stmt (S_while (cond, body)) range) others)
+        (man.exec (mk_stmt (S_while (cond, body)) range) others) >>%? fun flow ->
+      Flow.set T_break break_before man.lattice flow  |>
+      Flow.set T_continue continue_before man.lattice |>
+      Post.return
       |> OptionExt.return
 
     | S_c_break upd ->
