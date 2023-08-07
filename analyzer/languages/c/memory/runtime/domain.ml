@@ -116,14 +116,15 @@ struct
     let m' = set var Untracked m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
-    Some (Post.return flow) 
+    
+    Post.return flow 
 
   let exec_remove var man flow =
     let m = get_env T_cur man flow in
     let m' = remove var m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
-    Some (Post.return flow) 
+    Post.return flow 
 
   let exec_garbage_collect man flow =
     let m  = get_env T_cur man flow in 
@@ -131,7 +132,51 @@ struct
     let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "garbage collect" in
-    Some (Post.return flow)
+    Post.return flow
+
+
+let rec expr_status m e : Val.t = 
+  match ekind e with 
+  | E_var (var, _) -> var_status m var
+  | E_constant c -> const_status m c
+  | E_binop (op, e1, e2) -> binop_status m op e1 e2
+  | E_unop(op, e) -> unop_status m op e
+  | E_addr(a, mode) -> let () = Debug.debug ~channel:"runtime" "addr %a" pp_addr a in TOP
+  | E_c_address_of e -> addr_of_status m e
+  | E_c_deref e -> deref_status m e
+  | E_c_cast (e,c) -> cast_status m e c
+  | _ -> TOP
+
+and var_status m var = Map.find var m 
+and binop_status m op e1 e2 : Val.t = 
+  match expr_status m e1, expr_status m e2 with 
+  | BOT, _ -> BOT
+  | _, BOT -> BOT
+  | TOP, _ -> TOP
+  | _, TOP -> TOP
+  | Nbt Collected, _ -> Nbt Collected
+  | _, Nbt Collected -> Nbt Collected
+  | Nbt Alive, Nbt Alive -> Nbt Alive (* what operation would even make sense here? *)
+  | Nbt Alive, Nbt Untracked -> Nbt Alive
+  | Nbt Untracked, Nbt Alive -> Nbt Alive
+  | Nbt Untracked, Nbt Untracked -> Nbt Untracked
+and unop_status m op e : Val.t = expr_status m e
+and addr_of_status m e : Val.t = expr_status m e
+and deref_status m e : Val.t = expr_status m e
+and cast_status m e c : Val.t = expr_status m e 
+and const_status m c = 
+  match c with 
+  | C_ffi_alive_value -> Nbt Alive 
+  | _ -> Nbt Untracked
+
+
+  let exec_update var expr man flow = 
+    let m = get_env T_cur man flow in
+    let status = expr_status m expr in
+    let m' = Map.add var status m in
+    let flow = set_env T_cur m' man flow in
+    let () = Debug.debug ~channel:"runtime" "updated %a to %s" pp_var var (Val.to_string status) in
+    Post.return flow 
 
 
 
@@ -141,20 +186,19 @@ struct
   (** Entry point of abstract transformers *)
   let exec stmt man flow = 
     match skind stmt with 
-    | S_add { ekind = E_var (var, _) } -> exec_add var man flow      
-    | S_remove { ekind = E_var (var, _) } -> exec_remove var man flow
-    | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow
+    | S_add { ekind = E_var (var, _) } -> exec_add var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return      
+    | S_remove { ekind = E_var (var, _) } -> exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)   |> OptionExt.return
+    | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
-    | S_c_garbage_collect -> exec_garbage_collect man flow
+    | S_c_garbage_collect -> exec_garbage_collect man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       let () = Debug.debug ~channel:"runtime" "assigning %a = %a" pp_var var pp_expr e in 
-      None
+      exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
     | _ -> None
 
 
   (** {2 Pointer evaluation} *)
   (** ====================== *)
-
 
   (** Entry point of abstraction evaluations *)
   let eval exp man flow = None

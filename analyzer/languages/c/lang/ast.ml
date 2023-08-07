@@ -280,6 +280,8 @@ type constant +=
 
   | C_c_invalid
   (** Invalid pointer value *)
+  
+  | C_ffi_alive_value
 
 
 type expr_kind +=
@@ -958,6 +960,11 @@ let mk_c_multibyte_integer (s:string) (off:int) t range =
 let mk_c_invalid_pointer range =
   mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
 
+
+let mk_ffi_alive_value range =
+    mk_constant C_ffi_alive_value ~etyp:(T_c_pointer T_c_void) range
+  
+
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
@@ -1021,6 +1028,7 @@ let mk_c_null range =
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
+(* TODO: rename *)
 let mk_c_garbage_collect range =
     mk_stmt (S_c_garbage_collect) range
   

@@ -104,6 +104,7 @@ let _ =
       "quick_exit";
 
       "_ffi_garbage_collect";
+      "_ffi_generate_value";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

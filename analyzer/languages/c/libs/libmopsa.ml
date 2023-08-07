@@ -334,6 +334,11 @@ struct
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_ffi_generate_value", []) ->
+      let expr = mk_ffi_alive_value exp.erange in
+      Eval.singleton expr flow |>
+      OptionExt.return
+
     | _ -> None
 
   let ask _ _ _  = None
