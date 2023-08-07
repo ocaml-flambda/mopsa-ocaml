@@ -251,20 +251,29 @@ struct
     | Var { vkind = V_range_attr(range, "arg"); vtyp }
       when is_c_scalar_type vtyp ->
       let prog = find_ctx Ast.c_program_ctx ctx in
-      let o_f = List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions in
-      OptionExt.apply (fun f ->
-          let cs = find_ctx Context.callstack_ctx_key ctx in
-          if is_empty_callstack cs
-          then packs_of_function ~user_only f.c_func_unique_name
-          else
-            let _, cs' = pop_callstack cs in
-            if is_empty_callstack cs'
-            then packs_of_function ~user_only f.c_func_unique_name
-            else
-              let caller, _ = pop_callstack cs' in
-              packs_of_function ~user_only f.c_func_unique_name @
-              packs_of_function ~user_only caller.call_fun_uniq_name
-        ) [] o_f
+      let o_caller = List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions in
+      OptionExt.apply (fun caller ->
+          let o_callee = OptionExt.none_to_exn @@
+            OptionExt.lift (Visitor.fold_stmt
+                              (fun acc expr ->
+                                 match ekind expr with
+                                 | E_call (f, args) ->
+                                   begin match ekind (remove_casts f) with
+                                   | E_c_function f ->
+                                     if subset_range range expr.erange then
+                                       VisitParts (Some f)
+                                     else
+                                       VisitParts acc
+                                   | _ -> VisitParts acc
+                                   end
+                                 | _ -> VisitParts acc)
+                              (fun acc stmt -> VisitParts acc)
+                              None
+                           ) caller.c_func_body in
+          (OptionExt.apply (fun callee ->
+               packs_of_function ~user_only callee.c_func_unique_name) [] o_callee) @
+          packs_of_function ~user_only caller.c_func_unique_name
+        ) [] o_caller
 
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return (call, _) } ->
