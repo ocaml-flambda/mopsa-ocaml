@@ -105,6 +105,8 @@ let _ =
 
       "_ffi_garbage_collect";
       "_ffi_generate_value";
+      "_ffi_register_root";
+      "_ffi_assert_alive";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

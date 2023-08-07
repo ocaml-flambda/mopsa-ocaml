@@ -329,7 +329,7 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("_ffi_garbage_collect", []) ->
-      let stmt = mk_c_garbage_collect exp.erange in
+      let stmt = mk_ffi_garbage_collect exp.erange in
       man.exec stmt flow >>%? fun flow ->
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
@@ -339,6 +339,18 @@ struct
       Eval.singleton expr flow |>
       OptionExt.return
 
+    | E_c_builtin_call("_ffi_assert_alive", [e]) ->
+      let stmt = mk_ffi_assert_alive(e) exp.erange in
+      man.exec stmt flow >>% (fun flow -> 
+          Eval.singleton (mk_int 0 exp.erange) flow
+      ) |> OptionExt.return 
+
+
+    | E_c_builtin_call("_ffi_register_root", [e]) ->
+      let stmt = mk_ffi_register_root (e) exp.erange in
+      man.exec stmt flow >>% (fun flow -> 
+        Eval.singleton (mk_int 0 exp.erange) flow
+      ) |> OptionExt.return 
     | _ -> None
 
   let ask _ _ _  = None

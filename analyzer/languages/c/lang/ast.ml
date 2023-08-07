@@ -404,7 +404,10 @@ type stmt_kind +=
   (** default case of switch statements. *)
 
   (* runtime primtives *)
-  | S_c_garbage_collect
+  | S_ffi_garbage_collect
+  | S_ffi_register_root of expr
+  | S_ffi_assert_valid of expr
+
 
 
 
@@ -1028,10 +1031,16 @@ let mk_c_null range =
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
-(* TODO: rename *)
-let mk_c_garbage_collect range =
-    mk_stmt (S_c_garbage_collect) range
+
+let mk_ffi_garbage_collect range =
+  mk_stmt (S_ffi_garbage_collect) range
   
+let mk_ffi_assert_alive exp range =
+  mk_stmt (S_ffi_assert_valid exp) range
+
+let mk_ffi_register_root exp range =
+  mk_stmt (S_ffi_register_root exp) range
+    
 
 
 let is_c_global_scope = function

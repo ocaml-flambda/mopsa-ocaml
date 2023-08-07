@@ -116,7 +116,6 @@ struct
     let m' = set var Untracked m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
-    
     Post.return flow 
 
   let exec_remove var man flow =
@@ -135,13 +134,50 @@ struct
     Post.return flow
 
 
+
+  let exec_assert_valid_var var m exp man flow =
+    match Map.find var m with
+    | BOT -> Post.return flow 
+    | Nbt Alive -> 
+      let flow = safe_ffi_inactive_value_check exp.erange man flow in 
+      Post.return flow
+    | Nbt Collected | Nbt Untracked -> 
+      let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
+      Post.return flow
+    | TOP -> 
+      let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
+      Post.return flow
+
+
+  let exec_assert_valid exp man flow = 
+    man.eval exp flow >>$ fun exp flow ->
+    let m  = get_env T_cur man flow in 
+    match ekind exp with 
+    | E_var (var, _) -> exec_assert_valid_var var m exp man flow
+    | _ -> 
+      failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
+  
+  
+  
+  let exec_register_root exp man flow =
+    man.eval exp flow >>$ fun exp flow ->
+    (* let m  = get_env T_cur man flow in  *)
+    match ekind exp with 
+    | E_var (var, _) -> Post.return flow
+    | _ -> 
+        failwith (Format.asprintf "registering roots is only supported for variables, %a is not a variable" pp_expr exp)
+    
+
+
+
+
 let rec expr_status m e : Val.t = 
   match ekind e with 
   | E_var (var, _) -> var_status m var
   | E_constant c -> const_status m c
   | E_binop (op, e1, e2) -> binop_status m op e1 e2
   | E_unop(op, e) -> unop_status m op e
-  | E_addr(a, mode) -> let () = Debug.debug ~channel:"runtime" "addr %a" pp_addr a in TOP
+  | E_addr(a, mode) -> TOP
   | E_c_address_of e -> addr_of_status m e
   | E_c_deref e -> deref_status m e
   | E_c_cast (e,c) -> cast_status m e c
@@ -186,11 +222,20 @@ and const_status m c =
   (** Entry point of abstract transformers *)
   let exec stmt man flow = 
     match skind stmt with 
-    | S_add { ekind = E_var (var, _) } -> exec_add var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return      
-    | S_remove { ekind = E_var (var, _) } -> exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)   |> OptionExt.return
-    | S_forget { ekind = E_var (var, _) } -> exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
+    | S_add { ekind = E_var (var, _) } -> 
+      exec_add var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return      
+    | S_remove { ekind = E_var (var, _) } -> 
+      exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)   |> OptionExt.return
+    | S_forget { ekind = E_var (var, _) } -> 
+      let () = Format.printf "forgetting %a\n" pp_var var in 
+      exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
-    | S_c_garbage_collect -> exec_garbage_collect man flow |> OptionExt.return
+    | S_ffi_garbage_collect -> 
+      exec_garbage_collect man flow |> OptionExt.return
+    | S_ffi_assert_valid e -> 
+      exec_assert_valid e man flow |> OptionExt.return
+    | S_ffi_register_root e -> 
+      exec_register_root e man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       let () = Debug.debug ~channel:"runtime" "assigning %a = %a" pp_var var pp_expr e in 
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
