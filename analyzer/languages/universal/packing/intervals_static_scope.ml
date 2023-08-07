@@ -84,8 +84,7 @@ struct
      - handle floating point
   *)
   let refine_var_interval var man ctx post range =
-    (* FIXME: int or bool *)
-    if compare_typ (vtyp var) T_int <> 0 then post else
+    if not @@ is_int_type (vtyp var) then post else 
     (* Get the interval of the variable in the box domain *)
     let itv = man.get_value I.id var post in
 
@@ -163,7 +162,7 @@ struct
             List.fold_left (fun acc v -> Domain.related_vars v aa @ acc) acc vars
           ) vars packs |>
         List.sort_uniq compare_var |>
-        List.filter (fun v -> compare_typ (vtyp v) T_int = 0) in
+        List.filter (fun v -> is_int_type (vtyp v)) in
       let post' =
         List.fold_left (fun acc var ->
             try

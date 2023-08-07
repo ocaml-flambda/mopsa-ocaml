@@ -63,7 +63,7 @@ struct
 
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man ctx pre |>
-               List.filter (fun v -> compare_typ (vtyp v) T_int = 0) in
+               List.filter (fun v -> is_int_type (vtyp v)) in
 
     (* Refine the interval of each variable *)
     List.fold_left (fun post var ->
