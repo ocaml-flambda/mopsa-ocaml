@@ -69,6 +69,9 @@ let opt_stubs_files = ref []
 let opt_ignored_translation_units = ref []
 (** List of translation units to ignore during linking *)
 
+let opt_save_preprocessed_file = ref ""
+(** Where to save the preprocessed file *)
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -145,6 +148,13 @@ let () =
     category = "C";
     doc = " list of translation units ignored during linking.";
     spec = ArgExt.Set_string_list opt_ignored_translation_units;
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-c-save-preprocessed-file";
+    category = "C";
+    doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option";
+    spec = ArgExt.Set_string opt_save_preprocessed_file;
     default = "";
   };
   ()
@@ -268,9 +278,11 @@ let rec parse_program (files: string list) =
   let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
   let () =
-    let outch = open_out "preprocessed.i" in
-    C_print.print_project outch prj;
-    close_out outch in
+    if !opt_save_preprocessed_file <> "" then
+      let outch = open_out !opt_save_preprocessed_file in
+        let () = C_print.print_project ~verbose:false outch prj in
+        close_out outch;
+  in
   {
     prog_kind = from_project prj;
     prog_range = mk_program_range files;

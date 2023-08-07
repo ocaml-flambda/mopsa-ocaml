@@ -32,10 +32,10 @@ open Clang_utils
 let ignore_implicit_casts = true
 (** Only print explicit casts, not implici ones. *)
 
-let print_loc = true
+let print_loc = ref true
 (** Prints location information in comment for global declarations. *)
 
-let print_comments = true
+let print_comments = ref true
 (** Prints comments attached to declarations. *)
 
 let print_scope = false
@@ -85,7 +85,7 @@ let inc_indent indent =
 
 
 let bp_loc indent buf loc =
-  if print_loc
+  if !print_loc
   then bp buf "%s/* %s */\n" indent (Clang_dump.string_of_loc loc.Clang_AST.range_begin)
 
           
@@ -550,7 +550,7 @@ and c_buf_statement indent buf ((s,_):statement) =
   | S_target (S_default u) -> bp buf "%sdefault:;%a\n" indent c_buf_update u
 
 and c_buf_com indent buf v =
-  if print_comments
+  if !print_comments
   then List.iter (fun c -> bp buf "%s%s\n" indent c.Clang_AST.com_text) v
                           
 and c_buf_var_decl_inner indent buf v =
@@ -613,7 +613,7 @@ let c_buf_enum_decl indent buf e =
        indent
   else
     bp buf "%senum %s;\n" indent e.enum_unique_name
-    
+
 let c_buf_record_decl indent buf r =
   let indent2 = inc_indent indent in
   let f buf v =
@@ -746,9 +746,15 @@ let print_types_ordered
   StringMap.iter (fun _ -> typedef) td;
   StringMap.iter (fun _ -> record true) re
 (* internal function to print records and typedefs in correct order of dependency *)
-  
-      
-let print_project (ch:out_channel) (p:project) =
+
+
+let print_project ?(verbose = true) (ch:out_channel) (p:project) =
+  let old_pl, old_pc = !print_loc, !print_comments in
+  if not verbose then (
+    print_loc := false;
+    print_comments := false;
+  );
+
   let pr f _ x = output_string ch (f x) in
   let pf = Printf.fprintf in
 
@@ -778,8 +784,12 @@ let print_project (ch:out_channel) (p:project) =
   output_string ch "\n/* global variable definitions */\n\n";
   let vars = StringMap.filter (fun _ v -> v.var_init <> None) vars in
   StringMap.iter (pr string_of_var_decl) vars;
-  
+
   output_string ch "\n/* functions definitions */\n\n";
   let funcs = StringMap.filter (fun _ v -> v.func_body <> None) funcs in
-  StringMap.iter (pr string_of_func_decl) funcs
-                 
+  StringMap.iter (pr string_of_func_decl) funcs;
+
+  if not verbose then (
+    print_loc := old_pl;
+    print_comments := old_pc;
+  )

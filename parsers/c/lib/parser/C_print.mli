@@ -52,5 +52,5 @@ val string_of_record_decl : record_type -> string
 val string_of_typedef : typedef -> string
 (** Convert SAST types to string. *)
 
-val print_project : out_channel -> project -> unit
+val print_project : ?verbose:bool -> out_channel -> project -> unit
 (** Print a whole project as a valid C source. *)
