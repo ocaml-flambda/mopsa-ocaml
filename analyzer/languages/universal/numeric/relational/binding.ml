@@ -24,7 +24,13 @@
 open Mopsa
 
 
-module Equiv = Equiv.Make(Var)(Apron.Var)
+module Equiv = Equiv.Make(
+  struct
+    type t = var
+    let compare = compare_var
+    let print fmt v = Format.fprintf fmt "%a" pp_var v
+  end
+  )(Apron.Var)
 
 type t = Equiv.t
 

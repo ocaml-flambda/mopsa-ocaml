@@ -269,6 +269,11 @@ struct
 
     | Sys.Break -> raise Sys.Break
 
+    | Apron.Manager.Error exc ->
+      Printexc.raise_with_backtrace
+        (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
+        (Printexc.get_raw_backtrace())
+
     | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))

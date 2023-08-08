@@ -245,37 +245,77 @@ struct
           packs_of_function ~user_only f.c_func_unique_name @
           packs_of_function ~user_only caller.call_fun_uniq_name
 
+    (* Parameters are part of the caller and the callee packs *)
+    (* Subcase to avoid many distinctions, cf c/iterators/interproc.ml, function *)
+    (*    eval_calls_in_args a *)
+    | Var { vkind = V_range_attr(range, "arg"); vtyp }
+      when is_c_scalar_type vtyp ->
+      let prog = find_ctx Ast.c_program_ctx ctx in
+      let o_caller = List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions in
+      OptionExt.apply (fun caller ->
+          let o_callee = OptionExt.none_to_exn @@
+            OptionExt.lift (Visitor.fold_stmt
+                              (fun acc expr ->
+                                 match ekind expr with
+                                 | E_call (f, args) ->
+                                   begin match ekind (remove_casts f) with
+                                   | E_c_function f ->
+                                     if subset_range range expr.erange then
+                                       VisitParts (Some f)
+                                     else
+                                       VisitParts acc
+                                   | _ -> VisitParts acc
+                                   end
+                                 | _ -> VisitParts acc)
+                              (fun acc stmt -> VisitParts acc)
+                              None
+                           ) caller.c_func_body in
+          (OptionExt.apply (fun callee ->
+               packs_of_function ~user_only callee.c_func_unique_name) [] o_callee) @
+          packs_of_function ~user_only caller.c_func_unique_name
+        ) [] o_caller
+
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return (call, _) } ->
       let cs = find_ctx Context.callstack_ctx_key ctx in
-      if is_empty_callstack cs
+      let r = if is_empty_callstack cs
       then []
       else
         (* Note that the top of the callstack is not always the callee
            function, because the return variable is used after the function
            returns
         *)
-        let f1, cs' = pop_callstack cs in
         let fname = match ekind call with
           | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
-        if is_empty_callstack cs'
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else if f1.call_fun_uniq_name <> fname
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else
-          let f2, _ = pop_callstack cs' in
+        let f1, f2 =
+          let rec process cs = match cs with
+            | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then Some f, Some f' else process (f'::tl)
+            | [f] ->
+              if f.call_fun_orig_name = fname then
+                Some f, None
+              else None, None
+            | [] -> assert false 
+          in
+          process (List.rev cs) in
+        let () = debug "cs = %a@.fname = %s@.f1 = %a@.f2 = %a" Callstack.pp_callstack_short cs fname  (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f1 (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f2 in
+        match f2, f1 with
+        | None, None -> []
+        | Some _, None -> assert false
+        | None, Some f1 -> packs_of_function ~user_only f1.call_fun_uniq_name
+        | Some f2, Some f1 ->
           packs_of_function ~user_only f1.call_fun_uniq_name @
-          packs_of_function ~user_only f2.call_fun_uniq_name
+          packs_of_function ~user_only f2.call_fun_uniq_name in
+      r
 
     (* Primed bases are in the same pack as the original ones *)
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
       packs_of_base ~user_only ctx b
 
     | Var ({ vkind = V_c_stack_var(_, v)}) ->
-      packs_of_base ctx {b with base_kind = Var v}
+      packs_of_base ~user_only ctx {b with base_kind = Var v}
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
       user_packs_of_resource r

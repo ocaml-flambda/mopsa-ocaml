@@ -2,4 +2,4 @@
  (name toplevel)
  (public_name mopsa.mopsa_analyzer.framework.toplevel)
  (library_flags -linkall)
- (libraries core sig))
+ (libraries core sig apron))
