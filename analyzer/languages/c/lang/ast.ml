@@ -414,6 +414,8 @@ type stmt_kind +=
 
   | S_ffi_assert_locked
 
+  | S_ffi_ext_call of expr list
+
 
 
 
@@ -1052,7 +1054,12 @@ let mk_ffi_assert_locked range =
     
 let mk_ffi_set_lock state range =
   mk_stmt (S_ffi_set_lock state) range
-    
+  
+let mk_ffi_ext_call exprs range =
+  mk_stmt (S_ffi_ext_call exprs) range
+      
+  
+
 
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true

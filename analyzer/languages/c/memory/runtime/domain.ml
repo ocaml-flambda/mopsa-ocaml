@@ -205,7 +205,7 @@ and var_status m var =
   | Some (stat, rt) -> stat
   | None -> 
     (* FIXME: for type var[size], var is not added to the domain *)
-    let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var in TOP
+    let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var in Nbt Untracked
 and binop_status m op e1 e2 : Stat.t = 
   match expr_status m e1, expr_status m e2 with 
   | BOT, _ -> BOT
@@ -238,6 +238,23 @@ and const_status m c =
 
 
 
+  let exec_check_ext_call_arg arg man flow = 
+    let () = Debug.debug ~channel:"extcall" "checking %a" pp_expr arg in
+    let (m, l) = get_env T_cur man flow in
+    let status = expr_status m arg in 
+    begin match status with 
+    | Nbt Untracked -> Post.return flow
+    | _ -> 
+      let () = Debug.debug ~channel:"extcall" "status %s" (Stat.to_string status) in
+      let flow = raise_ffi_inactive_value arg man flow in Post.return flow
+    end
+
+  let exec_ext_call args man flow = 
+    let check_ext_call_args exprs = List.fold_left (fun acc c -> Post.bind (exec_check_ext_call_arg c man) acc) (Post.return flow) exprs in
+    check_ext_call_args args
+
+
+
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
@@ -262,6 +279,8 @@ and const_status m c =
       exec_assert_runtime_lock stmt.srange man flow |> OptionExt.return
     | S_ffi_set_lock new_state -> 
       exec_update_runtime_lock new_state man flow |> OptionExt.return
+    | S_ffi_ext_call args ->
+      exec_ext_call args man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       let () = Debug.debug ~channel:"runtime" "assigning %a = %a" pp_var var pp_expr e in 
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return

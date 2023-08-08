@@ -406,7 +406,9 @@ struct
             if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then flow
             else
               let r = bind_list args man.eval flow in
-              let flow = r >>$ (fun _ flow -> Post.return flow)|> post_to_flow man in
+              let flow = r >>$ (fun args flow -> 
+              man.exec (mk_ffi_ext_call args range) flow
+              )|> post_to_flow man in
               let () = warn_at range "%a" pp_assumption_kind (Soundness.A_havoc_undefined_function c_func_org_name) in
               flow
               (* Unknown functions are no longer assumed to not modify the state. *)
