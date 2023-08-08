@@ -1230,10 +1230,8 @@ struct
       match c.base with
       | { base_kind = Var v; base_valid = true; }  ->
         Debug.debug ~channel:"havoc" "cell: %a: %a, base: %a" pp_cell c pp_cell_typ c.typ pp_base c.base;
-        begin match c.typ with
-        | Numeric ty -> assign_cell c (mk_top ty range) None range man flow
-        | Pointer -> assign_cell c (mk_top (T_c_pointer T_c_void) range) None range man flow
-        end
+        let ty = match c.typ with Numeric ty -> ty | Pointer -> T_c_pointer T_c_void in
+        man.exec (mk_havoc_var v ty range) flow
       | _ -> Post.return flow 
     in
     let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in

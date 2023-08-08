@@ -490,11 +490,6 @@ struct
     | S_assume e ->
       filter ctx e true map
 
-    | S_havoc ->
-      let dom = VarMap.fold (fun v a c -> v :: c) map [] in
-      let () = Debug.debug ~channel:"havoc" "non-rel havoc for %a" (pp_bracketed_list pp_var) dom in
-      Some map
-
     | _ -> None
 
   let ask : type r.

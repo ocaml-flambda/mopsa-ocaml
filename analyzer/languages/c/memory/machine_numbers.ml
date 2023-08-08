@@ -716,6 +716,13 @@ struct
       man.exec (mk_assign vv top stmt.srange) flow ~route:universal |>
       OptionExt.return
 
+    | S_havoc_var (v, ty) when is_c_num_type ty ->
+      let lval = mk_var v stmt.srange in
+      let rval = mk_top ty stmt.srange in
+      man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
+      man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
+      man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
+      OptionExt.return
     | _ -> None
 
 

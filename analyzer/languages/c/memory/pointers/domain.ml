@@ -812,6 +812,10 @@ struct
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
 
+    | S_havoc_var(v, ty) when is_c_pointer_type ty -> 
+      assign v (mk_top ty stmt.srange) None stmt.srange man flow |>
+      OptionExt.return
+
     | _ -> None
 
 

@@ -405,6 +405,8 @@ type stmt_kind +=
 
    | S_free of addr
    (** Release a heap address *)
+   | S_havoc 
+   | S_havoc_var of var * typ
 
 
 let () =
@@ -439,6 +441,10 @@ let () =
 
         | S_print_expr el1, S_print_expr el2 -> Compare.list compare_expr el1 el2
 
+        | S_havoc, S_havoc -> 0
+
+        | S_havoc_var (v1, t1), S_havoc_var (v2, t2) -> Compare.pair compare_var compare_typ (v1, t1) (v2, t2)
+
         | _ -> next s1 s2
       );
 
@@ -459,6 +465,8 @@ let () =
         | S_print_state -> fprintf fmt "print();"
         | S_print_expr el -> fprintf fmt "print_expr(%a);" (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
         | S_free(a) -> fprintf fmt "free(%a);" pp_addr a
+        | S_havoc -> fprintf fmt "havoc;"
+        | S_havoc_var(v, t) -> fprintf fmt "havoc %a: %a;" pp_var v pp_typ t
         | _ -> default fmt stmt
       );
 
@@ -510,6 +518,10 @@ let () =
           (function {exprs} -> {stmt with skind = S_print_expr exprs})
 
         | S_free _ -> leaf stmt
+
+        | S_havoc -> leaf stmt
+
+        | S_havoc_var(v, t) -> leaf stmt
 
         | _ -> default stmt
       );
@@ -591,6 +603,14 @@ let mk_in ?(strict = false) ?(left_strict = false) ?(right_strict = false) ?(ety
 let mk_zero = mk_int 0
 let mk_one = mk_int 1
 let mk_minus_one = mk_int (-1)
+
+
+let mk_havoc range =
+  mk_stmt S_havoc range
+
+let mk_havoc_var var typ range =
+  mk_stmt (S_havoc_var (var, typ)) range
+  
 
 let universal_constants_range = tag_range (mk_fresh_range ()) "universal-constants"
 

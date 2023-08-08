@@ -47,7 +47,6 @@ type stmt_kind +=
   | S_expand of expr * expr list
   | S_fold of expr * expr list
   | S_block of stmt list * Var.var list
-  | S_havoc
 
 type block = stmt list
 
@@ -90,8 +89,6 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
         (fun () -> Compare.list compare_expr el el')
       ]
 
-    | S_havoc, S_havoc -> 0
-
     | _ -> Stdlib.compare s1 s2
   )
 
@@ -133,8 +130,6 @@ let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt ", ")
            pp_expr) el
-
-    | S_havoc -> fprintf fmt "havoc;"
 
     | _ -> failwith "Pp: Unknown statement"
   )
@@ -217,10 +212,6 @@ let mk_project_vars vars range =
   mk_project (List.map (fun v -> mk_var v range) vars) range
 
 let mk_forget e = mk_stmt (S_forget e)
-
-let mk_havoc range =
-  mk_stmt S_havoc range
-
 
 let mk_forget_var v range = mk_forget (mk_var v range) range
 
