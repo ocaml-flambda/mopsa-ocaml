@@ -85,6 +85,50 @@ struct
       default = "";
     }
 
+  (** Runtime testing options *)
+  module StringSet = SetExt.Make(String)
+  let ffitest_flag = ref false
+  let ffitest_filter = ref (StringSet.empty)
+  
+  let read_lines str = 
+    let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
+    let rec read_all_lines file = 
+      let line = try Some (input_line file) with End_of_file -> None in
+      match line with 
+      | None -> [] 
+      | Some s -> s :: read_all_lines file 
+    in 
+    try
+      let names = read_all_lines file in
+      close_in file;
+      names
+    with e ->
+      (* some unexpected exception occurs *)
+      close_in_noerr file;
+      (* emergency closing *)
+      raise e
+  
+  let () = register_domain_option name {
+    key = "-test-runtime-functions";
+    category="Runtime";
+    doc=" file containing function names of functions to test (if contained in the file)";
+    spec = ArgExt.String(fun s ->
+        let funs = read_lines s in
+        ffitest_filter := StringSet.of_list funs
+    );
+    default=""
+  }
+
+  let () = register_domain_option name {
+    key = "-runtimetest";
+    category="Runtime";
+    doc=" test C stubs";
+    spec = ArgExt.Set ffitest_flag;
+    default=""
+  }
+
+
+
 
   let checks = []
 
@@ -541,6 +585,27 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
+    | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
+      let make_test (f: c_fundec) = 
+        let name = f.c_func_org_name in
+        let args = List.map (fun arg -> mk_ffi_alive_value f.c_func_name_range) (f.c_func_parameters) in 
+        let stmt = mk_c_call_stmt f args f.c_func_name_range in
+        (name, stmt)
+      in
+ 
+      (* Initialize global variables *)
+      init_globals c_globals man flow >>%? fun flow ->
+
+      (* Execute stub directives *)
+      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
+  
+      let ffi_functions = List.filter (fun s -> StringSet.mem (s.c_func_unique_name) !ffitest_filter) c_functions in
+      let fstr = List.fold_right (fun s str -> s.c_func_org_name ^ "\n" ^ str) ffi_functions "" in
+      let () = Format.printf "%a\n%s" (Debug.color_str Debug.green) "Checking" fstr in
+      let tests = List.map make_test ffi_functions in
+      let unittests = mk_stmt (Universal.Ast.S_unit_tests tests) (srange stmt) in
+      man.exec unittests flow |>
+      OptionExt.return
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
