@@ -43,8 +43,10 @@ struct
   (** ================= *)
 
   (** Map from variables to set of pointer values *)
-  module Val = Framework.Lattices.Const.Make(Value)
-  module Map = Framework.Lattices.Partial_map.Make(Var)(Val)
+  module Stat = Framework.Lattices.Const.Make(Status)
+  module Root = Framework.Lattices.Const.Make(Roots)
+  module Val  = Framework.Lattices.Pair.Make(Stat)(Root)
+  module Map  = Framework.Lattices.Partial_map.Make(Var)(Val)
 
   type t = Map.t
 
@@ -93,8 +95,12 @@ struct
     Map.meet aa aa'
 
 
-  let set p v a = Map.add p (Val.embed v) a
-  let remove p a = Map.remove p a
+  let update_status var status' map = 
+    let (_, roots) = Map.find var map in
+    Map.add var (status', roots) map
+
+  (* let set p v a = Map.add p (Stat.embed v, ) a *)
+  (* let remove p a = Map.remove p a *)
 
   (** {2 Initialization} *)
   (** ================== *)
@@ -113,21 +119,21 @@ struct
 
   let exec_add var man flow =
     let m = get_env T_cur man flow in
-    let m' = set var Untracked m in
+    let m' = Map.add var (Stat.embed Untracked, Root.embed NotRooted) m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Post.return flow 
 
   let exec_remove var man flow =
     let m = get_env T_cur man flow in
-    let m' = remove var m in
+    let m' = Map.remove var m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
     Post.return flow 
 
   let exec_garbage_collect man flow =
     let m  = get_env T_cur man flow in 
-    let upd_set s = if Val.is_const s Alive then Val.embed Collected else s in 
+    let upd_set (s, r) = if Stat.is_const s Alive && not (Root.is_const r Rooted) then (Stat.embed Collected, r) else (s, r) in 
     let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur m' man flow in
     let () = Debug.debug ~channel:"runtime" "garbage collect" in
@@ -137,14 +143,14 @@ struct
 
   let exec_assert_valid_var var m exp man flow =
     match Map.find var m with
-    | BOT -> Post.return flow 
-    | Nbt Alive -> 
+    | BOT, _ -> Post.return flow 
+    | Nbt Alive, _ -> 
       let flow = safe_ffi_inactive_value_check exp.erange man flow in 
       Post.return flow
-    | Nbt Collected | Nbt Untracked -> 
+    | Nbt Collected, _ | Nbt Untracked, _ -> 
       let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
       Post.return flow
-    | TOP -> 
+    | TOP, _ -> 
       let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
       Post.return flow
 
@@ -161,9 +167,18 @@ struct
   
   let exec_register_root exp man flow =
     man.eval exp flow >>$ fun exp flow ->
-    (* let m  = get_env T_cur man flow in  *)
+    let m  = get_env T_cur man flow in 
     match ekind exp with 
-    | E_var (var, _) -> Post.return flow
+    | E_var (var, _) -> 
+      begin match Map.find var m with
+      | (Nbt Alive, Nbt NotRooted) -> 
+        let (stat, rt) = Map.find var m in
+        let m' = Map.add var (stat, Root.embed Rooted) m in 
+        let flow = set_env T_cur m' man flow in      
+        Post.return flow
+      | (Nbt Alive, Nbt Rooted) -> failwith (Format.asprintf "variable %a has been rooted already" pp_var var)
+      | (_, _) -> failwith (Format.asprintf "cannot prove that variable %a is alive and not rooted" pp_var var)
+      end
     | _ -> 
         failwith (Format.asprintf "registering roots is only supported for variables, %a is not a variable" pp_expr exp)
     
@@ -171,7 +186,7 @@ struct
 
 
 
-let rec expr_status m e : Val.t = 
+let rec expr_status m e : Stat.t = 
   match ekind e with 
   | E_var (var, _) -> var_status m var
   | E_constant c -> const_status m c
@@ -183,8 +198,8 @@ let rec expr_status m e : Val.t =
   | E_c_cast (e,c) -> cast_status m e c
   | _ -> TOP
 
-and var_status m var = Map.find var m 
-and binop_status m op e1 e2 : Val.t = 
+and var_status m var = fst (Map.find var m) 
+and binop_status m op e1 e2 : Stat.t = 
   match expr_status m e1, expr_status m e2 with 
   | BOT, _ -> BOT
   | _, BOT -> BOT
@@ -196,10 +211,10 @@ and binop_status m op e1 e2 : Val.t =
   | Nbt Alive, Nbt Untracked -> Nbt Alive
   | Nbt Untracked, Nbt Alive -> Nbt Alive
   | Nbt Untracked, Nbt Untracked -> Nbt Untracked
-and unop_status m op e : Val.t = expr_status m e
-and addr_of_status m e : Val.t = expr_status m e
-and deref_status m e : Val.t = expr_status m e
-and cast_status m e c : Val.t = expr_status m e 
+and unop_status m op e : Stat.t = expr_status m e
+and addr_of_status m e : Stat.t = expr_status m e
+and deref_status m e : Stat.t = expr_status m e
+and cast_status m e c : Stat.t = expr_status m e 
 and const_status m c = 
   match c with 
   | C_ffi_alive_value -> Nbt Alive 
@@ -209,9 +224,9 @@ and const_status m c =
   let exec_update var expr man flow = 
     let m = get_env T_cur man flow in
     let status = expr_status m expr in
-    let m' = Map.add var status m in
+    let m' = update_status var status m in
     let flow = set_env T_cur m' man flow in
-    let () = Debug.debug ~channel:"runtime" "updated %a to %s" pp_var var (Val.to_string status) in
+    let () = Debug.debug ~channel:"runtime" "updated %a status to %s" pp_var var (Stat.to_string status) in
     Post.return flow 
 
 
@@ -267,8 +282,8 @@ and const_status m c =
     | E_var (var,_) when is_c_pointer_type var.vtyp
                       && not (is_c_array_type var.vtyp) ->
       let a = get_env T_cur man flow in
-      let v = Map.find var a in 
-      let po : print_object = String (Val.to_string v) in
+      let (stat, rt) = Map.find var a in 
+      let po : print_object = String (Format.asprintf "%s,  %s" (Stat.to_string stat) (Root.to_string rt)) in
         pprint printer ~path:[ Key "runtime"; fkey "%a" pp_var var ] po
     | _ -> ()
 

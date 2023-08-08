@@ -34,7 +34,7 @@ open Top
 open Framework.Lattices.Partial_inversible_map
 
 
-module Value =
+module Status =
 struct
   type t = 
     Untracked | Alive | Collected
@@ -56,3 +56,22 @@ struct
   let print printer b = pp_string printer (to_string b)
 end
 
+module Roots =
+struct
+  type t = 
+    Rooted | NotRooted
+
+  let compare a b =
+    match a, b with 
+    | NotRooted, NotRooted -> 0
+    | Rooted, Rooted -> 0
+    | _, _ -> compare a b (* FIXME: this is the MOPSA standard, but does not seem great *)
+
+
+  let to_string s = 
+    match s with
+    | Rooted-> "root"
+    | NotRooted -> "not rooted"
+    
+  let print printer b = pp_string printer (to_string b)
+end
