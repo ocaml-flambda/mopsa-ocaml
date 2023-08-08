@@ -405,8 +405,14 @@ type stmt_kind +=
 
   (* runtime primtives *)
   | S_ffi_garbage_collect
+  
   | S_ffi_register_root of expr
+  
   | S_ffi_assert_valid of expr
+  
+  | S_ffi_set_lock of bool
+
+  | S_ffi_assert_locked
 
 
 
@@ -1041,7 +1047,12 @@ let mk_ffi_assert_alive exp range =
 let mk_ffi_register_root exp range =
   mk_stmt (S_ffi_register_root exp) range
     
-
+let mk_ffi_assert_locked range =
+  mk_stmt (S_ffi_assert_locked) range
+    
+let mk_ffi_set_lock state range =
+  mk_stmt (S_ffi_set_lock state) range
+    
 
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true

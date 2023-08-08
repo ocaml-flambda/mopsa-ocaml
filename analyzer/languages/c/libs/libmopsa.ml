@@ -339,6 +339,7 @@ struct
       Eval.singleton expr flow |>
       OptionExt.return
 
+
     | E_c_builtin_call("_ffi_assert_alive", [e]) ->
       let stmt = mk_ffi_assert_alive(e) exp.erange in
       man.exec stmt flow >>% (fun flow -> 
@@ -351,6 +352,23 @@ struct
       man.exec stmt flow >>% (fun flow -> 
         Eval.singleton (mk_int 0 exp.erange) flow
       ) |> OptionExt.return 
+
+
+    | E_c_builtin_call("_ffi_assert_locked", []) ->
+      let stmt = mk_ffi_assert_locked exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
+    | E_c_builtin_call("_ffi_acquire_lock", []) ->
+      let stmt = mk_ffi_set_lock true exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
+    | E_c_builtin_call("_ffi_release_lock", []) ->
+      let stmt = mk_ffi_set_lock false exp.erange in
+      man.exec stmt flow >>%? fun flow ->
+      Eval.singleton (mk_int 0 exp.erange) flow |>
+      OptionExt.return
     | _ -> None
 
   let ask _ _ _  = None

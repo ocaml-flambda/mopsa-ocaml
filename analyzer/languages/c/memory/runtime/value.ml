@@ -75,3 +75,24 @@ struct
     
   let print printer b = pp_string printer (to_string b)
 end
+
+
+module RuntimeLock =
+struct
+  type t = 
+    Locked | Unlocked 
+
+  let compare a b =
+    match a, b with 
+    | Locked, Locked -> 0
+    | Unlocked, Unlocked -> 0
+    | _, _ -> compare a b (* FIXME: this is the MOPSA standard, but does not seem great *)
+
+
+  let to_string s = 
+    match s with
+    | Locked -> "locked"
+    | Unlocked-> "unlocked"
+    
+  let print printer b = pp_string printer (to_string b)
+end
