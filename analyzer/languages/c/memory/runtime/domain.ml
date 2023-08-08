@@ -198,7 +198,12 @@ let rec expr_status m e : Stat.t =
   | E_c_cast (e,c) -> cast_status m e c
   | _ -> TOP
 
-and var_status m var = fst (Map.find var m) 
+and var_status m var = 
+  match Map.find_opt var m with 
+  | Some (stat, rt) -> stat
+  | None -> 
+    (* FIXME: for type var[size], var is not added to the domain *)
+    let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var in TOP
 and binop_status m op e1 e2 : Stat.t = 
   match expr_status m e1, expr_status m e2 with 
   | BOT, _ -> BOT
