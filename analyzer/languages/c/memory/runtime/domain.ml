@@ -244,6 +244,7 @@ and const_status m c =
     let status = expr_status m arg in 
     begin match status with 
     | Nbt Untracked -> Post.return flow
+    | Nbt Alive -> Post.return flow (* we allow for now to pass alive values to external functions *)
     | _ -> 
       let () = Debug.debug ~channel:"extcall" "status %s" (Stat.to_string status) in
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
