@@ -115,7 +115,7 @@ struct
     let switch_range = tag_range range "switch" in
     let rec iter cases flow =
       match cases with
-      | [] -> Post.return flow
+      | [] -> man.exec guard_cleaner flow
       | (e',r) :: tl ->
         (* Filter the environments *)
         let cond = mk_binop e O_eq e' ~etyp:u8 switch_range in
@@ -138,9 +138,7 @@ struct
 
     iter cases flow |>
     (* Merge all cases in one, so that we will execute the body only once *)
-    Post.remove_duplicates man.lattice
-    >>% fun flow ->
-    man.exec guard_cleaner flow >>% fun flow ->
+    Post.remove_duplicates man.lattice >>% fun flow -> 
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)
     let flow, no_default =
@@ -190,10 +188,13 @@ struct
     | S_c_switch(e, body) ->
        (
          (* Evaluate e once in case of side-effects *)
-         let range = srange stmt in
-         let guard_var = mk_range_attr_var range "switch-guard" (etyp e) in
-         man.exec (mk_assign (mk_var guard_var range) e range) flow >>% fun flow ->
-         exec_switch (mk_var guard_var range) body (mk_remove_var guard_var range) stmt.srange man flow
+         man.eval e flow |>
+         bind (fun case flow ->
+             match case with
+             | Empty -> Cases.empty flow
+             | NotHandled -> Cases.not_handled flow
+             | Result(e, _, cleaners) ->
+               exec_switch e body (Universal.Ast.mk_block (StmtSet.elements cleaners) (erange e)) stmt.srange man flow)
        ) |>
       OptionExt.return
 
