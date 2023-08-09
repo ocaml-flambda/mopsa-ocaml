@@ -325,11 +325,11 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    if fundec.c_func_org_name = "__builtin_alloca" then
+    (* if fundec.c_func_org_name = "__builtin_alloca" then
       match args with
       | [size] -> eval_alloca_call size range man flow
       | _ -> panic_at range "invalid call to alloca"
-    else
+    else *)
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
