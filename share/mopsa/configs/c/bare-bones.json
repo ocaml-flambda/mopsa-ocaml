@@ -20,7 +20,7 @@
                     // // "c.libs.clib.file_descriptor",
                     "c.libs.clib.formatted_io.fprint",
                     // // "c.libs.clib.formatted_io.fscanf",
-                    // // "c.libs.variadic",
+                    "c.libs.variadic",
                     // // // C stubs
                     // // "c.cstubs.assigns",
                     // // "c.cstubs.builtins",
