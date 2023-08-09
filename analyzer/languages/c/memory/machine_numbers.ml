@@ -238,7 +238,7 @@ struct
       let ritv = IntItv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
       if IntItv.subset itv ritv then
-        safe_c_integer_overflow_check range man flow |>
+        (if raise_alarm then safe_c_integer_overflow_check range man flow else flow) |>  (* disabling the safe checks *)
         Eval.singleton cexp |>
         Eval.add_translation "Universal" nexp
       else
