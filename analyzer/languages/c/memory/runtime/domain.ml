@@ -166,6 +166,8 @@ struct
         let flow = set_env T_cur (m', l) man flow in      
         Post.return flow
       | (Nbt Alive, Nbt Rooted) -> failwith (Format.asprintf "variable %a has been rooted already" pp_var var)
+      | (Nbt Untracked, _) ->     
+        failwith (Format.asprintf "cannot prove that variable %a is alive and not rooted" pp_var var) 
       | (_, _) -> failwith (Format.asprintf "cannot prove that variable %a is alive and not rooted" pp_var var)
       end
     | _ -> 
