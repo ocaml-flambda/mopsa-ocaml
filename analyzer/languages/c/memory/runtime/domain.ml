@@ -313,11 +313,6 @@ and const_status m c =
 
   (** {2 FFI function evaluation} *)
   (** ====================== *)
-  let eval_generate_value range man flow =
-    let expr = mk_ffi_alive_value range in
-    Eval.singleton expr flow
-
-
   let eval_mark_alive range exp man flow =
     let (m, l) = get_env T_cur man flow in 
     match ekind exp with 
@@ -424,8 +419,10 @@ and const_status m c =
     match f, args with 
     | "_ffi_garbage_collect", [] -> 
       eval_garbage_collect range man flow 
-    | "_ffi_mark_alive", [e] -> 
-        eval_mark_alive range e man flow
+    | "_ffi_mark_alive_value", [e] -> 
+      eval_mark_alive range e man flow
+    | "_ffi_mark_alive_ptr", [e] -> 
+      eval_mark_alive range e man flow
     | "_ffi_register_root", [e] -> 
       eval_register_root range e man flow
     | "_ffi_assert_alive", [e] -> 

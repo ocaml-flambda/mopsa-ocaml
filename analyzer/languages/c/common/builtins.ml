@@ -104,7 +104,8 @@ let _ =
       "quick_exit";
 
       "_ffi_garbage_collect";
-      "_ffi_mark_alive";
+      "_ffi_mark_alive_value";
+      "_ffi_mark_alive_ptr";
       "_ffi_register_root";
       "_ffi_acquire_lock";
       "_ffi_release_lock";
