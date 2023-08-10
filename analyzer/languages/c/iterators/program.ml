@@ -608,9 +608,13 @@ struct
       OptionExt.return *)
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
       let call_function (f: c_fundec) = 
-        let args = List.map (fun arg -> mk_ffi_alive_value f.c_func_name_range) (f.c_func_parameters) in 
-        let stmt = mk_c_call_stmt f args f.c_func_name_range in 
-        stmt
+        let value_typ = (T_c_integer (C_signed_long)) in
+        let tmp_alive_var = mktmp ~typ:value_typ () in 
+        let dec_var = mk_c_declaration tmp_alive_var (Some (C_init_expr (mk_top value_typ f.c_func_name_range))) Variable_global f.c_func_name_range in
+        let alive_var = mk_expr_stmt (mk_ffi_call "_ffi_mark_alive_value" [mk_var tmp_alive_var f.c_func_name_range] f.c_func_name_range) f.c_func_name_range in
+        let args = List.map (fun arg -> mk_var tmp_alive_var f.c_func_name_range) (f.c_func_parameters) in 
+        let exec_fun = mk_c_call_stmt f args f.c_func_name_range in 
+        mk_block [dec_var; alive_var; exec_fun] f.c_func_name_range
       in
       let rec exec_all_tests (fs: c_fundec list) (flows: 'a flow list) (flow: 'a flow) =
         match fs with 
