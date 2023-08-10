@@ -221,83 +221,6 @@ struct
     let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
     Post.return flow 
 
-  let exec_garbage_collect man flow =
-    let (m, l)  = get_env T_cur man flow in 
-    let upd_set (s, r) = if Stat.is_const s Alive && not (Root.is_const r Rooted) then (Stat.embed Collected, r) else (s, r) in 
-    let m' = Map.map (fun s -> upd_set s) m in
-    let flow = set_env T_cur (m', l) man flow in
-    let () = Debug.debug ~channel:"runtime" "garbage collect" in
-    Post.return flow
-
-  let exec_assert_valid_var var m exp man flow =
-    match Map.find_opt var m with
-    | Some (BOT, _) -> Post.return flow 
-    | Some (Nbt Alive, _) -> 
-      let flow = safe_ffi_value_liveness_check exp.erange man flow in 
-      Post.return flow
-    | Some (Nbt Collected, _) | Some (Nbt Untracked, _) | None -> 
-      let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
-      Post.return flow
-    | Some (TOP, _) -> 
-      let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
-      Post.return flow
-
-  let exec_begin_end_roots range man flow = 
-    let flow = raise_ffi_begin_end_roots range man flow in
-    Post.return flow
-    
-
-  let exec_assert_valid exp man flow = 
-    man.eval exp flow >>$ fun exp flow ->
-    let (m, l) = get_env T_cur man flow in 
-    match ekind exp with 
-    | E_var (var, _) -> exec_assert_valid_var var m exp man flow
-    | _ -> failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
-  
-  
-  
-  let exec_register_root exp man flow =
-    man.eval exp flow >>$ fun exp flow ->
-    let (m, l) = get_env T_cur man flow in 
-    match ekind exp with 
-    | E_var (var, _) -> 
-      begin match Map.find_opt var m with
-      | Some (_, Nbt Rooted) -> 
-        let flow = raise_ffi_double_root ~bottom:false exp man flow in
-        Post.return flow
-      | Some (Nbt Untracked, _) ->     
-        let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
-        Post.return flow
-      | Some (Nbt Alive, Nbt NotRooted) ->
-        let m' = Map.add var (Nbt Alive, Root.embed Rooted) m in 
-        let flow = set_env T_cur (m', l) man flow in      
-        let flow = safe_ffi_roots_check exp.erange man flow in 
-        Post.return flow
-      | _ -> 
-        let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
-        Post.return flow
-      end
-    | _ -> 
-      let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
-      Post.return flow
-    
-
-  let exec_assert_runtime_lock range man flow =
-    let (m, l): _ * Lock.t = get_env T_cur man flow in 
-    match l with 
-    | Nbt Locked ->
-      let flow = safe_ffi_runtime_lock_check range man flow in 
-      Post.return flow
-    | _ -> 
-      let flow = raise_ffi_runtime_unlocked ~bottom:true range man flow in
-      Post.return flow
-
-  let exec_update_runtime_lock new_state man flow =
-    let (m, l): _ * Lock.t = get_env T_cur man flow in 
-    let l' = (if new_state then Lock.embed Locked else Lock.embed Unlocked) in
-    let flow = set_env T_cur (m, l') man flow in      
-    Post.return flow
-
 let rec expr_status m e : Stat.t = 
   match ekind e with 
   | E_var (var, _) -> var_status m var
@@ -380,16 +303,6 @@ and const_status m c =
       let () = Format.printf "forgetting %a\n" pp_var var in 
       exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
-    | S_ffi_garbage_collect -> 
-      exec_garbage_collect man flow |> OptionExt.return
-    | S_ffi_assert_valid e -> 
-      exec_assert_valid e man flow |> OptionExt.return
-    | S_ffi_register_root e -> 
-      exec_register_root e man flow |> OptionExt.return
-    | S_ffi_assert_locked -> 
-      exec_assert_runtime_lock stmt.srange man flow |> OptionExt.return
-    | S_ffi_set_lock new_state -> 
-      exec_update_runtime_lock new_state man flow |> OptionExt.return
     | S_ffi_ext_call args ->
       exec_ext_call args man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
@@ -398,11 +311,130 @@ and const_status m c =
     | _ -> None
 
 
-  (** {2 Pointer evaluation} *)
+  (** {2 FFI function evaluation} *)
   (** ====================== *)
+  let eval_generate_value range man flow =
+    let expr = mk_ffi_alive_value range in
+    Eval.singleton expr flow
+
+  let eval_garbage_collect range man flow =
+    let (m, l)  = get_env T_cur man flow in 
+    let upd_set (s, r) = if Stat.is_const s Alive && not (Root.is_const r Rooted) then (Stat.embed Collected, r) else (s, r) in 
+    let m' = Map.map (fun s -> upd_set s) m in
+    let flow = set_env T_cur (m', l) man flow in
+    let () = Debug.debug ~channel:"runtime" "garbage collect" in
+    Eval.singleton (mk_unit range) flow
+
+  let eval_assert_valid_var var m exp man flow =
+    let flow = match Map.find_opt var m with
+    | Some (BOT, _) -> flow 
+    | Some (Nbt Alive, _) -> 
+      let flow = safe_ffi_value_liveness_check exp.erange man flow in 
+      flow
+    | Some (Nbt Collected, _) | Some (Nbt Untracked, _) | None -> 
+      let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
+      flow
+    | Some (TOP, _) -> 
+      let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
+      flow
+    in 
+      let () = Debug.debug ~channel:"runtime" "garbage collect" in
+      Eval.singleton (mk_unit exp.erange) flow
+    
+
+  let eval_begin_end_roots range man flow = 
+    let flow = raise_ffi_begin_end_roots range man flow in
+    Eval.singleton (mk_unit range) flow
+    
+
+  let eval_assert_valid exp man flow = 
+    let (m, l) = get_env T_cur man flow in 
+    match ekind exp with 
+    | E_var (var, _) -> eval_assert_valid_var var m exp man flow
+    | _ -> failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
+  
+
+  let eval_register_root range exp man flow =
+    let (m, l) = get_env T_cur man flow in 
+    match ekind exp with 
+    | E_var (var, _) -> 
+      begin match Map.find_opt var m with
+      | Some (_, Nbt Rooted) -> 
+        let flow = raise_ffi_double_root ~bottom:false exp man flow in
+        Eval.singleton (mk_unit range) flow
+      | Some (Nbt Untracked, _) ->     
+        let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
+        Eval.singleton (mk_unit range) flow
+      | Some (Nbt Alive, Nbt NotRooted) ->
+        let m' = Map.add var (Nbt Alive, Root.embed Rooted) m in 
+        let flow = set_env T_cur (m', l) man flow in      
+        let flow = safe_ffi_roots_check exp.erange man flow in 
+        Eval.singleton (mk_unit range) flow
+      | _ -> 
+        let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
+        Eval.singleton (mk_unit range) flow
+      end
+    | _ -> 
+      let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
+      Eval.singleton (mk_unit range) flow
+    
+
+  let eval_assert_runtime_lock range man flow =
+    let (m, l): _ * Lock.t = get_env T_cur man flow in 
+    match l with 
+    | Nbt Locked ->
+      let flow = safe_ffi_runtime_lock_check range man flow in 
+      Eval.singleton (mk_unit range) flow
+    | _ -> 
+      let flow = raise_ffi_runtime_unlocked ~bottom:true range man flow in
+      Eval.singleton (mk_unit range) flow
+
+  let eval_update_runtime_lock range new_state man flow =
+    let (m, l): _ * Lock.t = get_env T_cur man flow in 
+    let l' = (if new_state then Lock.embed Locked else Lock.embed Unlocked) in
+    let flow = set_env T_cur (m, l') man flow in      
+    Eval.singleton (mk_unit range) flow
+
+
+
+
+
+
+
+  let rec eval_ffi_primtive_args args man flow =
+    match args with 
+    | [] -> Cases.singleton [] flow
+    | (arg::args) -> 
+      man.eval arg flow >>$ fun arg flow -> 
+      eval_ffi_primtive_args args man flow >>$ fun args flow ->
+      Cases.singleton (arg :: args) flow
+       
+  let eval_ffi_primtive f args range man flow =
+    eval_ffi_primtive_args args man flow >>$ fun args flow -> 
+    match f, args with 
+    | "_ffi_garbage_collect", [] -> 
+      eval_garbage_collect range man flow 
+    | "_ffi_generate_value", [] -> 
+      eval_generate_value range man flow
+    | "_ffi_register_root", [e] -> 
+      eval_register_root range e man flow
+    | "_ffi_assert_alive", [e] -> 
+      eval_assert_valid e man flow
+    | "_ffi_assert_locked", [] -> 
+      eval_assert_runtime_lock range man flow
+    | "_ffi_acquire_lock", [] -> 
+      eval_update_runtime_lock range true man flow 
+    | "_ffi_release_lock", [] -> 
+      eval_update_runtime_lock range false man flow
+    | _, _ -> failwith (Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args) 
+
+
 
   (** Entry point of abstraction evaluations *)
-  let eval exp man flow = None
+  let eval exp man flow = 
+    match ekind exp with 
+    | E_ffi_call (f, args) -> eval_ffi_primtive f args exp.erange man flow |> OptionExt.return
+    | _ -> None
 
   (** {2 Handler of queries} *)
   (** ====================== *)

@@ -178,6 +178,7 @@ let () =
       | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e
       | E_c_predefined _ -> assert false
       | E_c_atomic (op,e1,e2) -> fprintf fmt "__atomic(%i,%a,%a)" op pp_expr e1 pp_expr e2
+      | E_ffi_call (f, args) -> fprintf fmt "ffi %s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | _ -> default fmt expr
     );
   register_stmt_pp (fun default fmt stmt ->

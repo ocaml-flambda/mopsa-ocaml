@@ -341,6 +341,8 @@ type expr_kind +=
       the block object will update the pointers that point to the
       block.  *)
 
+  | E_ffi_call of string * expr list 
+
 
 
 (*==========================================================================*)
@@ -403,17 +405,7 @@ type stmt_kind +=
   | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
-  (* runtime primtives *)
-  | S_ffi_garbage_collect
-  
-  | S_ffi_register_root of expr
-  
-  | S_ffi_assert_valid of expr
-  
-  | S_ffi_set_lock of bool
-
-  | S_ffi_assert_locked
-
+  (* runtime external call *)
   | S_ffi_ext_call of expr list
 
 
@@ -1040,21 +1032,9 @@ let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
 
-let mk_ffi_garbage_collect range =
-  mk_stmt (S_ffi_garbage_collect) range
-  
-let mk_ffi_assert_alive exp range =
-  mk_stmt (S_ffi_assert_valid exp) range
+let mk_ffi_call f exprs range = 
+  mk_expr (E_ffi_call (f, exprs)) range
 
-let mk_ffi_register_root exp range =
-  mk_stmt (S_ffi_register_root exp) range
-    
-let mk_ffi_assert_locked range =
-  mk_stmt (S_ffi_assert_locked) range
-    
-let mk_ffi_set_lock state range =
-  mk_stmt (S_ffi_set_lock state) range
-  
 let mk_ffi_ext_call exprs range =
   mk_stmt (S_ffi_ext_call exprs) range
       
@@ -1201,9 +1181,12 @@ let () =
          Compare.triple compare compare_expr compare_expr
            (op1,e1,ee1)
            (op2,e2,ee2)
-
+           
        | E_c_block_object(e1), E_c_block_object(e2) ->
          compare_expr e1 e2
+
+       | E_ffi_call (f, es1), E_ffi_call (g, es2) -> 
+          Compare.pair compare (Compare.list compare_expr) (f, es1) (g, es2)  
 
        | _ -> next e1 e2
     )

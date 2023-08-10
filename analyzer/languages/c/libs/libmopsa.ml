@@ -104,6 +104,19 @@ struct
     | f -> panic "extract_range_type: invalid argument %s" f
 
 
+  let is_ffi_function = function 
+    | "_ffi_garbage_collect"
+    | "_ffi_generate_value"
+    | "_ffi_register_root"
+    | "_ffi_acquire_lock"
+    | "_ffi_release_lock"
+    | "_ffi_assert_alive"
+    | "_ffi_assert_locked" 
+      -> true
+    | _ -> false
+
+
+
   let eval_rand typ range man flow = man.eval (mk_top typ range) flow
 
   let eval_range typ l u range man flow =
@@ -328,47 +341,9 @@ struct
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
-    | E_c_builtin_call("_ffi_garbage_collect", []) ->
-      let stmt = mk_ffi_garbage_collect exp.erange in
-      man.exec stmt flow >>%? fun flow ->
-      Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
-
-    | E_c_builtin_call("_ffi_generate_value", []) ->
-      let expr = mk_ffi_alive_value exp.erange in
-      Eval.singleton expr flow |>
-      OptionExt.return
-
-
-    | E_c_builtin_call("_ffi_assert_alive", [e]) ->
-      let stmt = mk_ffi_assert_alive(e) exp.erange in
-      man.exec stmt flow >>% (fun flow -> 
-          Eval.singleton (mk_int 0 exp.erange) flow
-      ) |> OptionExt.return 
-
-
-    | E_c_builtin_call("_ffi_register_root", [e]) ->
-      let stmt = mk_ffi_register_root (e) exp.erange in
-      man.exec stmt flow >>% (fun flow -> 
-        Eval.singleton (mk_int 0 exp.erange) flow
-      ) |> OptionExt.return 
-
-
-    | E_c_builtin_call("_ffi_assert_locked", []) ->
-      let stmt = mk_ffi_assert_locked exp.erange in
-      man.exec stmt flow >>%? fun flow ->
-      Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
-    | E_c_builtin_call("_ffi_acquire_lock", []) ->
-      let stmt = mk_ffi_set_lock true exp.erange in
-      man.exec stmt flow >>%? fun flow ->
-      Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
-    | E_c_builtin_call("_ffi_release_lock", []) ->
-      let stmt = mk_ffi_set_lock false exp.erange in
-      man.exec stmt flow >>%? fun flow ->
-      Eval.singleton (mk_int 0 exp.erange) flow |>
-      OptionExt.return
+    | E_c_builtin_call(f, args) when is_ffi_function f ->
+      let expr = mk_ffi_call f args exp.erange in 
+      man.eval expr flow |> OptionExt.return
     | _ -> None
 
   let ask _ _ _  = None
