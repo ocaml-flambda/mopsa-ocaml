@@ -75,14 +75,11 @@ let pp_base_verbose fmt base =
 
 type check += 
    CHK_C_INVALID_MEMORY_ACCESS
- | CHK_FFI_LIVENESS_VALUE 
- | CHK_FFI_RUNTIME_LOCK
+
 
 let () =
   register_check (fun next fmt -> function
       | CHK_C_INVALID_MEMORY_ACCESS -> fprintf fmt "Invalid memory access"
-      | CHK_FFI_LIVENESS_VALUE -> fprintf fmt "Liveness value check"     
-      | CHK_FFI_RUNTIME_LOCK -> fprintf fmt "Runtime lock currently unlocked"
       | a -> next fmt a
     )
 
@@ -104,8 +101,7 @@ type alarm_kind +=
                           range (** deallocation site *)
   | A_c_modify_read_only of expr (** pointer *) *
                             base (** pointed base *)
-  | A_ffi_non_alive_value of expr
-  | A_ffi_runtime_unlocked
+
 
 let () =
   register_alarm {
@@ -118,10 +114,6 @@ let () =
         | A_c_use_after_free _
         | A_c_modify_read_only _ ->
           CHK_C_INVALID_MEMORY_ACCESS
-        | A_ffi_non_alive_value e -> 
-          CHK_FFI_LIVENESS_VALUE
-        | A_ffi_runtime_unlocked ->
-          CHK_FFI_RUNTIME_LOCK
         | a -> next a
       );
     compare = (fun next a1 a2 ->
@@ -148,8 +140,6 @@ let () =
           Compare.pair compare_expr compare_range (p1,r1) (p2,r2)
         | A_c_modify_read_only(p1,b1), A_c_modify_read_only(p2,b2) ->
           Compare.pair compare_expr compare_base (p1,b1) (p2,b2)
-        | A_ffi_non_alive_value e1, A_ffi_non_alive_value e2 -> compare_expr e1 e2
-        | A_ffi_runtime_unlocked, A_ffi_runtime_unlocked -> 0
         | _ -> next a1 a2
       );
     print = (fun next fmt -> function
@@ -196,11 +186,6 @@ let () =
           fprintf fmt "'%a' points to read-only %a"
             (Debug.bold pp_expr) p
             pp_base_verbose b
-        | A_ffi_non_alive_value e -> 
-          fprintf fmt "'%a' is no longer alive"
-            (Debug.bold pp_expr) e
-        | A_ffi_runtime_unlocked -> 
-          fprintf fmt "runtime unlocked"
         | a -> next fmt a
       );
     join = (fun next a1 a2 ->
@@ -273,23 +258,6 @@ let unreachable_c_memory_access_check range man flow =
 let raise_c_memory_access_warning range man flow =
   Flow.add_warning_check CHK_C_INVALID_MEMORY_ACCESS range flow
 
-
-let raise_ffi_inactive_value ?(bottom=true) exp man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_non_alive_value exp) cs exp.erange in
-  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-  
-let safe_ffi_inactive_value_check range man flow =
-  Flow.add_safe_check CHK_FFI_LIVENESS_VALUE range flow
-  
-let raise_ffi_runtime_lock ?(bottom=true) range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_runtime_unlocked) cs range in
-  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-    
-
-let safe_ffi_runtime_lock_check range man flow =
-  Flow.add_safe_check CHK_FFI_RUNTIME_LOCK range flow
     
 
 (** {2 Division by zero} *)

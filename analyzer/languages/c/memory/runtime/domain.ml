@@ -33,6 +33,108 @@ open Value
 open Stubs.Ast (* for the printing functions *)
 
 
+type check +=  
+| CHK_FFI_LIVENESS_VALUE 
+| CHK_FFI_RUNTIME_LOCK
+| CHK_FFI_ROOTS
+
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime value liveness"     
+      | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"     
+      | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
+      | a -> next fmt a
+    )
+
+type alarm_kind += 
+  | A_ffi_non_alive_value of expr
+  | A_ffi_double_root of expr
+  | A_ffi_non_variable_root of expr
+  | A_ffi_runtime_unlocked
+  | A_ffi_begin_end_roots 
+
+let () = 
+  register_alarm {
+    check = (fun next alarm -> 
+      match alarm with
+      | A_ffi_non_alive_value e -> 
+        CHK_FFI_LIVENESS_VALUE
+      | A_ffi_runtime_unlocked ->
+        CHK_FFI_RUNTIME_LOCK
+      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  -> 
+        CHK_FFI_ROOTS
+      | a -> next a);
+    compare = (fun next a1 a2 -> 
+      match a1, a2 with
+      | A_ffi_non_alive_value e1, A_ffi_non_alive_value e2 -> compare_expr e1 e2
+      | A_ffi_runtime_unlocked, A_ffi_runtime_unlocked -> 0
+      | A_ffi_double_root e1, A_ffi_double_root e2 -> compare_expr e1 e2
+      | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
+      | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
+      | _ -> next a1 a2 
+    );
+    print = (fun next fmt a -> 
+      match a with 
+      | A_ffi_non_alive_value e -> 
+        Format.fprintf fmt "'%a' is not alive at this point" (Debug.bold pp_expr) e
+      | A_ffi_double_root e -> 
+        Format.fprintf fmt "'%a' is already registered as a root" (Debug.bold pp_expr) e
+      | A_ffi_non_variable_root e -> 
+          Format.fprintf fmt "attempting to register '%a' as a root failed" (Debug.bold pp_expr) e
+      | A_ffi_runtime_unlocked -> 
+        Format.fprintf fmt "runtime unlocked"
+      | A_ffi_begin_end_roots -> 
+        Format.fprintf fmt "Begin_roots/End_roots is deprecated" 
+      | a -> next fmt a
+    ); 
+    join = (fun next a1 a2 -> next a1 a2);
+  }
+
+
+
+let raise_ffi_inactive_value ?(bottom=true) exp man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_non_alive_value exp) cs exp.erange in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+    
+let raise_ffi_runtime_unlocked ?(bottom=true) range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_runtime_unlocked) cs range in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+
+let raise_ffi_double_root ?(bottom=true) exp man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_double_root exp) cs exp.erange in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+  
+let raise_ffi_double_root ?(bottom=true) exp man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+      
+let raise_ffi_rooting_failed ?(bottom=true) exp man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+        
+let raise_ffi_begin_end_roots range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_begin_end_roots) cs range in
+  Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
+          
+
+(* safe checks *)
+let safe_ffi_value_liveness_check range man flow =
+    Flow.add_safe_check CHK_FFI_LIVENESS_VALUE range flow
+  
+let safe_ffi_runtime_lock_check range man flow =
+  Flow.add_safe_check CHK_FFI_RUNTIME_LOCK range flow
+    
+let safe_ffi_roots_check range man flow =
+  Flow.add_safe_check CHK_FFI_ROOTS range flow
+  
+
 
 module Domain =
 struct
@@ -90,9 +192,6 @@ struct
     let (_, roots) = Map.find var map in
     Map.add var (status', roots) map
 
-  (* let set p v a = Map.add p (Stat.embed v, ) a *)
-  (* let remove p a = Map.remove p a *)
-
   (** {2 Initialization} *)
   (** ================== *)
 
@@ -131,26 +230,29 @@ struct
     Post.return flow
 
   let exec_assert_valid_var var m exp man flow =
-    match Map.find var m with
-    | BOT, _ -> Post.return flow 
-    | Nbt Alive, _ -> 
-      let flow = safe_ffi_inactive_value_check exp.erange man flow in 
+    match Map.find_opt var m with
+    | Some (BOT, _) -> Post.return flow 
+    | Some (Nbt Alive, _) -> 
+      let flow = safe_ffi_value_liveness_check exp.erange man flow in 
       Post.return flow
-    | Nbt Collected, _ | Nbt Untracked, _ -> 
+    | Some (Nbt Collected, _) | Some (Nbt Untracked, _) | None -> 
       let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
       Post.return flow
-    | TOP, _ -> 
+    | Some (TOP, _) -> 
       let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
       Post.return flow
 
+  let exec_begin_end_roots range man flow = 
+    let flow = raise_ffi_begin_end_roots range man flow in
+    Post.return flow
+    
 
   let exec_assert_valid exp man flow = 
     man.eval exp flow >>$ fun exp flow ->
     let (m, l) = get_env T_cur man flow in 
     match ekind exp with 
     | E_var (var, _) -> exec_assert_valid_var var m exp man flow
-    | _ -> 
-      failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
+    | _ -> failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
   
   
   
@@ -159,19 +261,25 @@ struct
     let (m, l) = get_env T_cur man flow in 
     match ekind exp with 
     | E_var (var, _) -> 
-      begin match Map.find var m with
-      | (Nbt Alive, Nbt NotRooted) -> 
-        let (stat, rt) = Map.find var m in
-        let m' = Map.add var (stat, Root.embed Rooted) m in 
-        let flow = set_env T_cur (m', l) man flow in      
+      begin match Map.find_opt var m with
+      | Some (_, Nbt Rooted) -> 
+        let flow = raise_ffi_double_root ~bottom:false exp man flow in
         Post.return flow
-      | (Nbt Alive, Nbt Rooted) -> failwith (Format.asprintf "variable %a has been rooted already" pp_var var)
-      | (Nbt Untracked, _) ->     
-        failwith (Format.asprintf "cannot prove that variable %a is alive and not rooted" pp_var var) 
-      | (_, _) -> failwith (Format.asprintf "cannot prove that variable %a is alive and not rooted" pp_var var)
+      | Some (Nbt Untracked, _) ->     
+        let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
+        Post.return flow
+      | Some (Nbt Alive, Nbt NotRooted) ->
+        let m' = Map.add var (Nbt Alive, Root.embed Rooted) m in 
+        let flow = set_env T_cur (m', l) man flow in      
+        let flow = safe_ffi_roots_check exp.erange man flow in 
+        Post.return flow
+      | _ -> 
+        let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
+        Post.return flow
       end
     | _ -> 
-        failwith (Format.asprintf "registering roots is only supported for variables, %a is not a variable" pp_expr exp)
+      let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
+      Post.return flow
     
 
   let exec_assert_runtime_lock range man flow =
@@ -181,7 +289,7 @@ struct
       let flow = safe_ffi_runtime_lock_check range man flow in 
       Post.return flow
     | _ -> 
-      let flow = raise_ffi_runtime_lock ~bottom:true range man flow in
+      let flow = raise_ffi_runtime_unlocked ~bottom:true range man flow in
       Post.return flow
 
   let exec_update_runtime_lock new_state man flow =
