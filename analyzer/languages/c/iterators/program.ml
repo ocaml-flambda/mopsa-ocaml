@@ -585,7 +585,7 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
-    | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
+    (* | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
       let make_test (f: c_fundec) = 
         let name = f.c_func_org_name in
         let args = List.map (fun arg -> mk_ffi_alive_value f.c_func_name_range) (f.c_func_parameters) in 
@@ -605,7 +605,31 @@ struct
       let tests = List.map make_test ffi_functions in
       let unittests = mk_stmt (Universal.Ast.S_unit_tests tests) (srange stmt) in
       man.exec unittests flow |>
+      OptionExt.return *)
+    | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
+      let call_function (f: c_fundec) = 
+        let args = List.map (fun arg -> mk_ffi_alive_value f.c_func_name_range) (f.c_func_parameters) in 
+        let stmt = mk_c_call_stmt f args f.c_func_name_range in 
+        stmt
+      in
+      let rec exec_all_tests (fs: c_fundec list) (flows: 'a flow list) (flow: 'a flow) =
+        match fs with 
+        | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows) 
+        | f :: fs -> 
+          Format.printf "Testing: %s\n" f.c_func_org_name; 
+          man.exec (call_function f) flow >>% fun flow' -> exec_all_tests fs (flow' :: flows) flow
+      in 
+ 
+      (* Initialize global variables *)
+      init_globals c_globals man flow >>%? fun flow ->
+
+      (* Execute stub directives *)
+      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
+  
+      let ffi_functions = List.filter (fun s -> StringSet.mem (s.c_func_unique_name) !ffitest_filter) c_functions in
+      exec_all_tests ffi_functions [] flow |>
       OptionExt.return
+      
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
