@@ -317,6 +317,16 @@ and const_status m c =
     let expr = mk_ffi_alive_value range in
     Eval.singleton expr flow
 
+
+  let eval_mark_alive range exp man flow =
+    let (m, l) = get_env T_cur man flow in 
+    match ekind exp with 
+    | E_var (var, _) ->  
+      let m' = update_status var (Stat.embed Alive) m in 
+      let flow = set_env T_cur (m', l) man flow in
+      Eval.singleton (mk_unit range) flow
+    | _ -> failwith (Format.asprintf "attempting to mark the expression %a alive, which is not a variable" pp_expr exp)
+
   let eval_garbage_collect range man flow =
     let (m, l)  = get_env T_cur man flow in 
     let upd_set (s, r) = if Stat.is_const s Alive && not (Root.is_const r Rooted) then (Stat.embed Collected, r) else (s, r) in 
@@ -414,8 +424,8 @@ and const_status m c =
     match f, args with 
     | "_ffi_garbage_collect", [] -> 
       eval_garbage_collect range man flow 
-    | "_ffi_generate_value", [] -> 
-      eval_generate_value range man flow
+    | "_ffi_mark_alive", [e] -> 
+        eval_mark_alive range e man flow
     | "_ffi_register_root", [e] -> 
       eval_register_root range e man flow
     | "_ffi_assert_alive", [e] -> 
