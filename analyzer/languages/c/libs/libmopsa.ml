@@ -104,18 +104,9 @@ struct
     | f -> panic "extract_range_type: invalid argument %s" f
 
 
-  let is_ffi_function = function 
-    | "_ffi_garbage_collect"
-    | "_ffi_generate_value"
-    | "_ffi_register_root"
-    | "_ffi_acquire_lock"
-    | "_ffi_release_lock"
-    | "_ffi_assert_alive"
-    | "_ffi_assert_locked" 
-      -> true
-    | _ -> false
-
-
+  let is_ffi_function = fun name -> 
+    String.starts_with ~prefix:"_ffi_" name
+    
 
   let eval_rand typ range man flow = man.eval (mk_top typ range) flow
 
