@@ -26,7 +26,7 @@ let builtin_functions = Hashtbl.create 16
 let _ =
   List.iter (fun a -> Hashtbl.add builtin_functions a ()) [
       "__builtin_constant_p";
-      "__builtin_expect";
+      (* "__builtin_expect"; *)
 
       "__builtin_va_start";
       "__builtin_va_end";
