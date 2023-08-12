@@ -305,7 +305,17 @@ struct
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
              Pp.pp_c_init (OptionExt.none_to_exn init)
 
-  
+  let mk_typed_zero typ range =
+    if is_c_int_type typ then
+      mk_zero ~typ range
+    else
+    if is_c_float_type typ then
+      mk_float 0. ~prec:(get_c_float_precision typ) range
+    else
+    if is_c_pointer_type typ then
+      mk_c_null range
+    else
+      mk_zero ~typ range
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
@@ -320,7 +330,7 @@ struct
         man.exec stmt flow
 
       | [] when is_c_global_scope scope ->
-        let stmt = mk_assign (mk_var v range) (mk_zero ~typ:v.vtyp range) range in
+        let stmt = mk_assign (mk_var v range) (mk_typed_zero v.vtyp range) range in
         man.exec stmt flow
 
       | _ ->
@@ -357,7 +367,7 @@ struct
              let init =
                match filler with
                | Some e -> e
-               | None -> mk_zero range (* global + uninitialized *)
+               | None -> mk_typed_zero t range (* global + uninitialized *)
              in
              let base =
                (* base : (char * )&v + o *)
