@@ -37,6 +37,9 @@
                                 "semantic": "C/Scalar",
                                 "switch": [
                                     "c.memory.runtime",
+                                    {
+                                        "nonrel": "c.runtime.status"
+                                    },
                                     "c.memory.scalars.pointer",
                                     "c.memory.scalars.machine_numbers"
                                 ]

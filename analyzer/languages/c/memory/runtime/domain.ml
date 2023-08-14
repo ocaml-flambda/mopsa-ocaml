@@ -33,6 +33,8 @@ open Value
 open Stubs.Ast (* for the printing functions *)
 
 
+(* open Status *)
+
 type check +=  
 | CHK_FFI_LIVENESS_VALUE 
 | CHK_FFI_RUNTIME_LOCK
@@ -151,6 +153,10 @@ struct
   module Map  = Framework.Lattices.Partial_map.Make(Var)(Val)
   module Lock = Framework.Lattices.Const.Make(RuntimeLock)
   module Dom  = Framework.Lattices.Pair.Make(Map)(Lock)
+
+  module Foo = Framework.Combiners.Value.Nonrel.Make(Mystatus.MyValue)
+
+  module Bar = Framework.Lattices.Pair.Make(Map)(Foo) 
 
   type t = Dom.t
 
