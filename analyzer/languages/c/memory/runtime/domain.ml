@@ -33,6 +33,29 @@ open Value
 open Stubs.Ast (* for the printing functions *)
 
 
+type addr_kind +=
+  | A_runtime_resource
+
+let () =
+  register_addr_kind {
+    print = (fun next fmt addr_kind ->
+        match addr_kind with
+        | A_runtime_resource -> Format.pp_print_string fmt "runtime"
+        | _ -> next fmt addr_kind
+      );
+    compare = (fun next ak1 ak2 ->
+        match ak1, ak2 with
+        | A_runtime_resource , A_runtime_resource  -> 0
+        | _ -> next ak1 ak2
+      );
+    }
+
+let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
+             match ak with
+             | A_runtime_resource -> Universal.Heap.Policies.mk_addr_stack_range ak
+             | _ -> default ak)
+
+
 (* open Status *)
 
 type check +=  
@@ -415,6 +438,19 @@ and const_status m c =
       man.eval arg flow >>$ fun arg flow -> 
       eval_ffi_primtive_args args man flow >>$ fun args flow ->
       Cases.singleton (arg :: args) flow
+
+
+  let eval_fresh_pointer range man flow =
+    man.eval (mk_alloc_addr A_runtime_resource range) flow >>$ fun addr flow -> 
+    match ekind addr with 
+    | E_addr (a, _) -> 
+      (* let base = mk_addr_base a in  *)
+      man.exec (mk_add addr range) flow >>% fun flow ->
+      man.eval (mk_c_address_of addr range) flow >>$ fun expr flow ->
+      man.exec (mk_assign addr (mk_top (T_c_integer C_signed_long) range) range) flow >>% fun flow ->
+      let () = Debug.debug ~channel:"eval" "check %a" pp_expr expr in
+      Cases.singleton (mk_zero range) flow
+    | _ -> failwith "failed to allocate an address"
        
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow -> 
@@ -435,6 +471,8 @@ and const_status m c =
       eval_update_runtime_lock range true man flow 
     | "_ffi_release_lock", [] -> 
       eval_update_runtime_lock range false man flow
+    | "_ffi_fresh_pointer", [] ->
+      eval_fresh_pointer range man flow
     | _, _ -> failwith (Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args) 
 
 

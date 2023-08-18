@@ -111,6 +111,7 @@ let _ =
       "_ffi_release_lock";
       "_ffi_assert_alive";
       "_ffi_assert_locked";
+      "_ffi_fresh_pointer";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

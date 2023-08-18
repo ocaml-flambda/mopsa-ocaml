@@ -29,7 +29,7 @@
                     // // "c.memory.variable_length_array",
                     "c.memory.aggregates",
                     "c.runtime.status_protection",
-                    // "universal.heap.recency",
+                    "universal.heap.recency",
                     {
                         "compose": [
                             "c.memory.lowlevel.cells",

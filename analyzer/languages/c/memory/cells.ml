@@ -1105,6 +1105,11 @@ struct
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow |>
       add_cell c range man
+    | { base_kind = Addr v; } ->
+      let () = Debug.debug ~channel:"declare" "adding address %a" pp_addr v  in
+      let c = mk_cell b Z.zero (T_c_integer C_signed_long) in
+      add_base b man flow |>
+      add_cell c range man
 
     | _ ->
       add_base b man flow |>
@@ -1296,6 +1301,7 @@ struct
 
 
     | S_add e when is_base_expr e && is_c_type e.etyp ->
+      (* let () = Debug.debug ~channel:"eval" "cells, adding %a" pp_expr e in  *)
       exec_add (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
