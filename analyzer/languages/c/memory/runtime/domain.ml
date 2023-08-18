@@ -154,10 +154,6 @@ struct
   module Lock = Framework.Lattices.Const.Make(RuntimeLock)
   module Dom  = Framework.Lattices.Pair.Make(Map)(Lock)
 
-  module Foo = Framework.Combiners.Value.Nonrel.Make(Mystatus.MyValue)
-
-  module Bar = Framework.Lattices.Pair.Make(Map)(Foo) 
-
   type t = Dom.t
 
   include GenDomainId(struct
@@ -445,8 +441,11 @@ and const_status m c =
 
   (** Entry point of abstraction evaluations *)
   let eval exp man flow = 
+    (* let () = Debug.debug ~channel:"eval" "evaluating %a" pp_expr exp in   *)
     match ekind exp with 
     | E_ffi_call (f, args) -> eval_ffi_primtive f args exp.erange man flow |> OptionExt.return
+    | E_c_deref e -> 
+      let () = Debug.debug ~channel:"eval" "deref %a" pp_expr e in None
     | _ -> None
 
   (** {2 Handler of queries} *)

@@ -28,7 +28,7 @@
                     // // // C memory model
                     // // "c.memory.variable_length_array",
                     "c.memory.aggregates",
-                    // "c.memory.protection",
+                    "c.runtime.status_protection",
                     // "universal.heap.recency",
                     {
                         "compose": [
@@ -37,9 +37,6 @@
                                 "semantic": "C/Scalar",
                                 "switch": [
                                     "c.memory.runtime",
-                                    {
-                                        "nonrel": "c.runtime.status"
-                                    },
                                     "c.memory.scalars.pointer",
                                     "c.memory.scalars.machine_numbers"
                                 ]
