@@ -116,7 +116,7 @@ struct
  
   (* S(&v) *)
   let status_addr_of_var m var : Stat.t = 
-    let () = Debug.debug ~channel:"status" "status of &%a" pp_var var in
+    (* let () = Debug.debug ~channel:"status" "status of &%a" pp_var var in *)
     match vkind var with 
     | V_c_stack_var _ -> Nbt Untracked
     | V_cvar _ -> Nbt Untracked
@@ -159,7 +159,8 @@ struct
     match ekind e with 
     | E_var (v, _) -> status_addr_of_var m v
     | _ -> failwith "support only computing the status of the address of variables"
-  and deref_status m e : Stat.t = (* FIXME: this is still broken, *) expr_status m e
+  and deref_status m e : Stat.t = failwith "this is broken. fix it "
+  (* FIXME: this is still broken, expr_status m e *)
   and cast_status m e c : Stat.t = expr_status m e 
 
 
