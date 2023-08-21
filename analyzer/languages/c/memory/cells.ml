@@ -1105,12 +1105,6 @@ struct
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow |>
       add_cell c range man
-    | { base_kind = Addr v; } ->
-      let () = Debug.debug ~channel:"declare" "adding address %a" pp_addr v  in
-      let c = mk_cell b Z.zero (T_c_integer C_signed_long) in
-      add_base b man flow |>
-      add_cell c range man
-
     | _ ->
       add_base b man flow |>
       Post.return
