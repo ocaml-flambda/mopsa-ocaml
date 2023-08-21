@@ -500,7 +500,7 @@ and const_status m c =
       eval_update_runtime_lock range true man flow 
     | "_ffi_release_lock", [] -> 
       eval_update_runtime_lock range false man flow
-    | "_ffi_fresh_value_pointer", [] ->
+    | "_ffi_fresh_value_ptr", [] ->
       eval_fresh_pointer range man flow
     | _, _ -> failwith (Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args) 
 

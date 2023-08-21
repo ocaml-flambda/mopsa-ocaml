@@ -111,7 +111,7 @@ let _ =
       "_ffi_release_lock";
       "_ffi_assert_alive";
       "_ffi_assert_locked";
-      "_ffi_fresh_value_pointer";
+      "_ffi_fresh_value_ptr";
 
       "__builtin_isfinite";
       "__builtin_isnormal";
