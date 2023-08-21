@@ -32,7 +32,7 @@ open Common.Alarms
 open Value
 open Stubs.Ast (* for the printing functions *)
 
-
+(* runtime addresses *)
 type addr_kind +=
   | A_runtime_resource
 
@@ -56,8 +56,38 @@ let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
              | _ -> default ak)
 
 
-(* open Status *)
+(* runtime variables, for dynamically allocated addresses *)
+type var_kind +=
+  | V_ffi_ptr of addr
+           
+let pp_ffi_var_addr fmt addr =
+  Format.fprintf fmt "var⦃%a⦄" pp_addr addr
+           
+let () =
+  register_var {
+    print = (fun next fmt v ->
+        match v.vkind with
+        | V_ffi_ptr addr -> pp_ffi_var_addr fmt addr
+        | _ -> next fmt v
+      );
 
+      compare = (fun next v1 v2 ->
+          match v1.vkind, v2.vkind with
+          | V_ffi_ptr a1, V_ffi_ptr a2 -> compare_addr a1 a2
+          | _ -> next v1 v2
+        );
+    }
+  
+let mk_ffi_var addr typ =
+  let name = Format.asprintf "var%s⦄" (addr_uniq_name addr) in
+  mkv name (V_ffi_ptr addr) typ
+
+let mk_ffi_var_expr addr ?(mode=None) ?(typ=T_c_integer C_signed_long) range =
+  let v = mk_ffi_var addr typ in
+  mk_var v ~mode range
+
+
+(* runtime checks *)
 type check +=  
 | CHK_FFI_LIVENESS_VALUE 
 | CHK_FFI_RUNTIME_LOCK
@@ -340,7 +370,7 @@ and const_status m c =
   (** ====================== *)
   let eval_mark_alive range exp man flow =
     let (m, l) = get_env T_cur man flow in 
-    match ekind exp with 
+    match ekind (remove_casts exp) with 
     | E_var (var, _) ->  
       let m' = update_status var (Stat.embed Alive) m in 
       let flow = set_env T_cur (m', l) man flow in
@@ -379,14 +409,14 @@ and const_status m c =
 
   let eval_assert_valid exp man flow = 
     let (m, l) = get_env T_cur man flow in 
-    match ekind exp with 
+    match ekind (remove_casts exp) with 
     | E_var (var, _) -> eval_assert_valid_var var m exp man flow
     | _ -> failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
   
 
   let eval_register_root range exp man flow =
     let (m, l) = get_env T_cur man flow in 
-    match ekind exp with 
+    match ekind (remove_casts exp) with 
     | E_var (var, _) -> 
       begin match Map.find_opt var m with
       | Some (_, Nbt Rooted) -> 
@@ -420,11 +450,22 @@ and const_status m c =
       Eval.singleton (mk_unit range) flow
 
   let eval_update_runtime_lock range new_state man flow =
-    let (m, l): _ * Lock.t = get_env T_cur man flow in 
+  let (m, l): _ * Lock.t = get_env T_cur man flow in 
     let l' = (if new_state then Lock.embed Locked else Lock.embed Unlocked) in
     let flow = set_env T_cur (m, l') man flow in      
     Eval.singleton (mk_unit range) flow
 
+
+    
+  let eval_fresh_pointer range man flow =
+    man.eval (mk_alloc_addr A_runtime_resource ~mode:STRONG range) flow >>$ fun addr flow -> 
+    match ekind addr with 
+    | E_addr (a, _) -> 
+      let val_var = (mk_ffi_var_expr a range) in
+      (* man.exec (mk_add addr range) flow >>% fun flow -> *)
+      man.exec (mk_add val_var range) flow >>% fun flow ->
+      Cases.singleton (mk_c_address_of val_var range) flow
+    | _ -> failwith "failed to allocate an address"
 
 
 
@@ -439,18 +480,6 @@ and const_status m c =
       eval_ffi_primtive_args args man flow >>$ fun args flow ->
       Cases.singleton (arg :: args) flow
 
-
-  let eval_fresh_pointer range man flow =
-    man.eval (mk_alloc_addr A_runtime_resource range) flow >>$ fun addr flow -> 
-    match ekind addr with 
-    | E_addr (a, _) -> 
-      (* let base = mk_addr_base a in  *)
-      man.exec (mk_add addr range) flow >>% fun flow ->
-      man.eval (mk_c_address_of addr range) flow >>$ fun expr flow ->
-      man.exec (mk_assign addr (mk_top (T_c_integer C_signed_long) range) range) flow >>% fun flow ->
-      let () = Debug.debug ~channel:"eval" "check %a" pp_expr expr in
-      Cases.singleton (mk_zero range) flow
-    | _ -> failwith "failed to allocate an address"
        
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow -> 
@@ -471,7 +500,7 @@ and const_status m c =
       eval_update_runtime_lock range true man flow 
     | "_ffi_release_lock", [] -> 
       eval_update_runtime_lock range false man flow
-    | "_ffi_fresh_pointer", [] ->
+    | "_ffi_fresh_value_pointer", [] ->
       eval_fresh_pointer range man flow
     | _, _ -> failwith (Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args) 
 
