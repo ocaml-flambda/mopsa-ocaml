@@ -34,29 +34,6 @@ open Top
 open Framework.Lattices.Partial_inversible_map
 
 
-module Status =
-struct
-  type t = 
-    Untracked | Active | Stale
-
-  let compare a b =
-    match a, b with 
-    | Untracked, Untracked -> 0
-    | Active, Active -> 0
-    | Stale, Stale -> 0
-    (* FIXME: This is the MOPSA standard, but does not seem great. Same below. *)
-    | _, _ -> compare a b 
-
-
-  let to_string s = 
-    match s with
-    | Untracked -> "untracked"
-    | Active -> "active"
-    | Stale -> "stale"
-    
-  let print printer b = pp_string printer (to_string b)
-end
-
 module Roots =
 struct
   type t = 

@@ -31,7 +31,7 @@ open Common
 open Common.Base
 open Common.Points_to
 open Common.Alarms
-
+open Common.Runtime
 
 module Domain =
 struct
@@ -167,9 +167,16 @@ struct
     Post.return flow  *)
 
 
-  let check_var_access var man flow =
-    let () = Debug.debug ~channel:"eval" "checking %a" pp_var var in
-    Post.return flow 
+  let check_var_access var range man flow =
+    resolve_status var man flow >>$ fun status flow ->
+    match status with 
+    | BOT | Nbt Untracked -> Post.return flow 
+    | Nbt Active -> 
+      let flow = safe_ffi_value_liveness_check range man flow in 
+      Post.return flow
+    | TOP | Nbt Stale ->
+      let flow = raise_ffi_inactive_value (mk_var var range) man flow in 
+      Post.return flow  
 
  (* evaluate a pointer to its points-to base *without dereferencing it* *)
  let eval_pointer expr man flow =
@@ -180,7 +187,7 @@ struct
   | Some (AddrOf (base, expr, mode)) ->
     Cases.singleton (P_block (base, expr, mode)) flow
   | Some (Eval (var, mode, offset)) -> 
-    check_var_access var man flow >>% fun flow ->
+    check_var_access var expr.erange man flow >>% fun flow ->
     let bin = mk_binop (mk_var var expr.erange) (O_plus) offset expr.erange in
     resolve_pointer bin man flow
   | Some (Invalid) -> Cases.singleton (P_invalid) flow
