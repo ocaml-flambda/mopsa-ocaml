@@ -280,8 +280,7 @@ type constant +=
 
   | C_c_invalid
   (** Invalid pointer value *)
-  
-  | C_ffi_alive_value
+
 
 
 type expr_kind +=
@@ -964,9 +963,6 @@ let mk_c_invalid_pointer range =
   mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
 
 
-let mk_ffi_alive_value range =
-    mk_constant C_ffi_alive_value ~etyp:(T_c_pointer T_c_void) range
-  
 
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)

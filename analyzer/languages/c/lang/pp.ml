@@ -144,7 +144,6 @@ let () =
       | C_c_character(c, k) -> fprintf fmt "%a'\\x%s'" pp_character_kind k (Z.format "%X" c)
       | C_c_string(s, k) -> fprintf fmt "%a\"%s\"" pp_character_kind k (String.escaped s)
       | C_c_invalid -> fprintf fmt "INVALID"
-      | C_ffi_alive_value -> fprintf fmt "<alive>"
       | _ -> next fmt c
     );
   register_operator_pp (fun next fmt op ->

@@ -140,7 +140,7 @@ struct
 
 
   (* We rewrite accesses [e] -> * (& e) when e is an l-value 
-      and make sure that &e is actually alive when we attempt to access it. *)
+      and make sure that &e is actually active when we attempt to access it. *)
   let eval_lval_access lval man flow =
     let ptr = mk_c_address_of lval lval.erange in
     let () = Debug.debug ~channel:"eval" "original %a" pp_expr ptr in
@@ -189,7 +189,7 @@ struct
 
 
   (* We rewrite accesses [e] -> * (& e) when e is an l-value 
-     and make sure that &e is actually alive when we attempt to access it. *)
+     and make sure that &e is actually active when we attempt to access it. *)
   let eval_lval_access lval man flow =
     let ptr = mk_c_address_of lval lval.erange in
     (* we simplify the pointer to something without calls *)

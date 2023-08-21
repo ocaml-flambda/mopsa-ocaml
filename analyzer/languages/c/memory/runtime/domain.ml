@@ -103,7 +103,7 @@ let () =
     )
 
 type alarm_kind += 
-  | A_ffi_non_alive_value of expr
+  | A_ffi_non_active_value of expr
   | A_ffi_double_root of expr
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
@@ -113,7 +113,7 @@ let () =
   register_alarm {
     check = (fun next alarm -> 
       match alarm with
-      | A_ffi_non_alive_value e -> 
+      | A_ffi_non_active_value e -> 
         CHK_FFI_LIVENESS_VALUE
       | A_ffi_runtime_unlocked ->
         CHK_FFI_RUNTIME_LOCK
@@ -122,7 +122,7 @@ let () =
       | a -> next a);
     compare = (fun next a1 a2 -> 
       match a1, a2 with
-      | A_ffi_non_alive_value e1, A_ffi_non_alive_value e2 -> compare_expr e1 e2
+      | A_ffi_non_active_value e1, A_ffi_non_active_value e2 -> compare_expr e1 e2
       | A_ffi_runtime_unlocked, A_ffi_runtime_unlocked -> 0
       | A_ffi_double_root e1, A_ffi_double_root e2 -> compare_expr e1 e2
       | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
@@ -131,8 +131,8 @@ let () =
     );
     print = (fun next fmt a -> 
       match a with 
-      | A_ffi_non_alive_value e -> 
-        Format.fprintf fmt "'%a' is not alive at this point" (Debug.bold pp_expr) e
+      | A_ffi_non_active_value e -> 
+        Format.fprintf fmt "'%a' is not active at this point" (Debug.bold pp_expr) e
       | A_ffi_double_root e -> 
         Format.fprintf fmt "'%a' is already registered as a root" (Debug.bold pp_expr) e
       | A_ffi_non_variable_root e -> 
@@ -150,7 +150,7 @@ let () =
 
 let raise_ffi_inactive_value ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_non_alive_value exp) cs exp.erange in
+  let alarm = mk_alarm (A_ffi_non_active_value exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
     
 let raise_ffi_runtime_unlocked ?(bottom=true) range man flow =
@@ -300,21 +300,17 @@ and binop_status m op e1 e2 : Stat.t =
   | _, BOT -> BOT
   | TOP, _ -> TOP
   | _, TOP -> TOP
-  | Nbt Collected, _ -> Nbt Collected
-  | _, Nbt Collected -> Nbt Collected
-  | Nbt Alive, Nbt Alive -> Nbt Alive (* what operation would even make sense here? *)
-  | Nbt Alive, Nbt Untracked -> Nbt Alive
-  | Nbt Untracked, Nbt Alive -> Nbt Alive
+  | Nbt Stale, _ -> Nbt Stale
+  | _, Nbt Stale -> Nbt Stale
+  | Nbt Active, Nbt Active -> Nbt Active (* what operation would even make sense here? *)
+  | Nbt Active, Nbt Untracked -> Nbt Active
+  | Nbt Untracked, Nbt Active -> Nbt Active
   | Nbt Untracked, Nbt Untracked -> Nbt Untracked
 and unop_status m op e : Stat.t = expr_status m e
 and addr_of_status m e : Stat.t = expr_status m e
 and deref_status m e : Stat.t = expr_status m e
 and cast_status m e c : Stat.t = expr_status m e 
-and const_status m c = 
-  match c with 
-  | C_ffi_alive_value -> Nbt Alive 
-  | _ -> Nbt Untracked
-
+and const_status m c = Nbt Untracked
 
   let exec_update var expr man flow = 
     let (m, l) = get_env T_cur man flow in
@@ -332,7 +328,7 @@ and const_status m c =
     let status = expr_status m arg in 
     begin match status with 
     | Nbt Untracked -> Post.return flow
-    | Nbt Alive -> Post.return flow (* we allow for now to pass alive values to external functions *)
+    | Nbt Active -> Post.return flow (* we allow for now to pass active values to external functions *)
     | _ -> 
       let () = Debug.debug ~channel:"extcall" "status %s" (Stat.to_string status) in
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
@@ -368,18 +364,18 @@ and const_status m c =
 
   (** {2 FFI function evaluation} *)
   (** ====================== *)
-  let eval_mark_alive range exp man flow =
+  let eval_mark_active range exp man flow =
     let (m, l) = get_env T_cur man flow in 
     match ekind (remove_casts exp) with 
     | E_var (var, _) ->  
-      let m' = update_status var (Stat.embed Alive) m in 
+      let m' = update_status var (Stat.embed Active) m in 
       let flow = set_env T_cur (m', l) man flow in
       Eval.singleton (mk_unit range) flow
-    | _ -> failwith (Format.asprintf "attempting to mark the expression %a alive, which is not a variable" pp_expr exp)
+    | _ -> failwith (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp)
 
   let eval_garbage_collect range man flow =
     let (m, l)  = get_env T_cur man flow in 
-    let upd_set (s, r) = if Stat.is_const s Alive && not (Root.is_const r Rooted) then (Stat.embed Collected, r) else (s, r) in 
+    let upd_set (s, r) = if Stat.is_const s Active && not (Root.is_const r Rooted) then (Stat.embed Stale, r) else (s, r) in 
     let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur (m', l) man flow in
     let () = Debug.debug ~channel:"runtime" "garbage collect" in
@@ -388,17 +384,16 @@ and const_status m c =
   let eval_assert_valid_var var m exp man flow =
     let flow = match Map.find_opt var m with
     | Some (BOT, _) -> flow 
-    | Some (Nbt Alive, _) -> 
+    | Some (Nbt Active, _) -> 
       let flow = safe_ffi_value_liveness_check exp.erange man flow in 
       flow
-    | Some (Nbt Collected, _) | Some (Nbt Untracked, _) | None -> 
+    | Some (Nbt Stale, _) | Some (Nbt Untracked, _) | None -> 
       let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
       flow
     | Some (TOP, _) -> 
       let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
       flow
     in 
-      let () = Debug.debug ~channel:"runtime" "garbage collect" in
       Eval.singleton (mk_unit exp.erange) flow
     
 
@@ -425,8 +420,8 @@ and const_status m c =
       | Some (Nbt Untracked, _) ->     
         let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
         Eval.singleton (mk_unit range) flow
-      | Some (Nbt Alive, Nbt NotRooted) ->
-        let m' = Map.add var (Nbt Alive, Root.embed Rooted) m in 
+      | Some (Nbt Active, Nbt NotRooted) ->
+        let m' = Map.add var (Nbt Active, Root.embed Rooted) m in 
         let flow = set_env T_cur (m', l) man flow in      
         let flow = safe_ffi_roots_check exp.erange man flow in 
         Eval.singleton (mk_unit range) flow
@@ -486,13 +481,13 @@ and const_status m c =
     match f, args with 
     | "_ffi_garbage_collect", [] -> 
       eval_garbage_collect range man flow 
-    | "_ffi_mark_alive_value", [e] -> 
-      eval_mark_alive range e man flow
-    | "_ffi_mark_alive_ptr", [e] -> 
-      eval_mark_alive range e man flow
+    | "_ffi_mark_active_value", [e] -> 
+      eval_mark_active range e man flow
+    | "_ffi_mark_active_ptr", [e] -> 
+      eval_mark_active range e man flow
     | "_ffi_register_root", [e] -> 
       eval_register_root range e man flow
-    | "_ffi_assert_alive", [e] -> 
+    | "_ffi_assert_active", [e] -> 
       eval_assert_valid e man flow
     | "_ffi_assert_locked", [] -> 
       eval_assert_runtime_lock range man flow

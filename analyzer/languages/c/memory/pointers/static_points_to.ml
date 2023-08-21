@@ -80,9 +80,6 @@ let rec eval_opt exp : static_points_to option =
   | E_constant(C_c_invalid) ->
     Invalid |> OptionExt.return
 
-  | E_constant(C_ffi_alive_value) ->
-      Top |> OptionExt.return
-
   | E_constant(C_top t) when is_c_pointer_type t ->
     Top |> OptionExt.return
 
