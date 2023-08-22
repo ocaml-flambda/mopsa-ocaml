@@ -90,8 +90,10 @@ struct
 
 
   let update_status var status' map = 
-    let (_, roots) = Map.find var map in
-    Map.add var (status', roots) map
+    match Map.find_opt var map with 
+    | None -> Map.add var (status', Nbt NotRooted) map
+    | Some (_, roots) -> Map.add var (status', roots) map
+    
 
   (** {2 Initialization} *)
   (** ================== *)
@@ -285,13 +287,48 @@ and status_deref man flow e range =
 
   (** {2 FFI function evaluation} *)
   (** ====================== *)
-  let eval_mark_active range exp man flow =
+  let eval_block_as_var base off mode typ range man flow = 
+    let lval = mk_lval base off typ mode range in 
+    man.eval lval flow >>$ fun exp flow -> 
+    match ekind exp with 
+    | E_var (v, _) -> Cases.singleton (Some v) flow 
+    | _ -> Cases.singleton None flow 
+
+  let eval_deref_to_var exp man flow = 
+    resolve_pointer exp man flow >>$ fun ptr flow -> 
+    match ptr with 
+    | P_block (base, off, mo) ->
+      eval_block_as_var base off mo ffi_value_typ exp.erange man flow 
+    | P_null | P_invalid | P_top | P_fun _ ->
+      Cases.singleton None flow 
+
+  let mark_var_active var range man flow = 
     let (m, l) = get_env T_cur man flow in
-    (* let () = Debug.debug ~channel:"status" "mark active %a" pp_expr exp in   *)
+    let m' = update_status var (Stat.embed Active) m in 
+    let flow = set_env T_cur (m', l) man flow in
+    Post.return flow 
+
+
+
+
+
+
+
+  let eval_mark_active_contents exp man flow = 
+    eval_deref_to_var exp man flow >>$ fun var flow ->
+    begin match var with 
+    | None -> 
+      let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression *%a active, which does not evaluate to a variable" pp_expr exp) man flow in 
+      Cases.empty flow
+    | Some v -> 
+      mark_var_active v exp.erange man flow >>% fun flow -> 
+      Eval.singleton (mk_unit exp.erange) flow
+    end
+
+  let eval_mark_active_pointer range exp man flow =
     match ekind (remove_casts exp) with 
     | E_var (var, _) ->  
-      let m' = update_status var (Stat.embed Active) m in 
-      let flow = set_env T_cur (m', l) man flow in
+      mark_var_active var range man flow >>% fun flow ->
       Eval.singleton (mk_unit range) flow
     | _ -> 
       let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp) man flow in 
@@ -335,29 +372,35 @@ and status_deref man flow e range =
       Cases.empty flow
 
 
-  let eval_register_root range exp man flow =
+  let exec_register_root_var var range man flow = 
     let (m, l) = get_env T_cur man flow in 
-    match ekind (remove_casts exp) with 
-    | E_var (var, _) -> 
-      begin match Map.find_opt var m with
-      | Some (_, Nbt Rooted) -> 
-        let flow = raise_ffi_double_root ~bottom:false exp man flow in
-        Eval.singleton (mk_unit range) flow
-      | Some (Nbt Untracked, _) ->     
-        let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
-        Eval.singleton (mk_unit range) flow
-      | Some (Nbt Active, Nbt NotRooted) ->
-        let m' = Map.add var (Nbt Active, Root.embed Rooted) m in 
-        let flow = set_env T_cur (m', l) man flow in      
-        let flow = safe_ffi_roots_check exp.erange man flow in 
-        Eval.singleton (mk_unit range) flow
-      | _ -> 
-        let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
-        Eval.singleton (mk_unit range) flow
-      end
+    let vexp = (mk_var var range) in
+    match Map.find_opt var m with
+    | Some (_, Nbt Rooted) -> 
+      let flow = raise_ffi_double_root ~bottom:false vexp man flow in
+      Post.return flow 
+    | Some (Nbt Untracked, _) ->     
+      let flow = raise_ffi_inactive_value ~bottom:true vexp man flow in
+      Post.return flow 
+    | Some (Nbt Active, Nbt NotRooted) ->
+      let m' = Map.add var (Nbt Active, Root.embed Rooted) m in 
+      let flow = set_env T_cur (m', l) man flow in      
+      let flow = safe_ffi_roots_check range man flow in 
+      Post.return flow 
     | _ -> 
+      let flow = raise_ffi_rooting_failed ~bottom:true vexp man flow in
+      Post.return flow 
+
+  let eval_register_root range exp man flow = 
+    eval_deref_to_var exp man flow >>$ fun var flow -> 
+    match var with 
+    | None -> 
       let flow = raise_ffi_rooting_failed ~bottom:true exp man flow in
       Eval.singleton (mk_unit range) flow
+    | Some v -> 
+      exec_register_root_var v exp.erange man flow >>% fun flow -> 
+      Eval.singleton (mk_unit exp.erange) flow
+    
     
 
   let eval_assert_runtime_lock range man flow =
@@ -404,10 +447,10 @@ and status_deref man flow e range =
     match f, args with 
     | "_ffi_garbage_collect", [] -> 
       eval_garbage_collect range man flow 
-    | "_ffi_mark_active_value", [e] -> 
-      eval_mark_active range e man flow
+    | "_ffi_mark_active_contents", [e] -> 
+      eval_mark_active_contents e man flow
     | "_ffi_mark_active_ptr", [e] -> 
-      eval_mark_active range e man flow
+      eval_mark_active_pointer range e man flow
     | "_ffi_register_root", [e] -> 
       eval_register_root range e man flow
     | "_ffi_assert_active", [e] -> 

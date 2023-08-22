@@ -18,6 +18,10 @@ let () = register_domain_option "c.iterators.program" {
 
 
 
+(* the type of values *)
+let ffi_value_typ = T_c_integer C_signed_long
+
+
 (* Runtime Status, shared accross domains *)
 module Status =
 struct
@@ -96,7 +100,7 @@ let mk_ffi_var addr typ =
   let name = Format.asprintf "var%s⦄" (addr_uniq_name addr) in
   mkv name (V_ffi_ptr addr) typ
 
-let mk_ffi_var_expr addr ?(mode=None) ?(typ=T_c_integer C_signed_long) range =
+let mk_ffi_var_expr addr ?(mode=None) ?(typ=ffi_value_typ) range =
   let v = mk_ffi_var addr typ in
   mk_var v ~mode range
 
