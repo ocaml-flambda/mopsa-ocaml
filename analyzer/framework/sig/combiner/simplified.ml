@@ -106,14 +106,19 @@ struct
        else
          f stmt (simplified_man man flow) (Flow.get_ctx flow) a |>
          OptionExt.lift @@ fun a' ->
-         set_env T_cur a' man flow |>
-         Post.return |>
-         Cases.map_effects (fun effects ->
-             man.set_effects (
-               man.get_effects effects |>
-               add_stmt_to_teffect stmt
-             ) effects
-           )
+         let post =
+           set_env T_cur a' man flow |>
+           Post.return
+         in
+         if are_effects_enabled () then
+           post |> Cases.map_effects (fun effects ->
+               man.set_effects (
+                 man.get_effects effects |>
+                 add_stmt_to_teffect stmt
+               ) effects
+             )
+         else
+           post
     )
 
   let eval domains exp man flow = None

@@ -53,14 +53,17 @@ struct
 
     (* Add stmt to the effects of the domain *)
     let exec stmt man flow =
-      I.exec stmt man flow |>
-      OptionExt.lift @@ fun res ->
-      Cases.map_effects (fun effects ->
-          man.set_effects (
-            man.get_effects effects |>
-            add_stmt_to_teffect stmt
-          ) effects
-        ) res
+      if are_effects_enabled () then
+        I.exec stmt man flow |>
+        OptionExt.lift @@ fun res ->
+        Cases.map_effects (fun effects ->
+            man.set_effects (
+              man.get_effects effects |>
+              add_stmt_to_teffect stmt
+            ) effects
+          ) res
+      else
+        I.exec stmt man flow
 
     (* Remove duplicate evaluations *)
     let eval exp man flow =
