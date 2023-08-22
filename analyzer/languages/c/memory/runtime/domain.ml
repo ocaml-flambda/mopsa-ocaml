@@ -118,7 +118,7 @@ struct
 
  
   (* S(&v) *)
-  let status_addr_of_var man flow var = 
+  let status_addr_of_var man flow var range = 
     match vkind var with 
     | V_c_stack_var _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
     | V_cvar _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
@@ -126,7 +126,9 @@ struct
       Hence, it is fine to say that the FFI variable is untracked. Alternatively, it could copy 
       the status of the contents [status_var m v], which is untracked or possibly alive inside of loops.  *)
     | V_ffi_ptr _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
-    | _ -> failwith "unsupported variable kind for status"
+    | _ -> 
+      let flow = raise_or_fail_ffi_unsupported range (Format.asprintf "status(%a) unsupported for this variable kind" pp_var var) man flow in 
+      Cases.empty flow
 
   (* S(c) *)
   let status_const man flow const = 
@@ -150,8 +152,11 @@ struct
 
   let status_addr_of man flow e = 
     match ekind e with 
-    | E_var (v, _) -> status_addr_of_var man flow v
-    | _ -> failwith "support only computing the status of the address of variables"
+    | E_var (v, _) -> status_addr_of_var man flow v e.erange
+    | _ -> 
+      let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(&%a) unsupported for this expression; only variables supported" pp_expr e) man flow in 
+      Cases.empty flow
+      
 
   let status_cast man flow c s =
     Cases.singleton s flow
@@ -178,24 +183,28 @@ struct
     | E_c_cast (e,c)       -> 
       status_expr man flow e >>$ fun s flow ->      
       status_cast man flow c s
-    | _ -> failwith "unsupported status"
-  
+    | _ -> 
+      let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(%a) unsupported for this kind of expression" pp_expr e) man flow in 
+      Cases.empty flow
 and status_deref man flow e range = 
     match Static_points_to.eval_opt e with
-    | None | Some (Fun _) -> failwith (Format.asprintf "*%a is not supported" pp_expr e)
+    | None | Some (Fun _) -> 
+      let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(*%a) unsupported for this kind of expression" pp_expr e) man flow in 
+      Cases.empty flow
     | Some (Eval(v, _, _)) -> 
       (* NOTE: Thist state should be unreachable, because dereference is taken care of 
          by an earlier domain. However, in some corner cases we can actually still reach 
          this case. Since evaluation of [*e] has not succeeded, we simply return [T], 
          because we do not know the precise status. *)
-      let () = Debug.debug ~channel:"unreachable" "status of *%a in *%a unknown" pp_var v pp_expr e in 
+      let () = Debug.debug ~channel:"status" "status of *%a in *%a unknown" pp_var v pp_expr e in 
       Cases.singleton (TOP: Stat.t) flow
     | Some Null | Some Invalid | Some Top -> 
       Cases.singleton (Nbt Untracked: Stat.t) flow
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) -> 
       status_var man flow v 
     | Some (AddrOf ({ base_kind = Addr a; }, _, _)) -> 
-      failwith "Not supported."
+      let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(%a) unsupported for addresses" pp_addr a) man flow in 
+      Cases.empty flow
     | Some (AddrOf ({ base_kind = String _; }, _, _)) -> 
       Cases.singleton (Nbt Untracked: Stat.t) flow
 (* 
@@ -284,8 +293,10 @@ and status_deref man flow e range =
       let m' = update_status var (Stat.embed Active) m in 
       let flow = set_env T_cur (m', l) man flow in
       Eval.singleton (mk_unit range) flow
-    | _ -> failwith (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp)
-
+    | _ -> 
+      let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp) man flow in 
+      Cases.empty flow
+      
   let eval_garbage_collect range man flow =
     let (m, l)  = get_env T_cur man flow in 
     let upd_set (s, r) = if Stat.is_const s Active && not (Root.is_const r Rooted) then (Stat.embed Stale, r) else (s, r) in 
@@ -319,8 +330,10 @@ and status_deref man flow e range =
     let (m, l) = get_env T_cur man flow in 
     match ekind (remove_casts exp) with 
     | E_var (var, _) -> eval_assert_valid_var var m exp man flow
-    | _ -> failwith (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp)
-  
+    | _ -> 
+      let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp) man flow in 
+      Cases.empty flow
+
 
   let eval_register_root range exp man flow =
     let (m, l) = get_env T_cur man flow in 
@@ -372,7 +385,9 @@ and status_deref man flow e range =
       (* man.exec (mk_add addr range) flow >>% fun flow -> *)
       man.exec (mk_add val_var range) flow >>% fun flow ->
       Cases.singleton (mk_c_address_of val_var range) flow
-    | _ -> failwith "failed to allocate an address"
+    | _ ->
+      let flow = raise_or_fail_ffi_unsupported range (Format.asprintf "failed to allocate a fresh address") man flow in 
+      Cases.empty flow
 
 
   let rec eval_ffi_primtive_args args man flow =
@@ -405,10 +420,11 @@ and status_deref man flow e range =
       eval_update_runtime_lock range false man flow
     | "_ffi_fresh_value_ptr", [] ->
       eval_fresh_pointer range man flow
-    | _, _ -> failwith (Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args) 
-
-
-
+    | _, _ -> 
+      let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
+      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      Cases.empty flow
+      
 
   let eval_var_status var man flow =
     let (m, l) = get_env T_cur man flow in

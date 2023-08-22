@@ -7,6 +7,16 @@ open Base
 open Ast
 
 
+let ffi_silent_analysis = ref false
+let () = register_domain_option "c.iterators.program" {
+  key = "-silent-failure";
+  category="Runtime";
+  doc=" do not raise for undefined featurs but raise an alarm";
+  spec = ArgExt.Set ffi_silent_analysis;
+  default=""
+}
+
+
 
 (* Runtime Status, shared accross domains *)
 module Status =
@@ -96,6 +106,7 @@ type check +=
 | CHK_FFI_LIVENESS_VALUE 
 | CHK_FFI_RUNTIME_LOCK
 | CHK_FFI_ROOTS
+| CHK_FFI
 
 
 let () =
@@ -103,6 +114,7 @@ let () =
       | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime value liveness"     
       | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"     
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
+      | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
       | a -> next fmt a
     )
 
@@ -112,6 +124,7 @@ type alarm_kind +=
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
   | A_ffi_begin_end_roots 
+  | A_ffi_abort_analysis of string
 
 let () = 
   register_alarm {
@@ -123,6 +136,8 @@ let () =
         CHK_FFI_RUNTIME_LOCK
       | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  -> 
         CHK_FFI_ROOTS
+      | A_ffi_abort_analysis _ -> 
+        CHK_FFI
       | a -> next a);
     compare = (fun next a1 a2 -> 
       match a1, a2 with
@@ -131,6 +146,7 @@ let () =
       | A_ffi_double_root e1, A_ffi_double_root e2 -> compare_expr e1 e2
       | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
       | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
+      | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
       | _ -> next a1 a2 
     );
     print = (fun next fmt a -> 
@@ -145,6 +161,8 @@ let () =
         Format.fprintf fmt "runtime unlocked"
       | A_ffi_begin_end_roots -> 
         Format.fprintf fmt "Begin_roots/End_roots is deprecated" 
+      | A_ffi_abort_analysis s ->
+        Format.fprintf fmt "Analysis failed: %s" s  
       | a -> next fmt a
     ); 
     join = (fun next a1 a2 -> next a1 a2);
@@ -182,6 +200,19 @@ let raise_ffi_begin_end_roots range man flow =
   let alarm = mk_alarm (A_ffi_begin_end_roots) cs range in
   Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
           
+
+let raise_or_fail_ffi_unsupported range reason man flow =
+  if not !ffi_silent_analysis then 
+    failwith (Format.asprintf "failed with reason: %s" reason)
+  else
+    let cs = Flow.get_callstack flow in
+    let alarm = mk_alarm (A_ffi_abort_analysis reason) cs range in
+    Flow.raise_alarm alarm ~bottom:true ~warning:false man.lattice flow
+            
+
+
+
+
 
 (* safe checks *)
 let safe_ffi_value_liveness_check range man flow =
