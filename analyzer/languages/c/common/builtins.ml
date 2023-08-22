@@ -112,6 +112,8 @@ let _ =
       "_ffi_assert_active";
       "_ffi_assert_locked";
       "_ffi_fresh_value_ptr";
+      "_ffi_set_shape";
+      "_ffi_assert_shape";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

@@ -34,7 +34,7 @@ open Common.Static_points_to
 open Common.Runtime
 open Value
 open Stubs.Ast (* for the printing functions *)
-
+module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
 module Domain =
@@ -48,7 +48,8 @@ struct
   (** Map from variables to set of pointer values *)
   module Stat = Framework.Lattices.Const.Make(Status)
   module Root = Framework.Lattices.Const.Make(Roots)
-  module Val  = Framework.Lattices.Pair.Make(Stat)(Root)
+  module ShapeSet  = Framework.Lattices.Powerset.Make(Shape)
+  module Val  = Framework.Lattices.Pair.Make(Framework.Lattices.Pair.Make(Stat)(Root))(ShapeSet)
   module Map  = Framework.Lattices.Partial_map.Make(Var)(Val)
   module Lock = Framework.Lattices.Const.Make(RuntimeLock)
   module Dom  = Framework.Lattices.Pair.Make(Map)(Lock)
@@ -91,9 +92,20 @@ struct
 
   let update_status var status' map = 
     match Map.find_opt var map with 
-    | None -> Map.add var (status', Nbt NotRooted) map
-    | Some (_, roots) -> Map.add var (status', roots) map
+    | None -> Map.add var ((status', Nbt NotRooted), ShapeSet.singleton NonValue) map
+    | Some ((_, roots), shapes) -> Map.add var ((status', roots), shapes)  map
     
+
+  let lookup_status var map = 
+    match Map.find_opt var map with 
+    | None -> None 
+    | Some ((status, _), _) -> Some status 
+
+  let lookup_shapes var map =
+    match Map.find_opt var map with 
+    | None -> None 
+    | Some (_, sh) -> Some sh
+
 
   (** {2 Initialization} *)
   (** ================== *)
@@ -112,7 +124,7 @@ struct
   let status_var man flow var =
     let (m, l) = get_env T_cur man flow in
     match Map.find_opt var m with 
-    | Some (stat, rt) -> Cases.singleton stat flow
+    | Some ((stat, _), _) -> Cases.singleton stat flow
     | None -> 
       (* FIXME: for type var[size], var is not added to the domain *)
       let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var 
@@ -226,7 +238,7 @@ and status_deref man flow e range =
 
   let exec_add var man flow =
     let (m, l) = get_env T_cur man flow in
-    let m' = Map.add var (Stat.embed Untracked, Root.embed NotRooted) m in
+    let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), ShapeSet.singleton NonValue) m in
     let flow = set_env T_cur (m', l) man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Post.return flow 
@@ -336,22 +348,22 @@ and status_deref man flow e range =
       
   let eval_garbage_collect range man flow =
     let (m, l)  = get_env T_cur man flow in 
-    let upd_set (s, r) = if Stat.is_const s Active && not (Root.is_const r Rooted) then (Stat.embed Stale, r) else (s, r) in 
+    let upd_set ((s, r), shapes) = if Stat.is_const s Active && not (Root.is_const r Rooted) then ((Stat.embed Stale, r), shapes) else ((s, r), shapes) in 
     let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur (m', l) man flow in
     let () = Debug.debug ~channel:"runtime" "garbage collect" in
     Eval.singleton (mk_unit range) flow
 
   let eval_assert_valid_var var m exp man flow =
-    let flow = match Map.find_opt var m with
-    | Some (BOT, _) -> flow 
-    | Some (Nbt Active, _) -> 
+    let flow = match lookup_status var m with
+    | Some BOT -> flow 
+    | Some Nbt Active -> 
       let flow = safe_ffi_value_liveness_check exp.erange man flow in 
       flow
-    | Some (Nbt Stale, _) | Some (Nbt Untracked, _) | None -> 
+    | Some Nbt Stale | Some Nbt Untracked | None -> 
       let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
       flow
-    | Some (TOP, _) -> 
+    | Some TOP -> 
       let flow = raise_ffi_inactive_value ~bottom:false exp man flow in
       flow
     in 
@@ -376,14 +388,14 @@ and status_deref man flow e range =
     let (m, l) = get_env T_cur man flow in 
     let vexp = (mk_var var range) in
     match Map.find_opt var m with
-    | Some (_, Nbt Rooted) -> 
+    | Some ((_, Nbt Rooted), _) -> 
       let flow = raise_ffi_double_root ~bottom:false vexp man flow in
       Post.return flow 
-    | Some (Nbt Untracked, _) ->     
+    | Some ((Nbt Untracked, _), _) ->     
       let flow = raise_ffi_inactive_value ~bottom:true vexp man flow in
       Post.return flow 
-    | Some (Nbt Active, Nbt NotRooted) ->
-      let m' = Map.add var (Nbt Active, Root.embed Rooted) m in 
+    | Some ((Nbt Active, Nbt NotRooted), shapes) ->
+      let m' = Map.add var ((Nbt Active, Root.embed Rooted), shapes) m in 
       let flow = set_env T_cur (m', l) man flow in      
       let flow = safe_ffi_roots_check range man flow in 
       Post.return flow 
@@ -441,7 +453,76 @@ and status_deref man flow e range =
       eval_ffi_primtive_args args man flow >>$ fun args flow ->
       Cases.singleton (arg :: args) flow
 
-       
+  
+  let eval_number_exp_to_integer exp man flow = 
+    let kind_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query exp) flow in
+    match Itv.bounds_opt kind_itv with 
+    | Some l, Some r when Z.equal l r ->
+      Cases.singleton (Some l) flow 
+    | _ -> 
+      Cases.singleton None flow 
+
+  let shape_ident_to_shape id : ShapeSet.t option =
+    match Z.to_int id with 
+    | exception Z.Overflow -> None 
+    | 1 -> ShapeSet.singleton Immediate |> OptionExt.return
+    | 2 -> ShapeSet.singleton Block |> OptionExt.return
+    | 3 -> ShapeSet.singleton Double |> OptionExt.return
+    | 4 -> ShapeSet.singleton Int64 |> OptionExt.return
+    | 5 -> ShapeSet.singleton Int32 |> OptionExt.return
+    | 6 -> ShapeSet.singleton Nativeint |> OptionExt.return
+    | 7 -> ShapeSet.singleton String |> OptionExt.return
+    | 8 -> ShapeSet.join (ShapeSet.singleton Block) (ShapeSet.singleton Immediate) 
+      |> OptionExt.return
+    | 9 -> ShapeSet.singleton Bigarray |> OptionExt.return
+    | 10 -> ShapeSet.singleton Abstract |> OptionExt.return
+    | 11 -> ShapeSet.singleton Any |> OptionExt.return
+    | _ -> None
+
+
+  let eval_assert_shape_var var ss range man flow = 
+    let (m, l) = man.get T_cur flow in
+    match lookup_shapes var m with 
+    | None | Some TOP -> 
+      let msg = Format.asprintf "cannot determine shape of %a" pp_var var in
+      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      Cases.empty flow
+    | Some s when ShapeSet.mem Any s ->
+      Cases.singleton () flow 
+    | Some s ->
+      if ShapeSet.for_all (fun sh -> ShapeSet.mem sh ss) s 
+      then Cases.singleton () flow 
+      else 
+        let msg = Format.asprintf "shape mismatch" in
+        let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+        Cases.empty flow
+
+
+  let eval_assert_shape v sh range man flow =
+    match ekind (remove_casts v) with 
+    | E_var (v, _) ->
+      eval_number_exp_to_integer sh man flow >>$ fun sh' flow -> 
+      let shapeset = OptionExt.bind (fun x -> shape_ident_to_shape x) sh' in 
+      begin match shapeset with
+      | Some ss -> 
+        eval_assert_shape_var v ss range man flow >>% fun flow -> 
+        Eval.singleton (mk_unit range) flow
+      | None -> 
+        let msg = Format.asprintf "cannot turn %a into a shape" pp_expr sh in
+        let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+        Cases.empty flow
+      end
+    | _ -> 
+      let msg = Format.asprintf "cannot determine shape of %a" pp_expr v in
+      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      Cases.empty flow
+      
+
+
+
+
+
+
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow -> 
     match f, args with 
@@ -471,8 +552,8 @@ and status_deref man flow e range =
 
   let eval_var_status var man flow =
     let (m, l) = get_env T_cur man flow in
-    match Map.find_opt var m with
-    | Some (s, _) -> 
+    match lookup_status var m with
+    | Some s -> 
       Cases.singleton s flow
     | None -> 
       let () = Debug.debug ~channel:"status" "status of variable %a unknown" pp_var var in 
