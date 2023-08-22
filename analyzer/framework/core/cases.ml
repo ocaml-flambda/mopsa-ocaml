@@ -462,30 +462,58 @@ let bind_opt
     (f: 'r case -> 'a flow -> ('a,'s) cases option )
     (cases: ('a,'r) cases)
   : ('a,'s) cases option =
-  let ctx,ret =
-    Dnf.fold_bind
-      (fun ctx (case,flow) ->
-         let flow = Flow.set_ctx ctx flow in
-         let cases' =
-           match f case flow with
-           | None   -> not_handled flow
-           | Some c -> c
-         in
-         let ctx' = get_ctx cases' in
-         let cases'' = add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-                       concat_effects (get_case_effects case) in
-         ctx',cases''.cases
-      )
-      (get_ctx cases) cases.cases in
-  set_ctx ctx {cases with cases = ret} |>
-  OptionExt.return
+  match Dnf.to_list cases.cases with
+  | [[Result(_, effects, cleaners) as case, flow]]
+    when StmtSet.is_empty cleaners && 
+         (not (are_effects_enabled ()) || is_empty_teffect effects) ->
+    f case flow
+
+  | [[case, flow]] -> (
+      match f case flow with
+      | None -> None
+      | Some cases' ->
+        add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+        concat_effects (get_case_effects case) |>
+        Option.some
+    )
+  
+  | _ ->
+    let ctx,ret =
+      Dnf.fold_bind
+        (fun ctx (case,flow) ->
+           let flow = Flow.set_ctx ctx flow in
+           let cases' =
+             match f case flow with
+             | None   -> not_handled flow
+             | Some c -> c
+           in
+           let ctx' = get_ctx cases' in
+           let cases'' = add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+                         concat_effects (get_case_effects case) in
+           ctx',cases''.cases
+        )
+        (get_ctx cases) cases.cases in
+    set_ctx ctx {cases with cases = ret} |>
+    OptionExt.return
 
 
 let (>>=?) cases f = bind_opt f cases
 
 let bind f cases =
-  bind_opt (fun case flow -> Some (f case flow)) cases |>
-  OptionExt.none_to_exn
+  match Dnf.to_list cases.cases with
+  | [[Result(_, effects, cleaners) as case, flow]]
+    when StmtSet.is_empty cleaners && 
+         (not (are_effects_enabled ()) || is_empty_teffect effects) ->
+    f case flow
+
+  | [[case, flow]] ->
+    let cases' = f case flow in
+    add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
+    concat_effects (get_case_effects case)
+  
+  | _ ->
+    bind_opt (fun case flow -> Some (f case flow)) cases |>
+    OptionExt.none_to_exn
 
 let (>>=) cases f = bind f cases
 
@@ -495,13 +523,29 @@ let bind_result_opt
     (cases:('a,'r) cases)
   : ('a,'s) cases option
   =
-  bind_opt
-    (fun case flow ->
-       match case with
-       | Result (r,_,_)   -> f r flow
-       | Empty            -> Some (empty flow)
-       | NotHandled       -> Some (not_handled flow)
-    ) cases
+  match Dnf.to_list cases.cases with
+  | [[Result(r, effects, cleaners), flow]]
+    when StmtSet.is_empty cleaners && 
+         (not (are_effects_enabled ()) || is_empty_teffect effects) ->
+    f r flow
+
+  | [[Result(r, effects, cleaners), flow]] -> (
+      match f r flow with
+      | None -> None
+      | Some cases' ->
+        add_cleaners (StmtSet.elements cleaners) cases' |>
+        concat_effects effects |>
+        Option.some
+    )
+  
+  | _ ->
+    bind_opt
+      (fun case flow ->
+         match case with
+         | Result (r,_,_)   -> f r flow
+         | Empty            -> Some (empty flow)
+         | NotHandled       -> Some (not_handled flow)
+      ) cases
 
 
 let (>>$?) r f = bind_result_opt f r
@@ -512,8 +556,20 @@ let bind_result
     (cases:('a,'r) cases)
   : ('a,'s) cases
   =
-  bind_result_opt (fun r flow -> Some (f r flow)) cases |>
-  OptionExt.none_to_exn
+  match Dnf.to_list cases.cases with
+  | [[Result(r, effects, cleaners), flow]]
+    when StmtSet.is_empty cleaners && 
+         (not (are_effects_enabled ()) || is_empty_teffect effects) ->
+    f r flow
+
+  | [[Result(r, effects, cleaners), flow]] ->
+    let cases' = f r flow in
+    add_cleaners (StmtSet.elements cleaners) cases' |>
+    concat_effects effects
+  
+  | _ ->
+    bind_result_opt (fun r flow -> Some (f r flow)) cases |>
+    OptionExt.none_to_exn
 
 
 let (>>$) r f = bind_result f r
