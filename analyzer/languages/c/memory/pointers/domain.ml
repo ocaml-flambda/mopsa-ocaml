@@ -29,7 +29,7 @@ open Common
 open Common.Points_to
 open Common.Base
 open Common.Alarms
-open Static_points_to
+open Common.Static_points_to
 open Value
 open Stubs.Ast (* for the printing functions *)
 

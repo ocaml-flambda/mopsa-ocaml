@@ -30,7 +30,8 @@ open Common.Points_to
 open Common.Runtime
 open Common.Base
 open Common.Alarms
-(* open Common.Runtime *)
+open Common.Static_points_to
+open Common.Runtime
 open Value
 open Stubs.Ast (* for the printing functions *)
 
@@ -103,67 +104,100 @@ struct
   (** {2 Expression Status} *)
   (** ==================== *)
   
+  let pp_status fmt (s: Stat.t) = Format.pp_print_string fmt (Stat.to_string s)
+ 
   (* S(v) *)
-  let status_var m var : Stat.t = 
+  let status_var man flow var =
+    let (m, l) = get_env T_cur man flow in
     match Map.find_opt var m with 
-    | Some (stat, rt) -> stat
+    | Some (stat, rt) -> Cases.singleton stat flow
     | None -> 
       (* FIXME: for type var[size], var is not added to the domain *)
       let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var 
-      in Nbt Untracked
+      in Cases.singleton (Nbt Untracked: Stat.t) flow
 
-  let pp_status fmt (s: Stat.t) = Format.pp_print_string fmt (Stat.to_string s)
  
   (* S(&v) *)
-  let status_addr_of_var m var : Stat.t = 
-    (* let () = Debug.debug ~channel:"status" "status of &%a" pp_var var in *)
+  let status_addr_of_var man flow var = 
     match vkind var with 
-    | V_c_stack_var _ -> Nbt Untracked
-    | V_cvar _ -> Nbt Untracked
+    | V_c_stack_var _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
+    | V_cvar _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
     (* NOTE: This should only be called right after creating a fresh variable for the address.
       Hence, it is fine to say that the FFI variable is untracked. Alternatively, it could copy 
       the status of the contents [status_var m v], which is untracked or possibly alive inside of loops.  *)
-    | V_ffi_ptr _ -> Nbt Untracked
+    | V_ffi_ptr _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
     | _ -> failwith "unsupported variable kind for status"
 
   (* S(c) *)
-  let status_const m const : Stat.t = 
-    Nbt Untracked
+  let status_const man flow const = 
+    Cases.singleton (Nbt Untracked: Stat.t) flow
 
-  let rec expr_status m e : Stat.t = 
+  let status_binop man flow op (s1: Stat.t) (s2: Stat.t) = 
+    match s1, s2 with 
+    | BOT, _ | _, BOT -> Cases.singleton (BOT: Stat.t) flow
+    | TOP, _ | _, TOP -> Cases.singleton (TOP: Stat.t) flow
+    | Nbt Stale, _ | _, Nbt Stale -> 
+      Cases.singleton (Nbt Stale: Stat.t) flow
+    | Nbt Active, Nbt Active
+    | Nbt Active, Nbt Untracked 
+    | Nbt Untracked, Nbt Active -> 
+      Cases.singleton (Nbt Active: Stat.t) flow
+    | Nbt Untracked, Nbt Untracked -> 
+      Cases.singleton (Nbt Untracked: Stat.t) flow
+
+  let status_unop man flow op s = 
+    Cases.singleton s flow 
+
+  let status_addr_of man flow e = 
     match ekind e with 
-    | E_var (var, _)       -> status_var m var
-    | E_constant c         -> const_status m c
-    | E_binop (op, e1, e2) -> binop_status m op e1 e2
-    | E_unop(op, e)        -> unop_status m op e
-    | E_addr(a, mode)      -> TOP
-    | E_c_address_of e     -> addr_of_status m e
-    | E_c_deref e          -> deref_status m e
-    | E_c_cast (e,c)       -> cast_status m e c
-    | _ -> failwith "unsupported status"
-      and const_status m c = Nbt Untracked
-  and binop_status m op e1 e2 : Stat.t = 
-    match expr_status m e1, expr_status m e2 with 
-    | BOT, _ -> BOT
-    | _, BOT -> BOT
-    | TOP, _ -> TOP
-    | _, TOP -> TOP
-    | Nbt Stale, _ -> Nbt Stale
-    | _, Nbt Stale -> Nbt Stale
-    | Nbt Active, Nbt Active -> Nbt Active (* what operation would even make sense here? *)
-    | Nbt Active, Nbt Untracked -> Nbt Active
-    | Nbt Untracked, Nbt Active -> Nbt Active
-    | Nbt Untracked, Nbt Untracked -> Nbt Untracked
-  and unop_status m op e : Stat.t = expr_status m e
-  and addr_of_status m e : Stat.t = 
-    match ekind e with 
-    | E_var (v, _) -> status_addr_of_var m v
+    | E_var (v, _) -> status_addr_of_var man flow v
     | _ -> failwith "support only computing the status of the address of variables"
-  and deref_status m e : Stat.t = failwith "this is broken. fix it "
-  (* FIXME: this is still broken, expr_status m e *)
-  and cast_status m e c : Stat.t = expr_status m e 
 
+  let status_cast man flow c s =
+    Cases.singleton s flow
 
+  let rec status_expr man flow e = 
+    match ekind e with 
+    | E_var (var, _)       -> 
+      status_var man flow var
+    | E_constant c         -> 
+      status_const man flow c
+    | E_binop (op, e1, e2) -> 
+      status_expr man flow e1 >>$ fun s1 flow -> 
+      status_expr man flow e2 >>$ fun s2 flow ->
+      status_binop man flow op s1 s2
+    | E_unop(op, e)        -> 
+      status_expr man flow e >>$ fun s flow ->
+      status_unop man flow op s
+    | E_addr(a, mode)      -> 
+      Cases.singleton (Nbt Untracked: Stat.t) flow
+    | E_c_address_of e     -> 
+      status_addr_of man flow e
+    | E_c_deref e          -> 
+      status_deref man flow e e.erange
+    | E_c_cast (e,c)       -> 
+      status_expr man flow e >>$ fun s flow ->      
+      status_cast man flow c s
+    | _ -> failwith "unsupported status"
+  
+and status_deref man flow e range = 
+    match Static_points_to.eval_opt e with
+    | None | Some (Fun _) -> failwith (Format.asprintf "*%a is not supported" pp_expr e)
+    | Some (Eval(v, _, _)) -> 
+      (* NOTE: Thist state should be unreachable, because dereference is taken care of 
+         by an earlier domain. However, in some corner cases we can actually still reach 
+         this case. Since evaluation of [*e] has not succeeded, we simply return [T], 
+         because we do not know the precise status. *)
+      let () = Debug.debug ~channel:"unreachable" "status of *%a in *%a unknown" pp_var v pp_expr e in 
+      Cases.singleton (TOP: Stat.t) flow
+    | Some Null | Some Invalid | Some Top -> 
+      Cases.singleton (Nbt Untracked: Stat.t) flow
+    | Some (AddrOf ({ base_kind = Var v; }, _, _)) -> 
+      status_var man flow v 
+    | Some (AddrOf ({ base_kind = Addr a; }, _, _)) -> 
+      failwith "Not supported."
+    | Some (AddrOf ({ base_kind = String _; }, _, _)) -> 
+      Cases.singleton (Nbt Untracked: Stat.t) flow
 (* 
   Will not compute status of the following expressions. 
   They should have been taken care of by previous iterators: 
@@ -195,24 +229,20 @@ struct
 
 
   let exec_update var expr man flow = 
+    status_expr man flow expr >>$ fun status flow -> 
     let (m, l) = get_env T_cur man flow in
-    let status = expr_status m expr in
     let m' = update_status var status m in
     let flow = set_env T_cur (m', l) man flow in
-    (* let () = Debug.debug ~channel:"status" "update %a <- %s; assiging %a" pp_var var (Stat.to_string status) pp_expr expr  in *)
     Post.return flow 
-
 
 
   let exec_check_ext_call_arg arg man flow = 
     let () = Debug.debug ~channel:"extcall" "checking %a" pp_expr arg in
-    let (m, l) = get_env T_cur man flow in
-    let status = expr_status m arg in 
+    status_expr man flow arg >>$ fun status flow ->
     begin match status with 
     | Nbt Untracked -> Post.return flow
     | Nbt Active -> Post.return flow (* we allow for now to pass active values to external functions *)
     | _ -> 
-      let () = Debug.debug ~channel:"extcall" "status %s" (Stat.to_string status) in
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
     end
 

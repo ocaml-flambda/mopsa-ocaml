@@ -6,3 +6,4 @@ module Quantified_offset = Quantified_offset
 module Scope_update = Scope_update
 module Soundness = Soundness
 module Runtime = Runtime
+module Static_points_to = Static_points_to

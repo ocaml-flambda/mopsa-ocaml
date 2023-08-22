@@ -180,7 +180,7 @@ struct
 
  (* evaluate a pointer to its points-to base *without dereferencing it* *)
  let eval_pointer expr man flow =
-  match Pointers.Static_points_to.eval_opt expr with 
+  match Common.Static_points_to.eval_opt expr with 
   | None -> panic_at expr.erange "evaluation of pointer expression %a not supported" pp_expr expr
   | Some (Null) -> Cases.singleton (P_null) flow
   | Some (Top) -> Cases.singleton (P_top) flow
