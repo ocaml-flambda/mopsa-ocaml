@@ -54,7 +54,7 @@ let parse_file
   in
 
   debug "Parsing %s, command '%s', target '%s', argument list %a" file command
-target_options.target_triple (ListExt.fprint ListExt.printer_list (fun ch s -> Format.fprintf ch "'%s'" s)) opts;
+    target_options.target_triple (ListExt.fprint ListExt.printer_list (fun ch s -> Format.fprintf ch "'%s'" s)) opts;
 
   let r = Clang_parser_cache.parse command target_options enable_cache file (Array.of_list opts)
   in

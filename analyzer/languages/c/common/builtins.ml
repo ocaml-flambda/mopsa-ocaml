@@ -97,8 +97,8 @@ let _ =
       "_mopsa_register_file_resource_at";
       "_mopsa_find_file_resource";
 
-      "error";
-      "error_at_line";
+      (* "error"; *)
+      (* "error_at_line"; *)
 
       "exit";
       "quick_exit";

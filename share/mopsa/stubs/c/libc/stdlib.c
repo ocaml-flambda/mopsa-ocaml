@@ -1128,23 +1128,19 @@ void qsort_r (void *__base, size_t __nmemb, size_t __size,
 
 /*$
  * requires: __x > INT_MIN;
- * ensures:  (__x >= 0 implies return == __x) and
- *           (__x < 0 implies return == -__x);
- */
+ * ensures: if __x >= 0 then return == __x else  return == -__x end;
+*/
 int abs (int __x);
 
 /*$
  * requires: __x > LONG_MIN;
- * ensures:  (__x >= 0 implies return == __x) and
- *           (__x < 0 implies return == -__x);
+ * ensures: if __x >= 0 then return == __x else  return == -__x end;
  */
 long int labs (long int __x);
 
-
 /*$
  * requires: __x > LLONG_MIN;
- * ensures:  (__x >= 0 implies return == __x) and
- *           (__x < 0 implies return == -__x);
+ * ensures: if __x >= 0 then return == __x else  return == -__x end;
  */
 long long int llabs (long long int __x);
 

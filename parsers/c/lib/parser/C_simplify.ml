@@ -92,7 +92,7 @@ let rec expr_one target range (t:typ) =
   | T_bitfield (t,_) ->
      expr_one target range t
   | T_enum u ->
-     expr_one target range (T_integer u.enum_integer_type)
+     expr_one target range (T_integer (match u.enum_integer_type with | Some s -> s | None -> assert false))
   | T_typedef d ->
      expr_one target range (fst d.typedef_def)
   | _ ->

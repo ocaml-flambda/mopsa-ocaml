@@ -608,7 +608,9 @@ let c_buf_enum_decl indent buf e =
   if e.enum_defined then
     bp buf "%senum %s { /* type: %s */\n%a%s};\n" indent
        e.enum_unique_name
-       (string_of_integer_type e.enum_integer_type)
+       (match e.enum_integer_type with
+        | None -> "None"
+        | Some s -> string_of_integer_type s)
        (bp_list f "") e.enum_values
        indent
   else

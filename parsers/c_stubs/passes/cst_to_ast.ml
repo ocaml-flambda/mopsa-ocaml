@@ -98,7 +98,7 @@ let rec unroll_type t =
   let open C_AST in
   match fst t with
   | T_typedef td -> unroll_type td.typedef_def
-  | T_enum e -> T_integer e.enum_integer_type, snd t
+  | T_enum e -> T_integer (match e.enum_integer_type with Some s -> s | None -> assert false), snd t
   | _ -> t
 
 let visit_qual q =
@@ -360,9 +360,9 @@ let binop_type range prj t1 t2 =
   | T_pointer p, T_array (e,_) when type_qual_compatible prj.proj_target p e -> t1
   | T_array (e,_), T_pointer p when type_qual_compatible prj.proj_target p e -> t2
 
-  | _ -> Exceptions.panic_at range "binop_type: unsupported case: %s and %s"
+  | _ -> Exceptions.warn_at range "binop_type: unsupported case: %s and %s"
            (C_print.string_of_type_qual t1)
-           (C_print.string_of_type_qual t2)
+           (C_print.string_of_type_qual t2); t1
 
  (* Integer promotions (C99 6.3.1.1) *)
 let integer_promotion prj (e: Ast.expr with_range) =
