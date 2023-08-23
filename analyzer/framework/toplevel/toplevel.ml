@@ -66,6 +66,8 @@ sig
 
   val init : program -> (t, t) man -> t flow
 
+  exception SysBreak of t flow
+
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
   val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
@@ -202,6 +204,8 @@ struct
   let enter_hook () = assert(not (inside_hook())); inside_hook_flag := true
   let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
 
+  exception SysBreak of Domain.t flow
+
   let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     let flow =
       if inside_hook () then
@@ -267,8 +271,8 @@ struct
         (Exceptions.PanicAtFrame(range, (Flow.get_callstack flow),msg, line))
         (Printexc.get_raw_backtrace())
 
-    | Sys.Break -> raise Sys.Break
-
+    | Sys.Break -> raise (SysBreak flow)
+    
     | Apron.Manager.Error exc ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
