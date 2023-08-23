@@ -609,13 +609,15 @@ struct
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
       let call_function (f: c_fundec) = 
         let value_typ = (T_c_integer (C_signed_long)) in
+        let range = f.c_func_name_range in 
         let tmp_active_var = mktmp ~typ:value_typ () in 
-        let tmp_active = mk_var tmp_active_var f.c_func_name_range in 
-        let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top value_typ f.c_func_name_range))) Variable_global f.c_func_name_range in
-        let active_var = mk_expr_stmt (mk_ffi_call "_ffi_mark_active_contents" [mk_c_address_of tmp_active f.c_func_name_range] f.c_func_name_range) f.c_func_name_range in
+        let tmp_active = mk_var tmp_active_var range in 
+        let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top value_typ range))) Variable_global range in
+        let active_var = mk_expr_stmt (mk_ffi_call "_ffi_mark_active_contents" [mk_c_address_of tmp_active range] range) range in
+        let any_shape_var = mk_expr_stmt (mk_ffi_call "_ffi_set_shape" [mk_c_address_of tmp_active range; mk_constant ~etyp:(T_c_integer C_signed_int) (C_int (Z.of_int 11)) range] range) range in
         let args = List.map (fun arg -> tmp_active) (f.c_func_parameters) in 
-        let exec_fun = mk_c_call_stmt f args f.c_func_name_range in 
-        mk_block [declare_var; active_var; exec_fun] f.c_func_name_range
+        let exec_fun = mk_c_call_stmt f args range in 
+        mk_block [declare_var; active_var; any_shape_var; exec_fun] range
       in
       let rec exec_all_tests (fs: c_fundec list) (flows: 'a flow list) (flow: 'a flow) =
         match fs with 
