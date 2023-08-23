@@ -870,13 +870,23 @@ struct
 
     (* Case 2: different base => undefined behavior *)
     let case2 =
-      let v1 = PointerSet.diff v1 v2 in
-      let v2 = PointerSet.diff v2 v1 in
-      if PointerSet.is_bottom v1 || PointerSet.is_bottom v2
-      then []
+      let vv1 = PointerSet.singleton_diff v1 v2 in
+      let vv2 = PointerSet.singleton_diff v2 v1 in
+      (* Weak bases may represent different concrete bases, while set difference
+         will remove them. So we need to add them. *)
+      let common_weak = PointerSet.meet v1 v2 |>
+                        PointerSet.filter
+                          (function
+                            | Base b -> base_mode b = WEAK
+                            | _ -> false)
+      in
+      let vv1 = PointerSet.union common_weak vv1 in
+      let vv2 = PointerSet.union common_weak vv2 in
+      if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
+        []
       else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
+        let flow = set_value_opt p1 vv1 man flow |>
+                   set_value_opt p2 vv2 man
         in
         let flow = raise_c_invalid_pointer_sub p q range man flow in
         [Eval.empty flow]
