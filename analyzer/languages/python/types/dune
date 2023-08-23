@@ -2,4 +2,5 @@
  (name types)
  (package mopsa)
  (libraries python_common data_model python_objects framework mopsa)
+ (library_flags -linkall)
  (flags :standard -open Python_common.Common -open Python_objects))

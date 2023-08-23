@@ -1,4 +1,5 @@
 (library
  (name interactive)
  (public_name mopsa.mopsa_analyzer.framework.interactive)
+ (library_flags -linkall)
  (libraries core output toplevel))

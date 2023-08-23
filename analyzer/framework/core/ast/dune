@@ -1,4 +1,5 @@
 (library
  (name ast)
  (public_name mopsa.mopsa_analyzer.framework.core.ast)
+ (library_flags -linkall)
  (libraries mopsa_utils))

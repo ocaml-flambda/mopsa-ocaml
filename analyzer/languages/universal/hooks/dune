@@ -2,4 +2,5 @@
  (name hooks)
  (public_name mopsa.mopsa_analyzer.universal.hooks)
  (libraries framework mopsa lang heap universal_numeric mopsa_utils)
+ (library_flags -linkall)
  (flags :standard -open Lang -open Universal_numeric))

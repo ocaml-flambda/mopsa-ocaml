@@ -2,4 +2,5 @@
  (name numeric_common)
  (public_name mopsa.mopsa_analyzer.universal.numeric.common)
  (libraries lang framework mopsa mopsa_utils apron)
+ (library_flags -linkall)
  (flags :standard -open Lang))

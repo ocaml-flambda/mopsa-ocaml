@@ -2,4 +2,5 @@
  (name python_libs)
  (package mopsa)
  (libraries python_lang desugar mopsa framework universal)
+ (library_flags -linkall)
  (flags :standard -open Python_lang.Lang))

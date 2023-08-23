@@ -1,6 +1,7 @@
 (library
  (name mopsa_utils)
  (public_name mopsa.mopsa_utils)
+ (library_flags -linkall)
  (libraries mopsa.mopsa_utils.core containers bitfields congUtils itvUtils))
 
 (dirs * \ tests)

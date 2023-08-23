@@ -2,4 +2,5 @@
  (name python_flows)
  (package mopsa)
  (libraries python_lang types python_objects mopsa framework universal)
+ (library_flags -linkall)
  (flags :standard -open Python_lang.Lang -open Python_objects))

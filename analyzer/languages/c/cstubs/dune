@@ -2,4 +2,5 @@
  (name cstubs)
  (package mopsa)
  (libraries mopsa framework universal stubs c_common c_lang)
+ (library_flags -linkall)
  (flags :standard -open C_common -open C_lang.Lang))
