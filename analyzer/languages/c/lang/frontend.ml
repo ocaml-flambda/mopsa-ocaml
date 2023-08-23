@@ -802,7 +802,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
                    c_enum_val_value = v.enum_val_value;
                    c_enum_val_range = from_range v.enum_val_range;
                  }) e.enum_values;
-          c_enum_integer_type = from_integer_type e.enum_integer_type;
+          c_enum_integer_type = from_integer_type (OptionExt.none_to_exn e.enum_integer_type);
           c_enum_range = from_range e.enum_range;
         }
       in

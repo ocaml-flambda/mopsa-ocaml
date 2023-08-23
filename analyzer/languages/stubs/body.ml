@@ -613,6 +613,8 @@ struct
   let eval exp man flow =
     match ekind exp with
     | E_stub_call (stub, args) ->
+      if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then Cases.empty flow |> OptionExt.return 
+      else 
       (* Create the return variable *)
       let return =
         match stub.stub_func_return_type with

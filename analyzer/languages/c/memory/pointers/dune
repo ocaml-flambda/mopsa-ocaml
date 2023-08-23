@@ -1,6 +1,6 @@
 (library
  (name pointers)
  (package mopsa)
- (libraries mopsa framework c_lang c_common universal)
+ (libraries mopsa framework c_lang c_common universal cells)
  (library_flags -linkall)
  (flags :standard -open C_lang.Lang -open C_common))

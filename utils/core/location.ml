@@ -52,7 +52,7 @@ let compare_pos (pos1: pos) (pos2: pos) =
 (** Return the relative path of `file` w.r.t. the current working directory *)
 let relative_path file =
   let wd = Sys.getcwd () in
-  if Str.string_match (Str.regexp ("^" ^ wd ^ "/.+")) file 0 then
+  if Str.string_match (Str.regexp ("^" ^ (Str.quote wd) ^ "/.+")) file 0 then
     let n1 = String.length wd in
     let n2 = String.length file in
     "./" ^ String.sub file (n1 + 1) (n2 - n1 - 1)

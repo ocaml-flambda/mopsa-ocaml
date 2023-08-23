@@ -229,7 +229,10 @@ let () =
   register_var {
     print = (fun next fmt v ->
         match vkind v with
-        | V_cvar cvar -> Format.fprintf fmt "%s" cvar.cvar_orig_name
+        | V_cvar cvar ->
+          if !Framework.Core.Ast.Var.print_uniq_with_uid then
+            Format.fprintf fmt "%s:%a" cvar.cvar_orig_name pp_relative_range cvar.cvar_range
+          else Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );
 
@@ -644,8 +647,8 @@ let rec sizeof_type (t : typ) : Z.t =
   | T_c_typedef td -> sizeof_type td.c_typedef_def
 
   | T_c_record r ->
-     if not r.c_record_defined then panic ~loc:__LOC__ " %a is undefined" pp_typ t;
-     r.c_record_sizeof
+    if not r.c_record_defined then Z.zero (*panic ~loc:__LOC__ " %a is undefined" pp_typ t; *)
+    else r.c_record_sizeof
 
   | T_c_enum e ->
      if not e.c_enum_defined then panic ~loc:__LOC__ "%a is undefined" pp_typ t;

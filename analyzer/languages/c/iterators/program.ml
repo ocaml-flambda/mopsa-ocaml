@@ -64,6 +64,17 @@ struct
       default = "main";
     }
 
+  let opt_check_memory = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-c-check-unreachable-memory";
+      category = "C";
+      doc = " check for unreachable allocated memory";
+      spec = ArgExt.Set opt_check_memory;
+      default = "main";
+    }
+
 
   (** Symbolic main arguments. *)
   let opt_symbolic_args = ref None
@@ -142,6 +153,24 @@ struct
       ) vars
     |> fst
 
+  let check_memory_allocation man range flow =
+    if not !opt_check_memory then flow else
+    (* debug "%a" (format @@ Flow.print man.lattice.print) flow; *)
+    let open Universal.Heap.Recency in
+    let dead_addrs =
+      let alive_addrs = man.ask Q_alive_addresses_aspset flow in
+      let all_addrs = man.ask Q_allocated_addresses_aspset flow in
+      debug "All addrs: %a@.Alive addrs %a" (format Pool.print) all_addrs (format Pool.print) alive_addrs;
+      Pool.diff all_addrs alive_addrs in
+    let interesting_dead_addrs =
+      Pool.filter (fun a ->
+          (* FIXME: we could also check the range... *)
+          match akind a with
+          | A_stub_resource m -> m = "Memory"
+          | _ -> false
+        ) dead_addrs in
+    (* FIXME add safe check otherwise *)
+    Pool.fold (fun addr flow -> Common.Alarms.raise_c_unreachable_memory addr range man flow) interesting_dead_addrs flow
 
   (** Execute exit functions using a loop *)
   let exec_exit_functions_with_loop a b buf range man flow =
@@ -180,6 +209,7 @@ struct
         | _ -> assert false
     in
     aux (Z.pred b) flow >>% fun flow ->
+    let flow = check_memory_allocation man range flow in
     Post.return (Flow.remove T_cur flow)
 
 
@@ -520,11 +550,11 @@ struct
     exec_entry_body main man flow
 
 
-
   let call_main main args functions man flow =
-    if List.length main.c_func_parameters = 2 then
+    (if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
-      | None, Some args   -> call_main_with_concrete_args main args man flow
+      | None, Some args   ->
+        call_main_with_concrete_args main args man flow
       | Some(lo,hi), None ->
         if lo = 0 && (hi = Some 0 || hi = None) then
           call_main_with_concrete_args main [] man flow
@@ -535,9 +565,8 @@ struct
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main man flow >>% fun flow ->
+      exec_entry_body main man flow) >>% fun flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow
-
 
   let exec stmt man flow =
     match skind stmt with
@@ -559,7 +588,7 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         call_main entry args c_functions man flow |>
-        OptionExt.return
+        OptionExt.return 
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
@@ -567,7 +596,6 @@ struct
         OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name
-
 
     | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->

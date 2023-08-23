@@ -228,8 +228,15 @@ let shift_left (a:t) (b:t) : t =
      match b with
      | PINF -> infinite (sign a)
      | Finite y when Z.geq y Z.zero ->
-        (try Finite (Z.shift_left x (Z.to_int y))
-        with Z.Overflow -> infinite (sign a))
+       (try
+          if Z.geq y (Z.of_int 2048) then
+            (* let's avoid allocating xx GB memory of Z.t *)
+            raise Z.Overflow
+          else 
+          let r = (Z.shift_left x (Z.to_int y)) in
+          Finite r
+        with Z.Overflow -> infinite (sign a)
+       )
      | _ -> invalid_arg "IntBound.shift_left"
 (** Left bitshift.
     Undefined if the second argument is negative (invalid argument exception).
@@ -279,7 +286,12 @@ let bit_and : t -> t -> t = only_finite "IntBound.bit_and" Z.logand
 let pow (a:t) (b:t) : t =
   match a, b with
   | Finite x, Finite y when Z.geq y Z.zero ->
-    (try Finite (Z.pow x (Z.to_int y))
+    (try
+       if Z.geq y (Z.of_int 2048) then
+         (* let's avoid allocating xx GB memory of Z.t *)
+         raise Z.Overflow
+       else 
+         Finite (Z.pow x (Z.to_int y))
      with Z.Overflow -> invalid_arg "IntBound.pow")
   | _ -> invalid_arg "IntBound.pow"
 (** Power. Undefined if the second argument is negative or too large. *)

@@ -213,7 +213,7 @@ and type_qual = typ * qualifier
      mutable enum_unique_name: string; (** unique, non-empty name *)
      mutable enum_defined: bool; (** false if only declared *)
      mutable enum_values: enum_value list;
-     mutable enum_integer_type: integer_type;
+     mutable enum_integer_type: integer_type option;
      mutable enum_range: range; (** declaration location *)
      mutable enum_com: comment list; (** comments associated to the declaration *)
    }
@@ -477,7 +477,7 @@ let rec resolve_typedef ((t,q):type_qual) : type_qual =
 let rec as_int_type (tq:type_qual) : integer_type =
   match fst (resolve_typedef tq) with
   | T_integer i -> i
-  | T_enum e -> e.enum_integer_type
+  | T_enum e -> (match e.enum_integer_type with | None -> failwith "None" | Some s -> s)
   | T_bool -> SIGNED_INT
   | _ -> invalid_arg "as_int_type: not an integer type"
 (** Interprets the type as an integer type, if possible *)

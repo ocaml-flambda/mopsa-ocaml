@@ -755,7 +755,7 @@ type alarm_kind += A_c_invalid_float_class of float_itv (** float value *) *
 
 let () =
   register_check (fun next fmt -> function
-      | CHK_C_INVALID_FLOAT_CLASS -> fprintf fmt " Invalid floating-point number class"
+      | CHK_C_INVALID_FLOAT_CLASS -> fprintf fmt "Invalid floating-point number class"
       | a -> next fmt a
     )
 
@@ -881,3 +881,44 @@ let safe_c_float_division_by_zero_check range man flow =
 
 let safe_c_float_overflow_check range man flow =
   Flow.add_safe_check CHK_C_FLOAT_OVERFLOW range flow
+
+
+(** {2 Unfreed/Unreachable memory } *)
+(** **************** *)
+
+
+type check      += CHK_C_UNREACHABLE_MEMORY 
+type alarm_kind += A_c_unreachable_memory of addr
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_C_UNREACHABLE_MEMORY -> fprintf fmt "Unreachable allocated memory"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm {
+    check = (fun next -> function
+        | A_c_unreachable_memory _ -> CHK_C_UNREACHABLE_MEMORY
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_unreachable_memory a1, A_c_unreachable_memory a2 ->
+          compare_addr a1 a2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_unreachable_memory a ->
+          fprintf fmt "Memory %a (allocated at %a) may be unreachable/unfreed" pp_addr a pp_addr_partitioning_full a.addr_partitioning;
+        | a -> next fmt a
+      );
+    join = (fun next -> next);
+  }
+
+let raise_c_unreachable_memory addr range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_c_unreachable_memory addr) cs range in 
+  Flow.raise_alarm alarm ~bottom:false man.lattice flow
+
+
