@@ -114,6 +114,7 @@ let _ =
       "_ffi_fresh_value_ptr";
       "_ffi_set_shape";
       "_ffi_assert_shape";
+      "_ffi_is_immediate";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

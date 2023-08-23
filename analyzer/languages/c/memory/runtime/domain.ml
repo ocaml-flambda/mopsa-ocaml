@@ -48,8 +48,7 @@ struct
   (** Map from variables to set of pointer values *)
   module Stat = Framework.Lattices.Const.Make(Status)
   module Root = Framework.Lattices.Const.Make(Roots)
-  module ShapeSet  = Framework.Lattices.Powerset.Make(Shape)
-  module Val  = Framework.Lattices.Pair.Make(Framework.Lattices.Pair.Make(Stat)(Root))(ShapeSet)
+  module Val  = Framework.Lattices.Pair.Make(Framework.Lattices.Pair.Make(Stat)(Root))(Shapes)
   module Map  = Framework.Lattices.Partial_map.Make(Var)(Val)
   module Lock = Framework.Lattices.Const.Make(RuntimeLock)
   module Dom  = Framework.Lattices.Pair.Make(Map)(Lock)
@@ -90,9 +89,13 @@ struct
   in Dom.meet aa aa'
 
 
+
+  let non_value_shape : Shapes.t = Nbt (NonVal)
+
+
   let update_status var status' map = 
     match Map.find_opt var map with 
-    | None -> Map.add var ((status', Nbt NotRooted), ShapeSet.singleton NonValue) map
+    | None -> Map.add var ((status', Nbt NotRooted), non_value_shape) map
     | Some ((_, roots), shapes) -> Map.add var ((status', roots), shapes)  map
     
   let update_shapes var shapes' map = 
@@ -247,15 +250,15 @@ and status_deref man flow e range =
     | None -> 
       (* FIXME: for type var[size], var is not added to the domain *)
       let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var 
-      in Cases.singleton (ShapeSet.singleton NonValue) flow
+      in Cases.singleton non_value_shape flow
 
   (* S(&v) *)
-  let shapes_addr_of_var man flow var range = Cases.singleton (ShapeSet.singleton NonValue) flow
+  let shapes_addr_of_var man flow var range = Cases.singleton non_value_shape flow
     
   (* S(c) *)
-  let shapes_const man flow const = Cases.singleton (ShapeSet.singleton NonValue) flow
-  let shapes_binop man flow op =  Cases.singleton (ShapeSet.singleton NonValue) flow
-  let shapes_unop man flow op =  Cases.singleton (ShapeSet.singleton NonValue) flow
+  let shapes_const man flow const = Cases.singleton non_value_shape flow
+  let shapes_binop man flow op =  Cases.singleton non_value_shape flow
+  let shapes_unop man flow op =  Cases.singleton non_value_shape flow
 
   let shapes_addr_of man flow e = 
     match ekind e with 
@@ -277,7 +280,7 @@ and status_deref man flow e range =
     | E_unop(op, e)        -> 
       shapes_unop man flow op
     | E_addr(a, mode)      -> 
-      Cases.singleton (ShapeSet.singleton NonValue) flow
+      Cases.singleton non_value_shape flow
     | E_c_address_of e     -> 
       shapes_addr_of man flow e
     | E_c_deref e          -> 
@@ -299,16 +302,16 @@ and shapes_deref man flow e range =
          this case. Since evaluation of [*e] has not succeeded, we simply return [T], 
          because we do not know the precise shapes. *)
       let () = Debug.debug ~channel:"status" "shapes of *%a in *%a unknown" pp_var v pp_expr e in 
-      Cases.singleton (TOP: ShapeSet.t) flow
+      Cases.singleton (TOP: Shapes.t) flow
     | Some Null | Some Invalid | Some Top -> 
-      Cases.singleton (TOP: ShapeSet.t) flow
+      Cases.singleton (TOP: Shapes.t) flow
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) -> 
       shapes_var man flow v 
     | Some (AddrOf ({ base_kind = Addr a; }, _, _)) -> 
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(%a) unsupported for addresses" pp_addr a) man flow in 
       Cases.empty flow
     | Some (AddrOf ({ base_kind = String _; }, _, _)) -> 
-      Cases.singleton (TOP: ShapeSet.t) flow
+      Cases.singleton (TOP: Shapes.t) flow
 (* 
   Will not compute status of the following expressions. 
   They should have been taken care of by previous iterators: 
@@ -326,7 +329,7 @@ and shapes_deref man flow e range =
 
   let exec_add var man flow =
     let (m, l) = get_env T_cur man flow in
-    let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), ShapeSet.singleton NonValue) m in
+    let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), non_value_shape) m in
     let flow = set_env T_cur (m', l) man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Post.return flow 
@@ -415,7 +418,6 @@ and shapes_deref man flow e range =
 
 
 
-
   let eval_mark_active_contents exp man flow = 
     eval_deref_to_var exp man flow >>$ fun var flow ->
     begin match var with 
@@ -435,6 +437,9 @@ and shapes_deref man flow e range =
     | _ -> 
       let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp) man flow in 
       Cases.empty flow
+
+
+      
       
   let eval_garbage_collect range man flow =
     let (m, l)  = get_env T_cur man flow in 
@@ -553,26 +558,25 @@ and shapes_deref man flow e range =
     | _ -> 
       Cases.singleton None flow 
 
-  let shape_ident_to_shape id : ShapeSet.t option =
+  let shape_ident_to_shape id : Shapes.t option =
     match Z.to_int id with 
     | exception Z.Overflow -> None 
-    | 1 -> ShapeSet.singleton Immediate |> OptionExt.return
-    | 2 -> ShapeSet.singleton Block |> OptionExt.return
-    | 3 -> ShapeSet.singleton Double |> OptionExt.return
-    | 4 -> ShapeSet.singleton Int64 |> OptionExt.return
-    | 5 -> ShapeSet.singleton Int32 |> OptionExt.return
-    | 6 -> ShapeSet.singleton Nativeint |> OptionExt.return
-    | 7 -> ShapeSet.singleton String |> OptionExt.return
-    | 8 -> ShapeSet.join (ShapeSet.singleton Block) (ShapeSet.singleton Immediate) 
-      |> OptionExt.return
-    | 9 -> ShapeSet.singleton Bigarray |> OptionExt.return
-    | 10 -> ShapeSet.singleton Abstract |> OptionExt.return
-    | 11 -> ShapeSet.singleton Any |> OptionExt.return
+    | 1 -> Shapes.immediate () |> OptionExt.return
+    | 2 -> Shapes.block () |> OptionExt.return
+    | 3 -> Shapes.double () |> OptionExt.return
+    | 4 -> Shapes.int64 () |> OptionExt.return
+    | 5 -> Shapes.int32 () |> OptionExt.return
+    | 6 -> Shapes.nativeint () |> OptionExt.return
+    | 7 -> Shapes.string () |> OptionExt.return
+    | 8 -> Shapes.join (Shapes.block ()) (Shapes.immediate ()) |> OptionExt.return
+    | 9 -> Shapes.bigarray () |> OptionExt.return
+    | 10 -> Shapes.abstract () |> OptionExt.return
+    | 11 -> Shapes.any() |> OptionExt.return
     | _ -> None
 
 
   let pp_shape_set fmt s = 
-    Print.format ShapeSet.print fmt s
+    Print.format Shapes.print fmt s
 
 
   let eval_assert_shape_var var ss range man flow = 
@@ -581,22 +585,12 @@ and shapes_deref man flow e range =
     | None -> 
       let flow = raise_ffi_bad_shape range (Format.asprintf "%a" pp_shape_set ss) "∅"  man flow in
       Cases.empty flow
-    | Some TOP -> 
-      let flow = raise_ffi_bad_shape range (Format.asprintf "%a" pp_shape_set ss) Top.top_string  man flow in
+    | Some s when not (Shapes.subset s ss) ->
+      let flow = raise_ffi_bad_shape range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
       Cases.empty flow
-    (* any is a wild card and allows every shape *)
-    | Some s when ShapeSet.mem Any s ->
+    | Some _ ->
       let flow = safe_ffi_shape_check range man flow in 
       Cases.singleton () flow 
-    | Some s ->
-      (* shape(var) ⊆ ss *)
-      if ShapeSet.for_all (fun sh -> ShapeSet.mem sh ss) s 
-      then 
-        let flow = safe_ffi_shape_check range man flow in 
-        Cases.singleton () flow 
-      else
-        let flow = raise_ffi_bad_shape range (Format.asprintf "%a" pp_shape_set ss) (Format.asprintf "%a" pp_shape_set s) man flow in
-        Cases.empty flow
 
   let eval_set_shape_var var ss range man flow =
     let (m, l) = get_env T_cur man flow in 
@@ -609,7 +603,27 @@ and shapes_deref man flow e range =
       let m' = Map.add var ((status, roots), ss) m in 
       let flow = set_env T_cur (m', l) man flow in 
       Post.return flow 
-    
+
+
+  let eval_is_immediate_var var range man flow = 
+    let (m, l) = get_env T_cur man flow in 
+    match Map.find_opt var m with 
+    | None -> 
+      let msg = Format.asprintf "cannot find a shape for %a" pp_var var in
+      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      Cases.empty flow  
+    | Some ((status, roots), ss) ->
+      Shapes.split_value_pointer ss flow >>$ fun upd flow -> 
+      match upd with 
+      | None -> 
+        let flow = raise_ffi_bad_shape range "an OCaml value" (Shapes.to_string ss) man flow in
+        Cases.empty flow
+      | Some (ss', rt) -> 
+        let m' = Map.add var ((status, roots), ss') m in 
+        let flow = set_env T_cur (m', l) man flow in 
+        Cases.singleton rt flow
+
+      
   let eval_assert_shape v sh range man flow =
     match ekind (remove_casts v) with 
     | E_var (v, _) ->
@@ -628,6 +642,22 @@ and shapes_deref man flow e range =
       let msg = Format.asprintf "cannot determine shape of %a" pp_expr v in
       let flow = raise_or_fail_ffi_unsupported range msg man flow in 
       Cases.empty flow
+
+
+  let eval_is_immediate v range man flow =
+    match ekind (remove_casts v) with 
+    | E_var (v, _) ->
+      eval_is_immediate_var v range man flow >>$ fun rt flow -> 
+      begin match rt with 
+      | Pointer -> Eval.singleton (mk_int 0 ~typ:(T_c_integer C_signed_int) range) flow 
+      | Immediate -> Eval.singleton (mk_int 1 ~typ:(T_c_integer C_signed_int) range) flow 
+      end
+    | _ -> 
+      let msg = Format.asprintf "cannot determine shape of %a" pp_expr v in
+      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      Cases.empty flow
+
+
       
 
   let eval_set_shape ptr sh range man flow = 
@@ -681,6 +711,8 @@ and shapes_deref man flow e range =
       eval_update_runtime_lock range false man flow
     | "_ffi_fresh_value_ptr", [] ->
       eval_fresh_pointer range man flow
+    | "_ffi_is_immediate", [e] -> 
+      eval_is_immediate e range man flow
     | _, _ -> 
       let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
       let flow = raise_or_fail_ffi_unsupported range msg man flow in 

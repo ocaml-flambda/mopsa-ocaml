@@ -150,11 +150,13 @@ struct
     immediate: bool;
     int64: bool;
     int32: bool; 
+    double: bool;
     string: bool;
     nativeint: bool;
     bigarray: bool;
     array: t option;
-    block: t IntMap.t IntMap.t
+    abstract: bool;
+    block: (t IntMap.t IntMap.t) option
   }
   and shape = 
     NonVal 
@@ -192,14 +194,16 @@ struct
   
   let rec join_shape_bodies s1 s2 : shape_body = 
     let immediate = s1.immediate || s2.immediate in 
+    let double = s1.double || s2.double in 
     let int64 = s1.int64 || s2.int64 in 
     let int32 = s1.int32 || s2.int32 in 
     let string = s1.string || s2.string in 
     let nativeint = s1.nativeint || s2.nativeint in
     let bigarray = s1.bigarray || s2.bigarray in 
+    let abstract = s1.abstract || s2.abstract in 
     let array = join_opt join s1.array s2.array in 
-    let block = join_maps (join_maps join) s1.block s2.block in 
-    { immediate; int64; int32; string; nativeint; bigarray; array; block }
+    let block = join_opt (join_maps (join_maps join)) s1.block s2.block in 
+    { immediate; int64; int32; string; nativeint; bigarray; double; abstract; array; block }
   
   and join a b = 
     match a, b with
@@ -210,20 +214,22 @@ struct
     | Nbt NonVal, Nbt NonVal -> Nbt NonVal
     | Nbt NonVal, _ -> TOP 
     | Nbt _, Nbt NonVal -> TOP
-    | Nbt Any, Nbt _ -> Nbt Any (* shape and any *) 
-    | Nbt _, Nbt Any -> Nbt Any (* shape and any *) 
+    | Nbt Any, Nbt _ -> b (* shape and any *) 
+    | Nbt _, Nbt Any -> a (* shape and any *) 
     | Nbt (Shape s1), Nbt (Shape s2) -> Nbt (Shape (join_shape_bodies s1 s2))
 
   let rec meet_shape_bodies s1 s2 : shape_body = 
     let immediate = s1.immediate && s2.immediate in 
+    let double = s1.double && s2.double in 
     let int64 = s1.int64 && s2.int64 in 
     let int32 = s1.int32 && s2.int32 in 
     let string = s1.string && s2.string in 
     let nativeint = s1.nativeint && s2.nativeint in
     let bigarray = s1.bigarray && s2.bigarray in 
+    let abstract = s1.abstract && s2.abstract in 
     let array = meet_opt meet s1.array s2.array in 
-    let block = meet_maps (meet_maps join) s1.block s2.block in 
-    { immediate; int64; int32; string; nativeint; bigarray; array; block }
+    let block = meet_opt (meet_maps (meet_maps join)) s1.block s2.block in 
+    { immediate; int64; int32; string; nativeint; bigarray; double; abstract; array; block }
   
   and meet a b = 
     match a, b with
@@ -234,8 +240,8 @@ struct
     | Nbt NonVal, Nbt NonVal -> Nbt NonVal
     | Nbt NonVal, _ -> BOT 
     | Nbt _, Nbt NonVal -> BOT
-    | Nbt Any, Nbt _ -> b (* shape and any *) 
-    | Nbt _, Nbt Any -> a (* shape and any *) 
+    | Nbt Any, Nbt _ -> Nbt Any (* shape and any *) 
+    | Nbt _, Nbt Any -> Nbt Any (* shape and any *) 
     | Nbt (Shape s1), Nbt (Shape s2) -> Nbt (Shape (meet_shape_bodies s1 s2))
 
 
@@ -257,9 +263,11 @@ struct
     subset_bool s1.int32 s2.int32 &&
     subset_bool s1.string s2.string &&
     subset_bool s1.nativeint s2.nativeint &&
+    subset_bool s1.double s2.double &&
     subset_bool s1.bigarray s2.bigarray &&
+    subset_bool s1.abstract s2.abstract &&
     subset_opt subset s1.array s2.array &&
-    subset_map (subset_map subset) s1.block s2.block
+    subset_opt (subset_map (subset_map subset)) s1.block s2.block
   and subset a b = 
     match a, b with 
     | BOT, _ -> true 
@@ -269,8 +277,8 @@ struct
     | Nbt NonVal, Nbt NonVal -> true 
     | Nbt NonVal, Nbt _ -> false 
     | Nbt _, Nbt NonVal -> false 
-    | Nbt _, Nbt Any -> true 
-    | Nbt Any, _ -> false 
+    | Nbt Any, _ -> true
+    | Nbt _, Nbt Any -> false 
     | Nbt (Shape s1), Nbt (Shape s2) -> subset_shape s1 s2
 
 
@@ -299,9 +307,11 @@ struct
     let nativeint = if s.nativeint then ["nativeint"] else [] in 
     let string = if s.string then ["string"] else [] in 
     let bigarray = if s.bigarray then ["bigarray"] else [] in 
+    let double = if s.double then ["double"] else [] in 
+    let abstract = if s.abstract then ["abstract"] else [] in 
     let array = match s.array with None -> [] | Some s -> [Format.asprintf "array(%a)" pp_shapes s] in 
-    let block = if IntMap.cardinal s.block > 0 then [Format.asprintf "block(%a)" (pp_map (pp_map pp_shapes)) s.block] else [] in 
-    let strings = List.concat [immediate;int64;int32;nativeint;string;bigarray;array;block] in 
+    let block = match s.block with None -> [] | Some m -> [Format.asprintf "block(%a)" (pp_map (pp_map pp_shapes)) m] in 
+    let strings = List.concat [immediate; int64; int32; nativeint; string; double; bigarray; abstract; array; block] in 
     Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") Format.pp_print_string fmt strings 
 
   let print (printer: Print.printer) (x: t) : unit =
@@ -309,6 +319,64 @@ struct
     
   let to_string (x: t) : string =
     Format.asprintf "%a" pp_shapes x
+
+
+
+
+  (* simple constructors *)
+  let any () : t = Nbt Any 
+
+  let nonvalue () : t = Nbt NonVal
+  
+  let immediate () : t = 
+    Nbt (Shape { immediate = true; double = false; int32 = false; int64 = false; nativeint = false; string = false; bigarray = false; abstract = false;  array = None; block = None})
+
+  let double () : t =
+    Nbt (Shape { immediate = false; double = true; int32 = false; int64 = false; nativeint = false; string = false; bigarray = false; abstract = false;  array = None; block = None})
+  
+  let int32 () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = true; int64 = false; nativeint = false; string = false; bigarray = false; abstract = false; array = None; block = None})
+
+  let int64 () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = true; nativeint = false; string = false; bigarray = false; abstract = false; array = None; block = None})
+  
+  let nativeint () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = true; string = false; bigarray = false; abstract = false; array = None; block = None})
+  
+  let string () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = false; string = true; bigarray = false; abstract = false; array = None; block = None})
+  
+  let bigarray () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = false; string = false; bigarray = true; abstract = false;  array = None; block = None})
+
+  let abstract () : t =
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = false; string = false; bigarray = false; abstract = true;  array = None; block = None})
+
+  let array (s: t) : t = 
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = false; string = false; bigarray = false; abstract = false; array = (Some s); block = None})
+
+  let block () : t = 
+    Nbt (Shape { immediate = false; double = false; int32 = false; int64 = false; nativeint = false; string = false; bigarray = false; abstract = false; array = None; block = Some (IntMap.empty)})
+
+
+
+  type physical_kind = Pointer | Immediate
+
+  let split_value_pointer (s: t) flow =
+    match s with 
+    | BOT 
+    | TOP 
+    | Nbt NonVal -> Cases.singleton None flow 
+    | Nbt Any -> 
+      let imm_case = Cases.singleton (Some (any (), Immediate)) flow in 
+      let ptr_case = Cases.singleton (Some (any (), Pointer)) flow in 
+      Cases.join imm_case ptr_case
+    | Nbt (Shape ({immediate=imm;double;int32;int64;nativeint;string;bigarray;abstract;array;block} as sh)) ->
+      let contains_ptr = (double || int64 || int32 || nativeint || string || bigarray || abstract || Option.is_some array || Option.is_some block) in
+      let impossible_case = if not contains_ptr && not imm then Cases.singleton None flow else Cases.empty flow in 
+      let imm_case = if imm then Cases.singleton (Some (immediate (), Immediate)) flow else Cases.empty flow in 
+      let ptr_case = if contains_ptr then Cases.singleton (Some (Bot_top.Nbt (Shape { sh with immediate = false }), Pointer)) flow else Cases.empty flow in 
+        impossible_case |> Cases.join imm_case |> Cases.join ptr_case  
 
 
 end 
