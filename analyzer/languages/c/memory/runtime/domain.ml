@@ -73,7 +73,9 @@ struct
 
   let subset = Dom.subset
 
-  let join = Dom.join
+  let join a b = 
+    let () = Debug.debug ~channel:"shape" "joining" in     
+    Dom.join a b
 
   let meet = Dom.meet
 
@@ -385,7 +387,7 @@ and shapes_deref man flow e range =
     | S_ffi_ext_call args ->
       exec_ext_call args man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
-      let () = Debug.debug ~channel:"runtime" "assigning %a = %a" pp_var var pp_expr e in 
+      let () = Debug.debug ~channel:"shape" "assigning %a = %a" pp_var var pp_expr e in 
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
     | _ -> None
 
@@ -583,10 +585,10 @@ and shapes_deref man flow e range =
     let (m, l) = get_env T_cur man flow  in
     match lookup_shapes var m with 
     | None -> 
-      let flow = raise_ffi_bad_shape range (Format.asprintf "%a" pp_shape_set ss) "∅"  man flow in
+      let flow = raise_ffi_shape_missing range pp_var var man flow in
       Cases.empty flow
     | Some s when not (Shapes.subset s ss) ->
-      let flow = raise_ffi_bad_shape range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
+      let flow = raise_ffi_shape_mismatch range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
       Cases.empty flow
     | Some _ ->
       let flow = safe_ffi_shape_check range man flow in 
@@ -596,34 +598,31 @@ and shapes_deref man flow e range =
     let (m, l) = get_env T_cur man flow in 
     match Map.find_opt var m with 
     | None -> 
-      let msg = Format.asprintf "cannot find a shape for %a" pp_var var in
-      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      let flow = raise_ffi_shape_missing range pp_var var man flow in 
       Cases.empty flow  
     | Some ((status, roots), _) -> 
       let m' = Map.add var ((status, roots), ss) m in 
       let flow = set_env T_cur (m', l) man flow in 
       Post.return flow 
 
-
   let eval_is_immediate_var var range man flow = 
     let (m, l) = get_env T_cur man flow in 
     match Map.find_opt var m with 
     | None -> 
-      let msg = Format.asprintf "cannot find a shape for %a" pp_var var in
-      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      let flow = raise_ffi_shape_missing range pp_var var man flow in 
       Cases.empty flow  
     | Some ((status, roots), ss) ->
       Shapes.split_value_pointer ss flow >>$ fun upd flow -> 
       match upd with 
       | None -> 
-        let flow = raise_ffi_bad_shape range "an OCaml value" (Shapes.to_string ss) man flow in
+        let flow = raise_ffi_shape_non_value range pp_var var Shapes.pp_shapes ss man flow in
         Cases.empty flow
       | Some (ss', rt) -> 
-        let m' = Map.add var ((status, roots), ss') m in 
+        let () = Debug.debug ~channel:"shape" "new shape is %a" (Shapes.pp_shapes) ss' in
+        let m' = update_shapes var ss' m in 
         let flow = set_env T_cur (m', l) man flow in 
         Cases.singleton rt flow
 
-      
   let eval_assert_shape v sh range man flow =
     match ekind (remove_casts v) with 
     | E_var (v, _) ->
@@ -634,13 +633,11 @@ and shapes_deref man flow e range =
         eval_assert_shape_var v ss range man flow >>% fun flow -> 
         Eval.singleton (mk_unit range) flow
       | None -> 
-        let msg = Format.asprintf "cannot turn %a into a shape" pp_expr sh in
-        let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+        let flow = raise_ffi_shape_number_error range pp_expr sh man flow in 
         Cases.empty flow
       end
     | _ -> 
-      let msg = Format.asprintf "cannot determine shape of %a" pp_expr v in
-      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      let flow = raise_ffi_shape_missing range pp_expr v man flow in 
       Cases.empty flow
 
 
@@ -653,10 +650,8 @@ and shapes_deref man flow e range =
       | Immediate -> Eval.singleton (mk_int 1 ~typ:(T_c_integer C_signed_int) range) flow 
       end
     | _ -> 
-      let msg = Format.asprintf "cannot determine shape of %a" pp_expr v in
-      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      let flow = raise_ffi_shape_missing range pp_expr v man flow in 
       Cases.empty flow
-
 
       
 
@@ -664,27 +659,20 @@ and shapes_deref man flow e range =
     eval_deref_to_var ptr man flow >>$ fun var flow ->
     match var with 
     | None -> 
-      let msg = Format.asprintf "cannot determine shape of %a" pp_expr ptr in
-      let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+      let flow = raise_ffi_shape_missing range pp_expr ptr man flow in 
       Cases.empty flow
     | Some v -> 
       eval_number_exp_to_integer sh man flow >>$ fun sh' flow -> 
       let shapeset = OptionExt.bind (fun x -> shape_ident_to_shape x) sh' in 
       begin match shapeset with
       | None -> 
-        let msg = Format.asprintf "cannot turn %a into a shape" pp_expr sh in
-        let flow = raise_or_fail_ffi_unsupported range msg man flow in 
+        let flow = raise_ffi_shape_number_error range pp_expr sh man flow in 
         Cases.empty flow
       | Some ss -> 
         eval_set_shape_var v ss range man flow >>% fun flow -> 
         Eval.singleton (mk_unit range) flow
       end
     
-
-
-
-
-
 
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow -> 

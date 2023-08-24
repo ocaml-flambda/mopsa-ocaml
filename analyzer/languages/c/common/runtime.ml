@@ -131,7 +131,7 @@ type alarm_kind +=
   | A_ffi_runtime_unlocked
   | A_ffi_begin_end_roots 
   | A_ffi_abort_analysis of string
-  | A_ffi_bad_shape of string * string
+  | A_ffi_bad_shape of string
 
 let () = 
   register_alarm {
@@ -156,12 +156,7 @@ let () =
       | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
       | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
       | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
-      | A_ffi_bad_shape (s1, s2), A_ffi_bad_shape (s1', s2') ->
-        Compare.compose [
-          (fun () -> String.compare s1 s1');
-          (fun () -> String.compare s2 s2')
-        ]          
-        
+      | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
       | _ -> next a1 a2 
     );
     print = (fun next fmt a -> 
@@ -178,8 +173,8 @@ let () =
         Format.fprintf fmt "Begin_roots/End_roots is deprecated" 
       | A_ffi_abort_analysis s ->
         Format.fprintf fmt "Analysis failed: %s" s 
-      | A_ffi_bad_shape (s1, s2) -> 
-        Format.fprintf fmt "Shape mismatch: expected %s, but has shape %s" s1 s2
+      | A_ffi_bad_shape s -> 
+        Format.fprintf fmt "Shape mismatch: %s" s
       | a -> next fmt a
     ); 
     join = (fun next a1 a2 -> next a1 a2);
@@ -217,11 +212,27 @@ let raise_ffi_begin_end_roots range man flow =
   let alarm = mk_alarm (A_ffi_begin_end_roots) cs range in
   Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
           
-let raise_ffi_bad_shape range s1 s2 man flow =
+let raise_ffi_shape_error range s man flow = 
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_bad_shape (s1, s2)) cs range in
+  let alarm = mk_alarm (A_ffi_bad_shape s) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
-        
+
+let raise_ffi_shape_mismatch range s1 s2 man flow =
+  raise_ffi_shape_error range (Format.asprintf "expected %s, but has shape %s" s1 s2) man flow
+
+let raise_ffi_shape_missing range pp_term term man flow =
+  raise_ffi_shape_error range (Format.asprintf "cannot determine shape of %a" pp_term term) man flow
+
+let raise_ffi_shape_non_value range pp_term term pp_shape shape man flow =
+  raise_ffi_shape_error range (Format.asprintf "%a has shape %a, expected an OCaml value" pp_term term pp_shape shape) man flow
+  
+let raise_ffi_shape_number_error range pp_term term man flow =
+    raise_ffi_shape_error range (Format.asprintf "cannot turn shape number %a into a shape description" pp_term term) man flow
+  
+
+
+
+
 let raise_or_fail_ffi_unsupported range reason man flow =
   if not !ffi_silent_analysis then 
     failwith (Format.asprintf "failed with reason: %s" reason)
