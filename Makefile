@@ -28,6 +28,9 @@ all:
 install:
 	opam exec -- dune install --profile release
 
+uninstall:
+	opam exec -- dune uninstall --profile release
+
 clean:
 	opam exec -- dune clean -p mopsa
 
