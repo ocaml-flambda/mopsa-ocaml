@@ -325,6 +325,17 @@ let () =
   }
 
 
+(** Ignore alarms when returning a value to the shell *)
+let () =
+  register_builtin_option {
+    key = "-no-report";
+    category = "Output";
+    doc = " do not output the MOPSA report";
+    spec = ArgExt.Set Output.Common.opt_no_report;
+    default = "unset";
+  }
+
+
 (** Output stream *)
 let () =
   register_builtin_option {

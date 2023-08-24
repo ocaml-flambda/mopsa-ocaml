@@ -623,8 +623,11 @@ struct
         match fs with 
         | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows) 
         | f :: fs -> 
-          Format.printf "Testing: %s\n" f.c_func_org_name; 
-          man.exec (call_function f) flow >>% fun flow' -> exec_all_tests fs (flow' :: flows) flow
+          Format.printf "checked: %s " f.c_func_org_name; 
+          man.exec (call_function f) flow >>% fun flow' -> 
+          let report = Flow.get_report flow' in 
+          if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
+          exec_all_tests fs (flow' :: flows) flow
       in 
  
       (* Initialize global variables *)
