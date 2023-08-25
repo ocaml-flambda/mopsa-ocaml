@@ -48,6 +48,8 @@ struct
   (** Map from variables to set of pointer values *)
   module Stat = Framework.Lattices.Const.Make(Status)
   module Root = Framework.Lattices.Const.Make(Roots)
+
+  module Shapes : Shapes.RuntimeShapes = Shapes.SimpleShapes
   module Val  = Framework.Lattices.Pair.Make(Framework.Lattices.Pair.Make(Stat)(Root))(Shapes)
   module Map  = Framework.Lattices.Partial_map.Make(Var)(Val)
   module Lock = Framework.Lattices.Const.Make(RuntimeLock)
@@ -91,13 +93,9 @@ struct
   in Dom.meet aa aa'
 
 
-
-  let non_value_shape : Shapes.t = Nbt (NonVal)
-
-
   let update_status var status' map = 
     match Map.find_opt var map with 
-    | None -> Map.add var ((status', Nbt NotRooted), non_value_shape) map
+    | None -> Map.add var ((status', Nbt NotRooted), Shapes.non_value_shape) map
     | Some ((_, roots), shapes) -> Map.add var ((status', roots), shapes)  map
     
   let update_shapes var shapes' map = 
@@ -252,15 +250,15 @@ and status_deref man flow e range =
     | None -> 
       (* FIXME: for type var[size], var is not added to the domain *)
       let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var 
-      in Cases.singleton non_value_shape flow
+      in Cases.singleton (Shapes.non_value_shape) flow
 
   (* S(&v) *)
-  let shapes_addr_of_var man flow var range = Cases.singleton non_value_shape flow
+  let shapes_addr_of_var man flow var range = Cases.singleton (Shapes.non_value_shape) flow
     
   (* S(c) *)
-  let shapes_const man flow const = Cases.singleton non_value_shape flow
-  let shapes_binop man flow op =  Cases.singleton non_value_shape flow
-  let shapes_unop man flow op =  Cases.singleton non_value_shape flow
+  let shapes_const man flow const = Cases.singleton (Shapes.non_value_shape) flow
+  let shapes_binop man flow op =  Cases.singleton (Shapes.non_value_shape) flow
+  let shapes_unop man flow op =  Cases.singleton (Shapes.non_value_shape) flow
 
   let shapes_addr_of man flow e = 
     match ekind e with 
@@ -282,7 +280,7 @@ and status_deref man flow e range =
     | E_unop(op, e)        -> 
       shapes_unop man flow op
     | E_addr(a, mode)      -> 
-      Cases.singleton non_value_shape flow
+      Cases.singleton (Shapes.non_value_shape) flow
     | E_c_address_of e     -> 
       shapes_addr_of man flow e
     | E_c_deref e          -> 
@@ -304,16 +302,16 @@ and shapes_deref man flow e range =
          this case. Since evaluation of [*e] has not succeeded, we simply return [T], 
          because we do not know the precise shapes. *)
       let () = Debug.debug ~channel:"status" "shapes of *%a in *%a unknown" pp_var v pp_expr e in 
-      Cases.singleton (TOP: Shapes.t) flow
+      Cases.singleton (Shapes.top) flow
     | Some Null | Some Invalid | Some Top -> 
-      Cases.singleton (TOP: Shapes.t) flow
+      Cases.singleton (Shapes.top) flow
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) -> 
       shapes_var man flow v 
     | Some (AddrOf ({ base_kind = Addr a; }, _, _)) -> 
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(%a) unsupported for addresses" pp_addr a) man flow in 
       Cases.empty flow
     | Some (AddrOf ({ base_kind = String _; }, _, _)) -> 
-      Cases.singleton (TOP: Shapes.t) flow
+      Cases.singleton (Shapes.top) flow
 (* 
   Will not compute status of the following expressions. 
   They should have been taken care of by previous iterators: 
@@ -331,7 +329,7 @@ and shapes_deref man flow e range =
 
   let exec_add var man flow =
     let (m, l) = get_env T_cur man flow in
-    let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), non_value_shape) m in
+    let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), Shapes.non_value_shape) m in
     let flow = set_env T_cur (m', l) man flow in
     let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Post.return flow 
@@ -587,7 +585,7 @@ and shapes_deref man flow e range =
     | None -> 
       let flow = raise_ffi_shape_missing range pp_var var man flow in
       Cases.empty flow
-    | Some s when not (Shapes.subset s ss) ->
+    | Some s when not (Shapes.compat ~value:s ~constr:ss) ->
       let flow = raise_ffi_shape_mismatch range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
       Cases.empty flow
     | Some _ ->
@@ -612,7 +610,7 @@ and shapes_deref man flow e range =
       let flow = raise_ffi_shape_missing range pp_var var man flow in 
       Cases.empty flow  
     | Some ((status, roots), ss) ->
-      Shapes.split_value_pointer ss flow >>$ fun upd flow -> 
+      Shapes.value_kind ss flow >>$ fun upd flow -> 
       match upd with 
       | None -> 
         let flow = raise_ffi_shape_non_value range pp_var var Shapes.pp_shapes ss man flow in
