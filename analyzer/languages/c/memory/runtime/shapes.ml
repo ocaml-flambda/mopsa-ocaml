@@ -143,8 +143,7 @@ struct
 
   let to_string s : string = Format.asprintf "%a" pp_shapes s
 
-  let compat ~value ~constr = is_bottom (meet value constr)
-
+  let compat ~value ~constr = not (is_bottom (meet value constr))
 
   let value_kind (s: t) flow = 
     match s with 
