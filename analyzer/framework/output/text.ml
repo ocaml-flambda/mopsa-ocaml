@@ -149,7 +149,7 @@ let highlight_range color fmt range =
     | _ -> ()
 
 
-let pp_diagnostic out n diag alarm_kinds callstacks =
+let pp_diagnostic out n diag callstacks kinds =
   (* Print the alarm instance *)
   let file_name = get_range_relative_file diag.diag_range in
   let fun_name = match CallstackSet.elements callstacks with
@@ -180,7 +180,7 @@ let pp_diagnostic out n diag alarm_kinds callstacks =
        | l ->
          fprintf fmt "@,%a"
            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) l
-    ) alarm_kinds
+    ) kinds
     (fun fmt callstacks ->
        match CallstackSet.elements callstacks with
        | [] -> ()
@@ -207,7 +207,7 @@ let pp_diagnostic out n diag alarm_kinds callstacks =
 
 
 
-let incr_check_diag check diag checks_map =
+let incr_check_diag len check diag checks_map =
   let (safe,error,warning,info,unimplemented) =
     match CheckMap.find_opt check checks_map with
     | Some x -> x
@@ -215,65 +215,63 @@ let incr_check_diag check diag checks_map =
   in
   let total =
     match diag with
-    | Safe        -> safe+1,error,warning,info,unimplemented
+    | Safe        -> safe+len,error,warning,info,unimplemented
     | Unreachable -> safe,error,warning,info,unimplemented
-    | Error       -> safe,error+1,warning,info,unimplemented
-    | Unimplemented      -> safe,error,warning,info,unimplemented+1
-    | Warning     -> safe,error,warning+1,info,unimplemented
-    | Info     -> safe,error,warning,info+1,unimplemented
+    | Error       -> safe,error+len,warning,info,unimplemented
+    | Unimplemented      -> safe,error,warning,info,unimplemented+len
+    | Warning     -> safe,error,warning+len,info,unimplemented
+    | Info     -> safe,error,warning,info+len,unimplemented
   in
   CheckMap.add check total checks_map
 
 let construct_checks_summary ?(print=false) rep out =
-  RangeMap.fold
-    (fun range checks acc ->
-       CheckMap.fold
-         (fun check diag (i,safe,error,warning,info,unimplemented,checks_map) ->
-            let checks_map' = incr_check_diag check diag.diag_kind checks_map in
-            match diag.diag_kind with
-            | Unreachable ->
-              i, safe, error, warning,  info, unimplemented, checks_map'
+  let diag_groups = Alarm.group_diagnostics rep.report_diagnostics in
+  RangeDiagnosticWoCsMap.fold (fun (range, diagWoCs) css acc ->
+      let (i,safe,error,warning,info,unimplemented,checks_map) = acc in
+      let len = CallstackSet.cardinal css in
+      let checks_map' = incr_check_diag len diagWoCs.diag_check diagWoCs.diag_kind checks_map in
+      match diagWoCs.diag_kind with
+      | Unreachable ->
+        i, safe, error, warning,  info, unimplemented, checks_map'
 
-            | Safe ->
-              if print && !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
-              i+1, safe+1, error, warning,  info, unimplemented, checks_map'
-            | Unimplemented when !opt_no_unimplemented_detailed_checks ->
-              i+1, safe+1, error, warning,  info, unimplemented + 1, checks_map'
-            | Error | Warning | Info | Unimplemented ->
-              (* Get the set of alarms kinds and callstacks *)
-              let kinds =
-                AlarmSet.fold
-                  (fun a kinds ->
-                     AlarmKindSet.add a.alarm_kind kinds
-                  ) diag.diag_alarms AlarmKindSet.empty in
-              (* Join alarm kinds *)
-              let rec iter = function
-                | [] -> []
-                | hd::tl ->
-                  let hd',tl' = iter_with hd tl in
-                  hd'::iter tl'
-              and iter_with a = function
-                | [] -> a,[]
-                | hd::tl ->
-                  match join_alarm_kind a hd with
-                  | None    ->
-                    let a',tl' = iter_with a tl in
-                    a',hd::tl'
-                  | Some aa ->
-                    let aa',tl' = iter_with aa tl in
-                    aa',tl'
-              in
-              let kinds' = iter (AlarmKindSet.elements kinds) in
-              if print then pp_diagnostic out i diag kinds' diag.diag_callstacks;
-              match diag.diag_kind with
-              | Error -> i+1, safe, error+1, warning, info, unimplemented, checks_map'
-              | Info -> i+1, safe, error, warning, info + 1, unimplemented, checks_map'
-              | Warning -> i+1, safe, error, warning+1, info, unimplemented, checks_map'
-              (* FIXME: remove unimplemented here and include it above to disable printing the unimplemented functions. *)
-              | Unimplemented -> i+1, safe, error, warning, info, unimplemented + 1, checks_map'
-              | _ -> assert false
-         ) checks acc
-    ) rep.report_diagnostics (0,0,0,0,0,0,CheckMap.empty)
+      | Safe ->
+        if print && !opt_show_safe_checks then pp_diagnostic out i diagWoCs css [];
+        i+len, safe+len, error, warning,  info, unimplemented, checks_map'
+      | Unimplemented when !opt_no_unimplemented_detailed_checks ->
+        i+len, safe, error, warning,  info, unimplemented + len, checks_map'
+      | Error | Warning | Info | Unimplemented ->
+        (* Get the set of alarms kinds and callstacks *)
+        let kinds =
+          AlarmSet.fold
+            (fun a kinds ->
+                AlarmKindSet.add a.alarm_kind kinds
+            ) diagWoCs.diag_alarms AlarmKindSet.empty in
+        (* Join alarm kinds *)
+        let rec iter = function
+          | [] -> []
+          | hd::tl ->
+            let hd',tl' = iter_with hd tl in
+            hd'::iter tl'
+        and iter_with a = function
+          | [] -> a,[]
+          | hd::tl ->
+            match join_alarm_kind a hd with
+            | None    ->
+              let a',tl' = iter_with a tl in
+              a',hd::tl'
+            | Some aa ->
+              let aa',tl' = iter_with aa tl in
+              aa',tl'
+        in
+        let kinds' = iter (AlarmKindSet.elements kinds) in
+        if print then pp_diagnostic out i diagWoCs css kinds';
+        (match diagWoCs.diag_kind with
+        | Error -> i+len, safe, error+len, warning, info, unimplemented, checks_map'
+        | Info -> i+len, safe, error, warning, info + len, unimplemented, checks_map'
+        | Warning -> i+len, safe, error, warning+len, info, unimplemented, checks_map'
+        | Unimplemented -> i+len, safe, error, warning, info, unimplemented + len, checks_map'
+        | _ -> assert false)
+    ) diag_groups (0,0,0,0,0,0,CheckMap.empty)
 
 let print_checks_summary checks_map total safe error warning info unimplemented out =
   let pp diag singluar plural fmt n =
