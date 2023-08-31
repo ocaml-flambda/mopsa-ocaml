@@ -24,6 +24,8 @@ depends: [
   "mlgmpidl"
   "yojson"
   "zarith"
+  "sexplib"
+  "ppx_sexp_conv"
   "odoc" {with-doc}
 ]
 build: [
