@@ -296,7 +296,6 @@ let resolve_status var man flow = man.ask (Q_ffi_status var) flow
 
 
 
-
 type type_shape =
   | Any (** anything of C type [value]*)
   | Imm (** immediate, tagged with a one at the end*)
@@ -319,15 +318,25 @@ type type_shape =
   | Or of type_shape * type_shape (** Disjunction between two shapes for (e.g., variant types) *)
 [@@deriving sexp]
 
-(* FIXME: this is probably not the way to go *)
-let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2 
 
+let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2  
 
-(* An external function consists of a*)
+(* TODO: check exceptions *)
+type fn_type =
+  { arguments : type_shape list
+  ; return : type_shape
+  }
+[@@deriving sexp]
+
+type external_function_description =
+  | ShapeDescr of fn_type
+  | ArityDescr of int
+  | NoDescr
+[@@deriving sexp]
+
 type external_function =
   { name : string (** C name of the function *)
-  ; arguments : type_shape list (** Shapes of the arguments *)
-  ; return : type_shape (** Shape of the return type *)
+  ; description : external_function_description
   }
 [@@deriving sexp]
 
@@ -356,10 +365,30 @@ let rec pp_shape fmt (sh : type_shape) =
   | Or (s1, s2) -> Format.fprintf fmt "%a ∨ %a" pp_shape s1 pp_shape s2
 ;;
 
+let pp_external_function_description fmt desc =
+  match desc with
+  | ShapeDescr { arguments; return } ->
+    Format.fprintf
+      fmt
+      "args(%a) -> %a"
+      (Format.pp_print_list pp_shape ~pp_sep:(fun fmt () ->
+         Format.pp_print_string fmt "; "))
+      arguments
+      pp_shape
+      return
+  | ArityDescr n -> Format.fprintf fmt "arity(%d)" n
+  | NoDescr -> Format.fprintf fmt "*"
+;;
+
+let pp_ext_fun fmt ext =
+  Format.fprintf fmt "%s: %a" ext.name pp_external_function_description ext.description
+;;
+
 let pp_ext_fun_sexp fmt ext =
   let sexp = [%sexp_of: external_function] ext in
   Format.pp_print_string fmt (Sexp.to_string sexp)
 ;;
+
 
 let parse_ext_fun (ef: string) =
   let sexp = Sexp.of_string ef in

@@ -90,7 +90,7 @@ struct
   let ffitest_flag = ref false
   let ffitest_filter = ref (StringSet.empty)
 
-  let ffitest_shapes : (type_shape list * type_shape) StringMap.t ref = ref (StringMap.empty)
+  let ffitest_shapes : external_function_description StringMap.t ref = ref (StringMap.empty)
 
   let read_lines str =
     let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
@@ -128,7 +128,7 @@ struct
     spec = ArgExt.String(fun s ->
       let parse_functions fn = 
         let fn = parse_ext_fun fn in 
-        (fn.name, (fn.arguments, fn.return))
+        (fn.name, fn.description)
       in
       let funs = read_lines s in
       let funs = List.map parse_functions funs in 
@@ -601,17 +601,20 @@ struct
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
-  type fn_type = type_shape list * type_shape
-
   (* FIXME: incorporate check for number of arguments *)
   (* FIXME: incorporate handling of more than five arguments *)
   let type_shape_of_function (f: c_fundec) : fn_type option = 
     match StringMap.find_opt f.c_func_org_name (!ffitest_shapes) with 
-    | Some (args, ret) -> Some (args, ret)
+    | Some (ShapeDescr ty) -> Some ty
+    | Some (ArityDescr arity) -> Some { arguments = List.init arity (fun _ -> Any); return = Any }
+    | Some NoDescr -> 
+      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in 
+      let default_shape_ret = Any in 
+      Some { arguments=default_shape_args; return=default_shape_ret }
     | None when StringSet.mem f.c_func_org_name (!ffitest_filter) -> 
       let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in 
       let default_shape_ret = Any in 
-      Some (default_shape_args, default_shape_ret)
+      Some { arguments=default_shape_args; return=default_shape_ret }
     (* not a runtime function we should test *)
     | None -> None
 
@@ -626,7 +629,7 @@ struct
 
   let virtual_runtime_function_test (f: c_fundec) (sh: fn_type) : stmt = 
     let range = f.c_func_name_range in 
-    let arg_shapes, ret_shape = sh in 
+    let {arguments = arg_shapes; return = ret_shape } = sh in 
     let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in
     let stmts = List.concat stmts in 
     let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
