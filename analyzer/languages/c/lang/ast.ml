@@ -161,6 +161,9 @@ type typ +=
   | T_c_block_object of typ
   (** Type of block objects.  *)
 
+  | T_c_unknown_builtin of string
+  (** Unknown builtin type. *)
+
 
 (** {2 Function descriptor} *)
 (** *********************** *)

@@ -462,6 +462,7 @@ type name = {
    | Type_BuiltinFn (** *)
    | Type_ARCUnbridgedCast (** case which in ARC would normally requier a __bridge *)
    | Type_OMPArraySection (** placeholder type for OpenMP array sections *)
+   | Type_unknown_builtin of string
  (** Builtin types *)
 
  and unary_transform_type = {

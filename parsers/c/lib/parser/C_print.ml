@@ -231,6 +231,7 @@ and raw_buf_type buf = function
     | T_record r -> bp buf "%s %s" (string_of_record_kind r.record_kind) r.record_unique_name
     | T_complex f -> bp buf "%s _Complex" (string_of_float_type f)
     | T_vector v -> bp buf "vector(%a, %i, %i)" raw_buf_type_qual v.vector_type v.vector_size v.vector_kind
+    | T_unknown_builtin s -> bp_str buf s
 (* raw (non-C) representation of a type, somewhat more clear than C sytnax *)
 
 
@@ -261,7 +262,7 @@ and c_buf_type_base buf (t,q) = match t with
         (string_of_qualifier q) (string_of_record_kind r.record_kind) r.record_unique_name
   | T_complex f -> bp buf "%s%s _Complex" (string_of_qualifier q) (string_of_float_type f)
   | T_vector v -> bp buf "%a" c_buf_type_base v.vector_type
-
+  | T_unknown_builtin s -> bp_str buf s
 
 (* prints the rest of the type; inner prints the innermost part of the type *)
 and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
@@ -293,6 +294,9 @@ and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
 
     | T_vector v ->
        bp buf "__attribute__((__vector_size__(%i)))" v.vector_size
+
+    | T_unknown_builtin _ ->
+       inner buf var
 
 (* array length *)             
 and len indent buf = function
@@ -709,6 +713,7 @@ let print_types_ordered
       | T_record r -> ()
       | T_enum _ -> ()
       | T_vector v -> explore (fst v.vector_type)
+      | T_unknown_builtin _ -> ()
     in
     if not (Hashtbl.mem black t.typedef_uid) then (
       if Hashtbl.mem gray t.typedef_uid then invalid_arg "cyclic type dependencies";
@@ -734,6 +739,7 @@ let print_types_ordered
       | T_record r -> if mustdef then record true r
       | T_enum _ -> ()
       | T_vector v -> explore mustdef (fst v.vector_type)
+      | T_unknown_builtin _ -> ()
     in
     if not (Hashtbl.mem black r.record_uid) then (
       if Hashtbl.mem gray r.record_uid then invalid_arg "cyclic type dependencies";

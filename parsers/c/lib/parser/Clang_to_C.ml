@@ -302,6 +302,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         | C.Type_LongDouble -> T_float LONG_DOUBLE, no_qual
         | C.Type_Float128 -> T_float FLOAT128, no_qual
         | C.Type_BuiltinFn -> T_builtin_fn, no_qual
+        | C.Type_unknown_builtin s -> T_unknown_builtin s, no_qual
         | _ -> error range "unhandled builtin type" (C.string_of_type t)
        )
 

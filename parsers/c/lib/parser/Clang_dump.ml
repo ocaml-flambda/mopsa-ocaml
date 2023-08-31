@@ -99,7 +99,8 @@ let builtin_type_name = function
   | Type_UnknownAny -> "__builtin_any_type"
   | Type_BuiltinFn -> "builtin_fn"
   | Type_ARCUnbridgedCast -> "__bridge"
-  | Type_OMPArraySection -> "array_sections"    
+  | Type_OMPArraySection -> "array_sections"
+  | Type_unknown_builtin s -> s
 
 let binary_operator_name = function
   | BO_Mul -> "*"

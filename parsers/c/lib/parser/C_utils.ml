@@ -126,6 +126,7 @@ let rec sizeof_type target t : Z.t =
      Z.of_int (sizeof_int target (match e.enum_integer_type with | Some s -> s | None -> assert false))
   | T_vector v ->
      Z.mul (sizeof_type target (fst v.vector_type)) (Z.of_int v.vector_size)
+  | T_unknown_builtin _ -> Z.zero
 (** Size (in bytes) of a type. Raises an Invalid_argument if the size is not a constant. *)
 
 
@@ -148,6 +149,7 @@ let sizeof_expr target (range:C.range) (result_type:type_qual) (t:typ) : expr =
     | T_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
     | T_function _ | T_builtin_fn -> invalid_arg "sizeof_expr: size of function"
     | T_typedef t -> doit (fst t.typedef_def)
+    | T_unknown_builtin _ -> E_integer_literal (Z.zero), result_type, range
   in
   doit t
 (** Size (in bytes) of a type, as an expression. Handles variable-length ararys. *)
@@ -172,6 +174,7 @@ let rec alignof_type target t : Z.t =
      Z.of_int (alignof_int target (match e.enum_integer_type with | Some s -> s | None -> assert false))
   | T_vector v ->
      alignof_type target (fst v.vector_type)
+  | T_unknown_builtin _ -> Z.zero
 (** Alignment (in bytes) of a type. *)
 
 
@@ -187,6 +190,7 @@ let rec type_declarable = function
   | T_record r -> r.record_defined
   | T_enum e -> e.enum_defined
   | T_vector v -> type_declarable (fst v.vector_type)
+  | T_unknown_builtin _ -> true
 
 and type_qual_declarable (t,q) =
   type_declarable t
@@ -405,6 +409,9 @@ let rec type_compare cmp gray (target:C.target_info) (t1:typ) (t2:typ) =
        (cmp.cmp_ignore_vector_size || v1.vector_size = v2.vector_size) &&
        (cmp.cmp_ignore_vector_kind || v1.vector_kind = v2.vector_kind)
 
+    | T_unknown_builtin s1, T_unknown_builtin s2 ->
+       s1 = s2
+
     | _ -> false
 
 and qual_compare cmp (q1:qualifier) (q2:qualifier) =
@@ -509,6 +516,9 @@ let rec type_unify gray target (t1:typ) (t2:typ) =
        let size = min v1.vector_size v2.vector_size in
        let kind = if v1.vector_kind = v2.vector_kind then v1.vector_kind else -1 in
        T_vector { vector_type = t; vector_size = size; vector_kind = kind; }
+
+    | T_unknown_builtin s1, T_unknown_builtin s2 when s1 = s2 ->
+       T_unknown_builtin s1
 
     | _ -> invalid_arg "type_unify: incompatible types"
 
@@ -704,7 +714,7 @@ let rec zero_init range (t:typ) : init =
      I_init_list (List.map (fun f -> zero_init range (fst f.field_type)) l, None)
   | T_enum e -> I_init_expr (expr_integer_cst range (match e.enum_integer_type with | Some s -> s | None -> assert false) Z.zero)
   | T_vector v ->  I_init_list ([], Some (zero_init range (fst v.vector_type)))
-
+  | T_unknown_builtin _ -> I_init_expr (expr_integer_cst range SIGNED_INT Z.zero)
 
 (** {2 Statement utilities} *)
 

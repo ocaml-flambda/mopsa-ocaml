@@ -166,6 +166,9 @@ type typ =
   | T_vector of vector_type
   (** GCC vectors *)
 
+  | T_unknown_builtin of string
+  (** unknown builtin *)
+
 
 and type_qual = typ * qualifier
  (** Type with qualifier. *)
@@ -502,6 +505,7 @@ let rec type_is_scalar (t:typ) =
   | T_record _ -> false
   | T_complex _ -> false
   | T_vector _ -> false
+  | T_unknown_builtin _ -> false
 (** Whether a type yields a scalar value. *)
 
 

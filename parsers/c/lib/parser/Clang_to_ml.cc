@@ -509,7 +509,7 @@ public:
   }
 
   CAMLprim value getFiles() { return cacheFile.get_values(); }
-
+  const LangOptions& getOpts() { return opts; }
 };
 
 CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a, int offset) {
@@ -3659,11 +3659,16 @@ enum {
   MLTAG_Type_OMPArraySection,
 };
 
+enum {
+  MLTAG_Type_unknown_builtin
+};
+
 
 /* BuiltinType -> builtin_type */
 CAMLprim value MLTreeBuilderVisitor::TranslateBuiltinType(const BuiltinType * node) {
   CAMLparam0();
-  int r = 0;
+  CAMLlocal1(ret);
+  int r = -1;
 
   check_null(node, "TranslateBuiltinType");
 
@@ -3718,10 +3723,19 @@ CAMLprim value MLTreeBuilderVisitor::TranslateBuiltinType(const BuiltinType * no
     GENERATE_CASE_PREFIX(r, BuiltinType::, Type_, OMPArraySection);
     // unknown
   default:
-    if (verbose_exn) { node->dump(); std::cout << "unknown builtin type: " << node->getKind() << std::endl; }
-    caml_failwith("mlClangAST: unknown builtin type");
+    // new version: generate a "unknown builtin" AST node that OCaml can use
+    WITH_CACHE(cacheMisc, ret, node, 1, MLTAG_Type_unknown_builtin, {
+        Store_field(ret, 0, caml_copy_string(node->getName(PrintingPolicy(loc.getOpts())).str().c_str()));
+        if (log_unknown) { std::cerr << "mlClangAST: unknown builtin type: " << node->getName(PrintingPolicy(loc.getOpts())).str() << std::endl; }
+    });
+    /*
+      // old version: exception
+      if (verbose_exn) { node->dump(); std::cout << "unknown builtin type: " << node->getKind() << std::endl; }
+      caml_failwith("mlClangAST: unknown builtin type");
+    */
   }
-  CAMLreturn(Val_int(r));
+  if (r != -1) ret = Val_int(r);
+  CAMLreturn(ret);
 }
 
 /* exception_specification_type */

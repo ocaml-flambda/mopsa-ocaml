@@ -811,6 +811,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
      (* size is in bytes, length is in units of t *)
      let len = Z.div (Z.of_int v.vector_size) (sizeof_type t) in
      Ast.T_c_array (t, Ast.C_array_length_cst len)
+  | C_AST.T_unknown_builtin s -> Ast.T_c_unknown_builtin s
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
   | C_AST.Char SIGNED -> Ast.C_signed_char
