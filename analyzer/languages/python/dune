@@ -1,4 +1,13 @@
 (library
  (name python)
  (public_name mopsa.mopsa_analyzer.python)
- (libraries python_common data_model desugar python_flows python_hooks python_libs python_objects python_packing types))
+ (libraries
+  python_common
+  data_model
+  desugar
+  python_flows
+  python_hooks
+  python_libs
+  python_objects
+  python_packing
+  python_types))

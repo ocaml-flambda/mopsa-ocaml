@@ -9,4 +9,4 @@ module Lang = Python_lang.Lang
 module Libs = Python_libs.Libs
 module Objects = Python_objects.Objects
 module Packing = Python_packing.Packing
-module Types = Types
+module Types = Python_types

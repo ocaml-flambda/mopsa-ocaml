@@ -1,4 +1,4 @@
 (library
- (name config)
- (public_name mopsa.mopsa_analyzer.framework.params.config)
+ (name mopsa_config)
+ (public_name mopsa.mopsa_analyzer.framework.params.mopsa_config)
  (libraries yojson sig combiners))

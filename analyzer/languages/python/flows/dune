@@ -1,5 +1,11 @@
 (library
  (name python_flows)
  (package mopsa)
- (libraries python_lang types python_objects mopsa framework universal)
+ (libraries
+  python_lang
+  python_types
+  python_objects
+  mopsa
+  framework
+  universal)
  (flags :standard -open Python_lang.Lang -open Python_objects))

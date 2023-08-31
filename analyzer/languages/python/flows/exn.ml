@@ -139,7 +139,7 @@ module Domain =
                    man.exec (mk_block (StmtSet.elements cleaners) range) true_flow >>% fun true_flow ->
                    let cur = Flow.get T_cur man.lattice true_flow in
                    debug "asking...@\ntrue_flow = %a" (format (Flow.print man.lattice.print)) true_flow;
-                   let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
+                   let exc_str, exc_message = man.ask (Python_types.Structural_types.Q_exn_string_query exp) true_flow in
                    debug "ok@\n";
                    let tk =
                      if List.exists (fun x ->
