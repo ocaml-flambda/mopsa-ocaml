@@ -20,8 +20,6 @@
 (****************************************************************************)
 
 (** Main handler of standalone C programs. *)
-
-
 open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
@@ -30,6 +28,7 @@ open Ast
 open Common
 open Common.Points_to
 open Common.Base
+open Common.Runtime
 open Universal.Numeric.Common
 module StringMap = MapExt.StringMap
 
@@ -87,17 +86,20 @@ struct
 
   (** Runtime testing options *)
   module StringSet = SetExt.Make(String)
+  (* module StringMap = Map.Make(String) *)
   let ffitest_flag = ref false
   let ffitest_filter = ref (StringSet.empty)
-  
-  let read_lines str = 
+
+  let ffitest_shapes : (type_shape list * type_shape) StringMap.t ref = ref (StringMap.empty)
+
+  let read_lines str =
     let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
-    let rec read_all_lines file = 
+    let rec read_all_lines file =
       let line = try Some (input_line file) with End_of_file -> None in
-      match line with 
-      | None -> [] 
-      | Some s -> s :: read_all_lines file 
-    in 
+      match line with
+      | None -> []
+      | Some s -> s :: read_all_lines file
+    in
     try
       let names = read_all_lines file in
       close_in file;
@@ -107,7 +109,7 @@ struct
       close_in_noerr file;
       (* emergency closing *)
       raise e
-  
+
   let () = register_domain_option name {
     key = "-test-runtime-functions";
     category="Runtime";
@@ -115,6 +117,22 @@ struct
     spec = ArgExt.String(fun s ->
         let funs = read_lines s in
         ffitest_filter := StringSet.of_list funs
+    );
+    default=""
+  }
+
+  let () = register_domain_option name {
+    key = "-test-runtime-shapes";
+    category="Runtime";
+    doc=" file containing function names of functions to test (if contained in the file)";
+    spec = ArgExt.String(fun s ->
+      let parse_functions fn = 
+        let fn = parse_ext_fun fn in 
+        (fn.name, (fn.arguments, fn.return))
+      in
+      let funs = read_lines s in
+      let funs = List.map parse_functions funs in 
+      ffitest_shapes := StringMap.of_list funs
     );
     default=""
   }
@@ -583,22 +601,57 @@ struct
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
+  type fn_type = type_shape list * type_shape
+
+  (* FIXME: incorporate check for number of arguments *)
+  (* FIXME: incorporate handling of more than five arguments *)
+  let type_shape_of_function (f: c_fundec) : fn_type option = 
+    match StringMap.find_opt f.c_func_org_name (!ffitest_shapes) with 
+    | Some (args, ret) -> Some (args, ret)
+    | None when StringSet.mem f.c_func_org_name (!ffitest_filter) -> 
+      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in 
+      let default_shape_ret = Any in 
+      Some (default_shape_args, default_shape_ret)
+    (* not a runtime function we should test *)
+    | None -> None
+
+
+  let virtual_runtime_function_argument range  (sh: type_shape) : stmt list * expr =
+    let tmp_active_var = mktmp ~typ:ffi_value_typ () in
+    let tmp_active = mk_var tmp_active_var range in
+    let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top ffi_value_typ range))) Variable_global range in
+    let init_var = mk_ffi_init_with_shape tmp_active_var sh range  in
+    [declare_var; init_var], tmp_active
+    
+
+  let virtual_runtime_function_test (f: c_fundec) (sh: fn_type) : stmt = 
+    let range = f.c_func_name_range in 
+    let arg_shapes, ret_shape = sh in 
+    let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in
+    let stmts = List.concat stmts in 
+    let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
+    let tmp_ret = mk_var tmp_ret_var range in
+    let exec_fun = mk_assign tmp_ret (mk_c_call f args range) range in
+    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape range in 
+    mk_block (stmts @ [exec_fun; assert_ret_shape]) range
+
+
   let exec stmt man flow =
     match skind stmt with
     (* | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-      let make_test (f: c_fundec) = 
+      let make_test (f: c_fundec) =
         let name = f.c_func_org_name in
-        let args = List.map (fun arg -> mk_ffi_active_value f.c_func_name_range) (f.c_func_parameters) in 
+        let args = List.map (fun arg -> mk_ffi_active_value f.c_func_name_range) (f.c_func_parameters) in
         let stmt = mk_c_call_stmt f args f.c_func_name_range in
         (name, stmt)
       in
- 
+
       (* Initialize global variables *)
       init_globals c_globals man flow >>%? fun flow ->
 
       (* Execute stub directives *)
       exec_stub_directives c_stub_directives man flow >>%? fun flow ->
-  
+
       let ffi_functions = List.filter (fun s -> StringSet.mem (s.c_func_unique_name) !ffitest_filter) c_functions in
       let fstr = List.fold_right (fun s str -> s.c_func_org_name ^ "\n" ^ str) ffi_functions "" in
       let () = Format.printf "%a\n%s" (Debug.color_str Debug.green) "Checking" fstr in
@@ -607,39 +660,27 @@ struct
       man.exec unittests flow |>
       OptionExt.return *)
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-      let call_function (f: c_fundec) = 
-        let value_typ = (T_c_integer (C_signed_long)) in
-        let range = f.c_func_name_range in 
-        let tmp_active_var = mktmp ~typ:value_typ () in 
-        let tmp_active = mk_var tmp_active_var range in 
-        let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top value_typ range))) Variable_global range in
-        let active_var = mk_expr_stmt (mk_ffi_call "_ffi_mark_active_contents" [mk_c_address_of tmp_active range] range) range in
-        let any_shape_var = mk_expr_stmt (mk_ffi_call "_ffi_set_shape" [mk_c_address_of tmp_active range; mk_constant ~etyp:(T_c_integer C_signed_int) (C_int (Z.of_int 11)) range] range) range in
-        let args = List.map (fun arg -> tmp_active) (f.c_func_parameters) in 
-        let exec_fun = mk_c_call_stmt f args range in 
-        mk_block [declare_var; active_var; any_shape_var; exec_fun] range
-      in
-      let rec exec_all_tests (fs: c_fundec list) (flows: 'a flow list) (flow: 'a flow) =
-        match fs with 
-        | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows) 
-        | f :: fs -> 
-          Format.printf "checked: %s " f.c_func_org_name; 
-          man.exec (call_function f) flow >>% fun flow' -> 
-          let report = Flow.get_report flow' in 
+      let rec exec_all_tests (fs: (c_fundec * fn_type) list) (flows: 'a flow list) (flow: 'a flow) =
+        match fs with
+        | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
+        | (f, ty) :: fs ->
+          Format.printf "checked: %s " f.c_func_org_name;
+          man.exec (virtual_runtime_function_test f ty) flow >>% fun flow' ->
+          let report = Flow.get_report flow' in
           if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
           exec_all_tests fs (flow' :: flows) flow
-      in 
- 
+      in
+
       (* Initialize global variables *)
       init_globals c_globals man flow >>%? fun flow ->
 
       (* Execute stub directives *)
       exec_stub_directives c_stub_directives man flow >>%? fun flow ->
-  
-      let ffi_functions = List.filter (fun s -> StringSet.mem (s.c_func_unique_name) !ffitest_filter) c_functions in
+
+      let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
       exec_all_tests ffi_functions [] flow |>
       OptionExt.return
-      
+
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)

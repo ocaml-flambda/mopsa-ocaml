@@ -324,6 +324,37 @@ and shapes_deref man flow e range =
 *)
 
 
+  let mark_var_active var range man flow = 
+    let (m, l) = get_env T_cur man flow in
+    let m' = update_status var (Stat.embed Active) m in 
+    let flow = set_env T_cur (m', l) man flow in
+    Post.return flow 
+
+  let eval_set_shape_var var ss range man flow =
+    let (m, l) = get_env T_cur man flow in 
+    match Map.find_opt var m with 
+    | None -> 
+      let flow = raise_ffi_shape_missing range pp_var var man flow in 
+      Cases.empty flow  
+    | Some ((status, roots), _) -> 
+      let m' = Map.add var ((status, roots), ss) m in 
+      let flow = set_env T_cur (m', l) man flow in 
+      Post.return flow 
+  
+
+  let eval_assert_shape_var var ss range man flow = 
+    let (m, l) = get_env T_cur man flow  in
+    match lookup_shapes var m with 
+    | None -> 
+      let flow = raise_ffi_shape_missing range pp_var var man flow in
+      Cases.empty flow
+    | Some s when not (Shapes.compat ~value:s ~constr:ss) ->
+      let flow = raise_ffi_shape_mismatch range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
+      Cases.empty flow
+    | Some _ ->
+      let flow = safe_ffi_shape_check range man flow in 
+      Cases.singleton () flow 
+    
   (** {2 Utility functions for symbolic evaluations} *)
   (** ============================================== *)
 
@@ -367,6 +398,39 @@ and shapes_deref man flow e range =
     check_ext_call_args args
 
 
+  let rec type_shape_to_shapes (sh: type_shape) =
+    match sh with 
+    | Any -> Shapes.any ()
+    | Imm -> Shapes.immediate ()
+    | Block _ -> Shapes.block ()
+    | String -> Shapes.string ()
+    | Array _ -> Shapes.block ()
+    | Int64 -> Shapes.int64 ()
+    | Int32 -> Shapes.int32 ()
+    | Double -> Shapes.double ()
+    | Nativeint -> Shapes.nativeint ()
+    (* FIXME: there should be things here *)
+    | Closure -> Shapes.any ()
+    | Obj -> Shapes.any ()
+    | FloatArray -> Shapes.any ()
+    | Or (s1, s2) -> Shapes.join (type_shape_to_shapes s1) (type_shape_to_shapes s2)
+
+
+  let exec_init_with_shape var sh range man flow = 
+    mark_var_active var range man flow >>% fun flow -> 
+    let sh = type_shape_to_shapes sh in 
+    eval_set_shape_var var sh range man flow
+
+  let exec_assert_shape exp sh range man flow = 
+    match ekind (remove_casts exp) with 
+    | E_var (v, _) ->
+      let ss = type_shape_to_shapes sh in 
+      eval_assert_shape_var v ss range man flow >>% fun flow -> 
+      Post.return flow
+    | _ -> 
+      let flow = raise_ffi_shape_missing range pp_expr exp man flow in 
+      Cases.empty flow
+
 
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
@@ -387,6 +451,10 @@ and shapes_deref man flow e range =
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       let () = Debug.debug ~channel:"shape" "assigning %a = %a" pp_var var pp_expr e in 
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
+    | S_ffi_init_with_shape (v, sh) -> 
+      exec_init_with_shape v sh stmt.srange man flow |> OptionExt.return 
+    | S_ffi_assert_shape (e, sh) -> 
+      exec_assert_shape e sh stmt.srange man flow |> OptionExt.return
     | _ -> None
 
 
@@ -406,13 +474,6 @@ and shapes_deref man flow e range =
       eval_block_as_var base off mo ffi_value_typ exp.erange man flow 
     | P_null | P_invalid | P_top | P_fun _ ->
       Cases.singleton None flow 
-
-  let mark_var_active var range man flow = 
-    let (m, l) = get_env T_cur man flow in
-    let m' = update_status var (Stat.embed Active) m in 
-    let flow = set_env T_cur (m', l) man flow in
-    Post.return flow 
-
 
 
 
@@ -579,29 +640,7 @@ and shapes_deref man flow e range =
     Print.format Shapes.print fmt s
 
 
-  let eval_assert_shape_var var ss range man flow = 
-    let (m, l) = get_env T_cur man flow  in
-    match lookup_shapes var m with 
-    | None -> 
-      let flow = raise_ffi_shape_missing range pp_var var man flow in
-      Cases.empty flow
-    | Some s when not (Shapes.compat ~value:s ~constr:ss) ->
-      let flow = raise_ffi_shape_mismatch range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
-      Cases.empty flow
-    | Some _ ->
-      let flow = safe_ffi_shape_check range man flow in 
-      Cases.singleton () flow 
 
-  let eval_set_shape_var var ss range man flow =
-    let (m, l) = get_env T_cur man flow in 
-    match Map.find_opt var m with 
-    | None -> 
-      let flow = raise_ffi_shape_missing range pp_var var man flow in 
-      Cases.empty flow  
-    | Some ((status, roots), _) -> 
-      let m' = Map.add var ((status, roots), ss) m in 
-      let flow = set_env T_cur (m', l) man flow in 
-      Post.return flow 
 
   let eval_is_immediate_var var range man flow = 
     let (m, l) = get_env T_cur man flow in 

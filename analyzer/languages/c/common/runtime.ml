@@ -6,6 +6,9 @@ open Universal.Ast
 open Base
 open Ast
 
+open Sexplib
+open Sexplib.Std
+open Ppx_sexp_conv_expander
 
 let ffi_silent_analysis = ref false
 let () = register_domain_option "c.iterators.program" {
@@ -25,24 +28,24 @@ let ffi_value_typ = T_c_integer C_signed_long
 (* Runtime Status, shared accross domains *)
 module Status =
 struct
-  type t = 
+  type t =
     Untracked | Active | Stale
 
   let compare a b =
-    match a, b with 
+    match a, b with
     | Untracked, Untracked -> 0
     | Active, Active -> 0
     | Stale, Stale -> 0
     (* FIXME: This is the MOPSA standard, but does not seem great. Same below. *)
-    | _, _ -> compare a b 
+    | _, _ -> compare a b
 
 
-  let to_string s = 
+  let to_string s =
     match s with
     | Untracked -> "untracked"
     | Active -> "active"
     | Stale -> "stale"
-    
+
   let print printer b = pp_string printer (to_string b)
 end
 
@@ -77,10 +80,10 @@ let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
 (** Runtime Variables *)
 type var_kind +=
   | V_ffi_ptr of addr
-           
+
 let pp_ffi_var_addr fmt addr =
   Format.fprintf fmt "var⦃%a⦄" pp_addr addr
-           
+
 let () =
   register_var {
     print = (fun next fmt v ->
@@ -95,7 +98,7 @@ let () =
           | _ -> next v1 v2
         );
     }
-  
+
 let mk_ffi_var addr typ =
   let name = Format.asprintf "var%s⦄" (addr_uniq_name addr) in
   mkv name (V_ffi_ptr addr) typ
@@ -106,8 +109,8 @@ let mk_ffi_var_expr addr ?(mode=None) ?(typ=ffi_value_typ) range =
 
 
 (** Runtime Checks and Alarms*)
-type check +=  
-| CHK_FFI_LIVENESS_VALUE 
+type check +=
+| CHK_FFI_LIVENESS_VALUE
 | CHK_FFI_RUNTIME_LOCK
 | CHK_FFI_ROOTS
 | CHK_FFI_SHAPE
@@ -116,39 +119,39 @@ type check +=
 
 let () =
   register_check (fun next fmt -> function
-      | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime value liveness"     
+      | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime value liveness"
       | CHK_FFI_SHAPE -> Format.fprintf fmt "Runtime value shapes"
-      | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"     
+      | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
       | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
       | a -> next fmt a
     )
 
-type alarm_kind += 
+type alarm_kind +=
   | A_ffi_non_active_value of expr
   | A_ffi_double_root of expr
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
-  | A_ffi_begin_end_roots 
+  | A_ffi_begin_end_roots
   | A_ffi_abort_analysis of string
   | A_ffi_bad_shape of string
 
-let () = 
+let () =
   register_alarm {
-    check = (fun next alarm -> 
+    check = (fun next alarm ->
       match alarm with
-      | A_ffi_non_active_value e -> 
+      | A_ffi_non_active_value e ->
         CHK_FFI_LIVENESS_VALUE
       | A_ffi_runtime_unlocked ->
         CHK_FFI_RUNTIME_LOCK
-      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  -> 
+      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  ->
         CHK_FFI_ROOTS
-      | A_ffi_abort_analysis _ -> 
+      | A_ffi_abort_analysis _ ->
         CHK_FFI
-      | A_ffi_bad_shape _ -> 
+      | A_ffi_bad_shape _ ->
         CHK_FFI_SHAPE
       | a -> next a);
-    compare = (fun next a1 a2 -> 
+    compare = (fun next a1 a2 ->
       match a1, a2 with
       | A_ffi_non_active_value e1, A_ffi_non_active_value e2 -> compare_expr e1 e2
       | A_ffi_runtime_unlocked, A_ffi_runtime_unlocked -> 0
@@ -157,26 +160,26 @@ let () =
       | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
       | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
       | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
-      | _ -> next a1 a2 
+      | _ -> next a1 a2
     );
-    print = (fun next fmt a -> 
-      match a with 
-      | A_ffi_non_active_value e -> 
+    print = (fun next fmt a ->
+      match a with
+      | A_ffi_non_active_value e ->
         Format.fprintf fmt "'%a' is not active at this point" (Debug.bold pp_expr) e
-      | A_ffi_double_root e -> 
+      | A_ffi_double_root e ->
         Format.fprintf fmt "'%a' is already registered as a root" (Debug.bold pp_expr) e
-      | A_ffi_non_variable_root e -> 
+      | A_ffi_non_variable_root e ->
           Format.fprintf fmt "attempting to register '%a' as a root failed" (Debug.bold pp_expr) e
-      | A_ffi_runtime_unlocked -> 
+      | A_ffi_runtime_unlocked ->
         Format.fprintf fmt "runtime unlocked"
-      | A_ffi_begin_end_roots -> 
-        Format.fprintf fmt "Begin_roots/End_roots is deprecated" 
+      | A_ffi_begin_end_roots ->
+        Format.fprintf fmt "Begin_roots/End_roots is deprecated"
       | A_ffi_abort_analysis s ->
-        Format.fprintf fmt "Analysis failed: %s" s 
-      | A_ffi_bad_shape s -> 
+        Format.fprintf fmt "Analysis failed: %s" s
+      | A_ffi_bad_shape s ->
         Format.fprintf fmt "Shape mismatch: %s" s
       | a -> next fmt a
-    ); 
+    );
     join = (fun next a1 a2 -> next a1 a2);
   }
 
@@ -186,7 +189,7 @@ let raise_ffi_inactive_value ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_non_active_value exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-    
+
 let raise_ffi_runtime_unlocked ?(bottom=true) range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_runtime_unlocked) cs range in
@@ -196,23 +199,23 @@ let raise_ffi_double_root ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_double_root exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-  
+
 let raise_ffi_double_root ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-      
+
 let raise_ffi_rooting_failed ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
-        
+
 let raise_ffi_begin_end_roots range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_begin_end_roots) cs range in
   Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
-          
-let raise_ffi_shape_error range s man flow = 
+
+let raise_ffi_shape_error range s man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_bad_shape s) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
@@ -225,22 +228,22 @@ let raise_ffi_shape_missing range pp_term term man flow =
 
 let raise_ffi_shape_non_value range pp_term term pp_shape shape man flow =
   raise_ffi_shape_error range (Format.asprintf "%a has shape %a, expected an OCaml value" pp_term term pp_shape shape) man flow
-  
+
 let raise_ffi_shape_number_error range pp_term term man flow =
     raise_ffi_shape_error range (Format.asprintf "cannot turn shape number %a into a shape description" pp_term term) man flow
-  
+
 
 
 
 
 let raise_or_fail_ffi_unsupported range reason man flow =
-  if not !ffi_silent_analysis then 
+  if not !ffi_silent_analysis then
     failwith (Format.asprintf "failed with reason: %s" reason)
   else
     let cs = Flow.get_callstack flow in
     let alarm = mk_alarm (A_ffi_abort_analysis reason) cs range in
     Flow.raise_alarm alarm ~bottom:true ~warning:false man.lattice flow
-            
+
 
 
 
@@ -249,16 +252,16 @@ let raise_or_fail_ffi_unsupported range reason man flow =
 (* safe checks *)
 let safe_ffi_value_liveness_check range man flow =
     Flow.add_safe_check CHK_FFI_LIVENESS_VALUE range flow
-  
+
 let safe_ffi_runtime_lock_check range man flow =
   Flow.add_safe_check CHK_FFI_RUNTIME_LOCK range flow
-    
+
 let safe_ffi_roots_check range man flow =
   Flow.add_safe_check CHK_FFI_ROOTS range flow
-  
+
 let safe_ffi_shape_check range man flow =
   Flow.add_safe_check CHK_FFI_SHAPE range flow
-    
+
 
 (* Runtime Status Query *)
 (* Points-to query *)
@@ -290,3 +293,103 @@ let () = register_query {
 
 let resolve_status var man flow = man.ask (Q_ffi_status var) flow
 
+
+
+
+
+type type_shape =
+  | Any (** anything of C type [value]*)
+  | Imm (** immediate, tagged with a one at the end*)
+  | Nativeint (** block to a native word (= 64-bit) integer*)
+  | Double (** block to a native double *)
+  | Int64 (** block to a 64-bit integer *)
+  | Int32 (** block to a 32-bit integer *)
+  | String (** block to a char pointer with a size *)
+  | FloatArray (** block containing native doubles *)
+  | Block of (int * type_shape list) option
+  (** Block below no-scan tag. If the argment is [None], then the block could have any tag
+      and any elements. If the argument is [Some (t, shs)], then [t] is the tag of the
+      block and [shs] contains the shapes of its fields. The length of the block is known statically.
+      Otherwise, it must be an array (see below). *)
+  | Array of type_shape
+  (** Block with tag 0 and a fixed size (not known statically). The shape of the elements is given
+      by the argument. *)
+  | Closure (** Block with closure tag. *)
+  | Obj (** Block with object tag. *)
+  | Or of type_shape * type_shape (** Disjunction between two shapes for (e.g., variant types) *)
+[@@deriving sexp]
+
+(* FIXME: this is probably not the way to go *)
+let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2 
+
+
+(* An external function consists of a*)
+type external_function =
+  { name : string (** C name of the function *)
+  ; arguments : type_shape list (** Shapes of the arguments *)
+  ; return : type_shape (** Shape of the return type *)
+  }
+[@@deriving sexp]
+
+let rec pp_shape fmt (sh : type_shape) =
+  match sh with
+  | Any -> Format.pp_print_string fmt "*"
+  | Imm -> Format.pp_print_string fmt "imm"
+  | Nativeint -> Format.pp_print_string fmt "native"
+  | Double -> Format.pp_print_string fmt "double"
+  | Int64 -> Format.pp_print_string fmt "int64"
+  | Int32 -> Format.pp_print_string fmt "int32"
+  | String -> Format.pp_print_string fmt "string"
+  | Block None -> Format.pp_print_string fmt "block"
+  | Block (Some (tag, shapes)) ->
+    Format.fprintf
+      fmt
+      "block[%d](%a)"
+      tag
+      (Format.pp_print_list pp_shape ~pp_sep:(fun fmt () ->
+         Format.pp_print_string fmt "; "))
+      shapes
+  | FloatArray -> Format.pp_print_string fmt "float_array"
+  | Obj -> Format.pp_print_string fmt "object"
+  | Array s -> Format.fprintf fmt "array(%a)" pp_shape s
+  | Closure -> Format.pp_print_string fmt "closure"
+  | Or (s1, s2) -> Format.fprintf fmt "%a ∨ %a" pp_shape s1 pp_shape s2
+;;
+
+let pp_ext_fun_sexp fmt ext =
+  let sexp = [%sexp_of: external_function] ext in
+  Format.pp_print_string fmt (Sexp.to_string sexp)
+;;
+
+let parse_ext_fun (ef: string) =
+  let sexp = Sexp.of_string ef in
+   ([%of_sexp: external_function] sexp)
+
+
+(* Shape Statement Extension *)
+type stmt_kind += 
+  | S_ffi_init_with_shape of var * type_shape
+  | S_ffi_assert_shape of expr * type_shape
+
+
+let mk_ffi_init_with_shape v sh range =
+  mk_stmt (S_ffi_init_with_shape (v, sh)) range
+      
+let mk_ffi_assert_shape e sh range =
+  mk_stmt (S_ffi_assert_shape (e, sh)) range
+      
+  
+let () = register_stmt_compare (fun next s1 s2 -> 
+  match skind s1, skind s2 with 
+  | S_ffi_init_with_shape (v1, ts1), S_ffi_init_with_shape (v2, ts2) -> 
+    Compare.pair compare_var compare_type_shape (v1, ts1) (v2, ts2)
+  | S_ffi_assert_shape (v1, ts1), S_ffi_assert_shape (v2, ts2) -> 
+    Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
+  | _, _ -> next s1 s2 )
+
+let () = register_stmt_pp (fun next fmt s -> 
+  match skind s with 
+  | S_ffi_init_with_shape (v, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_var v pp_shape sh   
+  | S_ffi_assert_shape (v, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr v pp_shape sh  
+  | _ -> next fmt s
+  )
