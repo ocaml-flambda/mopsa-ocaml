@@ -10,6 +10,7 @@ open Sexplib
 open Sexplib.Std
 open Ppx_sexp_conv_expander
 
+
 let ffi_silent_analysis = ref false
 let () = register_domain_option "c.iterators.program" {
   key = "-silent-failure";
@@ -294,131 +295,37 @@ let () = register_query {
 let resolve_status var man flow = man.ask (Q_ffi_status var) flow
 
 
-
-
-type type_shape =
-  | Any (** anything of C type [value]*)
-  | Imm (** immediate, tagged with a one at the end*)
-  | Nativeint (** block to a native word (= 64-bit) integer*)
-  | Double (** block to a native double *)
-  | Int64 (** block to a 64-bit integer *)
-  | Int32 (** block to a 32-bit integer *)
-  | String (** block to a char pointer with a size *)
-  | FloatArray (** block containing native doubles *)
-  | Block of (int * type_shape list) option
-  (** Block below no-scan tag. If the argment is [None], then the block could have any tag
-      and any elements. If the argument is [Some (t, shs)], then [t] is the tag of the
-      block and [shs] contains the shapes of its fields. The length of the block is known statically.
-      Otherwise, it must be an array (see below). *)
-  | Array of type_shape
-  (** Block with tag 0 and a fixed size (not known statically). The shape of the elements is given
-      by the argument. *)
-  | Closure (** Block with closure tag. *)
-  | Obj (** Block with object tag. *)
-  | Or of type_shape * type_shape (** Disjunction between two shapes for (e.g., variant types) *)
-[@@deriving sexp]
-
-
-let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2  
-
-(* TODO: check exceptions *)
-type fn_type =
-  { arguments : type_shape list
-  ; return : type_shape
-  }
-[@@deriving sexp]
-
-type external_function_description =
-  | ShapeDescr of fn_type
-  | ArityDescr of int
-  | NoDescr
-[@@deriving sexp]
-
-type external_function =
-  { name : string (** C name of the function *)
-  ; description : external_function_description
-  }
-[@@deriving sexp]
-
-let rec pp_shape fmt (sh : type_shape) =
-  match sh with
-  | Any -> Format.pp_print_string fmt "*"
-  | Imm -> Format.pp_print_string fmt "imm"
-  | Nativeint -> Format.pp_print_string fmt "native"
-  | Double -> Format.pp_print_string fmt "double"
-  | Int64 -> Format.pp_print_string fmt "int64"
-  | Int32 -> Format.pp_print_string fmt "int32"
-  | String -> Format.pp_print_string fmt "string"
-  | Block None -> Format.pp_print_string fmt "block"
-  | Block (Some (tag, shapes)) ->
-    Format.fprintf
-      fmt
-      "block[%d](%a)"
-      tag
-      (Format.pp_print_list pp_shape ~pp_sep:(fun fmt () ->
-         Format.pp_print_string fmt "; "))
-      shapes
-  | FloatArray -> Format.pp_print_string fmt "float_array"
-  | Obj -> Format.pp_print_string fmt "object"
-  | Array s -> Format.fprintf fmt "array(%a)" pp_shape s
-  | Closure -> Format.pp_print_string fmt "closure"
-  | Or (s1, s2) -> Format.fprintf fmt "%a ∨ %a" pp_shape s1 pp_shape s2
-;;
-
-let pp_external_function_description fmt desc =
-  match desc with
-  | ShapeDescr { arguments; return } ->
-    Format.fprintf
-      fmt
-      "args(%a) -> %a"
-      (Format.pp_print_list pp_shape ~pp_sep:(fun fmt () ->
-         Format.pp_print_string fmt "; "))
-      arguments
-      pp_shape
-      return
-  | ArityDescr n -> Format.fprintf fmt "arity(%d)" n
-  | NoDescr -> Format.fprintf fmt "*"
-;;
-
-let pp_ext_fun fmt ext =
-  Format.fprintf fmt "%s: %a" ext.name pp_external_function_description ext.description
-;;
-
-let pp_ext_fun_sexp fmt ext =
-  let sexp = [%sexp_of: external_function] ext in
-  Format.pp_print_string fmt (Sexp.to_string sexp)
-;;
-
-
-let parse_ext_fun (ef: string) =
-  let sexp = Sexp.of_string ef in
-   ([%of_sexp: external_function] sexp)
+(* Type Shapes *)
+include Type_shapes
+(* We directly include the file to shadow all of its declarations,
+   but keep the original file in sync with the external extraction. *)
+let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2
 
 
 (* Shape Statement Extension *)
-type stmt_kind += 
+type stmt_kind +=
   | S_ffi_init_with_shape of var * type_shape
   | S_ffi_assert_shape of expr * type_shape
 
 
 let mk_ffi_init_with_shape v sh range =
   mk_stmt (S_ffi_init_with_shape (v, sh)) range
-      
+
 let mk_ffi_assert_shape e sh range =
   mk_stmt (S_ffi_assert_shape (e, sh)) range
-      
-  
-let () = register_stmt_compare (fun next s1 s2 -> 
-  match skind s1, skind s2 with 
-  | S_ffi_init_with_shape (v1, ts1), S_ffi_init_with_shape (v2, ts2) -> 
+
+
+let () = register_stmt_compare (fun next s1 s2 ->
+  match skind s1, skind s2 with
+  | S_ffi_init_with_shape (v1, ts1), S_ffi_init_with_shape (v2, ts2) ->
     Compare.pair compare_var compare_type_shape (v1, ts1) (v2, ts2)
-  | S_ffi_assert_shape (v1, ts1), S_ffi_assert_shape (v2, ts2) -> 
+  | S_ffi_assert_shape (v1, ts1), S_ffi_assert_shape (v2, ts2) ->
     Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
   | _, _ -> next s1 s2 )
 
-let () = register_stmt_pp (fun next fmt s -> 
-  match skind s with 
-  | S_ffi_init_with_shape (v, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_var v pp_shape sh   
-  | S_ffi_assert_shape (v, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr v pp_shape sh  
+let () = register_stmt_pp (fun next fmt s ->
+  match skind s with
+  | S_ffi_init_with_shape (v, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_var v pp_shape sh
+  | S_ffi_assert_shape (v, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr v pp_shape sh
   | _ -> next fmt s
   )

@@ -88,9 +88,7 @@ struct
   module StringSet = SetExt.Make(String)
   (* module StringMap = Map.Make(String) *)
   let ffitest_flag = ref false
-  let ffitest_filter = ref (StringSet.empty)
-
-  let ffitest_shapes : external_function_description StringMap.t ref = ref (StringMap.empty)
+  let ffitest_extfuns : extfun_desc StringMap.t ref = ref (StringMap.empty)
 
   let read_lines str =
     let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
@@ -110,29 +108,19 @@ struct
       (* emergency closing *)
       raise e
 
-  let () = register_domain_option name {
-    key = "-test-runtime-functions";
-    category="Runtime";
-    doc=" file containing function names of functions to test (if contained in the file)";
-    spec = ArgExt.String(fun s ->
-        let funs = read_lines s in
-        ffitest_filter := StringSet.of_list funs
-    );
-    default=""
-  }
 
   let () = register_domain_option name {
-    key = "-test-runtime-shapes";
+    key = "-external-functions";
     category="Runtime";
     doc=" file containing function names of functions to test (if contained in the file)";
     spec = ArgExt.String(fun s ->
-      let parse_functions fn = 
-        let fn = parse_ext_fun fn in 
-        (fn.name, fn.description)
+      let parse_functions fn =
+        let fn = parse_ext_fun fn in
+        (fn.name, fn.desc)
       in
       let funs = read_lines s in
-      let funs = List.map parse_functions funs in 
-      ffitest_shapes := StringMap.of_list funs
+      let funs = List.map parse_functions funs in
+      ffitest_extfuns := StringMap.of_list funs
     );
     default=""
   }
@@ -603,17 +591,13 @@ struct
 
   (* FIXME: incorporate check for number of arguments *)
   (* FIXME: incorporate handling of more than five arguments *)
-  let type_shape_of_function (f: c_fundec) : fn_type option = 
-    match StringMap.find_opt f.c_func_org_name (!ffitest_shapes) with 
-    | Some (ShapeDescr ty) -> Some ty
-    | Some (ArityDescr arity) -> Some { arguments = List.init arity (fun _ -> Any); return = Any }
-    | Some NoDescr -> 
-      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in 
-      let default_shape_ret = Any in 
-      Some { arguments=default_shape_args; return=default_shape_ret }
-    | None when StringSet.mem f.c_func_org_name (!ffitest_filter) -> 
-      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in 
-      let default_shape_ret = Any in 
+  let type_shape_of_function (f: c_fundec) : fn_type_shapes option =
+    match StringMap.find_opt f.c_func_org_name (!ffitest_extfuns) with
+    | Some { shape = Some ty } -> Some ty
+    (* a runtime function we should test of unknown shape *)
+    | Some { shape = None } ->
+      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in
+      let default_shape_ret = Any in
       Some { arguments=default_shape_args; return=default_shape_ret }
     (* not a runtime function we should test *)
     | None -> None
@@ -625,17 +609,17 @@ struct
     let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top ffi_value_typ range))) Variable_global range in
     let init_var = mk_ffi_init_with_shape tmp_active_var sh range  in
     [declare_var; init_var], tmp_active
-    
 
-  let virtual_runtime_function_test (f: c_fundec) (sh: fn_type) : stmt = 
-    let range = f.c_func_name_range in 
-    let {arguments = arg_shapes; return = ret_shape } = sh in 
+
+  let virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) : stmt =
+    let range = f.c_func_name_range in
+    let {arguments = arg_shapes; return = ret_shape } = sh in
     let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in
-    let stmts = List.concat stmts in 
+    let stmts = List.concat stmts in
     let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
     let tmp_ret = mk_var tmp_ret_var range in
     let exec_fun = mk_assign tmp_ret (mk_c_call f args range) range in
-    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape range in 
+    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape range in
     mk_block (stmts @ [exec_fun; assert_ret_shape]) range
 
 
@@ -663,7 +647,7 @@ struct
       man.exec unittests flow |>
       OptionExt.return *)
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-      let rec exec_all_tests (fs: (c_fundec * fn_type) list) (flows: 'a flow list) (flow: 'a flow) =
+      let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) (flows: 'a flow list) (flow: 'a flow) =
         match fs with
         | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
         | (f, ty) :: fs ->
