@@ -343,7 +343,6 @@ and shapes_deref man flow e range =
       let flow = set_env T_cur (m', l) man flow in
       Post.return flow
 
-
   let eval_assert_shape_var var ss range man flow =
     let (m, l) = get_env T_cur man flow  in
     match lookup_shapes var m with
@@ -358,13 +357,12 @@ and shapes_deref man flow e range =
       Cases.singleton () flow
 
 
-  let eval_expr_as_var exp man flow =
-    man.eval exp flow >>$ fun exp flow ->
+  let unwrap_expr_as_var exp ?(fail = fun man flow -> raise_ffi_not_variable exp man flow)  man flow =
     match ekind (remove_casts exp) with
     | E_var (var, _) ->
       Cases.singleton var flow
     | _ ->
-      let flow = raise_ffi_not_variable exp man flow in
+      let flow = fail man flow in
       Cases.empty flow
 
 
@@ -430,13 +428,15 @@ and shapes_deref man flow e range =
 
 
   let exec_init_with_shape exp sh range man flow =
-    eval_expr_as_var exp man flow >>$ fun var flow ->
+    man.eval exp flow >>$ fun exp flow ->
+    unwrap_expr_as_var exp man flow >>$ fun var flow ->
     mark_var_active var range man flow >>% fun flow ->
     let sh = type_shape_to_shapes sh in
     eval_set_shape_var var sh range man flow
 
 
   let exec_assert_shape exp sh range man flow =
+
     match ekind (remove_casts exp) with
     | E_var (v, _) ->
       let ss = type_shape_to_shapes sh in
@@ -506,15 +506,9 @@ and shapes_deref man flow e range =
     end
 
   let eval_mark_active_pointer range exp man flow =
-    match ekind (remove_casts exp) with
-    | E_var (var, _) ->
-      mark_var_active var range man flow >>% fun flow ->
-      Eval.singleton (mk_unit range) flow
-    | _ ->
-      let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression %a active, which is not a variable" pp_expr exp) man flow in
-      Cases.empty flow
-
-
+    unwrap_expr_as_var exp man flow >>$ fun var flow ->
+    mark_var_active var range man flow >>% fun flow ->
+    Eval.singleton (mk_unit range) flow
 
 
   let eval_garbage_collect range man flow =
@@ -548,11 +542,8 @@ and shapes_deref man flow e range =
 
   let eval_assert_valid exp man flow =
     let (m, l) = get_env T_cur man flow in
-    match ekind (remove_casts exp) with
-    | E_var (var, _) -> eval_assert_valid_var var m exp man flow
-    | _ ->
-      let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "validity checks are only supported for variables, %a is not a variable" pp_expr exp) man flow in
-      Cases.empty flow
+    unwrap_expr_as_var exp man flow >>$ fun var flow ->
+    eval_assert_valid_var var m exp man flow
 
 
   let exec_register_root_var var range man flow =
@@ -676,35 +667,25 @@ and shapes_deref man flow e range =
         Cases.singleton rt flow
 
   let eval_assert_shape v sh range man flow =
-    match ekind (remove_casts v) with
-    | E_var (v, _) ->
-      eval_number_exp_to_integer sh man flow >>$ fun sh' flow ->
-      let shapeset = OptionExt.bind (fun x -> shape_ident_to_shape x) sh' in
-      begin match shapeset with
-      | Some ss ->
-        eval_assert_shape_var v ss range man flow >>% fun flow ->
-        Eval.singleton (mk_unit range) flow
-      | None ->
-        let flow = raise_ffi_shape_number_error range pp_expr sh man flow in
-        Cases.empty flow
-      end
-    | _ ->
-      let flow = raise_ffi_shape_missing range pp_expr v man flow in
+    unwrap_expr_as_var v man flow >>$ fun v flow ->
+    eval_number_exp_to_integer sh man flow >>$ fun sh' flow ->
+    let shapeset = OptionExt.bind (fun x -> shape_ident_to_shape x) sh' in
+    begin match shapeset with
+    | Some ss ->
+      eval_assert_shape_var v ss range man flow >>% fun flow ->
+      Eval.singleton (mk_unit range) flow
+    | None ->
+      let flow = raise_ffi_shape_number_error range pp_expr sh man flow in
       Cases.empty flow
-
+    end
 
   let eval_is_immediate v range man flow =
-    match ekind (remove_casts v) with
-    | E_var (v, _) ->
-      eval_is_immediate_var v range man flow >>$ fun rt flow ->
-      begin match rt with
-      | Pointer -> Eval.singleton (mk_int 0 ~typ:(T_c_integer C_signed_int) range) flow
-      | Immediate -> Eval.singleton (mk_int 1 ~typ:(T_c_integer C_signed_int) range) flow
-      end
-    | _ ->
-      let flow = raise_ffi_shape_missing range pp_expr v man flow in
-      Cases.empty flow
-
+    unwrap_expr_as_var v man flow >>$ fun v flow ->
+    eval_is_immediate_var v range man flow >>$ fun rt flow ->
+    begin match rt with
+    | Pointer -> Eval.singleton (mk_int 0 ~typ:(T_c_integer C_signed_int) range) flow
+    | Immediate -> Eval.singleton (mk_int 1 ~typ:(T_c_integer C_signed_int) range) flow
+    end
 
 
   let eval_set_shape ptr sh range man flow =
@@ -775,8 +756,6 @@ and shapes_deref man flow e range =
     (* let () = Debug.debug ~channel:"eval" "evaluating %a" pp_expr exp in   *)
     match ekind exp with
     | E_ffi_call (f, args) -> eval_ffi_primtive f args exp.erange man flow |> OptionExt.return
-    | E_c_deref e ->
-      let () = Debug.debug ~channel:"eval" "deref %a" pp_expr e in None
     | _ -> None
 
   (** {2 Handler of queries} *)
