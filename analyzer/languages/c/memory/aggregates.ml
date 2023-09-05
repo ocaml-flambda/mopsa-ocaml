@@ -281,12 +281,12 @@ struct
               | _ -> assert false in
             let under_bitfield_typ = match field.c_field_type with
               | T_c_bitfield (t, _) -> t
-              | _ -> assert false in 
+              | _ -> assert false in
             let new_l, new_r = discard_same_offsets l records in
-            let init_top = C_init_expr (mk_top under_bitfield_typ range) in 
+            let init_top = C_init_expr (mk_top under_bitfield_typ range) in
             let l1,l2 = flatten_init (Some init_top) o under_bitfield_typ range in
             aux new_l (List.rev_append l1 acc1) (List.rev_append l2 acc2) new_r
-          else 
+          else
             match l with
             | [] ->
               let l1,l2 = flatten_init None o field.c_field_type range in
@@ -305,11 +305,17 @@ struct
     | _ -> panic_at ~loc:__LOC__ range "initialization %a is not supported"
              Pp.pp_c_init (OptionExt.none_to_exn init)
 
-  
+
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
-    let () = Debug.debug ~channel:"declare" "variable %a" pp_var v in
+    let () = Debug.debug ~channel:"declare" "variable %a: %a" pp_var v pp_typ v.vtyp in
+    (* (match init with
+    | None -> Debug.debug ~channel:"declare" "no init provided"
+    | Some (C_init_expr e) -> Debug.debug ~channel:"declare" "init expression %a" pp_expr e
+    | Some (C_init_list _) -> Debug.debug ~channel:"declare" "init list"
+    | Some (C_init_implicit ty) -> Debug.debug ~channel:"declare" "init impicit for %a" pp_typ ty
+    ); *)
     man.exec (mk_add_var v range) flow >>% fun flow ->
     let initl,fill = flatten_init init Z.zero v.vtyp range in
 
@@ -412,7 +418,7 @@ struct
       in
 
       (* Get the fields to copy *)
-      let fields = 
+      let fields =
         match record_kind with
         | C_struct -> fields
         | C_union ->
@@ -488,7 +494,7 @@ struct
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
   let arrow_access p i f t range = mk_lowlevel_arrow_access p i t range
-  
+
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
   let address_of_array_subscript a i t range = mk_binop a O_plus i ~etyp:t range
 

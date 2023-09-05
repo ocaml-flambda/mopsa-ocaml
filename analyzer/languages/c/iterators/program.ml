@@ -607,21 +607,49 @@ struct
     let tmp_active_var = mktmp ~typ:ffi_value_typ () in
     let tmp_active = mk_var tmp_active_var range in
     let declare_var = mk_c_declaration tmp_active_var (Some (C_init_expr (mk_top ffi_value_typ range))) Variable_global range in
-    let init_var = mk_ffi_init_with_shape tmp_active_var sh range  in
+    let init_var = mk_ffi_init_with_shape tmp_active sh range  in
     [declare_var; init_var], tmp_active
 
+  let mk_lowlevel_subscript_access a i t range =
+      mk_c_deref (mk_binop a O_plus i ~etyp:(pointer_type t) range) range
 
+  let assign_array a i t e r range =
+    let lval = mk_lowlevel_subscript_access a i t r in
+    let stmt = mk_assign lval e range in
+    stmt
+
+
+  let virtual_runtime_arguments array tys range : expr list =
+    let len = List.length tys in
+    if len > 5 then [mk_c_address_of array range; mk_int len range]
+    else List.init len (fun i -> mk_lowlevel_subscript_access array (mk_int i range) ffi_value_typ range)
+
+  let virtual_runtime_argument_array tys range : (stmt list) * (expr list) =
+    let size = C_array_length_cst (Z.of_int (List.length tys)) in
+    let tmp_active_var = mktmp ~typ:(T_c_array (ffi_value_typ, size)) () in
+    let tmp_active = mk_var tmp_active_var range in
+    let declare_var = mk_c_declaration tmp_active_var None Variable_global range in
+    let assignments = List.mapi (fun i ty ->
+      [
+        assign_array tmp_active (mk_int i range) ffi_value_typ (mk_top ffi_value_typ range) range range;
+        mk_ffi_init_with_shape (mk_lowlevel_subscript_access tmp_active (mk_int i range) ffi_value_typ range) ty range
+      ]
+    ) tys in
+    let args = virtual_runtime_arguments tmp_active tys range in
+    declare_var :: List.concat assignments, args
 
 
   let virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) : stmt =
     let range = f.c_func_name_range in
     let {arguments = arg_shapes; return = ret_shape } = sh in
-    let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in
-    let stmts = List.concat stmts in
+    let stmts, args = virtual_runtime_argument_array arg_shapes range in
+    (* let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in *)
+    (* let stmts = List.concat stmts in *)
     let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
     let tmp_ret = mk_var tmp_ret_var range in
     let exec_fun = mk_assign tmp_ret (mk_c_call f args range) range in
     let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape f.c_func_range in
+    (* let array = virtual_runtime_argument_array arg_shapes range in *)
     mk_block (stmts @ [exec_fun; assert_ret_shape]) range
 
 
@@ -662,6 +690,7 @@ struct
       (* Execute stub directives *)
       exec_stub_directives c_stub_directives man flow >>%? fun flow ->
 
+      (* let () = Debug.debug ~channel:"functions" "function names %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "\n") Format.pp_print_string) (List.map (fun f -> f.c_func_org_name) c_functions) in *)
       let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
       exec_all_tests ffi_functions man [] flow |>
       OptionExt.return

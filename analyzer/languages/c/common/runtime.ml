@@ -138,6 +138,7 @@ type alarm_kind +=
   | A_ffi_abort_analysis of string
   | A_ffi_bad_shape of string
   | A_ffi_arity_mismatch of int * int
+  | A_ffi_not_variable of expr
 
 let () =
   register_alarm {
@@ -149,9 +150,9 @@ let () =
         CHK_FFI_RUNTIME_LOCK
       | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  ->
         CHK_FFI_ROOTS
-      | A_ffi_abort_analysis _ ->
+      | A_ffi_abort_analysis _ | A_ffi_not_variable _ ->
         CHK_FFI
-      | A_ffi_bad_shape _ ->
+      | A_ffi_bad_shape _  ->
         CHK_FFI_SHAPE
       | A_ffi_arity_mismatch _ ->
         CHK_FFI_ARITY
@@ -167,6 +168,8 @@ let () =
       | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
       | A_ffi_arity_mismatch (n1, m1), A_ffi_arity_mismatch (n2, m2) ->
         Compare.pair Int.compare Int.compare (n1, m1) (n2, m2)
+      | A_ffi_not_variable e1, A_ffi_not_variable e2 ->
+        compare_expr e1 e2
       | _ -> next a1 a2
     );
     print = (fun next fmt a ->
@@ -183,6 +186,8 @@ let () =
         Format.fprintf fmt "Begin_roots/End_roots is deprecated"
       | A_ffi_abort_analysis s ->
         Format.fprintf fmt "Analysis failed: %s" s
+      | A_ffi_not_variable e ->
+        Format.fprintf fmt "Cannot evaluate the expression %a to a logical variable known to the analysis." pp_expr e
       | A_ffi_bad_shape s ->
         Format.fprintf fmt "Shape mismatch: %s" s
       | A_ffi_arity_mismatch (n, m) ->
@@ -247,6 +252,11 @@ let raise_ffi_shape_number_error range pp_term term man flow =
 let raise_ffi_arity_mismatch range ~expected ~actual man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_arity_mismatch (expected, actual)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_ffi_not_variable expr man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_not_variable expr) cs expr.erange in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 
@@ -320,12 +330,12 @@ let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2
 
 (* Shape Statement Extension *)
 type stmt_kind +=
-  | S_ffi_init_with_shape of var * type_shape
+  | S_ffi_init_with_shape of expr * type_shape
   | S_ffi_assert_shape of expr * type_shape
 
 
-let mk_ffi_init_with_shape v sh range =
-  mk_stmt (S_ffi_init_with_shape (v, sh)) range
+let mk_ffi_init_with_shape e sh range =
+  mk_stmt (S_ffi_init_with_shape (e, sh)) range
 
 let mk_ffi_assert_shape e sh range =
   mk_stmt (S_ffi_assert_shape (e, sh)) range
@@ -334,14 +344,14 @@ let mk_ffi_assert_shape e sh range =
 let () = register_stmt_compare (fun next s1 s2 ->
   match skind s1, skind s2 with
   | S_ffi_init_with_shape (v1, ts1), S_ffi_init_with_shape (v2, ts2) ->
-    Compare.pair compare_var compare_type_shape (v1, ts1) (v2, ts2)
+    Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
   | S_ffi_assert_shape (v1, ts1), S_ffi_assert_shape (v2, ts2) ->
     Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
   | _, _ -> next s1 s2 )
 
 let () = register_stmt_pp (fun next fmt s ->
   match skind s with
-  | S_ffi_init_with_shape (v, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_var v pp_shape sh
-  | S_ffi_assert_shape (v, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr v pp_shape sh
+  | S_ffi_init_with_shape (e, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_expr e pp_shape sh
+  | S_ffi_assert_shape (e, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr e pp_shape sh
   | _ -> next fmt s
   )
