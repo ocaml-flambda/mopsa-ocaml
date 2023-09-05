@@ -127,6 +127,26 @@ struct
       default = "false";
     }
 
+  let opt_int_division_by_zero = ref false
+  let () =
+    register_domain_option name {
+      key = "-c-check-int-division-by-zero";
+      category = "C";
+      doc = " int divisions by 0 generate errors instead of top";
+      spec = ArgExt.Bool (fun b -> opt_int_division_by_zero := b);
+      default = "false";
+    }
+
+  let opt_int_shift = ref false
+  let () =
+    register_domain_option name {
+      key = "-c-check-int-shift";
+      category = "C";
+      doc = " int shifts out of bounds generate errors instead of 0";
+      spec = ArgExt.Bool (fun b -> opt_int_shift := b);
+      default = "false";
+    }
+
   let opt_float_overflow = ref false
   let () =
     register_domain_option name {
@@ -166,7 +186,7 @@ struct
     | T_bool | T_int | T_float _ | T_any -> t
     | _ ->
       match remove_typedef_qual t with
-      | T_c_bitfield(t, d) -> T_int 
+      | T_c_bitfield(t, d) -> T_int
       | T_c_bool -> T_bool
       | T_c_integer _ -> T_int
       | T_c_enum _ -> T_int
@@ -282,19 +302,25 @@ struct
   (** Check that a division is not performed on a null denominator *)
   let check_int_division cexp man flow =
     let nexp = c2num cexp in
+    let typ = cexp.etyp in
+    let range = cexp.erange in
+    let raise_alarm = !opt_int_division_by_zero in
     let denominator = match ekind nexp with
       | E_binop(_,_,e) -> e
       | _ -> assert false in
     let cond = ne denominator zero cexp.erange in
     assume cond
       ~fthen:(fun tflow ->
-          safe_c_divide_by_zero_check cexp.erange man tflow |>
+          (if raise_alarm then safe_c_divide_by_zero_check cexp.erange man tflow else tflow) |>
           (* a division can also generate an overflow (min-int / -1) *)
           check_int_overflow cexp ~nexp cexp.erange man
         )
       ~felse:(fun fflow ->
+        if raise_alarm then
           let flow = raise_c_divide_by_zero_alarm denominator cexp.erange man fflow in
           Eval.empty flow
+        else
+          Eval.singleton (mk_top typ range) fflow
         )
       man flow
 
@@ -308,17 +334,21 @@ struct
     let nexp = c2num cexp in
     let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
     let range = cexp.erange in
+    let raise_alarm = !opt_int_shift in
     (* Condition: n ∈ [0, bits(t) - 1] *)
     let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
-          let tflow = safe_c_shift_check range man tflow in
+          let tflow = if raise_alarm then safe_c_shift_check range man tflow else flow in
           check_int_overflow cexp ~nexp range man tflow
         )
       ~felse:(fun fflow ->
-          let flow' = raise_c_invalid_shift_alarm cexp n range man flow fflow in
-          Eval.empty flow'
+          if raise_alarm then
+            let flow' = raise_c_invalid_shift_alarm cexp n range man flow fflow in
+            Eval.empty flow'
+          else
+            check_int_overflow cexp ~nexp range man fflow
         )
       man flow
 
@@ -359,7 +389,7 @@ struct
     in
     Eval.singleton cexp flow' |>
     Eval.add_translation "Universal" nexp'
-        
+
 
   (** Check that a float division is not performed on a null denominator.
       Also checks for invalid operations and overflows.
@@ -396,7 +426,7 @@ struct
       (* division by zero can happen but will result *)
       check_float_valid cexp ~nexp range man flow
 
-    
+
   (** Transfer functions *)
   (** ================== *)
 
@@ -514,7 +544,7 @@ struct
       let cexp = rebuild_c_expr exp [e;e'] in
       check_float_division cexp man flow |>
       OptionExt.return
-                           
+
     (* 𝔼⟦ e ⋄ e' ⟧, type(exp) = float *)
     | E_binop(op, e, e') when exp |> etyp |> is_c_float_type
       ->
@@ -523,7 +553,7 @@ struct
       let cexp = rebuild_c_expr exp [e;e'] in
       check_float_valid cexp exp.erange man flow |>
       OptionExt.return
-                           
+
     (* 𝔼⟦ e ⋄ e' ⟧ *)
     | E_binop(op, e, e') when exp |> etyp |> is_c_num_type ->
       man.eval e flow >>$? fun e flow ->
