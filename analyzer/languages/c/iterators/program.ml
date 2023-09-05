@@ -611,6 +611,8 @@ struct
     [declare_var; init_var], tmp_active
 
 
+
+
   let virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) : stmt =
     let range = f.c_func_name_range in
     let {arguments = arg_shapes; return = ret_shape } = sh in
@@ -619,44 +621,40 @@ struct
     let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
     let tmp_ret = mk_var tmp_ret_var range in
     let exec_fun = mk_assign tmp_ret (mk_c_call f args range) range in
-    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape range in
+    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape f.c_func_range in
     mk_block (stmts @ [exec_fun; assert_ret_shape]) range
+
+
+  let exec_arity_check f ty range man flow =
+    let actual = List.length (f.c_func_parameters) in
+    let expected = List.length (ty.arguments) in
+    if actual != expected && expected <= 5  then
+      let flow = raise_ffi_arity_mismatch range ~actual ~expected man flow in
+      Post.return flow
+    else if expected > 5 && actual != 2 then
+      let flow = raise_ffi_arity_mismatch range ~actual ~expected:2 man flow in
+      Post.return flow
+    else
+      let flow = safe_ffi_arity_check range man flow in
+      Post.return flow
+
+
+  let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (flow: 'a flow) =
+    match fs with
+    | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
+    | (f, ty) :: fs ->
+        exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
+        Format.printf "checked: %s " f.c_func_org_name;
+        man.exec (virtual_runtime_function_test f ty) flow' >>% fun flow'' ->
+        let report = Flow.get_report flow'' in
+        if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
+        exec_all_tests fs man (flow'' :: flows) flow
 
 
   let exec stmt man flow =
     match skind stmt with
-    (* | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-      let make_test (f: c_fundec) =
-        let name = f.c_func_org_name in
-        let args = List.map (fun arg -> mk_ffi_active_value f.c_func_name_range) (f.c_func_parameters) in
-        let stmt = mk_c_call_stmt f args f.c_func_name_range in
-        (name, stmt)
-      in
-
-      (* Initialize global variables *)
-      init_globals c_globals man flow >>%? fun flow ->
-
-      (* Execute stub directives *)
-      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
-
-      let ffi_functions = List.filter (fun s -> StringSet.mem (s.c_func_unique_name) !ffitest_filter) c_functions in
-      let fstr = List.fold_right (fun s str -> s.c_func_org_name ^ "\n" ^ str) ffi_functions "" in
-      let () = Format.printf "%a\n%s" (Debug.color_str Debug.green) "Checking" fstr in
-      let tests = List.map make_test ffi_functions in
-      let unittests = mk_stmt (Universal.Ast.S_unit_tests tests) (srange stmt) in
-      man.exec unittests flow |>
-      OptionExt.return *)
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-      let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) (flows: 'a flow list) (flow: 'a flow) =
-        match fs with
-        | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
-        | (f, ty) :: fs ->
-          Format.printf "checked: %s " f.c_func_org_name;
-          man.exec (virtual_runtime_function_test f ty) flow >>% fun flow' ->
-          let report = Flow.get_report flow' in
-          if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
-          exec_all_tests fs (flow' :: flows) flow
-      in
+
 
       (* Initialize global variables *)
       init_globals c_globals man flow >>%? fun flow ->
@@ -665,7 +663,7 @@ struct
       exec_stub_directives c_stub_directives man flow >>%? fun flow ->
 
       let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
-      exec_all_tests ffi_functions [] flow |>
+      exec_all_tests ffi_functions man [] flow |>
       OptionExt.return
 
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)

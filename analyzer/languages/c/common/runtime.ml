@@ -25,7 +25,6 @@ let () = register_domain_option "c.iterators.program" {
 (* the type of values *)
 let ffi_value_typ = T_c_integer C_signed_long
 
-
 (* Runtime Status, shared accross domains *)
 module Status =
 struct
@@ -116,6 +115,7 @@ type check +=
 | CHK_FFI_ROOTS
 | CHK_FFI_SHAPE
 | CHK_FFI
+| CHK_FFI_ARITY
 
 
 let () =
@@ -125,6 +125,7 @@ let () =
       | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
       | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
+      | CHK_FFI_ARITY -> Format.fprintf fmt "External function arity"
       | a -> next fmt a
     )
 
@@ -136,6 +137,7 @@ type alarm_kind +=
   | A_ffi_begin_end_roots
   | A_ffi_abort_analysis of string
   | A_ffi_bad_shape of string
+  | A_ffi_arity_mismatch of int * int
 
 let () =
   register_alarm {
@@ -151,6 +153,8 @@ let () =
         CHK_FFI
       | A_ffi_bad_shape _ ->
         CHK_FFI_SHAPE
+      | A_ffi_arity_mismatch _ ->
+        CHK_FFI_ARITY
       | a -> next a);
     compare = (fun next a1 a2 ->
       match a1, a2 with
@@ -161,6 +165,8 @@ let () =
       | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
       | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
       | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
+      | A_ffi_arity_mismatch (n1, m1), A_ffi_arity_mismatch (n2, m2) ->
+        Compare.pair Int.compare Int.compare (n1, m1) (n2, m2)
       | _ -> next a1 a2
     );
     print = (fun next fmt a ->
@@ -179,6 +185,8 @@ let () =
         Format.fprintf fmt "Analysis failed: %s" s
       | A_ffi_bad_shape s ->
         Format.fprintf fmt "Shape mismatch: %s" s
+      | A_ffi_arity_mismatch (n, m) ->
+        Format.fprintf fmt "Arity mismatch: expect %d arguments, but function has %d arguments" n m
       | a -> next fmt a
     );
     join = (fun next a1 a2 -> next a1 a2);
@@ -231,10 +239,12 @@ let raise_ffi_shape_non_value range pp_term term pp_shape shape man flow =
   raise_ffi_shape_error range (Format.asprintf "%a has shape %a, expected an OCaml value" pp_term term pp_shape shape) man flow
 
 let raise_ffi_shape_number_error range pp_term term man flow =
-    raise_ffi_shape_error range (Format.asprintf "cannot turn shape number %a into a shape description" pp_term term) man flow
+  raise_ffi_shape_error range (Format.asprintf "cannot turn shape number %a into a shape description" pp_term term) man flow
 
-
-
+let raise_ffi_arity_mismatch range ~expected ~actual man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_arity_mismatch (expected, actual)) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 
 let raise_or_fail_ffi_unsupported range reason man flow =
@@ -262,6 +272,9 @@ let safe_ffi_roots_check range man flow =
 
 let safe_ffi_shape_check range man flow =
   Flow.add_safe_check CHK_FFI_SHAPE range flow
+
+let safe_ffi_arity_check range man flow =
+  Flow.add_safe_check CHK_FFI_ARITY range flow
 
 
 (* Runtime Status Query *)
