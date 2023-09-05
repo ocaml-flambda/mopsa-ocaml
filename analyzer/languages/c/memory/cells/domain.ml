@@ -930,6 +930,12 @@ struct
     | Top ->
       man.eval (mk_top (void_to_char t) range) flow
 
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.lt lo (Z.of_int @@ String.length s) ->
+      man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow 
+
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.equal lo (Z.of_int @@ String.length s) ->
+      man.eval (mk_zero ~typ:t range) ~route:scalar flow 
+
     | Region (base,lo,hi,step) ->
       smash_region base lo hi step t range man flow >>$ fun ret flow ->
       man.eval ret flow ~route:scalar
