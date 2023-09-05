@@ -125,7 +125,7 @@ let () =
       | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
       | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
-      | CHK_FFI_ARITY -> Format.fprintf fmt "External function arity"
+      | CHK_FFI_ARITY -> Format.fprintf fmt "Function arity"
       | a -> next fmt a
     )
 
@@ -186,7 +186,10 @@ let () =
       | A_ffi_bad_shape s ->
         Format.fprintf fmt "Shape mismatch: %s" s
       | A_ffi_arity_mismatch (n, m) ->
-        Format.fprintf fmt "Arity mismatch: expect %d arguments, but function has %d arguments" n m
+        let pp_args fmt n =
+          if n = 1 then Format.pp_print_string fmt "1 argument" else Format.fprintf fmt "%d arguments" n
+        in
+        Format.fprintf fmt "Arity mismatch: expected %a, but function takes %a" pp_args n pp_args m
       | a -> next fmt a
     );
     join = (fun next a1 a2 -> next a1 a2);
