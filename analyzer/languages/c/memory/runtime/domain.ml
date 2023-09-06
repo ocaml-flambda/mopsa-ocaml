@@ -353,7 +353,7 @@ and shapes_deref man flow e range =
       let flow = raise_ffi_shape_mismatch range (Shapes.to_string ss) (Shapes.to_string s)  man flow in
       Cases.empty flow
     | Some _ ->
-      let flow = safe_ffi_shape_check range man flow in
+      (* let flow = safe_ffi_shape_check range man flow in *)
       Cases.singleton () flow
 
 
@@ -565,6 +565,19 @@ and shapes_deref man flow e range =
       let flow = raise_ffi_rooting_failed ~bottom:true vexp man flow in
       Post.return flow
 
+  let exec_unregister_root_var var range man flow =
+    let (m, l) = get_env T_cur man flow in
+    let vexp = (mk_var var range) in
+    match Map.find_opt var m with
+    | Some ((status, Nbt Rooted), shapes) ->
+      let m' = Map.add var ((status, Root.embed NotRooted), shapes) m in
+      let flow = set_env T_cur (m', l) man flow in
+      let flow = safe_ffi_roots_check range man flow in
+      Post.return flow
+    | Some ((_, _), _) | None ->
+      let flow = raise_ffi_not_rooted ~bottom:true vexp man flow in
+      Post.return flow
+
   let eval_register_root range exp man flow =
     eval_deref_to_var exp man flow >>$ fun var flow ->
     match var with
@@ -573,6 +586,17 @@ and shapes_deref man flow e range =
       Eval.singleton (mk_unit range) flow
     | Some v ->
       exec_register_root_var v exp.erange man flow >>% fun flow ->
+      Eval.singleton (mk_unit exp.erange) flow
+
+
+  let eval_unregister_root range exp man flow =
+    eval_deref_to_var exp man flow >>$ fun var flow ->
+    match var with
+    | None ->
+      let flow = raise_ffi_not_rooted ~bottom:true exp man flow in
+      Eval.singleton (mk_unit range) flow
+    | Some v ->
+      exec_unregister_root_var v exp.erange man flow >>% fun flow ->
       Eval.singleton (mk_unit exp.erange) flow
 
 
@@ -706,6 +730,10 @@ and shapes_deref man flow e range =
         Eval.singleton (mk_unit range) flow
       end
 
+  let eval_unimplemented range man flow =
+    let flow = raise_ffi_unimplemented range man flow in
+    Eval.singleton (mk_top (T_c_pointer T_c_void) range) flow
+
 
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow ->
@@ -718,6 +746,8 @@ and shapes_deref man flow e range =
       eval_mark_active_pointer range e man flow
     | "_ffi_register_root", [e] ->
       eval_register_root range e man flow
+    | "_ffi_unregister_root", [e] ->
+        eval_unregister_root range e man flow
     | "_ffi_assert_active", [e] ->
       eval_assert_valid e man flow
     | "_ffi_assert_shape", [v; sh] ->
@@ -734,6 +764,8 @@ and shapes_deref man flow e range =
       eval_fresh_pointer range man flow
     | "_ffi_is_immediate", [e] ->
       eval_is_immediate e range man flow
+    | "_ffi_unimplemented", [] ->
+      eval_unimplemented range man flow
     | _, _ ->
       let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
       let flow = raise_or_fail_ffi_unsupported range msg man flow in

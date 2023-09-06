@@ -114,8 +114,8 @@ type check +=
 | CHK_FFI_RUNTIME_LOCK
 | CHK_FFI_ROOTS
 | CHK_FFI_SHAPE
-| CHK_FFI
 | CHK_FFI_ARITY
+| CHK_FFI
 
 
 let () =
@@ -124,14 +124,15 @@ let () =
       | CHK_FFI_SHAPE -> Format.fprintf fmt "Runtime value shapes"
       | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
-      | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
       | CHK_FFI_ARITY -> Format.fprintf fmt "Function arity"
+      | CHK_FFI -> Format.fprintf fmt "FFI analysis failed"
       | a -> next fmt a
     )
 
 type alarm_kind +=
   | A_ffi_non_active_value of expr
   | A_ffi_double_root of expr
+  | A_ffi_not_rooted of expr
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
   | A_ffi_begin_end_roots
@@ -139,6 +140,7 @@ type alarm_kind +=
   | A_ffi_bad_shape of string
   | A_ffi_arity_mismatch of int * int
   | A_ffi_not_variable of expr
+  | A_ffi_unimplemented
 
 let () =
   register_alarm {
@@ -148,9 +150,9 @@ let () =
         CHK_FFI_LIVENESS_VALUE
       | A_ffi_runtime_unlocked ->
         CHK_FFI_RUNTIME_LOCK
-      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots  ->
+      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots | A_ffi_not_rooted _  ->
         CHK_FFI_ROOTS
-      | A_ffi_abort_analysis _ | A_ffi_not_variable _ ->
+      | A_ffi_abort_analysis _ | A_ffi_not_variable _ | A_ffi_unimplemented ->
         CHK_FFI
       | A_ffi_bad_shape _  ->
         CHK_FFI_SHAPE
@@ -163,6 +165,7 @@ let () =
       | A_ffi_runtime_unlocked, A_ffi_runtime_unlocked -> 0
       | A_ffi_double_root e1, A_ffi_double_root e2 -> compare_expr e1 e2
       | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
+      | A_ffi_not_rooted e1, A_ffi_not_rooted e2 -> compare_expr e1 e2
       | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
       | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
       | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
@@ -170,6 +173,7 @@ let () =
         Compare.pair Int.compare Int.compare (n1, m1) (n2, m2)
       | A_ffi_not_variable e1, A_ffi_not_variable e2 ->
         compare_expr e1 e2
+      | A_ffi_unimplemented, A_ffi_unimplemented -> 0
       | _ -> next a1 a2
     );
     print = (fun next fmt a ->
@@ -180,6 +184,8 @@ let () =
         Format.fprintf fmt "'%a' is already registered as a root" (Debug.bold pp_expr) e
       | A_ffi_non_variable_root e ->
           Format.fprintf fmt "attempting to register '%a' as a root failed" (Debug.bold pp_expr) e
+      | A_ffi_not_rooted e ->
+        Format.fprintf fmt "attempting to unregister '%a' as a root failed, it appears to be not rooted" (Debug.bold pp_expr) e
       | A_ffi_runtime_unlocked ->
         Format.fprintf fmt "runtime unlocked"
       | A_ffi_begin_end_roots ->
@@ -195,6 +201,9 @@ let () =
           if n = 1 then Format.pp_print_string fmt "1 argument" else Format.fprintf fmt "%d arguments" n
         in
         Format.fprintf fmt "Arity mismatch: expected %a, but function takes %a" pp_args n pp_args m
+
+      | A_ffi_unimplemented ->
+        Format.pp_print_string fmt "This operation is currently not supported by the FFI checker."
       | a -> next fmt a
     );
     join = (fun next a1 a2 -> next a1 a2);
@@ -219,8 +228,14 @@ let raise_ffi_double_root ?(bottom=true) exp man flow =
 
 let raise_ffi_double_root ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
+  let alarm = mk_alarm (A_ffi_double_root exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+
+let raise_ffi_not_rooted ?(bottom=true) exp man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_not_rooted exp) cs exp.erange in
+  Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
+
 
 let raise_ffi_rooting_failed ?(bottom=true) exp man flow =
   let cs = Flow.get_callstack flow in
@@ -257,6 +272,11 @@ let raise_ffi_arity_mismatch range ~expected ~actual man flow =
 let raise_ffi_not_variable expr man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_not_variable expr) cs expr.erange in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_ffi_unimplemented range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_unimplemented) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 

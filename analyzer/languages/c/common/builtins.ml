@@ -107,6 +107,7 @@ let _ =
       "_ffi_mark_active_contents";
       "_ffi_mark_active_ptr";
       "_ffi_register_root";
+      "_ffi_unregister_root";
       "_ffi_acquire_lock";
       "_ffi_release_lock";
       "_ffi_assert_active";
@@ -115,6 +116,7 @@ let _ =
       "_ffi_set_shape";
       "_ffi_assert_shape";
       "_ffi_is_immediate";
+      "_ffi_unimplemented";
 
       "__builtin_isfinite";
       "__builtin_isnormal";
