@@ -207,6 +207,8 @@ struct
     | E_c_cast (e,c)       ->
       status_expr man flow e >>$ fun s flow ->
       status_cast man flow c s
+    | E_c_function _ | E_function _ | E_c_builtin_function _  ->
+      Cases.singleton (Nbt Untracked: Stat.t) flow
     | _ ->
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(%a) unsupported for this kind of expression" pp_expr e) man flow in
       Cases.empty flow
@@ -234,9 +236,9 @@ and status_deref man flow e range =
 (*
   Will not compute status of the following expressions.
   They should have been taken care of by previous iterators:
-        E_alloc_addr, E_function, E_call, E_array, E_subscript, E_len,
+        E_alloc_addr, E_call, E_array, E_subscript, E_len,
         E_c_conditional, E_c_array_subscript, E_c_member_access,
-        E_c_function, E_c_builtin_function, E_c_builtin_call, E_c_arrow_access,
+        E_c_builtin_call, E_c_arrow_access,
         E_c_assign, E_c_compound_assign, E_c_comma, E_c_increment,
         E_c_statement, E_c_predefined, E_c_var_args, E_c_atomic, E_c_block_object,
         E_c_ffi_call
@@ -290,6 +292,8 @@ and status_deref man flow e range =
     | E_c_cast (e,c)       ->
       shapes_expr man flow e >>$ fun s flow ->
       shapes_cast man flow c s
+    | E_c_function _ | E_function _ | E_c_builtin_function _  ->
+      Cases.singleton Shapes.non_value_shape flow
     | _ ->
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(%a) unsupported for this kind of expression" pp_expr e) man flow in
       Cases.empty flow
@@ -317,9 +321,9 @@ and shapes_deref man flow e range =
 (*
   Will not compute status of the following expressions.
   They should have been taken care of by previous iterators:
-        E_alloc_addr, E_function, E_call, E_array, E_subscript, E_len,
+        E_alloc_addr, E_call, E_array, E_subscript, E_len,
         E_c_conditional, E_c_array_subscript, E_c_member_access,
-        E_c_function, E_c_builtin_function, E_c_builtin_call, E_c_arrow_access,
+        E_c_builtin_call, E_c_arrow_access,
         E_c_assign, E_c_compound_assign, E_c_comma, E_c_increment,
         E_c_statement, E_c_predefined, E_c_var_args, E_c_atomic, E_c_block_object,
         E_c_ffi_call
