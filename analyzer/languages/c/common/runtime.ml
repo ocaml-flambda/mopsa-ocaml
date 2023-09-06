@@ -139,6 +139,7 @@ type alarm_kind +=
   | A_ffi_abort_analysis of string
   | A_ffi_bad_shape of string
   | A_ffi_arity_mismatch of int * int
+  | A_ffi_void_return
   | A_ffi_not_variable of expr
   | A_ffi_unimplemented
 
@@ -156,7 +157,7 @@ let () =
         CHK_FFI
       | A_ffi_bad_shape _  ->
         CHK_FFI_SHAPE
-      | A_ffi_arity_mismatch _ ->
+      | A_ffi_arity_mismatch _ | A_ffi_void_return ->
         CHK_FFI_ARITY
       | a -> next a);
     compare = (fun next a1 a2 ->
@@ -173,6 +174,7 @@ let () =
         Compare.pair Int.compare Int.compare (n1, m1) (n2, m2)
       | A_ffi_not_variable e1, A_ffi_not_variable e2 ->
         compare_expr e1 e2
+      | A_ffi_void_return, A_ffi_void_return -> 0
       | A_ffi_unimplemented, A_ffi_unimplemented -> 0
       | _ -> next a1 a2
     );
@@ -201,7 +203,8 @@ let () =
           if n = 1 then Format.pp_print_string fmt "1 argument" else Format.fprintf fmt "%d arguments" n
         in
         Format.fprintf fmt "Arity mismatch: expected %a, but function takes %a" pp_args n pp_args m
-
+      | A_ffi_void_return ->
+          Format.pp_print_string fmt "Type mismatch: Function returns void instead of an OCaml value."
       | A_ffi_unimplemented ->
         Format.pp_print_string fmt "This operation is currently not supported by the FFI checker."
       | a -> next fmt a
@@ -268,6 +271,12 @@ let raise_ffi_arity_mismatch range ~expected ~actual man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_arity_mismatch (expected, actual)) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
+let raise_ffi_void_return range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_void_return) cs range in
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+
 
 let raise_ffi_not_variable expr man flow =
   let cs = Flow.get_callstack flow in

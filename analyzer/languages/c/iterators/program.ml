@@ -639,18 +639,27 @@ struct
     declare_var :: List.concat assignments, args
 
 
-  let virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) : stmt =
+  let check_ret_val_exists range retval man flow =
+    match ekind retval with
+    | E_constant C_unit ->
+      let flow = raise_ffi_void_return range man flow in
+      Cases.singleton () flow
+    | _ -> Cases.empty flow
+
+
+
+  let exec_virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) man flow =
     let range = f.c_func_name_range in
     let {arguments = arg_shapes; return = ret_shape } = sh in
     let stmts, args = virtual_runtime_argument_array arg_shapes range in
-    (* let stmts, args = List.split (List.map (fun sh -> virtual_runtime_function_argument range sh) arg_shapes) in *)
-    (* let stmts = List.concat stmts in *)
-    let tmp_ret_var = mktmp ~typ:ffi_value_typ () in
-    let tmp_ret = mk_var tmp_ret_var range in
-    let exec_fun = mk_assign tmp_ret (mk_c_call f args range) range in
-    let assert_ret_shape = mk_ffi_assert_shape tmp_ret ret_shape f.c_func_range in
-    (* let array = virtual_runtime_argument_array arg_shapes range in *)
-    mk_block (stmts @ [exec_fun; assert_ret_shape]) range
+    (* allocate the runtime arguments *)
+    man.exec (mk_block stmts range) flow >>% fun flow ->
+    (* execute the external function *)
+    man.eval (mk_c_call f args range) flow >>$ fun exp flow ->
+    (* check the return value is not void *)
+    check_ret_val_exists f.c_func_range exp man flow >>% fun flow ->
+    (* assert the result shape *)
+    man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
 
 
   let exec_arity_check f ty range man flow =
@@ -673,7 +682,7 @@ struct
     | (f, ty) :: fs ->
         exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
         Format.printf "checked: %s " f.c_func_org_name;
-        man.exec (virtual_runtime_function_test f ty) flow' >>% fun flow'' ->
+        exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
         let report = Flow.get_report flow'' in
         if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
         exec_all_tests fs man (flow'' :: flows) flow
