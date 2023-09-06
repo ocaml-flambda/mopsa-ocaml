@@ -358,10 +358,10 @@ struct
   let check_float_valid cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     let prec = get_c_float_precision typ in
-    let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
     let flow', nexp' =
-      if !opt_float_invalid_operation then
-        if itv.nan then
+    if !opt_float_invalid_operation then
+      let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+      if itv.nan then
           (* invalid operation exception, remove NaN from result *)
           let float_no_nan = float_class ~valid:true ~inf:true () in
           raise_c_float_invalid_operation_alarm cexp itv typ range man flow,
@@ -375,6 +375,7 @@ struct
     in
     let flow', nexp' =
       if !opt_float_overflow then
+        let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
         if itv.pinf || itv.minf then
           (* overflow exception, remove infinities from result *)
           let float_no_inf = float_class ~valid:true ~nan:true () in
