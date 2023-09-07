@@ -680,6 +680,17 @@ struct
       Post.return flow
 
 
+  let report_conclusion (rep: report) =
+    let total, safe, error, warning, info, unimplemented, checks_map = Output.Text.construct_checks_summary ~print:false rep None in
+    if error > 0 || warning > 0 then
+      Output.Text.icon_of_diag Error
+    else if unimplemented > 0 then
+      Output.Text.icon_of_diag Unimplemented
+    else if info > 0 then
+      Output.Text.icon_of_diag Info
+    else Output.Text.icon_of_diag Safe
+
+
   let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (flow: 'a flow) =
     match fs with
     | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
@@ -688,7 +699,7 @@ struct
         Format.printf "checked: %s " f.c_func_org_name;
         exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
         let report = Flow.get_report flow'' in
-        if is_safe_report report then Format.printf "(✓)\n" else Format.printf "(✗)\n";
+        Format.printf "(%s)\n" (report_conclusion report);
         exec_all_tests fs man (flow'' :: flows) flow
 
 
