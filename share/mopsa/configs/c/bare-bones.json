@@ -15,7 +15,7 @@
                     // // // Stubs
                     // // "stubs.iterators.body",
                     // // // C Libraries
-                    // // "c.libs.compiler",
+                    "c.libs.compiler", // compiler builtins
                     "c.libs.mopsalib",
                     // // "c.libs.clib.file_descriptor",
                     "c.libs.clib.formatted_io.fprint",

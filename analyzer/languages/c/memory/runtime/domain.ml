@@ -177,6 +177,7 @@ struct
   let status_addr_of man flow e =
     match ekind e with
     | E_var (v, _) -> status_addr_of_var man flow v e.erange
+    | E_c_function _ | E_function _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
     | _ ->
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(&%a) unsupported for this expression; only variables supported" pp_expr e) man flow in
       Cases.empty flow
@@ -267,6 +268,7 @@ and status_deref man flow e range =
   let shapes_addr_of man flow e =
     match ekind e with
     | E_var (v, _) -> shapes_addr_of_var man flow v e.erange
+    | E_c_function _ | E_function _ -> Cases.singleton (Shapes.non_value_shape) flow
     | _ ->
       let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shape(&%a) unsupported for this expression; only variables supported" pp_expr e) man flow in
       Cases.empty flow
