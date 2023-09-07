@@ -71,7 +71,17 @@ let parse_program lang files =
     try find_language_frontend lang
     with Not_found -> Exceptions.panic "No front-end found for language %s" lang
   in
-  front.parse files
+  match front.parse files with
+  | exception (Failure s) ->
+    Format.eprintf "Parsing error: %s\n" s;
+    exit 3
+  | exception (Exceptions.Panic (s, _)) ->
+    Format.eprintf "%s\n" s;
+    exit 4
+  | exception e ->
+    Format.eprintf "Unknown Exception %s" (Printexc.to_string e);
+    exit 3
+  | prg -> prg
 
 
 
