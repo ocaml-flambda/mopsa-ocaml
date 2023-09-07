@@ -31,6 +31,7 @@ open Common
 
 (** Command-line option to enable display of alarms call stacks *)
 let opt_show_callstacks = ref false
+let opt_hide_unimplemented = ref false
 
 
 
@@ -54,11 +55,15 @@ let color_of_diag = function
   | Unreachable -> Debug.gray
   | Error       -> Debug.red
   | Warning     -> Debug.orange
+  | Info        -> Debug.fushia
+  | Unimplemented  -> Debug.blue
 
 let icon_of_diag = function
   | Safe        -> "✔"
   | Warning     -> "⚠"
   | Error       -> "✗"
+  | Info        -> "ⓘ"
+  | Unimplemented -> "?"
   | Unreachable -> "🛇"
 
 (** Highlight source code at a given location range *)
@@ -199,17 +204,19 @@ let pp_diagnostic out n diag alarm_kinds callstacks =
 
 
 let incr_check_diag check diag checks_map =
-  let (safe,error,warning) =
+  let (safe,error,warning,info,unimplemented) =
     match CheckMap.find_opt check checks_map with
     | Some x -> x
-    | None   -> (0,0,0)
+    | None   -> (0,0,0,0,0)
   in
   let total =
     match diag with
-    | Safe        -> safe+1,error,warning
-    | Unreachable -> safe,error,warning
-    | Error       -> safe,error+1,warning
-    | Warning     -> safe,error,warning+1
+    | Safe        -> safe+1,error,warning,info,unimplemented
+    | Unreachable -> safe,error,warning,info,unimplemented
+    | Error       -> safe,error+1,warning,info,unimplemented
+    | Unimplemented      -> safe,error,warning,info,unimplemented+1
+    | Warning     -> safe,error,warning+1,info,unimplemented
+    | Info     -> safe,error,warning,info+1,unimplemented
   in
   CheckMap.add check total checks_map
 
@@ -217,17 +224,18 @@ let construct_checks_summary ?(print=false) rep out =
   RangeMap.fold
     (fun range checks acc ->
        CheckMap.fold
-         (fun check diag (i,safe,error,warning,checks_map) ->
+         (fun check diag (i,safe,error,warning,info,unimplemented,checks_map) ->
             let checks_map' = incr_check_diag check diag.diag_kind checks_map in
             match diag.diag_kind with
             | Unreachable ->
-              i, safe, error, warning, checks_map'
+              i, safe, error, warning,  info, unimplemented, checks_map'
 
             | Safe ->
               if print && !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
-              i+1, safe+1, error, warning, checks_map'
-
-            | Error | Warning ->
+              i+1, safe+1, error, warning,  info, unimplemented, checks_map'
+            | Unimplemented when !opt_hide_unimplemented ->
+              i+1, safe+1, error, warning,  info, unimplemented + 1, checks_map'
+            | Error | Warning | Info | Unimplemented ->
               (* Get the set of alarms kinds and callstacks *)
               let kinds =
                 AlarmSet.fold
@@ -253,30 +261,39 @@ let construct_checks_summary ?(print=false) rep out =
               in
               let kinds' = iter (AlarmKindSet.elements kinds) in
               if print then pp_diagnostic out i diag kinds' diag.diag_callstacks;
-              let error',warning' = if diag.diag_kind = Error then error+1,warning else error,warning+1 in
-              i+1, safe, error', warning', checks_map'
+              match diag.diag_kind with
+              | Error -> i+1, safe, error+1, warning, info, unimplemented, checks_map'
+              | Info -> i+1, safe, error, warning, info + 1, unimplemented, checks_map'
+              | Warning -> i+1, safe, error, warning+1, info, unimplemented, checks_map'
+              (* FIXME: remove unimplemented here and include it above to disable printing the unimplemented functions. *)
+              | Unimplemented -> i+1, safe, error, warning, info, unimplemented + 1, checks_map'
+              | _ -> assert false
          ) checks acc
-    ) rep.report_diagnostics (0,0,0,0,CheckMap.empty)
+    ) rep.report_diagnostics (0,0,0,0,0,0,CheckMap.empty)
 
-let print_checks_summary checks_map total safe error warning out =
+let print_checks_summary checks_map total safe error warning info unimplemented out =
   let pp diag singluar plural fmt n =
     if n = 0 then () else
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v2>Checks summary: %a%a%a%a@,%a@]@.@."
+  print out "@[<v2>Checks summary: %a%a%a%a%a%a@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
+    (pp Info "info" "info") info
+    (pp Unimplemented "unimplemented" "unimplemented") unimplemented
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-       (fun fmt (check,(safe,error,warning)) ->
-          fprintf fmt "%a: %d total%a%a%a"
+       (fun fmt (check,(safe,error,warning,info, unimplemented)) ->
+          fprintf fmt "%a: %d total%a%a%a%a%a"
             pp_check check
             (safe+error+warning)
             (pp Safe "safe" "safe") safe
             (pp Error "error" "errors") error
             (pp Warning "warning" "warnings") warning
+            (pp Info "info" "info") info
+            (pp Unimplemented "unimplemented" "unimplemented") unimplemented
        )
     ) (CheckMap.bindings checks_map)
 
@@ -298,8 +315,8 @@ let report man flow ~time ~files ~out =
 
   print out "Analysis time: %.3fs@." time;
 
-  let total, safe, error, warning, checks_map = construct_checks_summary ~print:true rep out in
-  print_checks_summary checks_map total safe error warning out
+  let total, safe, error, warning, info, unimplemented, checks_map = construct_checks_summary ~print:true rep out in
+  print_checks_summary checks_map total safe error warning info unimplemented out
   ;
   if not (is_sound_report rep) then
     let nb = AssumptionSet.cardinal rep.report_assumptions in

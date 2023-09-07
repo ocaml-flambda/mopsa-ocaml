@@ -270,12 +270,19 @@ let raise_ffi_shape_number_error range pp_term term man flow =
 let raise_ffi_arity_mismatch range ~expected ~actual man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_arity_mismatch (expected, actual)) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  if expected = 1 && actual = 0 then
+    (* probably the unit case, we only info about it *)
+    let diag = mk_info_diagnostic alarm in
+    Flow.add_diagnostic diag flow
+  else
+    Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 let raise_ffi_void_return range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_void_return) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  let diag = mk_info_diagnostic alarm in
+  Flow.add_diagnostic diag flow
+  (* Flow.raise_alarm alarm ~bottom:true man.lattice flow *)
 
 
 let raise_ffi_not_variable expr man flow =
@@ -285,8 +292,9 @@ let raise_ffi_not_variable expr man flow =
 
 let raise_ffi_unimplemented range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_unimplemented) cs range in
-  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  (* let alarm = mk_alarm (A_ffi_unimplemented) cs range in *)
+  let diagnostic = mk_unimplemented_diagnostic CHK_FFI cs range in
+  Flow.add_diagnostic diagnostic flow
 
 
 let raise_or_fail_ffi_unsupported range reason man flow =

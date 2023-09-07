@@ -150,6 +150,8 @@ type diagnostic_kind =
   | Warning     (** Some executions may have issues *)
   | Safe        (** All executions are safe *)
   | Error       (** All executions do have issues *)
+  | Info        (** Some execution has an issue *)
+  | Unimplemented (** Some execution hits an unimplemented feature *)
   | Unreachable (** No execution reaches the check point *)
 
 type diagnostic = {
@@ -171,6 +173,11 @@ val mk_warning_diagnostic : check -> callstack -> range -> diagnostic
 
 val mk_unreachable_diagnostic : check -> callstack -> range -> diagnostic
 (** Create a diagnostic that says that a check is unreachable *)
+
+val mk_info_diagnostic : alarm -> diagnostic
+
+val mk_unimplemented_diagnostic : check -> callstack -> range -> diagnostic
+
 
 val pp_diagnostic_kind : Format.formatter -> diagnostic_kind -> unit
 (** Print a diagnostic kind *)

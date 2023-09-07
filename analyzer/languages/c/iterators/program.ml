@@ -643,8 +643,9 @@ struct
     match ekind retval with
     | E_constant C_unit ->
       let flow = raise_ffi_void_return range man flow in
-      Cases.singleton () flow
-    | _ -> Cases.empty flow
+      Cases.singleton false flow
+    | _ ->
+      Cases.singleton true flow
 
 
 
@@ -657,9 +658,12 @@ struct
     (* execute the external function *)
     man.eval (mk_c_call f args range) flow >>$ fun exp flow ->
     (* check the return value is not void *)
-    check_ret_val_exists f.c_func_range exp man flow >>% fun flow ->
-    (* assert the result shape *)
-    man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
+    check_ret_val_exists f.c_func_range exp man flow >>$ fun has_ret flow ->
+    if has_ret && not (Flow.is_empty flow) then
+      (* assert the result shape *)
+      man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
+    else
+      Post.return flow
 
 
   let exec_arity_check f ty range man flow =

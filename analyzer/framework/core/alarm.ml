@@ -155,7 +155,10 @@ type diagnostic_kind =
   | Warning
   | Safe
   | Error
+  | Info
+  | Unimplemented
   | Unreachable
+
 
 type diagnostic = {
   diag_range : range;
@@ -193,32 +196,68 @@ let mk_warning_diagnostic check callstack range =
     diag_alarms = AlarmSet.empty;
     diag_callstacks = CallstackSet.singleton callstack }
 
+let mk_info_diagnostic alarm =
+  { diag_range = alarm.alarm_range;
+  diag_check = alarm.alarm_check;
+  diag_kind = Info;
+  diag_alarms = AlarmSet.singleton alarm;
+  diag_callstacks = CallstackSet.singleton alarm.alarm_callstack }
+
+let mk_unimplemented_diagnostic check callstack range =
+  { diag_range = range;
+    diag_check = check;
+    diag_kind = Unimplemented;
+    diag_alarms = AlarmSet.empty;
+    diag_callstacks = CallstackSet.singleton callstack }
+
+
 let pp_diagnostic_kind fmt = function
   | Warning   -> pp_print_string fmt "warning"
   | Safe      -> pp_print_string fmt "safe"
   | Error     -> pp_print_string fmt "error"
   | Unreachable -> pp_print_string fmt "unreachable"
+  | Info -> pp_print_string fmt "info"
+  | Unimplemented -> pp_print_string fmt "unimplemented"
 
 let pp_diagnostic fmt d =
   match d.diag_kind with
-  | Safe | Unreachable ->
+  | Safe | Unreachable | Unimplemented ->
     pp_diagnostic_kind fmt d.diag_kind
-  | Error | Warning ->
+  | Error | Warning | Info ->
     fprintf fmt "%a: %a"
       pp_diagnostic_kind d.diag_kind
       pp_alarm_set d.diag_alarms
 
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let subset_diagnostic_kind s1 s2 =
   if s1 == s2 then true else
   match s1,s2 with
+  | _, Unimplemented -> true
+  | Unimplemented, _ -> false
   | Unreachable, _ -> true
   | _, Unreachable -> false
   | _, Warning     -> true
   | Warning, _     -> false
+  | Info, Safe      -> false
+  | Safe, Info      -> true
   | Error, Error   -> true
   | Safe, Safe     -> true
+  | Info, Info      -> true
   | Error,Safe     -> false
   | Safe,Error     -> false
+  | Info, Error    -> false
+  | Error, Info    -> false
 
 
 let subset_diagnostic d1 d2 =
@@ -227,13 +266,31 @@ let subset_diagnostic d1 d2 =
   && AlarmSet.subset d1.diag_alarms d2.diag_alarms
   && CallstackSet.subset d1.diag_callstacks d2.diag_callstacks
 
+
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let join_diagnostic_kind s1 s2 =
   if s1 == s2 then s1 else
   match s1,s2 with
+  | Unimplemented, _ | _, Unimplemented -> Unimplemented
   | Unreachable, x | x, Unreachable  -> x
   | Warning, x     | x, Warning      -> Warning
   | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
+  | Info, Info                       -> Info
+  | Safe, Info                       -> Info
+  | Info, Safe                       -> Info
+  | Error, Info    | Info, Error
   | Error, Safe    | Safe, Error     -> Warning
 
 
@@ -251,14 +308,30 @@ let join_diagnostic d1 d2 =
       diag_callstacks = CallstackSet.union d1.diag_callstacks d2.diag_callstacks; }
   )
 
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let meet_diagnostic_kind s1 s2 =
   if s1 == s2 then s1 else
   match s1,s2 with
   | Unreachable, _ | _, Unreachable  -> Unreachable
+  | Unimplemented, x     | x, Unimplemented  -> x
   | Warning, x     | x, Warning      -> x
   | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
-  | Error, Safe    | Safe, Error     -> Exceptions.panic "unsound intersection of diagnostics"
+  | Info, Info                       -> Info
+  | Info, Safe | Safe, Info          -> Safe
+  | Info, Error | Error, Info
+  | Error, Safe    | Safe, Error     -> Unreachable
 
 let meet_diagnostic d1 d2 =
   if d1 == d2 then d1 else
@@ -302,6 +375,12 @@ let add_alarm_to_diagnostic a d =
   | Unreachable ->
     { d with diag_kind = Error;
              diag_alarms = AlarmSet.singleton a;
+             diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
+  | Unimplemented ->
+    d
+  | Info ->
+    { d with diag_kind = Error;
+             diag_alarms = AlarmSet.add a d.diag_alarms;
              diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
 
 let compare_diagnostic d1 d2 =
@@ -419,8 +498,8 @@ let is_safe_report r =
        CheckMap.for_all
          (fun check diag ->
             match diag.diag_kind with
-            | Safe  | Unreachable  -> true
-            | Error | Warning      -> false
+            | Safe  | Unreachable | Info        -> true
+            | Error | Warning | Unimplemented   -> false
          ) checks
     ) r.report_diagnostics
 
@@ -516,8 +595,8 @@ let count_alarms r =
        CheckMap.fold
          (fun check diag (errors,warnings) ->
             match diag.diag_kind with
-            | Error              -> errors + 1, warnings
-            | Warning            -> errors, warnings + 1
+            | Error | Unimplemented        -> errors + 1, warnings
+            | Warning | Info     -> errors, warnings + 1
             | Safe | Unreachable -> errors, warnings
          ) checks acc
     ) r.report_diagnostics (0,0)

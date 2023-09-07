@@ -597,8 +597,8 @@ struct
 
     | Info Checks ->
       let report = Flow.get_report flow in
-      let total, safe, error, warning, checks_map = Output.Text.construct_checks_summary report None in
-      Output.Text.print_checks_summary checks_map total safe error warning None;
+      let total, safe, error, warning, info, unimplemented, checks_map = Output.Text.construct_checks_summary report None in
+      Output.Text.print_checks_summary checks_map total safe error warning info unimplemented None;
       interact action flow
 
     | Info Breakpoints ->
@@ -628,7 +628,7 @@ struct
       interact action flow
 
     | Set (Script, filename) ->
-      let ch = open_out filename in 
+      let ch = open_out filename in
       state.script <- Some ch;
       interact action flow
 

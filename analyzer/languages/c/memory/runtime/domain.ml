@@ -738,7 +738,7 @@ and shapes_deref man flow e range =
 
   let eval_unimplemented range man flow =
     let flow = raise_ffi_unimplemented range man flow in
-    Eval.singleton (mk_top (T_c_pointer T_c_void) range) flow
+    Cases.empty flow
 
 
   let eval_ffi_primtive f args range man flow =

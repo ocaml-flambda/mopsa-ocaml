@@ -77,7 +77,7 @@ let aggregate_alarms report =
          (fun check diag acc ->
             match diag.diag_kind with
             | Safe | Unreachable -> acc
-            | Error | Warning ->
+            | Error | Warning | Info | Unimplemented ->
               let csl = AlarmSet.elements diag.diag_alarms |>
                         List.map callstack_of_alarm in
               (range,check,csl) :: acc

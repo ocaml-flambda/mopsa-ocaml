@@ -356,6 +356,14 @@ let () =
     default = "false";
   }
 
+let () =
+  register_builtin_option {
+    key = "-hide-unimplemented";
+    category = "Alarms";
+    doc = " hide the unimplemented callsites";
+    spec = ArgExt.Set Output.Text.opt_hide_unimplemented;
+    default = "false";
+  }
 
 let () =
   register_builtin_option {
