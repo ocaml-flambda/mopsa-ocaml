@@ -104,9 +104,9 @@ struct
     | f -> panic "extract_range_type: invalid argument %s" f
 
 
-  let is_ffi_function = fun name -> 
+  let is_ffi_function = fun name ->
     String.starts_with ~prefix:"_ffi_" name
-    
+
 
   let eval_rand typ range man flow = man.eval (mk_top typ range) flow
 
@@ -333,7 +333,7 @@ struct
       OptionExt.return
 
     | E_c_builtin_call(f, args) when is_ffi_function f ->
-      let expr = mk_ffi_call f args exp.erange in 
+      let expr = mk_ffi_call f args exp.erange in
       man.eval expr flow |> OptionExt.return
     | _ -> None
 

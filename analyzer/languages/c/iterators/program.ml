@@ -790,7 +790,11 @@ struct
   let eval_exit name code range man flow =
     man.eval code flow >>$ fun _ flow ->
     exec_exit_functions name range man flow >>% fun flow ->
-    Eval.singleton (mk_unit range) flow
+    Cases.empty flow
+
+  let eval_abort range man flow =
+    Cases.empty flow
+
 
   let eval exp man flow =
     match ekind exp with
@@ -800,7 +804,9 @@ struct
     | E_c_builtin_call("quick_exit", [code]) ->
       eval_exit "quick_exit" code exp.erange man flow |>
       OptionExt.return
-
+    | E_c_builtin_call("abort", []) ->
+      eval_abort exp.erange man flow |>
+      OptionExt.return
     | _ -> None
 
 

@@ -629,7 +629,6 @@ and shapes_deref man flow e range =
     match ekind addr with
     | E_addr (a, _) ->
       let val_var = (mk_ffi_var_expr a range) in
-      (* man.exec (mk_add addr range) flow >>% fun flow -> *)
       man.exec (mk_add val_var range) flow >>% fun flow ->
       Cases.singleton (mk_c_address_of val_var range) flow
     | _ ->

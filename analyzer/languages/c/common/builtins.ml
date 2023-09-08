@@ -103,6 +103,8 @@ let _ =
       "exit";
       "quick_exit";
 
+      "abort";
+
       "_ffi_garbage_collect";
       "_ffi_mark_active_contents";
       "_ffi_mark_active_ptr";
