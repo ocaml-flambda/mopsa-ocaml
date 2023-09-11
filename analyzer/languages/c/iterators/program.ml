@@ -697,10 +697,17 @@ struct
     | (f, ty) :: fs ->
         exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
         Format.printf "checked: %s " f.c_func_org_name;
-        exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
-        let report = Flow.get_report flow'' in
-        Format.printf "(%s)\n" (report_conclusion report);
-        exec_all_tests fs man (flow'' :: flows) flow
+        try
+          (exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
+          let report = Flow.get_report flow'' in
+          Format.printf "(%s)\n" (report_conclusion report);
+          exec_all_tests fs man (flow'' :: flows) flow)
+        with e ->
+          (* something went wrong in the analysis *)
+          Format.printf "(%s)\n" (Output.Text.icon_of_diag Unimplemented);
+          let flow' = raise_ffi_unimplemented f.c_func_range man flow in
+          exec_all_tests fs man (flow' :: flows) flow
+
 
 
   let exec stmt man flow =
