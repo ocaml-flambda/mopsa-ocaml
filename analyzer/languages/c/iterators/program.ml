@@ -697,6 +697,8 @@ struct
     | (f, ty) :: fs ->
         exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
         Format.printf "checked: %s " f.c_func_org_name;
+        (* catching the exceptions like this is horrible,
+           ideally there would be a better way *)
         try
           (exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
           let report = Flow.get_report flow'' in
