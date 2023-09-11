@@ -770,7 +770,7 @@ struct
     let top = Eval.singleton (mk_top (void_to_char t) range) flow in
     if not !opt_smash
     || not (is_interesting_base base)
-    || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
+       (* || not (is_c_pointer_type t) *) (* For performance reasons, we smash only pointer cells *)
     then
       let () = debug "%a: expansion %a not worth smashing, results in T" pp_range range pp_expansion (Region (base,lo,hi,step)) in
       top
@@ -781,8 +781,9 @@ struct
       let cells = cell_set_filter_range
           (fun c ->
              (* Get only pointer cells that are correctly aligned with the step *)
-             c.typ = Pointer
-             && Z.(rem (c.offset - lo) step = zero)
+             (* c.typ = Pointer *)
+             (* && *)
+             Z.(rem (c.offset - lo) step = zero)
           )
           base lo hi a.cells in
       (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
