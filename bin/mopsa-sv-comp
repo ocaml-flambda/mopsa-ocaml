@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+# This file provides an interface between Mopsa and Benchexec
+# Notably, when running SV-comp benchmarks, data models and properties are specified.
+# We pass the former to Mopsa and keep the latter to postprocess Mopsa's results.
+
+
+import argparse
+from collections import namedtuple
+from datetime import datetime
+import json
+import hashlib
+import os
+import subprocess
+import sys
+
+class result:
+    RESULT_TRUE_PROP = "true"
+    RESULT_FALSE_PROP = "false"
+    RESULT_UNKNOWN = "unknown"
+    RESULT_ERROR = "error"
+
+MOPSA_DIR = '/'.join(sys.path[0].split('/')[:-1])
+
+class ANSIColors:
+    END='\033[0m'
+    WHITE='\033[1;38;5;1m'
+    RED='\033[1;38;5;9m'
+    GREEN='\033[1;38;5;40m'
+    YELLOW='\033[1;38;5;190m'
+    BLUE='\033[1;38;5;12m'
+    MAGENTA='\033[1;38;5;5m'
+    FUSHIA='\033[1;38;5;177m'
+    ORANGE='\033[1;38;5;208m'
+    TEAL='\033[1;38;5;6m'
+    GRAY='\033[1;38;5;8m'
+    PINK='\033[1;38;5;162m'
+
+    if sys.stdout.isatty():
+        @staticmethod
+        def color(str, color):
+            return f"{color}{str}{ANSIColors.END}"
+    else:
+        @staticmethod
+        def color(str, color):
+            return str
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Wrapper around Mopsa for use in SV-COMP.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--property",
+        type=str,
+        help="File containing the property that shall be verified.",
+    )
+
+    parser.add_argument(
+        "--program",
+        type=str,
+        help="Input program for the analysis.",
+        nargs="*"
+    )
+
+    parser.add_argument(
+        "--data_model",
+        type=str,
+        default="ILP32",
+        help="The data model that shall be assumed when analyzing the input program. Either ILP32 or LP64.",
+    )
+
+    parser.add_argument(
+        "--debug",
+        action='store_true',
+        help="Enable debugging (store Mopsa's results as json files, and print detailed error info)"
+    )
+
+    parser.add_argument(
+        "--version",
+        action='store_true',
+        help="Display version and quit"
+    )
+
+    args, unknown = parser.parse_known_args()
+
+    if unknown:
+        parser.error(f"Unrecognized arguments: {unknown}")
+
+    return args
+
+def program_defines_any_of(decl_list, prog):
+    with open(prog, 'r') as p:
+        for l in p:
+            if l.strip() in decl_list: return True
+        return False
+
+def run_mopsa(args, config):
+    # __float128 ugly hack
+    # FIXME: Modifying the original program will create a hash issue for the witnesses
+    # if "uthash" in args.program:
+    #     subprocess.run(["sed", "-i", "s#__float128 __max_align_f128 __attribute__((__aligned__(__alignof(__float128))));#//__float128 __max_align_f128 __attribute__((__aligned__(__alignof(__float128))));#g", args.program])
+    unistd_decls = [
+        "int close(int);",
+        "extern int close(int __fd ) ;",
+        "extern __off_t lseek(int __fd , __off_t __offset , int __whence ) __attribute__((__nothrow__)) ;",
+        "extern int dup2(int __fd , int __fd2 )  __attribute__((__nothrow__)) ;",
+        "int isatty (int __fd);",
+        "extern int ( __attribute__((__nonnull__(1,2))) execvp)(char const   *__file , char **__argv ) __attribute__((__nothrow__)) ;"
+    ]
+    err_decls = [
+        "extern void error(int __status , int __errnum , char const *__format , ...) ;",
+        "extern void error(int __status , int __errnum , const char *__format , ...) ;"
+    ]
+    cmd = [f"{MOPSA_DIR}/bin/mopsa-c",
+           f"-config={config.config}",
+           *config.extra_args,
+           "-additional-stubs=c/sv-comp.c",
+           "-use-stub=reach_error,fread_unlocked,fread,strndup,xstrndup",
+           "-no-warning",
+           "-ccopt=-fbracket-depth=2048", # -includestdio.h,-includestdlib.h,
+           "-stub-ignore-case=malloc.failure,malloc.empty",
+           "-c-check-signed-implicit-cast-overflow=false",
+           "-c-check-unsigned-implicit-cast-overflow=false",
+           "-c-check-unreachable-memory",
+           *args.program,
+           # TODO: check if parsing time is too big with new files, especially in relational analysis. If so, filter according to function tags
+           # the one below is needed because sometimes unistd conflicts with other declarations of custom read function
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/assert.c",
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/unistd.c" if any(program_defines_any_of(unistd_decls, p) for p in args.program) else "",
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/sys/socket.c", # accept, bind, connect, listen, socket, recv 
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/libintl.c", # dcgettext, gettext, bindtextdomain, textdomain, 
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/stdio_ext.c", # __fpending
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/netinet/in.c", # htons 
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/arpa/inet.c", # inet_addr 
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/wctype.c", # iswprint
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/sys/stat.c", # umask
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/error.c" if any(program_defines_any_of(err_decls, p) for p in args.program) else "-error-is-builtin=false", # error
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/math.c", # __isnan, __isinf, __isinff, __signbit, __fpclassify, ceil, fabs, fdim, floor, gcd, lrint, lround, min, nearbyint, rint, round, sqrt, sqrtl, trunc, 
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/stdio.c",
+           f"{MOPSA_DIR}/share/mopsa/stubs/c/libc/stdlib.c"
+           ]
+    if args.data_model == "ILP32":
+        cmd.append("-target-triple=i386-pc-linux-gnu")
+    cmd.append("-format=json")
+    # handle datamodel through -target-triple option
+    print(ANSIColors.color(f"Running {' '.join(cmd)}", ANSIColors.GRAY), flush=True)
+    process = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    # assert process.stderr == ""
+    return process.stdout.decode()
+
+def pp_range(r):
+    try:
+        sf = r["start"]["file"]
+        sl = r["start"]["line"]
+        sc = r["start"]["column"]
+        ef = r["end"]["file"]
+        el = r["end"]["line"]
+        ec = r["end"]["column"]
+        if sf == ef:
+            if sl == el:
+                if sc == ec:
+                    return f"{sf}:{sl}.{sc}"
+                else:
+                    return f"{sf}:{sl}.{sc}-{ec}"
+            else:
+                return f"{sf}:{sl}.{sc}-{el}.{ec}"
+        else:
+            return f"{sf}:{sl}.{sc}-{ef}:{el}.{ec}"
+    except KeyError:
+        return ""
+
+def pp_callstacks(css):
+    return '\n'.join([pp_callstack(cs) for cs in css[0:1]]) + (f"\n\t+{len(css)-1} other callstacks" if len(css) > 1 else "")
+
+
+def pp_callstack(cs):
+    return '\n\t\t'.join([f"{pp_range(c['range'])}:{c['function']}" for c in cs])
+
+def pp_json_results(r):
+    if not r["success"]:
+        if "range" in r.keys():
+            print(f'{ANSIColors.color("Analysis aborted:", ANSIColors.RED)} {r["exception"]} at {pp_range(r["range"])}')
+        else:
+            print(f'{ANSIColors.color("Analysis aborted:", ANSIColors.RED)} {r["exception"]}')
+        return
+
+    # A better output is provided by mopsa if `-format=text` is provided. Here, it's just a quick parse and print of the json results
+    na = len(r["assumptions"])
+    if na == 0:
+        print(ANSIColors.color(f"Analysis terminated successfully in {r['time']:.2f}s", ANSIColors.GREEN))
+    else:
+        print(ANSIColors.color(f"Analysis terminated successfully in {r['time']:.2f}s (with assumptions)", ANSIColors.ORANGE))
+
+    for c in r["checks"]:
+        print(f"{c['title']}: {c['messages']} at {pp_range(c['range'])}\n\tCallstacks:\n\t\t{pp_callstacks(c['callstacks'])}\n")
+
+    if na > 0:
+        print(f"{na} assumptions")
+        for a in r["assumptions"]:
+            print(f"\t{pp_range(a['range'])}: {a['message']}")
+
+def parse_property(prop_file):
+    with open(prop_file, 'r') as f:
+        t = f.read()
+        if "overflow" in t:
+            return "overflow"
+        elif "reach_error" in t:
+            return "unreach"
+        elif "valid-free" in t: # or "valid-memcleanup" in t:
+            return "safe-memory"
+    print(result.RESULT_ERROR + "unsupported property " + t)
+    sys.exit(1)
+
+def sha256(filename):
+    chunk_size = 8192
+    with open(filename, "rb") as f:
+        hash = hashlib.sha256()
+        chunk = f.read(chunk_size)
+        while chunk:
+            hash.update(chunk)
+            chunk = f.read(chunk_size)
+        return hash.hexdigest()
+
+def create_dummy_witness(args, res):
+    producer = f"Mopsa (v{res['mopsa_version']})" # or mopsa_dev_version
+    arch = "32bit "if args.data_model == "ILP32" else "64bit"
+    # if len(args.program) > 1: print("Multiple programs passed as input, only the first one will be exported in the witness.")
+    args.program = args.program[0]
+    prog_file = args.program
+    prog_hash = sha256(args.program)
+    # else:
+    #     prog_file = "MULTIPLE FILES"
+    #     prog_hash = None
+    with open(args.property) as f:
+        spec = f.read()[:-1]
+    creation_time = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    witness_type = "correctness_witness"
+    return f"""\
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<key id="frontier" attr.name="isFrontierNode" attr.type="boolean" for="node">
+<default>false</default>
+</key>
+<key id="violation" attr.name="isViolationNode" attr.type="boolean" for="node">
+<default>false</default>
+</key>
+<key id="entry" attr.name="isEntryNode" attr.type="boolean" for="node">
+<default>false</default>
+</key>
+<key id="sink" attr.name="isSinkNode" attr.type="boolean" for="node">
+<default>false</default>
+</key>
+<key id="cyclehead" attr.name="cyclehead" attr.type="boolean" for="node">
+<default>false</default>
+</key>
+<key id="sourcecodelang" attr.name="sourcecodeLanguage" attr.type="string" for="graph"/>
+<key id="programfile" attr.name="programfile" attr.type="string" for="graph"/>
+<key id="programhash" attr.name="programhash" attr.type="string" for="graph"/>
+<key id="creationtime" attr.name="creationtime" attr.type="string" for="graph"/>
+<key id="specification" attr.name="specification" attr.type="string" for="graph"/>
+<key id="architecture" attr.name="architecture" attr.type="string" for="graph"/>
+<key id="producer" attr.name="producer" attr.type="string" for="graph"/>
+<key id="sourcecode" attr.name="sourcecode" attr.type="string" for="edge"/>
+<key id="startline" attr.name="startline" attr.type="int" for="edge"/>
+<key id="startoffset" attr.name="startoffset" attr.type="int" for="edge"/>
+<key id="control" attr.name="control" attr.type="string" for="edge"/>
+<key id="invariant" attr.name="invariant" attr.type="string" for="node"/>
+<key id="invariant.scope" attr.name="invariant.scope" attr.type="string" for="node"/>
+<key id="assumption" attr.name="assumption" attr.type="string" for="edge"/>
+<key id="assumption.scope" attr.name="assumption" attr.type="string" for="edge"/>
+<key id="assumption.resultfunction" attr.name="assumption.resultfunction" attr.type="string" for="edge"/>
+<key id="enterFunction" attr.name="enterFunction" attr.type="string" for="edge"/>
+<key id="returnFromFunction" attr.name="returnFromFunction" attr.type="string" for="edge"/>
+<key id="endline" attr.name="endline" attr.type="int" for="edge"/>
+<key id="endoffset" attr.name="endoffset" attr.type="int" for="edge"/>
+<key id="threadId" attr.name="threadId" attr.type="string" for="edge"/>
+<key id="createThread" attr.name="createThread" attr.type="string" for="edge"/>
+<key id="witness-type" attr.name="witness-type" attr.type="string" for="graph"/>
+<graph edgedefault="directed">
+<data key="producer">{producer}</data>
+<data key="sourcecodelang">C</data>
+<data key="architecture">{arch}</data>
+<data key="programfile">{prog_file}</data>
+<data key="programhash">{prog_hash}</data>
+<data key="specification">{spec}</data>
+<data key="creationtime">{creation_time}</data>
+<data key="witness-type">{witness_type}</data>
+<node id="N0">
+<data key="entry">true</data>
+</node>
+<node id="N1"></node>
+<edge id="E0" source="N0" target="N1">
+<data key="enterFunction">main</data>
+<data key="createThread">0</data>
+</edge>
+</graph>
+</graphml>"""
+
+def issue_in_program_range(r):
+    return "mopsa/stubs/c" not in r["start"]["file"]
+
+def process_result(mopsa_result, property_kind, debug, c):
+    if debug:
+        log_name = property_kind + "_" + os.path.splitext(os.path.basename(mopsa_result["files"][-1]))[0] + c.config.replace('/','__') + str(len(c.extra_args)) + ".json"
+        with open(log_name, "w") as f:
+            json.dump(mopsa_result, f)
+    if mopsa_result["success"]:
+        # check that the program has been correctly analyzed
+        for a in mopsa_result["assumptions"]:
+            if "ignoring side-effects of calling undefined function 'pthread" in a['message']:
+                return result.RESULT_UNKNOWN + " (pthreads)"
+            if "ignoring side effects of recursive call to" in a["message"]:
+                return result.RESULT_UNKNOWN + " (recursive)"
+            if "ignoring side-effects of calling undetermined function pointer '__CS" in a['message']:
+                return result.RESULT_UNKNOWN + " (funptr=T)"
+        for c in mopsa_result["checks"]:
+            if ((property_kind == "overflow" and c["title"] == "Integer overflow") and issue_in_program_range(c["range"])) or \
+               (property_kind == "safe-memory" and c["title"] in ["Invalid memory access", "Invalid pointer comparison", "Invalid pointer subtraction", "Double free", "Stub condition", "Unreachable allocated memory"]) or \
+               (property_kind == "unreach" and c["title"] == "Stub condition" and c["messages"] == "reach_error called"):
+                return result.RESULT_UNKNOWN
+            # if property_kind == "unreach" and c["title"] == "Invalid memory access" and c["kind"] == "error":
+            #     return result.RESULT_ERROR + " (unbehaved)"
+
+            # if reach_error or overflow and corresponding property, we do not categorize the alarm
+        return result.RESULT_TRUE_PROP
+        # what about the witness?
+    else:
+        if "Failure" in mopsa_result["exception"]:
+            return result.RESULT_ERROR + " internal failure" # + " ".join(s[len("Failure(\""):-2].split()[1:])
+        elif "Parsing error" in mopsa_result["exception"]:
+            return result.RESULT_ERROR + " parsing error"
+        # if debug:
+        #     return result.RESULT_ERROR + " " + mopsa_result["exception"]
+        else:
+            return result.RESULT_ERROR
+
+def try_configs(configs, args, prop):
+    handle_nested_calls = False
+    for c in configs:
+        res = json.loads(run_mopsa(args, config=c))
+        pp_json_results(res)
+        sys.stdout.flush()
+        # print result # or return or ... ?
+        r0 = process_result(res, prop, args.debug, c)
+        if r0.startswith(result.RESULT_ERROR) or r0.startswith(result.RESULT_TRUE_PROP):
+            print(r0)
+            if r0.startswith(result.RESULT_TRUE_PROP):
+                with open("witness.graphml", 'w') as f:
+                    f.write(create_dummy_witness(args, res))
+            return
+        if any(["ignoring side effects of recursive call to" in a['message'] for a in res["assumptions"]]):
+            handle_nested_calls = True
+    print(result.RESULT_UNKNOWN)
+
+class Config:
+    def __init__(self, c, ea):
+        self.config = c
+        self.extra_args = ea
+
+if __name__ == "__main__":
+    # parse options
+    args = parse_args()
+    if args.version:
+        subprocess.run([f"{MOPSA_DIR}/bin/mopsa-c", "-v"])
+        sys.exit(0)
+    prop = parse_property(args.property)
+    configs = [
+        Config("c/default.json", ["-c-init-memset-threshold=5"]),
+        Config("c/cell-string-length-itv.json", []), # regarder si ça va pas créer plus de timeouts
+        Config("c/cell-string-length-pointer-sentinel-pack-rel-itv.json", []),
+        Config("c/cell-string-length-pointer-sentinel-pack-rel-itv-congr.json", ["-widening-delay=1", "-hook constant_widening_thresholds"])
+    ]
+    try_configs(configs, args, prop)

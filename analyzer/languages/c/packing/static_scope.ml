@@ -245,51 +245,137 @@ struct
           packs_of_function ~user_only f.c_func_unique_name @
           packs_of_function ~user_only caller.call_fun_uniq_name
 
+    (* Parameters are part of the caller and the callee packs *)
+    (* Subcase to avoid many distinctions, cf c/iterators/interproc.ml, function *)
+    (*    eval_calls_in_args a *)
+    | Var { vkind = V_range_attr(range, "arg"); vtyp }
+      when is_c_scalar_type vtyp ->
+      let prog = find_ctx Ast.c_program_ctx ctx in
+      let o_caller = List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions in
+      OptionExt.apply (fun caller ->
+          let o_callee = OptionExt.none_to_exn @@
+            OptionExt.lift (Visitor.fold_stmt
+                              (fun acc expr ->
+                                 match ekind expr with
+                                 | E_call (f, args) ->
+                                   begin match ekind (remove_casts f) with
+                                   | E_c_function f ->
+                                     if subset_range range expr.erange then
+                                       VisitParts (Some f)
+                                     else
+                                       VisitParts acc
+                                   | _ -> VisitParts acc
+                                   end
+                                 | _ -> VisitParts acc)
+                              (fun acc stmt -> VisitParts acc)
+                              None
+                           ) caller.c_func_body in
+          (OptionExt.apply (fun callee ->
+               packs_of_function ~user_only callee.c_func_unique_name) [] o_callee) @
+          packs_of_function ~user_only caller.c_func_unique_name
+        ) [] o_caller
+
     (* Return variables are also part of the caller and the callee packs *)
     | Var { vkind = Universal.Iterators.Interproc.Common.V_return (call, _) } ->
       let cs = find_ctx Context.callstack_ctx_key ctx in
-      if is_empty_callstack cs
+      let r = if is_empty_callstack cs
       then []
       else
         (* Note that the top of the callstack is not always the callee
            function, because the return variable is used after the function
            returns
         *)
-        let f1, cs' = pop_callstack cs in
         let fname = match ekind call with
           | E_call ({ekind = E_function (User_defined f)},_) -> f.fun_uniq_name
           | Stubs.Ast.E_stub_call(f,_) -> f.stub_func_name
           | _ -> assert false
         in
-        if is_empty_callstack cs'
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else if f1.call_fun_uniq_name <> fname
-        then packs_of_function ~user_only f1.call_fun_uniq_name
-        else
-          let f2, _ = pop_callstack cs' in
+        let f1, f2 =
+          let rec process cs = match cs with
+            | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then Some f, Some f' else process (f'::tl)
+            | [f] ->
+              if f.call_fun_orig_name = fname then
+                Some f, None
+              else None, None
+            | [] -> assert false 
+          in
+          process (List.rev cs) in
+        let () = debug "cs = %a@.fname = %s@.f1 = %a@.f2 = %a" Callstack.pp_callstack_short cs fname  (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f1 (OptionExt.print (fun fmt x -> Format.pp_print_string fmt x.call_fun_uniq_name)) f2 in
+        match f2, f1 with
+        | None, None -> []
+        | Some _, None -> assert false
+        | None, Some f1 -> packs_of_function ~user_only f1.call_fun_uniq_name
+        | Some f2, Some f1 ->
           packs_of_function ~user_only f1.call_fun_uniq_name @
-          packs_of_function ~user_only f2.call_fun_uniq_name
+          packs_of_function ~user_only f2.call_fun_uniq_name in
+      r
 
     (* Primed bases are in the same pack as the original ones *)
     | Var { vkind = Cstubs.Aux_vars.V_c_primed_base b } ->
       packs_of_base ~user_only ctx b
 
     | Var ({ vkind = V_c_stack_var(_, v)}) ->
-      packs_of_base ctx {b with base_kind = Var v}
+      packs_of_base ~user_only ctx {b with base_kind = Var v}
+
+    (* Resource are put in the function scope corresponding to their allocation area *)
+    (* | Addr { addr_kind = Stubs.Ast.A_stub_resource r; *)
+    (*          addr_partitioning = Universal.Heap.Policies.G_range range } -> *)
+    (*   let prog = find_ctx Ast.c_program_ctx ctx in *)
+    (*   let pack = match List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions with *)
+    (*     | None -> *)
+    (*       (\* let () = debug "putting %a %a in globals" pp_base b pp_range range in *\) *)
+    (*       Globals *)
+    (*     | Some f -> *)
+    (*       (\* let () = debug "putting %a in %s" pp_base b f.c_func_unique_name in *\) *)
+    (*       Locals f.c_func_unique_name *)
+    (*   in *)
+    (*   pack :: user_packs_of_resource r *)
+
+    (* | Addr { addr_kind = Stubs.Ast.A_stub_resource r; *)
+    (*          addr_partitioning = Universal.Heap.Policies.G_stack_range (cs, range) } -> *)
+    (*   let prog = find_ctx Ast.c_program_ctx ctx in *)
+    (*   let is_c_stub func = *)
+    (*     not (List.exists (fun c -> c.c_func_unique_name = func && c.c_func_stub = None) prog.c_functions) in *)
+    (*   let path_contains p1 p2 = *)
+    (*     let l1 = String.split_on_char '/' p1 in *)
+    (*     let l2 = String.split_on_char '/' p2 in *)
+    (*     List.for_all (fun el1 -> *)
+    (*         List.mem el1 l2 *)
+    (*       ) l1 *)
+    (*   in *)
+    (*   let packs = match List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions with *)
+    (*     | None -> *)
+    (*       if List.length cs > 0 && not @@ List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then  *)
+    (*         List.map (fun c -> Locals c.call_fun_uniq_name) cs *)
+    (*       else [Globals] *)
+    (*       (\* begin match List.find_opt (fun callsite -> *\) *)
+    (*       (\*     not (path_contains "share/mopsa/stubs/c/" (Location.get_range_file callsite.call_range)) && *\) *)
+    (*       (\*     not (is_c_stub callsite.call_fun_uniq_name)) cs with *\) *)
+    (*       (\*   | None -> let () = debug "puntting %a in Globals" pp_base b in Globals *\) *)
+    (*       (\*   | Some callsite -> *\) *)
+    (*       (\*     let () = debug "puntting %a in %s" pp_base b callsite.call_fun_uniq_name in  *\) *)
+    (*       (\*     Locals callsite.call_fun_uniq_name *\) *)
+    (*       (\* end *\) *)
+    (*     | Some f -> *)
+    (*       if List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then [] *)
+    (*       else *)
+    (*       [Locals f.c_func_unique_name] *)
+    (*   in *)
+    (*   packs @ user_packs_of_resource r  *)
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
       user_packs_of_resource r
 
-    | _ -> []
-
-
+    | _ ->
+      []
 
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
     match v.vkind with
-    | Memory.Cells.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
+    | Memory.Cells.Domain.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
       let user_only = not (is_c_scalar_type v.vtyp) in
       packs_of_base ~user_only ctx c.base
+
     | Memory.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
     | Memory.Pointer_sentinel.Domain.V_c_sentinel (base) -> packs_of_base ctx base
     | Memory.Pointer_sentinel.Domain.V_c_sentinel_pos (base) -> packs_of_base ctx base
@@ -297,6 +383,7 @@ struct
     | Memory.Smashing.Domain.V_c_uninit (base) -> packs_of_base ctx base
     | Memory.Pointers.Domain.Domain.V_c_ptr_offset vv -> packs_of_var ctx vv
     | Memory.Machine_numbers.Domain.V_c_num vv -> packs_of_var ctx vv
+    | Memory.Variable_length_array.Domain.V_c_variable_length vv -> packs_of_var ctx vv
     | Cstubs.Aux_vars.V_c_bytes a -> packs_of_base ctx (mk_addr_base a)
     | Cstubs.Aux_vars.V_c_primed_base b -> packs_of_base ctx b
     | V_c_stack_var(_, vv) -> packs_of_var ctx vv

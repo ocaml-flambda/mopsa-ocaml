@@ -870,13 +870,23 @@ struct
 
     (* Case 2: different base => undefined behavior *)
     let case2 =
-      let v1 = PointerSet.diff v1 v2 in
-      let v2 = PointerSet.diff v2 v1 in
-      if PointerSet.is_bottom v1 || PointerSet.is_bottom v2
-      then []
+      let vv1 = PointerSet.singleton_diff v1 v2 in
+      let vv2 = PointerSet.singleton_diff v2 v1 in
+      (* Weak bases may represent different concrete bases, while set difference
+         will remove them. So we need to add them. *)
+      let common_weak = PointerSet.meet v1 v2 |>
+                        PointerSet.filter
+                          (function
+                            | Base b -> base_mode b = WEAK
+                            | _ -> false)
+      in
+      let vv1 = PointerSet.union common_weak vv1 in
+      let vv2 = PointerSet.union common_weak vv2 in
+      if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
+        []
       else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
+        let flow = set_value_opt p1 vv1 man flow |>
+                   set_value_opt p2 vv2 man
         in
         let flow = raise_c_invalid_pointer_sub p q range man flow in
         [Eval.empty flow]
@@ -959,29 +969,37 @@ struct
     | E_binop(O_eq, p, q)
     | E_unop(O_log_not, {ekind = E_binop(O_ne, p, q)})
       when is_c_pointer_type p.etyp ||
-           is_c_pointer_type q.etyp
+           is_c_pointer_type q.etyp ||
+           is_c_pointer_type (remove_casts p).etyp ||
+           is_c_pointer_type (remove_casts q).etyp
       ->
-       OptionExt.return (
-           man.eval p flow >>$ fun p flow ->
-           man.eval q flow >>$ fun q flow ->
-           let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-           let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-           Eval.join evl1 evl2
-         )
+      OptionExt.return (
+        let p = if is_c_pointer_type p.etyp then p else (remove_casts p) in
+        let q = if is_c_pointer_type q.etyp then q else (remove_casts q) in
+        man.eval p flow >>$ fun p flow ->
+        man.eval q flow >>$ fun q flow ->
+        let evl1 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+        let evl2 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+        Eval.join evl1 evl2
+      )
 
     (* 𝔼⟦ ?(p != q) ⟧ *)
     | E_binop(O_ne, p, q)
     | E_unop(O_log_not, {ekind = E_binop(O_eq, p, q)})
       when is_c_pointer_type p.etyp ||
-           is_c_pointer_type q.etyp
+           is_c_pointer_type q.etyp ||
+           is_c_pointer_type (remove_casts p).etyp ||
+           is_c_pointer_type (remove_casts q).etyp
       ->
        OptionExt.return (
-           man.eval p flow >>$ fun p flow ->
-           man.eval q flow >>$ fun q flow ->
-           let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
-           let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
-           Eval.join evl1 evl2
-         )
+         let p = if is_c_pointer_type p.etyp then p else (remove_casts p) in
+         let q = if is_c_pointer_type q.etyp then q else (remove_casts q) in
+         man.eval p flow >>$ fun p flow ->
+         man.eval q flow >>$ fun q flow ->
+         let evl1 = assume_ne p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_true exp.erange) flow in
+         let evl2 = assume_eq p q exp.erange man flow >>$ fun () flow -> Eval.singleton (mk_false exp.erange) flow in
+         Eval.join evl1 evl2
+       )
 
     (* 𝔼⟦ p op q | op ∈ {<, <=, >, >=} ⟧ *)
     | E_binop((O_lt | O_le | O_gt | O_ge) as op, p, q)
@@ -1079,6 +1097,57 @@ struct
       let a = get_env T_cur man flow in
       let vars = try Map.fold (fun v _ acc -> v :: acc) a [] with Top.Found_TOP -> [] in
       Some vars
+    | Universal.Heap.Recency.Q_alive_addresses_aspset ->
+      let a = get_env T_cur man flow in
+      (* we start from the roots: non addr bases, and iterate until everything has been covered *)
+      let open Cells.Domain.Domain in
+      let roots = Map.fold (fun v _ roots ->
+          match vkind v with
+          | V_c_cell c ->
+            begin match c.base.base_kind with
+              | Var _ -> BaseSet.add c.base roots
+              | _ -> roots
+            end
+          | _ -> BaseSet.add (mk_base (Var v)) roots
+        ) a BaseSet.empty in
+      let rec reachable_addrs bases =
+        Debug.debug ~channel:"pointer" "reachable_addrs with bases = %a" (format BaseSet.print) bases;
+        let reachable_from_bases =
+          Map.fold
+            (fun v oaset new_acc ->
+               let base = 
+                 match vkind v with
+                 | V_c_cell c -> c.base
+                 |_ -> mk_base (Var v) in
+               if BaseSet.mem base bases then
+                   match oaset with
+                   | Top.TOP -> new_acc (* woups *)
+                   | Top.Nt aset ->
+                     Map.ValueSet.fold
+                       (fun pv new_acc ->
+                          match pv with
+                          | Base b when b.base_valid ->
+                            BaseSet.add b new_acc
+                          | _ -> new_acc
+                       ) aset new_acc
+                 else
+                   new_acc
+            ) a bases
+        in
+        let new_acc = BaseSet.union bases reachable_from_bases in
+        if BaseSet.cardinal bases < BaseSet.cardinal new_acc then
+          reachable_addrs new_acc
+        else
+          let open Universal.Heap.Recency in
+          BaseSet.fold (fun c acc -> match c.base_kind with
+              | Addr a -> Pool.add a acc
+              | _ -> acc) bases Pool.empty 
+      in
+      begin try Some (reachable_addrs roots)
+      with Not_found -> assert false end
+
+  (* ask the heap domain for all allocated addresses, then check if all allocated Memory is still reachable from main's locals + the globals *)
+
    | _ -> None
 
 

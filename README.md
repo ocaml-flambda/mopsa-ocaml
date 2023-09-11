@@ -51,6 +51,11 @@ eval $(opam env)
 opam install --deps-only --with-doc --with-test .
 ```
 
+For SV-Comp, you also need:
+```shell
+ sudo dpkg --add-architecture i386 && sudo apt install libc6-dev-i386
+```
+
 ## Compilation
 
 To compile MOPSA, just run:

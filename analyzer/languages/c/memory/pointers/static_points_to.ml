@@ -38,6 +38,14 @@ type static_points_to =
   | Invalid
   | Top
 
+let pp_static_points_to fmt spt =
+  match spt with
+  | AddrOf(base, e, om) -> Format.fprintf fmt "AddrOf(%a, %a, %a)" pp_base base pp_expr e (OptionExt.print pp_mode) om
+  | Eval(v, om, e) -> Format.fprintf fmt "Eval(%a, %a, %a)" pp_var v (OptionExt.print pp_mode) om pp_expr e
+  | Fun f -> Format.fprintf fmt "Fun(%s)" f.c_func_org_name
+  | Null -> Format.fprintf fmt "Null"
+  | Invalid -> Format.fprintf fmt "Invalid"
+  | Top -> Format.fprintf fmt "Top"
 
 (** Advance the offset of a symbolic pointer *)
 let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : static_points_to =
@@ -80,7 +88,7 @@ let rec eval_opt exp : static_points_to option =
   | E_constant(C_c_invalid) ->
     Invalid |> OptionExt.return
 
-  | E_constant(C_top t) when is_c_pointer_type t ->
+  | E_constant(C_top t) when is_c_pointer_type t || is_c_function_type t ->
     Top |> OptionExt.return
 
   | E_addr (addr, mode) ->

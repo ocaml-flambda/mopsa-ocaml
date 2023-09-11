@@ -336,6 +336,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
   (* translate type declarations *)
   (* *************************** *)
 
+  and fmt_range fmt r = Format.fprintf fmt "%s--%s" (Clang_dump.string_of_loc r.Clang_AST.range_begin) (Clang_dump.string_of_loc r.Clang_AST.range_end)
+
+
   (* enums *)
 
   and enum_decl e =
@@ -354,11 +357,13 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       let range = e.C.enum_range in
       (* integer type *)
       let itype = match e.C.enum_integer_type with
-      | None -> SIGNED_INT
+      | None -> None 
       | Some tq ->
-         match type_qual range tq with
-         | T_integer i, _ -> i
-         | _ -> SIGNED_INT
+        Some (
+          match type_qual range tq with
+          | T_integer i, _ -> i
+          | _ -> SIGNED_INT
+        )
       in
       (* create record *)
       let enum =
@@ -409,7 +414,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         | a::rest ->
            if type_unifiable ctx.ctx_target (T_enum enum) (T_enum a) then (
              (* found compatible type *)
-             if !log_merge then Printf.printf "found enum declaration for '%s' (%s and %s)\n" org_name enum.enum_unique_name a.enum_unique_name;
+             let () =
+               if !log_merge then
+                 Format.printf "found enum declaration for '%s' (%s@%a and %s@%a)@." org_name enum.enum_unique_name fmt_range enum.enum_range a.enum_unique_name fmt_range enum.enum_range
+               else ()
+             in
              enum_unify ctx.ctx_target a enum
            )
            else merge rest
@@ -600,7 +609,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
             prev.var_type <- t;
             prev.var_com <- !c
           with Invalid_argument msg ->
-            warning range "incompatible variable types" (Printf.sprintf "variable %s, type1 %s, type2 %s, %s" org_name (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
+            warning range "incompatible variable types" (Format.asprintf "variable %s (ranges %a %a) type1 %s, type2 %s, %s" org_name fmt_range range fmt_range prev.var_range (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
       );
       (* make variable *)
       let var = match prev with

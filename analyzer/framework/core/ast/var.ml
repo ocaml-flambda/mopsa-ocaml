@@ -26,6 +26,7 @@ open Mopsa_utils
 open Typ
 open Semantic
 
+let print_uniq_with_uid = ref false
 
 type var_kind = ..
 
@@ -217,7 +218,9 @@ let () =
       );
     print = (fun next fmt v ->
         match vkind v with
-        | V_uniq (orig,uid) -> Format.fprintf fmt "%s" orig (* uid *)
+        | V_uniq (orig,uid) ->
+          if !print_uniq_with_uid then Format.fprintf fmt "%s:%d" orig uid
+          else Format.fprintf fmt "%s" orig
 
         | V_var_attr (v, a) -> Format.fprintf fmt "%s(%a)" a pp_var v
 

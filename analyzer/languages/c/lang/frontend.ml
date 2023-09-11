@@ -478,17 +478,12 @@ and from_project prj =
 
 
 and find_target target targets =
-  let re = Str.regexp (".*" ^ target ^ "$") in
-  let search_targets r =
-    List.find (fun t ->
-        Str.string_match r t 0
-      ) targets in
   try
-    search_targets re
+    List.find (fun t -> String.equal (Filename.basename t) target) targets
   with Not_found ->
-    let re_permissive = Str.regexp (".*" ^ target ^ ".*") in
-    let t = search_targets re_permissive in
-    warn "permissive search selected target %s" t;
+    let re_permissive = Str.regexp ("^" ^ target ^ ".*") in
+    let t = List.find (fun t -> Str.string_match re_permissive (Filename.basename t) 0) targets in
+    warn "permissive search selected target %s (initial target: %s)" t target;
     t
 
 (** {2 functions} *)
@@ -818,7 +813,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
                    c_enum_val_value = v.enum_val_value;
                    c_enum_val_range = from_range v.enum_val_range;
                  }) e.enum_values;
-          c_enum_integer_type = from_integer_type e.enum_integer_type;
+          c_enum_integer_type = from_integer_type (OptionExt.none_to_exn e.enum_integer_type);
           c_enum_range = from_range e.enum_range;
         }
       in

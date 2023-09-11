@@ -33,6 +33,20 @@ open Common.Builtins
 open Universal.Iterators.Interproc.Common
 
 
+
+let opt_error_builtin = ref true
+
+let () =
+  register_language_option "c" {
+    key="-error-is-builtin";
+    category = "C";
+    doc = "assume error function corresponds to the builtin";
+    spec = ArgExt.Bool (fun b -> opt_error_builtin := b);
+    default = "true"
+  }
+
+
+
 module Domain =
 struct
 
@@ -71,7 +85,13 @@ struct
   (** {2 Initialization of environments} *)
   (** ================================== *)
 
-  let init prog man flow = set_env T_cur empty man flow
+  let init prog man flow =
+    let () =
+      if !opt_error_builtin then
+        let () = Hashtbl.add Common.Builtins.builtin_functions "error" () in
+        Hashtbl.add Common.Builtins.builtin_functions "error_at" ()
+    in
+    set_env T_cur empty man flow
 
 
   (** {2 Computation of post-conditions} *)
@@ -322,9 +342,32 @@ struct
         eval_calls_in_args tl man flow >>$ fun tl flow ->
         Cases.singleton (arg::tl) flow
 
+  let is_c_fun_boolean_predicate fundec args man flow =
+    List.length args = 1 &&
+    begin match ekind (List.hd args) with
+    | E_binop(op, e1, e2) ->
+      is_comparison_op op || op = O_c_and || op = O_c_or
+    | E_unop(op, _) -> op = O_log_not
+    | _ -> false
+    end &&
+    begin match fundec with
+      | {c_func_body = Some body; c_func_variadic = false } ->
+        let stmts_count = Visitor.fold_stmt (fun c e -> Keep c)
+            (fun c s -> VisitParts (c+1)) 0 body in
+        debug "stmts_count = %d" stmts_count;
+        stmts_count < 20
+      | _ -> false
+    end
+
+  let is_c_constant e =
+    match ekind e with
+    | E_constant c -> is_c_int_type (etyp e)
+    | _ -> false
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
+    if List.length args > 0 && List.length fundec.c_func_parameters > 0 then
+      debug "%s %a %a" fundec.c_func_org_name pp_typ (List.hd fundec.c_func_parameters).vtyp pp_typ (List.hd args).etyp;
     if fundec.c_func_org_name = "__builtin_alloca" then
       match args with
       | [size] -> eval_alloca_call size range man flow
@@ -333,6 +376,20 @@ struct
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
+      man.eval exp' flow
+    else
+      (* in the case f(cond) where cond is a boolean, f is not too difficult,
+         we rewrite it into if(cond) f(1) else f(0) to gain precision *)
+    if is_c_fun_boolean_predicate fundec args man flow && not @@ is_c_constant @@ List.hd args then
+      let arg = List.hd args in
+      let arg_type = etyp arg in
+      let mk_call c = mk_expr (E_call (mk_expr (E_c_function fundec) range, [c]))  ~etyp:fundec.c_func_return range in
+      let exp' = mk_expr ~etyp:fundec.c_func_return
+          (E_c_conditional
+             (arg,
+              mk_call (mk_one ~typ:arg_type range),
+              mk_call (mk_zero ~typ:arg_type range))) range in
+      let () = debug "%s is considered as a boolean predicate, rewriting as %a" fundec.c_func_org_name pp_expr exp' in
       man.eval exp' flow
     else
       (* save the alloca resources of the caller before resetting it *)
@@ -444,6 +501,9 @@ struct
         Eval.singleton (mk_unit range) flow
       else
         man.eval (mk_top (under_type p.etyp) range) flow
+
+    | P_null ->
+      Common.Alarms.raise_c_null_deref_alarm p man flow |> Eval.empty 
 
     | _ ->
       panic_at range

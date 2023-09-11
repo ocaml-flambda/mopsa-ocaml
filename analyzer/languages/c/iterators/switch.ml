@@ -102,7 +102,7 @@ struct
   (** ============================== *)
 
   (** 𝕊⟦ switch (e) body ⟧ *)
-  let exec_switch e body range man flow =
+  let exec_switch e body guard_cleaner range man flow =
     (* Save initial state before removing the break flows *)
     let flow0 = flow in
     let flow = Flow.remove T_break flow in
@@ -115,12 +115,13 @@ struct
     let switch_range = tag_range range "switch" in
     let rec iter cases flow =
       match cases with
-      | [] -> Post.return flow
+      | [] -> man.exec guard_cleaner flow
       | (e',r) :: tl ->
         (* Filter the environments *)
         let cond = mk_binop e O_eq e' ~etyp:u8 switch_range in
         assume cond
           ~fthen:(fun flow ->
+              man.exec guard_cleaner flow >>% fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
               let cur = Flow.get T_cur man.lattice flow in
               Flow.set (T_c_switch_case (e',r)) cur man.lattice flow |>
@@ -137,9 +138,7 @@ struct
 
     iter cases flow |>
     (* Merge all cases in one, so that we will execute the body only once *)
-    Post.remove_duplicates man.lattice
-    >>% fun flow ->
-
+    Post.remove_duplicates man.lattice >>% fun flow -> 
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)
     let flow, no_default =
@@ -184,14 +183,18 @@ struct
     Flow.remove (T_c_switch_default range) |>
     Common.Scope_update.update_scope upd range man
 
-
   let exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
        (
          (* Evaluate e once in case of side-effects *)
-         man.eval e flow >>$ fun e flow ->
-         exec_switch e body stmt.srange man flow
+         man.eval e flow |>
+         bind (fun case flow ->
+             match case with
+             | Empty -> Cases.empty flow
+             | NotHandled -> Cases.not_handled flow
+             | Result(e, _, cleaners) ->
+               exec_switch e body (Universal.Ast.mk_block (StmtSet.elements cleaners) (erange e)) stmt.srange man flow)
        ) |>
       OptionExt.return
 

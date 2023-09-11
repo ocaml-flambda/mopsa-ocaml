@@ -40,6 +40,7 @@ module Pool =
 type ('a,_) query +=
   | Q_alive_addresses : ('a,addr list) query
   | Q_alive_addresses_aspset : ('a,Pool.t) query
+  | Q_allocated_addresses_aspset : ('a,Pool.t) query
 
 let () =
   register_query {
@@ -49,6 +50,7 @@ let () =
           match query with
           | Q_alive_addresses -> List.sort_uniq compare_addr (a @ b)
           | Q_alive_addresses_aspset -> Pool.join a b
+          | Q_allocated_addresses_aspset -> Pool.join a b
           | _ -> next.pool_join query a b
       in f
     );
@@ -58,6 +60,7 @@ let () =
           match query with
           | Q_alive_addresses -> assert false
           | Q_alive_addresses_aspset -> Pool.meet a b
+          | Q_allocated_addresses_aspset -> Pool.meet a b
           | _ -> next.pool_meet query a b
       in f
     );
@@ -255,6 +258,9 @@ struct
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
       if Pool.is_top pool then Some [] else Some (Pool.elements pool)
+
+    | Q_allocated_addresses_aspset ->
+      Some (get_env T_cur man flow)
 
     | _ -> None
 

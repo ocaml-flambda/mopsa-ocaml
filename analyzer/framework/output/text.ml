@@ -77,12 +77,19 @@ let highlight_range color fmt range =
 
     (* Read the file from disk *)
     let f = open_in file in
-    let rec get_bug_lines i =
-      try
-        let l = input_line f in
-        if is_bug_line i then (i,l) :: get_bug_lines (i+1)
-        else get_bug_lines (i+1)
-      with End_of_file -> []
+    let get_bug_lines i =
+      let rec iter i acc =
+        let ol = try Some (input_line f) with End_of_file -> None in
+        if is_bug_line i then
+          iter (i+1)
+            (match ol with
+             | None -> acc
+             | Some l -> (i, l)::acc)
+        else
+          match ol with
+          | None -> acc
+          | _ -> iter (i+1) acc in
+      List.rev @@ iter i []
     in
 
     (* Highlight bug region in a line *)

@@ -30,6 +30,16 @@ open Apron_transformer
 
 
 
+let opt_show_relational_domain = ref false
+let () =
+  register_domain_option "universal.numeric.relational" {
+    key = "-show-relational-def-domain";
+    category = "Numeric";
+    doc = " display the domain on which the relational abstract state is defined";
+    spec = ArgExt.Set opt_show_relational_domain;
+    default = "false";
+  }
+
 (** Query to retrieve relational variables *)
 
 type ('a,_) query +=
@@ -79,6 +89,7 @@ struct
       type nonrec t = t
       let name = ApronManager.name
     end)
+
 
 
 
@@ -375,11 +386,23 @@ struct
 
 
   let print_state printer a =
-    let size = Apron.Environment.size (Apron.Abstract1.env (fst a)) in
-    debug "%d variables in the env" size;
-    pprint printer
-      (pbox (Apron_pp.pp_env ApronManager.man) a)
-      ~path:[Key "numeric-relations"]
+    if !opt_show_relational_domain then
+      let dom = Binding.Equiv.fold (fun (a, _) acc -> a::acc) (snd a) [] in
+      pp_obj_map printer
+        [
+          (String "domain",
+           List
+             (List.map (fun v -> String (Format.asprintf "%a" pp_var v)) dom,
+              { sopen = "{"; ssep = ","; sclose = "}"; sbind = "" }));
+          (String "relations", pbox (Apron_pp.pp_env ApronManager.man) a);
+        ]
+        ~path:[Key "numeric-relations"]
+    else
+      pprint printer
+        (pbox (Apron_pp.pp_env ApronManager.man) a)
+        ~path:[Key "numeric-relations"]
+
+
 
   let print_expr man ctx a printer exp =
     if exists_expr
