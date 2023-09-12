@@ -294,9 +294,9 @@ struct
         (fun c -> c.call_fun_uniq_name <> fundec.c_func_unique_name)
     in
     if first_call then
-      fundec
+      false, fundec
     else
-      { fundec with
+      true, { fundec with
         c_func_parameters = List.map (mk_stack_var cs) fundec.c_func_parameters;
         c_func_local_vars = List.map (mk_stack_var cs) fundec.c_func_local_vars;
         c_func_body = OptionExt.lift (rename_variables_in_function_body cs) fundec.c_func_body;
@@ -366,6 +366,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
+    let fundec_has_been_modified = ref false in 
     if List.length args > 0 && List.length fundec.c_func_parameters > 0 then
       debug "%s %a %a" fundec.c_func_org_name pp_typ (List.hd fundec.c_func_parameters).vtyp pp_typ (List.hd args).etyp;
     if fundec.c_func_org_name = "__builtin_alloca" then
@@ -411,7 +412,17 @@ struct
             man.eval (mk_top fundec.c_func_return range) flow
         )
         else
-         let fundec = rename_variables_in_fundec (Flow.get_callstack flow) fundec in
+         let is_modified, fundec = rename_variables_in_fundec (Flow.get_callstack flow) fundec in
+         let () = fundec_has_been_modified := is_modified in 
+         let flow =
+           if !fundec_has_been_modified then 
+           (* after fundec renaming, we save the updated program in the context for the interactive engine *)
+             let old_c_program = get_c_program flow in 
+             let new_c_program =
+               {old_c_program with
+                c_functions = fundec :: old_c_program.c_functions } in
+             set_c_program new_c_program flow
+           else flow in
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
            let open Universal.Ast in
@@ -476,6 +487,12 @@ struct
       in
       (* free alloca addresses *)
       ret >>$ fun e flow ->
+      let flow =
+        if !fundec_has_been_modified then
+          (* we updated the program before analyzing the renamed function, we can now get rid of it *)
+          let c_program = get_c_program flow in
+          set_c_program {c_program with c_functions = List.tl c_program.c_functions} flow
+        else flow in 
       let callee_alloca_addrs = get_env T_cur man flow in
       let flow = set_env T_cur caller_alloca_addrs man flow in
       AddrSet.fold
