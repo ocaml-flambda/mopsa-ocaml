@@ -589,8 +589,7 @@ struct
       exec_exit_functions "exit" main.c_func_name_range man flow
 
 
-  (* FIXME: incorporate check for number of arguments *)
-  (* FIXME: incorporate handling of more than five arguments *)
+
   let type_shape_of_function (f: c_fundec) : fn_type_shapes option =
     match StringMap.find_opt f.c_func_org_name (!ffitest_extfuns) with
     | Some { shape = Some ty } -> Some ty
@@ -723,7 +722,6 @@ struct
       (* Execute stub directives *)
       exec_stub_directives c_stub_directives man flow >>%? fun flow ->
 
-      (* let () = Debug.debug ~channel:"functions" "function names %a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "\n") Format.pp_print_string) (List.map (fun f -> f.c_func_org_name) c_functions) in *)
       let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
       exec_all_tests ffi_functions man [] flow |>
       OptionExt.return

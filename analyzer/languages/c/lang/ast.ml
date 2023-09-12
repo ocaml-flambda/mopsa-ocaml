@@ -340,7 +340,7 @@ type expr_kind +=
       the block object will update the pointers that point to the
       block.  *)
 
-  | E_ffi_call of string * expr list 
+  | E_ffi_call of string * expr list
 
 
 
@@ -962,8 +962,6 @@ let mk_c_multibyte_integer (s:string) (off:int) t range =
 let mk_c_invalid_pointer range =
   mk_constant C_c_invalid ~etyp:(T_c_pointer T_c_void) range
 
-
-
 let void = T_c_void
 let u8 = T_c_integer(C_unsigned_char)
 let s8 = T_c_integer(C_signed_char)
@@ -1028,13 +1026,13 @@ let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
 
-let mk_ffi_call f exprs range = 
+let mk_ffi_call f exprs range =
   mk_expr (E_ffi_call (f, exprs)) range
 
 let mk_ffi_ext_call exprs range =
   mk_stmt (S_ffi_ext_call exprs) range
-      
-  
+
+
 
 
 let is_c_global_scope = function
@@ -1177,12 +1175,12 @@ let () =
          Compare.triple compare compare_expr compare_expr
            (op1,e1,ee1)
            (op2,e2,ee2)
-           
+
        | E_c_block_object(e1), E_c_block_object(e2) ->
          compare_expr e1 e2
 
-       | E_ffi_call (f, es1), E_ffi_call (g, es2) -> 
-          Compare.pair compare (Compare.list compare_expr) (f, es1) (g, es2)  
+       | E_ffi_call (f, es1), E_ffi_call (g, es2) ->
+          Compare.pair compare (Compare.list compare_expr) (f, es1) (g, es2)
 
        | _ -> next e1 e2
     )
@@ -1438,4 +1436,3 @@ let rec var_scope v =
   | V_cvar { cvar_scope } -> cvar_scope
   | V_c_stack_var(_, vv)  -> var_scope vv
   | _ -> assert false
-
