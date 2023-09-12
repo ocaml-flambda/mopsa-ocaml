@@ -1167,6 +1167,114 @@ let () =
     )
 
 
+(**************************)
+(** Statement comparison **)
+(**************************)
+
+let rec compare_c_var_init i1 i2 =
+  match i1, i2 with
+  | C_init_expr e1, C_init_expr e2 ->
+    compare_expr e1 e2
+
+  | C_init_list(l1,o1), C_init_list(l2,o2) ->
+    Compare.compose [
+      (fun () -> Compare.list compare_c_var_init l1 l2);
+      (fun () -> Compare.option compare_c_var_init o1 o2)
+    ]
+
+  | C_init_implicit t1, C_init_implicit t2 ->
+    compare_typ t1 t2
+
+  | _ ->
+    Stdlib.compare i1 i2
+
+let compare_c_fundec f1 f2 =
+  Compare.compose [
+    (fun () -> Stdlib.compare f1.c_func_uid f2.c_func_uid);
+    (fun () -> Stdlib.compare f1.c_func_unique_name f2.c_func_unique_name)
+  ]
+
+let compare_c_var_scope s1 s2 =
+  match s1, s2 with
+  | Variable_local f1, Variable_local f2
+  | Variable_parameter f1, Variable_parameter f2
+  | Variable_func_static f1,Variable_func_static f2 ->
+    compare_c_fundec f1 f2
+  | _ ->
+    Stdlib.compare s1 s2
+
+let compare_c_var_scope_update s1 s2 =
+  Compare.compose [
+    (fun () -> Compare.list compare_var s1.c_scope_var_added s2.c_scope_var_added);
+    (fun () -> Compare.list compare_var s1.c_scope_var_removed s2.c_scope_var_removed)
+  ]
+
+
+let () =
+  register_stmt_compare
+    (fun next s1 s2 ->
+       match skind s1, skind s2 with
+
+       | S_c_goto_stab(s1), S_c_goto_stab(s2) ->
+         compare_stmt s1 s2
+
+       | S_c_declaration(v1,i1,s1), S_c_declaration(v2,i2,s2) ->
+         Compare.compose [
+           (fun () -> compare_var v1 v2);
+           (fun () -> Compare.option compare_c_var_init i1 i2);
+           (fun () -> compare_c_var_scope s1 s2)
+         ]
+
+       | S_c_do_while(s1,e1), S_c_do_while(s2,e2) ->
+         Compare.compose [
+           (fun () -> compare_stmt s1 s2);
+           (fun () -> compare_expr e1 e2)
+         ]
+
+       | S_c_for(init1,cond1,incr1,body1), S_c_for(init2,cond2,incr2,body2) ->
+         Compare.compose [
+           (fun () -> compare_stmt init1 init2);
+           (fun () -> Compare.option compare_expr cond1 cond2);
+           (fun () -> Compare.option compare_expr incr1 incr2);
+           (fun () -> compare_stmt body1 body2)
+         ]
+
+       | S_c_return(e1,s1), S_c_return(e2,s2) ->
+         Compare.compose [
+           (fun () -> Compare.option compare_expr e1 e2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_break(s1), S_c_break(s2)
+       | S_c_continue(s1), S_c_continue(s2) ->
+         compare_c_var_scope_update s1 s2
+
+       | S_c_goto(l1,s1), S_c_goto(l2,s2) ->
+         Compare.compose [
+           (fun () -> compare l1 l2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_switch(e1,s1), S_c_switch(e2,s2) ->
+         Compare.compose [
+           (fun () -> compare_expr e1 e2);
+           (fun () -> compare_stmt s1 s2)
+         ]
+
+       | S_c_label(l1), S_c_label(l2) ->
+         Stdlib.compare l1 l2
+
+       | S_c_switch_case(e1,s1), S_c_switch_case(e2,s2) ->
+         Compare.compose [
+           (fun () ->  compare_expr e1 e2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_switch_default(s1), S_c_switch_default(s2) ->
+         compare_c_var_scope_update s1 s2
+
+       | _ -> next s1 s2
+    )
 
 let range_cond e_mint rmin rmax range =
   let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
@@ -1417,4 +1525,3 @@ let rec var_scope v =
   | V_cvar { cvar_scope } -> cvar_scope
   | V_c_stack_var(_, vv)  -> var_scope vv
   | _ -> assert false
-
