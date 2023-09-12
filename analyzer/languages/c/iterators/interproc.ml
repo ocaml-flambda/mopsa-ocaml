@@ -291,7 +291,7 @@ struct
     (* No renaming the function is not in the callstack *)
     let first_call =
       cs |> List.for_all
-        (fun c -> c.call_fun_uniq_name = fundec.c_func_unique_name)
+        (fun c -> c.call_fun_uniq_name <> fundec.c_func_unique_name)
     in
     if first_call then
       fundec
