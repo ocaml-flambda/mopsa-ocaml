@@ -158,7 +158,7 @@ type operator +=
   | O_minus      (** - *)
   | O_mult       (** * *)
   | O_div        (** / *)
-  | O_mod        (** % *)
+  | O_mod        (** % where the remainder can be negative, following C *)
   | O_ediv       (** euclidian division *)
   | O_erem       (** remainder for euclidian division *)
   | O_pow        (** power *)
