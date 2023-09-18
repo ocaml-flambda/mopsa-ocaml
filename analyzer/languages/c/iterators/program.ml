@@ -85,10 +85,10 @@ struct
     }
 
   (** Runtime testing options *)
-  module StringSet = SetExt.Make(String)
-  (* module StringMap = Map.Make(String) *)
   let ffitest_flag = ref false
+  module StringSet = Set.Make(String)
   let ffitest_extfuns : extfun_desc StringMap.t ref = ref (StringMap.empty)
+  let ffitest_missing_funs : StringSet.t ref = ref (StringSet.empty)
 
   let read_lines str =
     let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
@@ -682,49 +682,76 @@ struct
   let report_conclusion (rep: report) =
     let total, safe, error, warning, info, unimplemented, checks_map = Output.Text.construct_checks_summary ~print:false rep None in
     if error > 0 || warning > 0 then
-      Output.Text.icon_of_diag Error
+      Error
     else if unimplemented > 0 then
-      Output.Text.icon_of_diag Unimplemented
-    else if info > 0 then
-      Output.Text.icon_of_diag Info
-    else Output.Text.icon_of_diag Safe
+      Unimplemented
+    else if info > 0 then Info
+    else Safe
 
 
-  let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (flow: 'a flow) =
+  let pp_runtime_analysis_results fmt results =
+    List.iter (fun (f, res) -> Format.fprintf fmt "%s (%s)\n" f (Output.Text.icon_of_diag res)) results
+
+
+  let rec exec_all_tests (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
     match fs with
-    | [] -> Post.return (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
+    | [] ->
+      Cases.singleton results (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
     | (f, ty) :: fs ->
+        let () = Debug.debug ~channel:"runtime_functions" "analyzing %s at %a" (f.c_func_org_name) pp_range f.c_func_range in
         exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
-        Format.printf "checked: %s " f.c_func_org_name;
         (* catching the exceptions like this is horrible,
            ideally there would be a better way *)
         try
           (exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
           let report = Flow.get_report flow'' in
-          Format.printf "(%s)\n" (report_conclusion report);
-          exec_all_tests fs man (flow'' :: flows) flow)
+          let res = report_conclusion report in
+          exec_all_tests fs man (flow'' :: flows) ((f.c_func_org_name, res) :: results) flow)
         with e ->
           (* something went wrong in the analysis *)
-          Format.printf "(%s)\n" (Output.Text.icon_of_diag Unimplemented);
           let flow' = raise_ffi_unimplemented f.c_func_range man flow in
-          exec_all_tests fs man (flow' :: flows) flow
+          exec_all_tests fs man (flow' :: flows) ((f.c_func_org_name, Unimplemented) :: results) flow
+
+
+  let output_results skipped_functions results to_test =
+    let pp_unknown_functions fmt set =
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
+    in
+    let results_map = StringMap.of_list results in
+    let delta = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
+    let pp_missing_functions fmt map =
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) delta [])
+    in
+      Format.printf
+      "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
+      pp_runtime_analysis_results
+      results
+      pp_unknown_functions
+      skipped_functions
+      pp_missing_functions
+      delta
+
+  let exec_runtime_tests c_globals c_functions c_stub_directives man flow =
+    (* Initialize global variables *)
+    init_globals c_globals man flow >>% fun flow ->
+    (* Execute stub directives *)
+    exec_stub_directives c_stub_directives man flow >>% fun flow ->
+    let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
+    exec_all_tests ffi_functions man [] [] flow >>$ fun results flow ->
+    output_results (!ffitest_missing_funs) results (!ffitest_extfuns);
+    Post.return flow
 
 
 
   let exec stmt man flow =
     match skind stmt with
     | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
-
-
-      (* Initialize global variables *)
-      init_globals c_globals man flow >>%? fun flow ->
-
-      (* Execute stub directives *)
-      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
-
-      let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
-      exec_all_tests ffi_functions man [] flow |>
+      exec_runtime_tests c_globals c_functions c_stub_directives man flow |>
       OptionExt.return
+
+    | S_c_ext_call (f, exprs) ->
+      ffitest_missing_funs := StringSet.add (f.c_func_org_name) (!ffitest_missing_funs);
+      man.exec ~route:(Below name) stmt flow |> OptionExt.return
 
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->

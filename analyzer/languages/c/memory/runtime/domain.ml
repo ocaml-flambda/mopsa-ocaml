@@ -410,7 +410,7 @@ and shapes_deref man flow e range =
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
     end
 
-  let exec_ext_call args man flow =
+  let exec_ext_call f args man flow =
     let check_ext_call_args exprs = List.fold_left (fun acc c -> Post.bind (exec_check_ext_call_arg c man) acc) (Post.return flow) exprs in
     check_ext_call_args args
 
@@ -467,8 +467,8 @@ and shapes_deref man flow e range =
       let () = Format.printf "forgetting %a\n" pp_var var in
       exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
     | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
-    | S_ffi_ext_call args ->
-      exec_ext_call args man flow |> OptionExt.return
+    | S_c_ext_call (f, args) ->
+      exec_ext_call f args man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       let () = Debug.debug ~channel:"shape" "assigning %a = %a" pp_var var pp_expr e in
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return

@@ -405,7 +405,7 @@ type stmt_kind +=
   (** default case of switch statements. *)
 
   (* runtime external call *)
-  | S_ffi_ext_call of expr list
+  | S_c_ext_call of c_fundec * expr list
 
 
 
@@ -1029,8 +1029,8 @@ let mk_c_declaration v init scope range =
 let mk_ffi_call f exprs range =
   mk_expr (E_ffi_call (f, exprs)) range
 
-let mk_ffi_ext_call exprs range =
-  mk_stmt (S_ffi_ext_call exprs) range
+let mk_c_ext_call f exprs range =
+  mk_stmt (S_c_ext_call (f, exprs)) range
 
 
 
