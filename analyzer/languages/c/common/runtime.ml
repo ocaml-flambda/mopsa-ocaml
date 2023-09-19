@@ -11,17 +11,6 @@ open Sexplib.Std
 open Ppx_sexp_conv_expander
 
 
-let ffi_silent_analysis = ref false
-let () = register_domain_option "c.iterators.program" {
-  key = "-silent-failure";
-  category="Runtime";
-  doc=" do not raise for undefined featurs but raise an alarm";
-  spec = ArgExt.Set ffi_silent_analysis;
-  default=""
-}
-
-
-
 (* the type of values *)
 let ffi_value_typ = T_c_integer C_signed_long
 
@@ -338,22 +327,9 @@ let raise_ffi_unimplemented range man flow =
   Flow.add_diagnostic diagnostic flow
 
 
-let raise_or_fail_ffi_unsupported range reason man flow =
-  if not !ffi_silent_analysis then
-    failwith (Format.asprintf "failed with reason: %s" reason)
-  else
-    let cs = Flow.get_callstack flow in
-    let alarm = mk_alarm (A_ffi_abort_analysis reason) cs range in
-    Flow.raise_alarm alarm ~bottom:true ~warning:false man.lattice flow
-
-
-
-
-
-
 (* safe checks *)
 let safe_ffi_value_liveness_check range man flow =
-    Flow.add_safe_check CHK_FFI_LIVENESS_VALUE range flow
+  Flow.add_safe_check CHK_FFI_LIVENESS_VALUE range flow
 
 let safe_ffi_runtime_lock_check range man flow =
   Flow.add_safe_check CHK_FFI_RUNTIME_LOCK range flow
