@@ -177,7 +177,7 @@ let () =
           | _ -> assert false
         )
 
-      | E_c_block_object ee -> 
+      | E_c_block_object ee ->
         {exprs = [ee]; stmts = []},
         (function
           | {exprs = [ee]} -> {exp with ekind = E_c_block_object(ee)}
@@ -255,6 +255,10 @@ let () =
           | _ -> assert false
         )
       | S_c_switch_default _ -> leaf stmt
+      | S_c_ext_call (f, es) ->
+        {exprs = es; stmts = []},
+        (function {exprs;stmts = []} -> { stmt with skind = S_c_ext_call (f, exprs) }
+          | _ -> assert false )
 
       | _ -> default stmt
     );

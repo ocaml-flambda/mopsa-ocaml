@@ -24,7 +24,7 @@ open Mopsa
 open Ast
 
 let print_implicit_cast = false
- 
+
 let rec pp_c_type_short fmt =
   function
   | T_c_void -> pp_print_string fmt "void"
@@ -207,6 +207,7 @@ let () =
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
+      | S_c_ext_call (f, es) -> fprintf fmt "external %s(%a)" f.c_func_org_name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) es
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->
