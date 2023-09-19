@@ -115,8 +115,11 @@ struct
     doc=" file containing function names of functions to test (if contained in the file)";
     spec = ArgExt.String(fun s ->
       let parse_functions fn =
-        let fn = Type_shapes.parse_ext_fun fn in
-        (fn.name, fn.desc)
+        match Type_shapes.deserialize_extfun fn with
+        | Some {name; desc} -> (name, desc)
+        | None ->
+          (* FIXME: perhaps we want a different error here? *)
+          failwith (Format.asprintf "input error: cannot parse external type declaration %s" fn)
       in
       let funs = read_lines s in
       let funs = List.map parse_functions funs in

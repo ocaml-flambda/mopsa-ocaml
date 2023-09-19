@@ -24,7 +24,6 @@ type type_shape =
   (** Disjunction between two shapes for (e.g., variant types) *)
 [@@deriving sexp]
 
-(* TODO: check exceptions *)
 type fn_type_shapes =
   { arguments : type_shape list
   ; return : type_shape
@@ -89,12 +88,15 @@ let pp_extfun_desc fmt desc =
 
 let pp_ext_fun fmt ext = Format.fprintf fmt "%s: %a" ext.name pp_extfun_desc ext.desc
 
-let pp_ext_fun_sexp fmt ext =
+let serialize_extfun ext =
   let sexp = [%sexp_of: extfun] ext in
-  Format.pp_print_string fmt (Sexp.to_string sexp)
+  Sexp.to_string sexp
 ;;
 
-let parse_ext_fun (ef: string) =
-  let sexp = Sexp.of_string ef in
-   ([%of_sexp: extfun] sexp)
+let deserialize_extfun (ef : string) =
+  try
+    let sexp = Sexp.of_string ef in
+    Some ([%of_sexp: extfun] sexp)
+  with
+  | _ -> None
 ;;
