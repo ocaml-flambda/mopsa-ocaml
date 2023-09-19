@@ -71,13 +71,16 @@ let parse_program lang files =
     try find_language_frontend lang
     with Not_found -> Exceptions.panic "No front-end found for language %s" lang
   in
+  (* NOTE: we use the exit code 3 for parsing errors *)
   match front.parse files with
   | exception (Failure s) ->
+    (* Typically caused by raising failure from the C++ bindings to Clang *)
     Format.eprintf "Parsing error: %s\n" s;
     exit 3
   | exception (Exceptions.Panic (s, _)) ->
+    (* Typically caused by the MOPSA conversion from Clang AST to C AST *)
     Format.eprintf "%s\n" s;
-    exit 4
+    exit 3
   | exception e ->
     Format.eprintf "Unknown Exception %s" (Printexc.to_string e);
     exit 3
