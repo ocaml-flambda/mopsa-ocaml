@@ -73,8 +73,7 @@ let pp_base_verbose fmt base =
 (** {2 Checks for invalid memory access} *)
 (** ************************************ *)
 
-type check += 
-   CHK_C_INVALID_MEMORY_ACCESS
+type check += CHK_C_INVALID_MEMORY_ACCESS
 
 
 let () =
@@ -101,7 +100,6 @@ type alarm_kind +=
                           range (** deallocation site *)
   | A_c_modify_read_only of expr (** pointer *) *
                             base (** pointed base *)
-
 
 let () =
   register_alarm {
@@ -258,7 +256,6 @@ let unreachable_c_memory_access_check range man flow =
 let raise_c_memory_access_warning range man flow =
   Flow.add_warning_check CHK_C_INVALID_MEMORY_ACCESS range flow
 
-    
 
 (** {2 Division by zero} *)
 (** ******************** *)
