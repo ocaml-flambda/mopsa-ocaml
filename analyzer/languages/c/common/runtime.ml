@@ -9,7 +9,7 @@ open Ast
 open Sexplib
 open Sexplib.Std
 open Ppx_sexp_conv_expander
-
+open Type_shapes
 
 (* the type of values *)
 let ffi_value_typ = T_c_integer C_signed_long
@@ -25,8 +25,7 @@ struct
     | Untracked, Untracked -> 0
     | Active, Active -> 0
     | Stale, Stale -> 0
-    (* FIXME: This is the MOPSA standard, but does not seem great. Same below. *)
-    | _, _ -> compare a b
+    | _, _ -> Stdlib.compare a b
 
 
   let to_string s =
@@ -101,10 +100,11 @@ let () =
       );
     }
 
-let () = Universal.Heap.Policies.register_mk_addr (fun default ak ->
-             match ak with
-             | A_runtime_resource -> Universal.Heap.Policies.mk_addr_stack_range ak
-             | _ -> default ak)
+let () =
+  Universal.Heap.Policies.register_mk_addr (fun default ak ->
+    match ak with
+    | A_runtime_resource -> Universal.Heap.Policies.mk_addr_stack_range ak
+    | _ -> default ak)
 
 
 (** Runtime Variables *)
@@ -166,11 +166,11 @@ type alarm_kind +=
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
   | A_ffi_begin_end_roots
-  | A_ffi_abort_analysis of string
   | A_ffi_bad_shape of string
   | A_ffi_arity_mismatch of int * int
   | A_ffi_void_return
   | A_ffi_not_variable of expr
+  | A_ffi_abort_analysis of string
   | A_ffi_unimplemented
 
 let () =
@@ -375,8 +375,7 @@ let () = register_query {
 let resolve_status var man flow = man.ask (Q_ffi_status var) flow
 
 
-(* Type Shapes *)
-include Type_shapes
+
 (* We directly include the file to shadow all of its declarations,
    but keep the original file in sync with the external extraction. *)
 let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2
@@ -408,4 +407,17 @@ let () = register_stmt_pp (fun next fmt s ->
   | S_ffi_init_with_shape (e, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_expr e pp_shape sh
   | S_ffi_assert_shape (e, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr e pp_shape sh
   | _ -> next fmt s
+  )
+
+let () = register_stmt_visitor (fun default stmt ->
+  match skind stmt with
+  | S_ffi_init_with_shape (e, sh) ->
+    {exprs = [e]; stmts = []},
+    (function {exprs=[e];stmts = []} -> { stmt with skind = S_ffi_init_with_shape (e, sh) }
+      | _ -> assert false )
+  | S_ffi_assert_shape (e, sh) ->
+    {exprs = [e]; stmts = []},
+    (function {exprs=[e];stmts = []} -> { stmt with skind = S_ffi_assert_shape (e, sh) }
+      | _ -> assert false )
+  | _ -> default stmt
   )

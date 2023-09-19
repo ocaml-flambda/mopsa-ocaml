@@ -11,6 +11,7 @@ open Common.Base
 open Common.Alarms
 open Common.Static_points_to
 open Common.Runtime
+open Common.Type_shapes
 open Value
 open Stubs.Ast (* for the printing functions *)
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value

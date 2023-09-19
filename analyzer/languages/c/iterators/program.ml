@@ -87,7 +87,7 @@ struct
   (** Runtime testing options *)
   let ffitest_flag = ref false
   module StringSet = Set.Make(String)
-  let ffitest_extfuns : extfun_desc StringMap.t ref = ref (StringMap.empty)
+  let ffitest_extfuns : Type_shapes.extfun_desc StringMap.t ref = ref (StringMap.empty)
   let ffitest_missing_funs : StringSet.t ref = ref (StringSet.empty)
 
   let read_lines str =
@@ -115,7 +115,7 @@ struct
     doc=" file containing function names of functions to test (if contained in the file)";
     spec = ArgExt.String(fun s ->
       let parse_functions fn =
-        let fn = parse_ext_fun fn in
+        let fn = Type_shapes.parse_ext_fun fn in
         (fn.name, fn.desc)
       in
       let funs = read_lines s in
@@ -171,13 +171,13 @@ struct
   (** OCaml runtime function test machinery *)
   (** ===================================== *)
 
-  let type_shape_of_function (f: c_fundec) : fn_type_shapes option =
+  let type_shape_of_function (f: c_fundec) : Type_shapes.fn_type_shapes option =
     match StringMap.find_opt f.c_func_org_name (!ffitest_extfuns) with
     | Some { shape = Some ty } -> Some ty
     (* a runtime function we should test of unknown shape *)
     | Some { shape = None } ->
-      let default_shape_args = List.map (fun _ -> Any) (f.c_func_parameters) in
-      let default_shape_ret = Any in
+      let default_shape_args = List.map (fun _ -> Type_shapes.Any) (f.c_func_parameters) in
+      let default_shape_ret = Type_shapes.Any in
       Some { arguments=default_shape_args; return=default_shape_ret }
     (* not a runtime function we should test *)
     | None -> None
@@ -210,7 +210,7 @@ struct
       Cases.singleton true flow
 
 
-  let exec_arity_check f ty range man flow =
+  let exec_arity_check f (ty: Type_shapes.fn_type_shapes) range man flow =
     let actual = List.length (f.c_func_parameters) in
     let expected = List.length (ty.arguments) in
     if actual != expected && expected <= 5  then
@@ -223,9 +223,9 @@ struct
       let flow = safe_ffi_arity_check range man flow in
       Post.return flow
 
-  let exec_virtual_runtime_function_test (f: c_fundec) (ty: fn_type_shapes) man flow =
+  let exec_virtual_runtime_function_test (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =
     let range = f.c_func_name_range in
-    let {arguments = arg_shapes; return = ret_shape } = ty in
+    let {Type_shapes.arguments = arg_shapes; return = ret_shape } = ty in
     let stmts, args = virtual_runtime_argument_array arg_shapes range in
     (* check the OCaml side arity and the C side arity agree *)
     exec_arity_check f ty f.c_func_range man flow >>% fun flow ->
@@ -241,7 +241,7 @@ struct
     else
       Post.return flow
 
-  let rec exec_all_runtime_functions (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
+  let rec exec_all_runtime_functions (fs: (c_fundec * Type_shapes.fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
     match fs with
     | [] ->
       (* eventually, we reverse the results to be again in program order *)
