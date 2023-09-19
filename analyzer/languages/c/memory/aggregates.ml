@@ -309,13 +309,6 @@ struct
 
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
-    let () = Debug.debug ~channel:"declare" "variable %a: %a" pp_var v pp_typ v.vtyp in
-    (* (match init with
-    | None -> Debug.debug ~channel:"declare" "no init provided"
-    | Some (C_init_expr e) -> Debug.debug ~channel:"declare" "init expression %a" pp_expr e
-    | Some (C_init_list _) -> Debug.debug ~channel:"declare" "init list"
-    | Some (C_init_implicit ty) -> Debug.debug ~channel:"declare" "init impicit for %a" pp_typ ty
-    ); *)
     man.exec (mk_add_var v range) flow >>% fun flow ->
     let initl,fill = flatten_init init Z.zero v.vtyp range in
 

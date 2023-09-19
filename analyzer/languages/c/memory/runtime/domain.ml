@@ -76,7 +76,6 @@ struct
   let subset = Dom.subset
 
   let join a b =
-    let () = Debug.debug ~channel:"shape" "joining" in
     Dom.join a b
 
   let meet = Dom.meet
@@ -135,8 +134,8 @@ struct
     | Some ((stat, _), _) -> Cases.singleton stat flow
     | None ->
       (* FIXME: for type var[size], var is not added to the domain *)
-      let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var
-      in Cases.singleton (Nbt Untracked: Stat.t) flow
+      let () = Debug.debug ~channel:"runtime" "missing variable %a" pp_var var in
+      Cases.singleton (Nbt Untracked: Stat.t) flow
 
 
   (* S(&v) *)
@@ -223,7 +222,6 @@ and status_deref man flow e range =
          by an earlier domain. However, in some corner cases we can actually still reach
          this case. Since evaluation of [*e] has not succeeded, we simply return [T],
          because we do not know the precise status. *)
-      let () = Debug.debug ~channel:"status" "status of *%a in *%a unknown" pp_var v pp_expr e in
       Cases.singleton (TOP: Stat.t) flow
     | Some Null | Some Invalid | Some Top ->
       Cases.singleton (Nbt Untracked: Stat.t) flow
@@ -309,7 +307,6 @@ and shapes_deref man flow e range =
          by an earlier domain. However, in some corner cases we can actually still reach
          this case. Since evaluation of [*e] has not succeeded, we simply return [T],
          because we do not know the precise shapes. *)
-      let () = Debug.debug ~channel:"status" "shapes of *%a in *%a unknown" pp_var v pp_expr e in
       Cases.singleton (Shapes.top) flow
     | Some Null | Some Invalid | Some Top ->
       Cases.singleton (Shapes.top) flow
@@ -379,14 +376,12 @@ and shapes_deref man flow e range =
     let (m, l) = get_env T_cur man flow in
     let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), Shapes.non_value_shape) m in
     let flow = set_env T_cur (m', l) man flow in
-    let () = Debug.debug ~channel:"runtime" "added %a" pp_var var in
     Post.return flow
 
   let exec_remove var man flow =
     let (m, l) = get_env T_cur man flow in
     let m' = Map.remove var m in
     let flow = set_env T_cur (m', l) man flow in
-    let () = Debug.debug ~channel:"runtime" "removed %a" pp_var var in
     Post.return flow
 
 
@@ -401,7 +396,6 @@ and shapes_deref man flow e range =
 
 
   let exec_check_ext_call_arg arg man flow =
-    let () = Debug.debug ~channel:"extcall" "checking %a" pp_expr arg in
     status_expr man flow arg >>$ fun status flow ->
     begin match status with
     | Nbt Untracked -> Post.return flow
@@ -464,13 +458,13 @@ and shapes_deref man flow e range =
     | S_remove { ekind = E_var (var, _) } ->
       exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)   |> OptionExt.return
     | S_forget { ekind = E_var (var, _) } ->
-      let () = Format.printf "forgetting %a\n" pp_var var in
       exec_remove var man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow)  |> OptionExt.return
-    | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) -> (Debug.debug ~channel:"runtime" "attempt rename %a into %a" pp_var from pp_var into; None)
+    | S_rename ({ ekind = E_var (from, _) }, { ekind = E_var (into, _) }) ->
+      (* FIXME: Should we implement this? *)
+      None
     | S_c_ext_call (f, args) ->
       exec_ext_call f args man flow |> OptionExt.return
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
-      let () = Debug.debug ~channel:"shape" "assigning %a = %a" pp_var var pp_expr e in
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
     | S_ffi_init_with_shape (exp, sh) ->
       exec_init_with_shape exp sh stmt.srange man flow |> OptionExt.return
@@ -522,7 +516,6 @@ and shapes_deref man flow e range =
     let upd_set ((s, r), shapes) = if Stat.is_const s Active && not (Root.is_const r Rooted) then ((Stat.embed Stale, r), shapes) else ((s, r), shapes) in
     let m' = Map.map (fun s -> upd_set s) m in
     let flow = set_env T_cur (m', l) man flow in
-    let () = Debug.debug ~channel:"runtime" "garbage collect" in
     Eval.singleton (mk_unit range) flow
 
   let eval_assert_valid_var var m exp man flow =
@@ -690,7 +683,6 @@ and shapes_deref man flow e range =
         let flow = raise_ffi_shape_non_value range pp_var var Shapes.pp_shapes ss man flow in
         Cases.empty flow
       | Some (ss', rt) ->
-        let () = Debug.debug ~channel:"shape" "new shape is %a" (Shapes.pp_shapes) ss' in
         let m' = update_shapes var ss' m in
         let flow = set_env T_cur (m', l) man flow in
         Cases.singleton rt flow
@@ -783,14 +775,12 @@ and shapes_deref man flow e range =
     | Some s ->
       Cases.singleton s flow
     | None ->
-      let () = Debug.debug ~channel:"status" "status of variable %a unknown" pp_var var in
       Cases.singleton Bot_top.TOP flow
 
 
 
   (** Entry point of abstraction evaluations *)
   let eval exp man flow =
-    (* let () = Debug.debug ~channel:"eval" "evaluating %a" pp_expr exp in   *)
     match ekind exp with
     | E_ffi_call (f, args) -> eval_ffi_primtive f args exp.erange man flow |> OptionExt.return
     | _ -> None

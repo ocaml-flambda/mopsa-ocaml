@@ -689,7 +689,6 @@ struct
       Cases.singleton None flow
 
     | _ ->
-      Debug.debug ~channel:"assignments" "assigning cell, pointer is neither block nor top";
       Cases.singleton None flow
 
   (** Expand a pointer dereference into a cell. *)
@@ -697,7 +696,6 @@ struct
     eval_pointed_base_offset p range man flow >>$ fun pp flow ->
     match pp with
     | None ->
-      Debug.debug ~channel:"assignments" "assigning cell, evaluate base to top";
       Cases.singleton Top flow
 
     | Some (base,offset,mode) ->
@@ -706,7 +704,6 @@ struct
 
       (* Get the size of the base *)
       eval_base_size base range man flow >>$ fun size flow ->
-        Debug.debug ~channel:"assignments" "assigning cell, expanding";
       (* Compute the interval and create a finite number of cells *)
       let offset_itv, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       match c with
@@ -738,11 +735,9 @@ struct
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
-        Debug.debug ~channel:"assignments" "cell, still expanding lower bound %a, upper bound %a, step %a, number of elements in interval %a" Z.pp_print lo Z.pp_print uo Z.pp_print step Z.pp_print nb;
         if uo < lo then
           (* guanranteed to be out of bounds, we set the location to top *)
           let region = Region (base, Z.zero, Z.sub us elm,step) in
-          Debug.debug ~channel:"assignments" "cell, negative range %a %a" Z.pp_print us Z.pp_print elm;
             Cases.singleton region flow
         else if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
           (* too many cases -> top *)
@@ -1082,7 +1077,6 @@ struct
   let exec_assign lval e range man flow =
     let ptr = mk_c_address_of lval range in
     expand ptr range man flow >>$ fun expansion flow ->
-    Debug.debug ~channel:"assignments" "cell, post expansion";
     match expansion with
     | Top ->
       Post.return flow
@@ -1092,16 +1086,13 @@ struct
 
     | Region (base,lo,hi,step) ->
       man.eval e flow >>$ fun _ flow ->
-      Debug.debug ~channel:"assignments" "cell, assign region %a %a %a" pp_base base Z.pp_print lo Z.pp_print hi;
       assign_region base lo hi step range man flow
 
 
 
   let exec_add b range man flow =
-    let () = Debug.debug ~channel:"declare" "declaring base %a" pp_base b in
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
-      let () = Debug.debug ~channel:"declare" "declaring scalar %a" pp_base b in
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow |>
       add_cell c range man
@@ -1223,21 +1214,19 @@ struct
 
 
   (** havoc *)
-  let exec_havoc stmt range man flow = 
+  let exec_havoc stmt range man flow =
     let env = get_env T_cur man flow in
-    let havoc_cell (c: cell) flow = 
+    let havoc_cell (c: cell) flow =
       match c.base with
       | { base_kind = Var v; base_valid = true; }  ->
-        let var = mk_cell_var c in 
-        Debug.debug ~channel:"havoc" "cell: %a: %a, base: %a, var: %a" pp_cell c pp_cell_typ c.typ pp_base c.base pp_var var;
+        let var = mk_cell_var c in
         let ty = match c.typ with Numeric ty -> ty | Pointer -> T_c_pointer T_c_void in
         man.exec (mk_havoc_var var ty range) flow
-      | _ -> Post.return flow 
+      | _ -> Post.return flow
     in
     let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in
     let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
     let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells [] in
-    (* Debug.debug ~channel:"havoc" "cells: %a" (pp_bracketed_list (pp_pair pp_base (pp_bracketed_list (pp_pair Z.pp_print (pp_bracketed_list pp_cell))))) cells;  *)
     havoc_cells cells
     (* man.exec ~route:(Below name) stmt flow  *)
 
@@ -1289,13 +1278,11 @@ struct
       OptionExt.return
 
     | S_assign(x, e) when is_c_scalar_type x.etyp ->
-      Debug.debug ~channel:"assignments" "cells, assigning %a = %a" pp_expr x pp_expr e;
       exec_assign x e stmt.srange man flow |>
       OptionExt.return
 
 
     | S_add e when is_base_expr e && is_c_type e.etyp ->
-      (* let () = Debug.debug ~channel:"eval" "cells, adding %a" pp_expr e in  *)
       exec_add (expr_to_base e) stmt.srange man flow |>
       OptionExt.return
 
@@ -1329,7 +1316,7 @@ struct
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
 
-    | S_havoc -> 
+    | S_havoc ->
       exec_havoc stmt stmt.srange man flow |> OptionExt.return
 
     | _ -> None

@@ -90,7 +90,6 @@ struct
       OptionExt.return
 
     | S_assign(x,e) when is_universal_type (etyp x) ->
-      Debug.debug ~channel:"assignments" "universal intraproc, assigning %a = %a" pp_expr x pp_expr e;
       man.eval e flow ~translate:"Universal" >>$? fun e flow ->
       man.exec (mk_assign x e stmt.srange) flow ~route:(Below name) |>
       OptionExt.return
