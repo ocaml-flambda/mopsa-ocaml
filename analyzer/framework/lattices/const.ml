@@ -103,4 +103,8 @@ struct
       | TOP -> Top.top_string
       | BOT -> Bot.bot_string
       | Nbt s -> Const.to_string s
+
+  let pp_const fmt (x: t) =
+    Format.pp_print_string fmt (to_string x)
+
 end

@@ -13,7 +13,6 @@ open Common.Static_points_to
 open Common.Runtime
 open Common.Type_shapes
 open Value
-open Stubs.Ast (* for the printing functions *)
 module Itv = Universal.Numeric.Values.Intervals.Integer.Value
 
 
@@ -46,7 +45,13 @@ struct
 
   let top = Dom.top
 
-  let checks = [ ]
+  let checks = [
+    CHK_FFI;
+    CHK_FFI_LIVENESS_VALUE;
+    CHK_FFI_ROOTS;
+    CHK_FFI_RUNTIME_LOCK;
+    CHK_FFI_SHAPE
+  ]
 
   (** {2 Lattice operators} *)
   (** ===================== *)
@@ -55,8 +60,7 @@ struct
 
   let subset = Dom.subset
 
-  let join a b =
-    Dom.join a b
+  let join = Dom.join
 
   let meet = Dom.meet
 
@@ -74,6 +78,7 @@ struct
 
   let update_status var status' map =
     match Map.find_opt var map with
+    (* FIXME: look into this function *)
     | None -> Map.add var ((status', Nbt NotRooted), Shapes.non_value_shape) map
     | Some ((_, roots), shapes) -> Map.add var ((status', roots), shapes)  map
 
@@ -104,8 +109,6 @@ struct
 
   (** {2 Expression Status} *)
   (** ==================== *)
-
-  let pp_status fmt (s: Stat.t) = Format.pp_print_string fmt (Stat.to_string s)
 
   (* S(v) *)
   let status_var man flow var =
@@ -228,6 +231,8 @@ and status_deref man flow e range =
 *)
 
 
+  (** {2 Expression Shape} *)
+  (** ==================== *)
 
   (* S(v) *)
   let shapes_var man flow var =
@@ -317,6 +322,9 @@ and shapes_deref man flow e range =
 *)
 
 
+  (** {2 Utility functions for symbolic evaluations} *)
+  (** ============================================== *)
+
   let mark_var_active var range man flow =
     let (m, l) = get_env T_cur man flow in
     let m' = update_status var (Stat.embed Active) m in
@@ -356,8 +364,60 @@ and shapes_deref man flow e range =
       let flow = fail man flow in
       Cases.empty flow
 
+  let eval_block_as_var base off mode typ range man flow =
+    let lval = mk_lval base off typ mode range in
+    man.eval lval flow >>$ fun exp flow ->
+    match ekind exp with
+    | E_var (v, _) -> Cases.singleton (Some v) flow
+    | _ -> Cases.singleton None flow
 
-  (** {2 Utility functions for symbolic evaluations} *)
+  let eval_deref_to_var exp man flow =
+    resolve_pointer exp man flow >>$ fun ptr flow ->
+    match ptr with
+    | P_block (base, off, mo) ->
+      eval_block_as_var base off mo ffi_value_typ exp.erange man flow
+    | P_null | P_invalid | P_top | P_fun _ ->
+      Cases.singleton None flow
+
+
+
+  (* FIXME: derive this function function in the shapes file *)
+  let rec type_shape_to_shapes (sh: type_shape) =
+    match sh with
+    | Any -> Shapes.any ()
+    | Imm -> Shapes.immediate ()
+    | Block _ -> Shapes.block ()
+    | String -> Shapes.string ()
+    | Array _ -> Shapes.block ()
+    | Int64 -> Shapes.int64 ()
+    | Int32 -> Shapes.int32 ()
+    | Double -> Shapes.double ()
+    | Nativeint -> Shapes.nativeint ()
+    (* FIXME: there should be things here *)
+    | Closure -> Shapes.any ()
+    | Obj -> Shapes.any ()
+    | FloatArray -> Shapes.any ()
+    | Or (s1, s2) -> Shapes.join (type_shape_to_shapes s1) (type_shape_to_shapes s2)
+
+
+  let shape_ident_to_shape id : Shapes.t option =
+    match Z.to_int id with
+    | exception Z.Overflow -> None
+    | 1 -> Shapes.immediate () |> OptionExt.return
+    | 2 -> Shapes.block () |> OptionExt.return
+    | 3 -> Shapes.double () |> OptionExt.return
+    | 4 -> Shapes.int64 () |> OptionExt.return
+    | 5 -> Shapes.int32 () |> OptionExt.return
+    | 6 -> Shapes.nativeint () |> OptionExt.return
+    | 7 -> Shapes.string () |> OptionExt.return
+    | 8 -> Shapes.join (Shapes.block ()) (Shapes.immediate ()) |> OptionExt.return
+    | 9 -> Shapes.bigarray () |> OptionExt.return
+    | 10 -> Shapes.abstract () |> OptionExt.return
+    | 11 -> Shapes.any() |> OptionExt.return
+    | _ -> None
+
+
+  (** {2 Transformers} *)
   (** ============================================== *)
 
   let exec_add var man flow =
@@ -387,7 +447,8 @@ and shapes_deref man flow e range =
     status_expr man flow arg >>$ fun status flow ->
     begin match status with
     | Nbt Untracked -> Post.return flow
-    | Nbt Active -> Post.return flow (* we allow for now to pass active values to external functions *)
+    (* we allow for now to pass active values to external functions *)
+    | Nbt Active -> Post.return flow
     | _ ->
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
     end
@@ -395,25 +456,6 @@ and shapes_deref man flow e range =
   let exec_ext_call f args man flow =
     let check_ext_call_args exprs = List.fold_left (fun acc c -> Post.bind (exec_check_ext_call_arg c man) acc) (Post.return flow) exprs in
     check_ext_call_args args
-
-
-  let rec type_shape_to_shapes (sh: type_shape) =
-    match sh with
-    | Any -> Shapes.any ()
-    | Imm -> Shapes.immediate ()
-    | Block _ -> Shapes.block ()
-    | String -> Shapes.string ()
-    | Array _ -> Shapes.block ()
-    | Int64 -> Shapes.int64 ()
-    | Int32 -> Shapes.int32 ()
-    | Double -> Shapes.double ()
-    | Nativeint -> Shapes.nativeint ()
-    (* FIXME: there should be things here *)
-    | Closure -> Shapes.any ()
-    | Obj -> Shapes.any ()
-    | FloatArray -> Shapes.any ()
-    | Or (s1, s2) -> Shapes.join (type_shape_to_shapes s1) (type_shape_to_shapes s2)
-
 
   let exec_init_with_shape exp sh range man flow =
     man.eval exp flow >>$ fun exp flow ->
@@ -424,7 +466,6 @@ and shapes_deref man flow e range =
 
 
   let exec_assert_shape exp sh range man flow =
-
     match ekind (remove_casts exp) with
     | E_var (v, _) ->
       let ss = type_shape_to_shapes sh in
@@ -463,24 +504,6 @@ and shapes_deref man flow e range =
 
   (** {2 FFI function evaluation} *)
   (** ====================== *)
-  let eval_block_as_var base off mode typ range man flow =
-    let lval = mk_lval base off typ mode range in
-    man.eval lval flow >>$ fun exp flow ->
-    match ekind exp with
-    | E_var (v, _) -> Cases.singleton (Some v) flow
-    | _ -> Cases.singleton None flow
-
-  let eval_deref_to_var exp man flow =
-    resolve_pointer exp man flow >>$ fun ptr flow ->
-    match ptr with
-    | P_block (base, off, mo) ->
-      eval_block_as_var base off mo ffi_value_typ exp.erange man flow
-    | P_null | P_invalid | P_top | P_fun _ ->
-      Cases.singleton None flow
-
-
-
-
 
   let eval_mark_active_contents exp man flow =
     eval_deref_to_var exp man flow >>$ fun var flow ->
@@ -521,12 +544,6 @@ and shapes_deref man flow e range =
       flow
     in
       Eval.singleton (mk_unit exp.erange) flow
-
-
-  let eval_begin_end_roots range man flow =
-    let flow = raise_ffi_begin_end_roots range man flow in
-    Eval.singleton (mk_unit range) flow
-
 
   let eval_assert_valid exp man flow =
     let (m, l) = get_env T_cur man flow in
@@ -576,7 +593,6 @@ and shapes_deref man flow e range =
       exec_register_root_var v exp.erange man flow >>% fun flow ->
       Eval.singleton (mk_unit exp.erange) flow
 
-
   let eval_unregister_root range exp man flow =
     eval_deref_to_var exp man flow >>$ fun var flow ->
     match var with
@@ -586,8 +602,6 @@ and shapes_deref man flow e range =
     | Some v ->
       exec_unregister_root_var v exp.erange man flow >>% fun flow ->
       Eval.singleton (mk_unit exp.erange) flow
-
-
 
   let eval_assert_runtime_lock range man flow =
     let (m, l): _ * Lock.t = get_env T_cur man flow in
@@ -636,28 +650,6 @@ and shapes_deref man flow e range =
       Cases.singleton (Some l) flow
     | _ ->
       Cases.singleton None flow
-
-  let shape_ident_to_shape id : Shapes.t option =
-    match Z.to_int id with
-    | exception Z.Overflow -> None
-    | 1 -> Shapes.immediate () |> OptionExt.return
-    | 2 -> Shapes.block () |> OptionExt.return
-    | 3 -> Shapes.double () |> OptionExt.return
-    | 4 -> Shapes.int64 () |> OptionExt.return
-    | 5 -> Shapes.int32 () |> OptionExt.return
-    | 6 -> Shapes.nativeint () |> OptionExt.return
-    | 7 -> Shapes.string () |> OptionExt.return
-    | 8 -> Shapes.join (Shapes.block ()) (Shapes.immediate ()) |> OptionExt.return
-    | 9 -> Shapes.bigarray () |> OptionExt.return
-    | 10 -> Shapes.abstract () |> OptionExt.return
-    | 11 -> Shapes.any() |> OptionExt.return
-    | _ -> None
-
-
-  let pp_shape_set fmt s =
-    Print.format Shapes.print fmt s
-
-
 
 
   let eval_is_immediate_var var range man flow =
