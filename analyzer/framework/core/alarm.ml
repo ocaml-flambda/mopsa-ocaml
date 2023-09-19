@@ -198,10 +198,10 @@ let mk_warning_diagnostic check callstack range =
 
 let mk_info_diagnostic alarm =
   { diag_range = alarm.alarm_range;
-  diag_check = alarm.alarm_check;
-  diag_kind = Info;
-  diag_alarms = AlarmSet.singleton alarm;
-  diag_callstacks = CallstackSet.singleton alarm.alarm_callstack }
+    diag_check = alarm.alarm_check;
+    diag_kind = Info;
+    diag_alarms = AlarmSet.singleton alarm;
+    diag_callstacks = CallstackSet.singleton alarm.alarm_callstack }
 
 let mk_unimplemented_diagnostic check callstack range =
   { diag_range = range;
@@ -377,8 +377,10 @@ let add_alarm_to_diagnostic a d =
              diag_alarms = AlarmSet.singleton a;
              diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }
   | Unimplemented ->
+    (* Unimplemented absorbs all other alarms *)
     d
   | Info ->
+    (* If there is an alarm, we switch to error (see [Safe]) *)
     { d with diag_kind = Error;
              diag_alarms = AlarmSet.add a d.diag_alarms;
              diag_callstacks = CallstackSet.add a.alarm_callstack d.diag_callstacks }

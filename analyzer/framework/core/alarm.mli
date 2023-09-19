@@ -23,7 +23,7 @@
 
     During the analysis, domains can perform checks to verify whether some
     property of interest is preserved. Domains declare the list of checks that
-    they are responsible for in their header, and can generate 4 types of
+    they are responsible for in their header, and can generate 6 types of
     diagnostics for a given check and regarding a given location range:
 
     - [Safe] indicates that the property of interest is preserved for all
@@ -32,6 +32,10 @@
     paths.
     - [Warning] is used for potential alarms that maybe infeasible in some
     execution paths.
+    - [Info] is used for alarms that will not cause program failure (and the analysis can continue)
+      but that should be addressed by the user.
+    - [Unimplemented] is used to indicate that the analysis stopped at a certain
+      point, because it encountered some unimplemented functionality.
     - [Unreachable] indicates that the check location can't be reached in
     any execution path.
  *)
@@ -175,9 +179,10 @@ val mk_unreachable_diagnostic : check -> callstack -> range -> diagnostic
 (** Create a diagnostic that says that a check is unreachable *)
 
 val mk_info_diagnostic : alarm -> diagnostic
+(** Create a diagnostic that says that a certain issue is noteworthy *)
 
 val mk_unimplemented_diagnostic : check -> callstack -> range -> diagnostic
-
+(** Create a diagnostic that says that the desired functionality is not implemented *)
 
 val pp_diagnostic_kind : Format.formatter -> diagnostic_kind -> unit
 (** Print a diagnostic kind *)
