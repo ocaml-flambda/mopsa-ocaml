@@ -280,9 +280,9 @@ let raise_ffi_arity_mismatch range ~expected ~actual man flow =
 let raise_ffi_void_return range man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_void_return) cs range in
-  let diag = mk_info_diagnostic alarm in
-  Flow.add_diagnostic diag flow
-  (* Flow.raise_alarm alarm ~bottom:true man.lattice flow *)
+  Flow.raise_alarm alarm ~bottom:true man.lattice flow
+  (* let diag = mk_error_diagnostic alarm in *)
+  (* Flow.add_diagnostic diag flow *)
 
 
 let raise_ffi_not_variable expr man flow =
