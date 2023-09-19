@@ -689,6 +689,7 @@ struct
       Cases.singleton None flow
 
     | _ ->
+      (* UNSOUND: If we cannot resolve a pointer, we continue with [None] (similar to [P_top]) instead of failing. *)
       Cases.singleton None flow
 
   (** Expand a pointer dereference into a cell. *)
@@ -735,6 +736,8 @@ struct
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
+        (* UNSOUND: if the pointer range is negative, then we set the entire region to [Top].
+           This is unsound, because it constitues and out-of-bounds access. *)
         if uo < lo then
           (* guanranteed to be out of bounds, we set the location to top *)
           let region = Region (base, Z.zero, Z.sub us elm,step) in
@@ -1079,6 +1082,7 @@ struct
     expand ptr range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
+      (* UNSOUND: If we cannot determine where a pointer points to, we treat assignment as a no-op. *)
       Post.return flow
 
     | Cell (c,mode) ->

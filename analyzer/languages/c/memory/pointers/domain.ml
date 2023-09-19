@@ -288,7 +288,7 @@ struct
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
         let vq = Map.find q a in
-        let vq, offset = 
+        let vq, offset =
           match PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_valid vq) > 0,
                 PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_non_valid vq) > 0,
                 expr_to_z offset with
@@ -316,7 +316,7 @@ struct
           | false, false, _ ->
             vq, None
         in
-        vq, offset 
+        vq, offset
 
       | Fun f ->
         PointerSet.cfun f, None
@@ -582,6 +582,7 @@ struct
       if PointerSet.is_bottom v1_invalid && PointerSet.is_bottom v2_invalid
       then []
       else
+        (* UNSOUND: This pointer comparison is undefined behaivor, but we ignore it here. *)
         [ Post.return flow ]
     in
 
@@ -620,6 +621,7 @@ struct
         let flow = set_value_opt p1 vv1 man flow |>
                    set_value_opt p2 vv2 man
         in
+        (* UNSOUND: This pointer comparison is undefined behavior, but we allow it here. *)
         [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
@@ -665,7 +667,7 @@ struct
     if PointerSet.is_valid value' then
       let o = mk_offset p None range in
       let ol = ListExt.map_filter (fun q ->
-          if PointerSet.is_valid (Map.find q a) then 
+          if PointerSet.is_valid (Map.find q a) then
             Some (mk_offset q None range)
           else None
         ) ql in
@@ -812,7 +814,7 @@ struct
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
 
-    | S_havoc_var(v, ty) when is_c_pointer_type ty -> 
+    | S_havoc_var(v, ty) when is_c_pointer_type ty ->
       assign v (mk_top ty stmt.srange) None stmt.srange man flow |>
       OptionExt.return
 
@@ -881,6 +883,7 @@ struct
         let flow = set_value_opt p1 v1 man flow |>
                    set_value_opt p2 v2 man
         in
+        (* UNSOUND: This is undefined behavior, but we return [Top] instead of failing. *)
         [man.eval (mk_top T_int range) flow]
     in
 

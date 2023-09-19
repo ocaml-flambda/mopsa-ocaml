@@ -360,6 +360,7 @@ struct
     let prec = get_c_float_precision typ in
     let flow', nexp' =
     if !opt_float_invalid_operation then
+      (* This interval query is duplicated, because it can fail and is not necessary if [opt_float_invalid_operation] is false. *)
       let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
       if itv.nan then
           (* invalid operation exception, remove NaN from result *)
@@ -375,6 +376,7 @@ struct
     in
     let flow', nexp' =
       if !opt_float_overflow then
+        (* This interval query is duplicated, because it can fail and is not necessary if [opt_float_overflow] is false. *)
         let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
         if itv.pinf || itv.minf then
           (* overflow exception, remove infinities from result *)

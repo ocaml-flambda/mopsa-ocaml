@@ -105,6 +105,8 @@ let _ =
 
       "abort";
 
+      (* OCaml Runtime Primitives, which are
+         implemented in the runtime domain. *)
       "_ffi_garbage_collect";
       "_ffi_mark_active_contents";
       "_ffi_mark_active_ptr";
