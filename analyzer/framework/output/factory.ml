@@ -45,7 +45,7 @@ let report man flow ~time ~files =
   let report = Core.Flow.get_report flow in
   let return_v = if !opt_silent || is_safe_report report then 0 else 1 in
   let module E = (val (get_output_engine ())) in
-  if !opt_no_report then () else E.report man flow ~time ~files ~out:!opt_file;
+  E.report man flow ~time ~files ~out:!opt_file;
   return_v
 
 let panic ~btrace exn ~time ~files =

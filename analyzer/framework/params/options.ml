@@ -324,18 +324,6 @@ let () =
     default = "unset";
   }
 
-
-(** Ignore alarms when returning a value to the shell *)
-let () =
-  register_builtin_option {
-    key = "-no-report";
-    category = "Output";
-    doc = " do not output the MOPSA report";
-    spec = ArgExt.Set Output.Common.opt_no_report;
-    default = "unset";
-  }
-
-
 (** Output stream *)
 let () =
   register_builtin_option {
@@ -358,10 +346,46 @@ let () =
 
 let () =
   register_builtin_option {
-    key = "-hide-unimplemented";
+    key = "-no-detailed-errors-unimplemented";
     category = "Alarms";
-    doc = " hide the unimplemented callsites";
-    spec = ArgExt.Set Output.Text.opt_hide_unimplemented;
+    doc = " hide errors related to unimplemented from the detailed analysis results";
+    spec = ArgExt.Set Output.Text.opt_no_unimplemented_detailed_checks;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-detailed-errors";
+    category = "Alarms";
+    doc = " hide the detailed analysis results (=the errors with their location)";
+    spec = ArgExt.Set Output.Text.opt_no_detailed_checks;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-analysis-time";
+    category = "Alarms";
+    doc = " hide the time it took the analysis to execute";
+    spec = ArgExt.Set Output.Text.opt_no_time;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-analysis-summary";
+    category = "Alarms";
+    doc = " hide the summary of the analysis at the end";
+    spec = ArgExt.Set Output.Text.opt_no_analysis_summary;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-ffi-functions-report";
+    category = "Alarms";
+    doc = " hide the summary of the analyzed functions, the skipped functions, and the missing functions";
+    spec = ArgExt.Set Output.Text.opt_no_ffi_report;
     default = "false";
   }
 

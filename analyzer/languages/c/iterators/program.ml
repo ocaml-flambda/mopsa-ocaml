@@ -275,14 +275,15 @@ struct
     in
     let results_map = StringMap.of_list results in
     let missing_functions = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
-      Format.printf
-      "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
-      pp_runtime_analysis_results
-      results
-      pp_unknown_functions
-      skipped_functions
-      pp_missing_functions
-      missing_functions
+      if not (!Output.Text.opt_no_ffi_report) then
+        Format.printf
+          "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
+          pp_runtime_analysis_results
+          results
+          pp_unknown_functions
+          skipped_functions
+          pp_missing_functions
+          missing_functions
 
   let exec_runtime_tests c_functions man flow =
     (* Determine the runtime functions to execute; we sort them by program order *)

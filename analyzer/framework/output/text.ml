@@ -31,8 +31,12 @@ open Common
 
 (** Command-line option to enable display of alarms call stacks *)
 let opt_show_callstacks = ref false
-let opt_hide_unimplemented = ref false
-
+let opt_no_unimplemented_detailed_checks = ref false
+(* NOTE: The time is not stable accross executions on different machines *)
+let opt_no_time = ref false
+let opt_no_detailed_checks = ref false
+let opt_no_analysis_summary = ref false
+let opt_no_ffi_report = ref false
 
 
 let print out fmt =
@@ -233,7 +237,7 @@ let construct_checks_summary ?(print=false) rep out =
             | Safe ->
               if print && !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
               i+1, safe+1, error, warning,  info, unimplemented, checks_map'
-            | Unimplemented when !opt_hide_unimplemented ->
+            | Unimplemented when !opt_no_unimplemented_detailed_checks ->
               i+1, safe+1, error, warning,  info, unimplemented + 1, checks_map'
             | Error | Warning | Info | Unimplemented ->
               (* Get the set of alarms kinds and callstacks *)
@@ -313,11 +317,11 @@ let report man flow ~time ~files ~out =
   if is_safe_report rep
   then print out "%a No alarm@." ((Debug.color Debug.green) pp_print_string) "✔";
 
-  print out "Analysis time: %.3fs@." time;
+  if not (!opt_no_time) then print out "Analysis time: %.3fs@." time;
 
-  let total, safe, error, warning, info, unimplemented, checks_map = construct_checks_summary ~print:true rep out in
-  print_checks_summary checks_map total safe error warning info unimplemented out
-  ;
+  let total, safe, error, warning, info, unimplemented, checks_map = construct_checks_summary ~print:(not (!opt_no_detailed_checks)) rep out in
+
+  if not (!opt_no_analysis_summary) then print_checks_summary checks_map total safe error warning info unimplemented out;
   if not (is_sound_report rep) then
     let nb = AssumptionSet.cardinal rep.report_assumptions in
     print out "%d assumption%a:@,  @[<v>%a@]@.@."

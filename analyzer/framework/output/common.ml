@@ -57,4 +57,3 @@ let opt_format = ref F_text
 let opt_file : string option ref = ref None
 let opt_display_lastflow = ref false
 let opt_silent = ref false
-let opt_no_report = ref false
