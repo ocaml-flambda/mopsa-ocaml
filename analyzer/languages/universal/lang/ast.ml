@@ -405,8 +405,16 @@ type stmt_kind +=
 
    | S_free of addr
    (** Release a heap address *)
-   | S_havoc 
-   | S_havoc_var of var * typ
+
+   | S_havoc
+   (** Virtual statement for signaling that external code runs,
+       making modifications as it pleases. Domains can respond
+       by, for example, setting variables to Top. *)
+
+    | S_havoc_var of var * typ
+    (** Virtual statement for signaling that external code runs,
+        possibly modifying this variable. Domains can respond
+        by, for example, setting the variable to Top. *)
 
 
 let () =
@@ -610,7 +618,7 @@ let mk_havoc range =
 
 let mk_havoc_var var typ range =
   mk_stmt (S_havoc_var (var, typ)) range
-  
+
 
 let universal_constants_range = tag_range (mk_fresh_range ()) "universal-constants"
 

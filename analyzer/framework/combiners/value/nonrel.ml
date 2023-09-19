@@ -392,7 +392,6 @@ struct
 
   let init prog = empty
 
-
   let exec stmt man ctx (map:t) : t option =
     match skind stmt with
     | S_remove { ekind = E_var (v, _) } when Value.accept_type v.vtyp ->

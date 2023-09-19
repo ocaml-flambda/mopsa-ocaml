@@ -1228,7 +1228,6 @@ struct
     let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
     let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells [] in
     havoc_cells cells
-    (* man.exec ~route:(Below name) stmt flow  *)
 
 
   (** Forget the value of an lval *)
