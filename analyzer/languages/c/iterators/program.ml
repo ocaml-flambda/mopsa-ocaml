@@ -201,7 +201,7 @@ struct
     let args = virtual_runtime_arguments tmp_active tys range in
     declare_var :: List.concat assignments, args
 
-  let check_ret_val_exists range retval man flow =
+  let eval_is_ret_val range retval man flow =
     match ekind retval with
     | E_constant C_unit ->
       let flow = raise_ffi_void_return range man flow in
@@ -209,21 +209,6 @@ struct
     | _ ->
       Cases.singleton true flow
 
-  let exec_virtual_runtime_function_test (f: c_fundec) (sh: fn_type_shapes) man flow =
-    let range = f.c_func_name_range in
-    let {arguments = arg_shapes; return = ret_shape } = sh in
-    let stmts, args = virtual_runtime_argument_array arg_shapes range in
-    (* allocate the runtime arguments *)
-    man.exec (mk_block stmts range) flow >>% fun flow ->
-    (* execute the external function *)
-    man.eval (mk_c_call f args range) flow >>$ fun exp flow ->
-    (* check the return value is not void *)
-    check_ret_val_exists f.c_func_range exp man flow >>$ fun has_ret flow ->
-    if has_ret && not (Flow.is_empty flow) then
-      (* assert the result shape *)
-      man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
-    else
-      Post.return flow
 
   let exec_arity_check f ty range man flow =
     let actual = List.length (f.c_func_parameters) in
@@ -238,17 +223,34 @@ struct
       let flow = safe_ffi_arity_check range man flow in
       Post.return flow
 
+  let exec_virtual_runtime_function_test (f: c_fundec) (ty: fn_type_shapes) man flow =
+    let range = f.c_func_name_range in
+    let {arguments = arg_shapes; return = ret_shape } = ty in
+    let stmts, args = virtual_runtime_argument_array arg_shapes range in
+    (* check the OCaml side arity and the C side arity agree *)
+    exec_arity_check f ty f.c_func_range man flow >>% fun flow ->
+    (* allocate the runtime arguments *)
+    man.exec (mk_block stmts range) flow >>% fun flow ->
+    (* execute the external function *)
+    man.eval (mk_c_call f args range) flow >>$ fun exp flow ->
+    (* check the return value is not void *)
+    eval_is_ret_val f.c_func_range exp man flow >>$ fun has_ret flow ->
+    if has_ret && not (Flow.is_empty flow) then
+      (* assert the result shape *)
+      man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
+    else
+      Post.return flow
+
   let rec exec_all_runtime_functions (fs: (c_fundec * fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
     match fs with
     | [] ->
-      Cases.singleton results (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
+      (* eventually, we reverse the results to be again in program order *)
+      Cases.singleton (List.rev results) (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
     | (f, ty) :: fs ->
         let () = Debug.debug ~channel:"runtime_functions" "analyzing %s at %a" (f.c_func_org_name) pp_range f.c_func_range in
-        exec_arity_check f ty f.c_func_range man flow >>% fun flow' ->
-        (* catching the exceptions like this is horrible,
-           ideally there would be a better way *)
+        (* catching the exceptions like this is horrible, ideally there would be a better way *)
         try
-          (exec_virtual_runtime_function_test f ty man flow' >>% fun flow'' ->
+          (exec_virtual_runtime_function_test f ty man flow >>% fun flow'' ->
           let report = Flow.get_report flow'' in
           let res = function_report_outcome report in
           exec_all_runtime_functions fs man (flow'' :: flows) ((f.c_func_org_name, res) :: results) flow)
@@ -265,11 +267,11 @@ struct
     let pp_runtime_analysis_results fmt results =
       List.iter (fun (f, res) -> Format.fprintf fmt "%s (%s)\n" f (Output.Text.icon_of_diag res)) results
     in
-    let results_map = StringMap.of_list results in
-    let delta = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
     let pp_missing_functions fmt map =
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) delta [])
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) map [])
     in
+    let results_map = StringMap.of_list results in
+    let missing_functions = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
       Format.printf
       "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
       pp_runtime_analysis_results
@@ -277,13 +279,16 @@ struct
       pp_unknown_functions
       skipped_functions
       pp_missing_functions
-      delta
+      missing_functions
 
   let exec_runtime_tests c_functions man flow =
-    (* Determine the runtime functions to execute *)
+    (* Determine the runtime functions to execute; we sort them by program order *)
+    let c_functions = List.sort (fun f g -> compare_range f.c_func_range g.c_func_range) c_functions in
     let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
     (* Execute all the runtime functions, yielding a list of results for each function *)
     exec_all_runtime_functions ffi_functions man [] [] flow >>$ fun results flow ->
+    (* we output the results, the functions that were assumed to be missing,
+       and compute the functions that should have been checked but were not. *)
     output_results (!ffitest_missing_funs) results (!ffitest_extfuns);
     Post.return flow
 
