@@ -88,7 +88,7 @@ let rec print_typ fmt t =
   match t with
   | AST_INT -> Format.pp_print_string fmt "int"
   | AST_REAL -> Format.pp_print_string fmt "real"
-  | AST_ARRAY t -> Format.printf "[%a]" print_typ t
+  | AST_ARRAY t -> Format.fprintf fmt "[%a]" print_typ t
   | AST_STRING -> Format.pp_print_string fmt "string"
   | AST_CHAR -> Format.pp_print_string fmt "char"
 
@@ -243,7 +243,7 @@ and print_stat_ext fmt (s, _) =
 and print_declaration fmt ((s, o) : declaration) =
   match o with
   | None -> print_typed_var fmt s
-  | Some e -> Format.printf "%a = %a"
+  | Some e -> Format.fprintf fmt "%a = %a"
                 print_typed_var s
                 print_expr_ext e
 
