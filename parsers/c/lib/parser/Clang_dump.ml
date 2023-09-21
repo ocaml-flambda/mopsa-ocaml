@@ -697,8 +697,8 @@ module P = struct
     | AccessSpecDecl -> p ch "%sAccessSpecDecl\n" indent
     | FriendDecl f -> friend_decl indent ch f
     | StaticAssertDecl s ->
-       p ch "%sStaticAssertDecl isfailed=%B expr=%a msg=%s\n" indent
-         s.assert_is_failed expr s.assert_expr s.assert_msg
+       p ch "%sStaticAssertDecl isfailed=%B expr=%a msg=%a\n" indent
+         s.assert_is_failed expr s.assert_expr (bp_option "<none>" expr) s.assert_msg
     | NamespaceDecl n ->
        p ch "%sNamespaceDecl %a\n" indent namespace_decl n
     | NamespaceAliasDecl n ->
