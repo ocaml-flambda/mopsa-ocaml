@@ -29,11 +29,6 @@
 
 
 /* Clang includes */
-#if CLANG_VERSION_MAJOR < 17
-#include "llvm/Support/Host.h"
-#else
-#include "llvm/TargetParser/Host.h"
-#endif
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/Preprocessor.h"
@@ -54,6 +49,12 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
+
+#if CLANG_VERSION_MAJOR < 17
+#include "llvm/Support/Host.h"
+#else
+#include "llvm/TargetParser/Host.h"
+#endif
 
 #if CLANG_VERSION_MAJOR >= 10
 #include "clang/Basic/Builtins.h"
