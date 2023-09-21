@@ -29,7 +29,11 @@
 
 
 /* Clang includes */
+#if CLANG_VERSION_MAJOR < 17
 #include "llvm/Support/Host.h"
+#else
+#include "llvm/TargetParser/Host.h"
+#endif
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/Preprocessor.h"
@@ -95,6 +99,9 @@ static const bool log_unknown = true;
 #define DEBUG_SOURCE_RANGE(node) ""
 #endif
 
+#if CLANG_VERSION_MAJOR >= 17
+#define Optional std::optional
+#endif
 
 /* OCaml helpers */
 /* ************* */
@@ -1030,7 +1037,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
 
       GENERATE_NODE_INDIRECT(StaticAssertDecl, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getAssertExpr()));
-          Store_field(ret, 1, caml_copy_string(x->getMessage() ? x->getMessage()->getString().str().c_str() : ""));
+          Store_field_option(ret, 1, x->getMessage(), TranslateExpr(x->getMessage()));
           Store_field(ret, 2, Val_bool(x->isFailed()));
         });
 
@@ -3037,8 +3044,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDesignator(const DesignatedInitExp
 
   if (d->isFieldDesignator()) {
     ret = caml_alloc(1, MLTAG_Designator_Field);
+#if CLANG_VERSION_MAJOR >= 17
+    Store_field(ret, 0, TranslateFieldDecl(d->getFieldDecl()));
+#else
     Store_field(ret, 0, TranslateFieldDecl(d->getField()));
-  }
+#endif
+ }
   else if (d->isArrayDesignator()) {
     ret = caml_alloc(1, MLTAG_Designator_Array);
     Store_field(ret, 0, TranslateExpr(x->getArrayIndex(*d)));
