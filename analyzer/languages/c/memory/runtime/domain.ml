@@ -679,6 +679,41 @@ and shapes_deref man flow e range =
     Cases.empty flow
 
 
+
+  let exec_pass_on_shape_var range pv i cv man flow =
+    let (m, l) = get_env T_cur man flow  in
+    match lookup_shapes pv m with
+    | None ->
+      let flow = raise_ffi_shape_missing range pp_var pv man flow in
+      Cases.empty flow
+    | Some TOP | Some BOT | Some (Nbt (R _)) ->
+      let flow = raise_ffi_shape_missing range pp_var pv man flow in
+      Cases.empty flow
+    | Some (Nbt (L sh)) ->
+      let sh = OCamlValue.field_shape_at_index sh i in
+      eval_set_shape_var cv (Shape.ocaml_value sh) range man flow >>$ fun _ flow ->
+      Post.return flow
+
+
+  let exec_pass_on_shape range parent index child man flow =
+    unwrap_expr_as_var parent man flow >>$ fun pv flow ->
+    eval_deref_to_var child man flow >>$ fun cv flow ->
+    match cv with
+    | None ->
+      (* FIXME: maybe raise an error *)
+      Post.return flow
+    | Some cv ->
+      eval_number_exp_to_integer index man flow >>$ fun zo flow ->
+      match OptionExt.lift (fun z -> Z.to_int z) zo with
+      | exception Z.Overflow -> Post.return flow
+      | None -> Post.return flow
+      | Some z -> exec_pass_on_shape_var range pv z cv man flow
+
+  let eval_pass_on_shape range parent index child man flow =
+    exec_pass_on_shape range parent index child man flow >>% fun flow ->
+    Eval.singleton (mk_unit range) flow
+
+
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow ->
     match f, args with
@@ -710,6 +745,8 @@ and shapes_deref man flow e range =
       eval_is_immediate e range man flow
     | "_ffi_unimplemented", [] ->
       eval_unimplemented range man flow
+    | "_ffi_pass_on_shape", [parent; idx; child] ->
+      eval_pass_on_shape range parent idx child man flow
     | _, _ ->
       (* let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in *)
       (* let flow = raise_or_fail_ffi_unsupported range msg man flow in *)

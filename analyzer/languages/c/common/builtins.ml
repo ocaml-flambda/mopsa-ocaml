@@ -121,6 +121,7 @@ let _ =
       "_ffi_assert_shape";
       "_ffi_is_immediate";
       "_ffi_unimplemented";
+      "_ffi_pass_on_shape";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

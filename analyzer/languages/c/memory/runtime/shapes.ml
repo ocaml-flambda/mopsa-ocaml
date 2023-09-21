@@ -51,6 +51,9 @@ module type OCamlValueShape = sig
   val pp_shapes : Format.formatter -> t -> unit
   val to_string : t -> string
 
+
+  val field_shape_at_index : t -> int -> t
+
 end
 
 
@@ -448,6 +451,8 @@ struct
 
   let to_string s : string = Format.asprintf "%a" pp_shapes s
 
+  let field_shape_at_index _ _ = any ()
+
 end
 
 
@@ -830,5 +835,39 @@ struct
 
   let print printer x =
     Print.unformat pp_shapes printer x
+
+
+
+  let variant_shapes_at_index (sh: t IntMap.t Top.with_top IntMap.t Top.with_top) i : t option =
+    let shape_at_index_fields (fields: t IntMap.t Top.with_top) i =
+      match fields with
+      | TOP -> top
+      | Nt m ->
+        begin match IntMap.find_opt i m with
+        | None -> top
+        | Some t -> t
+        end
+    in
+    match sh with
+    | TOP -> Some top
+    | Nt m when IntMap.is_empty m -> None
+    | Nt m ->
+      Some (IntMap.fold (fun tag fields acc -> join (shape_at_index_fields fields i) acc) m bottom)
+
+  let array_shapes_at_index (sh: t option Top.with_top) i : t option =
+    match sh with
+    | TOP -> Some top
+    | Nt None -> None
+    | Nt (Some t) -> Some t
+
+
+  let field_shape_at_index (sh: t) i =
+    match variant_shapes_at_index sh.variant_fields i, array_shapes_at_index sh.array_fields i with
+    | Some t1, Some t2 -> join t1 t2
+    | Some t, None -> t
+    | None, Some t -> t
+    (* FIXME: not ideal, but okay *)
+    | None, None -> top
+
 
 end
