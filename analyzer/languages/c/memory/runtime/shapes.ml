@@ -20,10 +20,15 @@ module type OCamlValueShape = sig
   (** [any_block] covers any allocated runtime block, including strings, custom blocks, abstract blocks, etc. *)
   val any_block : unit -> t
 
-  (** [standard_block] covers tuples, records, arrays, and variant type constructors  *)
-  val standard_block:
-    tag: int option (** tag of the block, if known, should be a standard variant tag *)
-    -> fields: t list option (** shapes of the fields of the block, if known *)
+  (** [any_standard_block] covers tuples, records, arrays, and variant type constructors; excludes strings, custom blocks, abstract blocks, etc.  *)
+  val any_standard_block: unit -> t
+
+  (** [any_non_array_standard_block] covers tuples, records, and variant type constructors; it does not cover arrays *)
+  val any_non_array_standard_block: unit -> t
+
+  val fixed_size_standard_block:
+    tag: int (** tag of the block, if known, should be a standard variant tag *)
+    -> fields: t list (** shapes of the fields of the block, if known *)
     -> t
 
   (* all of the shapes below are blocks *)
@@ -57,8 +62,8 @@ struct
     match sh with
     | Any -> OCamlValue.any ()
     | Imm -> OCamlValue.immediate ()
-    | Block None -> OCamlValue.standard_block ~tag:None ~fields:None
-    | Block (Some (t, shs)) -> OCamlValue.standard_block ~tag:(Some t) ~fields: (Some (List.map type_shape_to_shapes shs))
+    | Block None -> OCamlValue.any_non_array_standard_block ()
+    | Block (Some (t, shs)) -> OCamlValue.fixed_size_standard_block ~tag:t ~fields: (List.map type_shape_to_shapes shs)
     | String -> OCamlValue.string ()
     | Array sh -> OCamlValue.array (type_shape_to_shapes sh)
     | Int64 -> OCamlValue.int64 ()
@@ -121,13 +126,13 @@ struct
   let runtime_shape_to_shapes (s: runtime_shape_enum) =
     match s with
     | FFI_IMMEDIATE -> OCamlValue.immediate ()
-    | FFI_BLOCK     -> OCamlValue.standard_block ~tag:None ~fields:None
+    | FFI_BLOCK     -> OCamlValue.any_standard_block ()
     | FFI_DOUBLE    -> OCamlValue.double ()
     | FFI_INT64     -> OCamlValue.int64 ()
     | FFI_INT32     -> OCamlValue.int32 ()
     | FFI_NATIVEINT -> OCamlValue.nativeint ()
     | FFI_STRING    -> OCamlValue.string ()
-    | FFI_VARIANT   -> OCamlValue.join (OCamlValue.standard_block ~tag:None ~fields:None) (OCamlValue.immediate ())
+    | FFI_VARIANT   -> OCamlValue.join (OCamlValue.any_standard_block ()) (OCamlValue.immediate ())
     | FFI_BIGARRAY  -> OCamlValue.bigarray ()
     | FFI_ABSTRACT  -> OCamlValue.abstract ()
     | FFI_ANY       -> OCamlValue.any ()
@@ -197,7 +202,7 @@ struct
     | BLOCK_INFIX -> OCamlValue.any ()
     | BLOCK_LAZY -> OCamlValue.any ()
     | BLOCK_FORWARD -> OCamlValue.any ()
-    | BLOCK_ORDINARY n -> OCamlValue.standard_block ~tag:(Some n) ~fields:None
+    | BLOCK_ORDINARY n -> OCamlValue.any_standard_block ()
 
   let shape_of_runtime_block_tag_int (id: Z.t) : OCamlValue.t option =
     match runtime_block_tag_of_int (Z.to_int id) with
@@ -409,8 +414,15 @@ struct
   let array _ : t =
     ocaml_value OrdinaryBlock
 
-  let standard_block ~tag ~fields : t =
+  let any_standard_block () : t =
     ocaml_value OrdinaryBlock
+
+  let fixed_size_standard_block ~tag ~fields : t =
+    ocaml_value OrdinaryBlock
+
+  let any_non_array_standard_block () : t =
+    ocaml_value OrdinaryBlock
+
 
   let any_block () =
     ocaml_value OrdinaryBlock |>
@@ -619,19 +631,21 @@ struct
     let vs = { bot_value_shape with ordinary_block = true } in
     { shape = vs; variant_fields = Nt IntMap.empty; array_fields = Nt (Some sh) }
 
-  let standard_block ~tag ~fields : t =
-    let vs = { bot_value_shape with ordinary_block = true } in
-    match tag, fields with
-    | Some t, Some fs ->
-      { shape = vs; array_fields = Nt None; variant_fields = Nt (variant_fields_of_shapes t fs) }
-    | Some t, None when t != 0 ->
-      { shape = vs; array_fields = Nt None; variant_fields = TOP }
-    | _, _ ->
-      { shape = vs; variant_fields = TOP; array_fields = TOP }
-
   let any_block () =
     let vs = { top_value_shape with immediate = false } in
     { shape = vs; variant_fields = TOP; array_fields = TOP }
+
+  let any_standard_block () =
+    let vs = { bot_value_shape with ordinary_block = true } in
+    { shape = vs; array_fields = TOP; variant_fields = TOP }
+
+  let any_non_array_standard_block () =
+    let vs = { bot_value_shape with ordinary_block = true } in
+    { shape = vs; array_fields = Nt None; variant_fields = TOP }
+
+  let fixed_size_standard_block ~tag ~fields : t =
+    let vs = { bot_value_shape with ordinary_block = true } in
+    { shape = vs; array_fields = Nt None; variant_fields = Nt (variant_fields_of_shapes tag fields) }
 
 
   let join_value_shape sh1 sh2 =

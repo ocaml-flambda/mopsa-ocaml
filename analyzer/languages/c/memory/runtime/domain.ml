@@ -28,7 +28,7 @@ struct
   module Stat = Framework.Lattices.Const.Make(Status)
   module Root = Framework.Lattices.Const.Make(Roots)
 
-  module OCamlValue = Shapes.FlatShapes
+  module OCamlValue = Shapes.NestedShapes
   module OCamlValueExt = Shapes.OCamlValueExt(OCamlValue)
   module Shape = Shapes.RuntimeShape(OCamlValue)
   module Val  = Framework.Lattices.Pair.Make(Framework.Lattices.Pair.Make(Stat)(Root))(Shape)
