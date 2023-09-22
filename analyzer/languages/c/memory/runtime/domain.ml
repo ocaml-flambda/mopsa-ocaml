@@ -343,20 +343,6 @@ and shapes_deref man flow e range =
       let flow = set_env T_cur (m', l) man flow in
       Post.return flow
 
-  let eval_assert_shape_var var ss range man flow =
-    let (m, l) = get_env T_cur man flow  in
-    match lookup_shapes var m with
-    | None ->
-      let flow = raise_ffi_shape_missing range pp_var var man flow in
-      Cases.empty flow
-    | Some s when not (Shape.compat_runtime_shape ~value:s ~constr:ss) ->
-      let flow = raise_ffi_shape_mismatch range (Shape.to_string ss) (Shape.to_string s)  man flow in
-      Cases.empty flow
-    | Some _ ->
-      (* let flow = safe_ffi_shape_check range man flow in *)
-      Cases.singleton () flow
-
-
   let unwrap_expr_as_var exp ?(fail = fun man flow -> raise_ffi_not_variable exp man flow)  man flow =
     match ekind (remove_casts exp) with
     | E_var (var, _) ->
@@ -391,6 +377,32 @@ and shapes_deref man flow e range =
       Cases.empty flow
     | Some (Nbt (L sh)) ->
       Cases.singleton sh flow
+
+
+  type integer_result = IntegerEvalFail | Integer of Z.t | IntegerRange of Z.t * Z.t
+  type int_result = IntEvalFail | Int of int | IntRange of int * int
+
+  let eval_number_exp_to_integer exp man flow =
+    man.eval ~translate:"Universal" exp flow >>$ fun exp' flow ->
+    let kind_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query exp') flow in
+    match Itv.bounds_opt kind_itv with
+    | Some l, Some r when Z.equal l r -> Cases.singleton (Integer l) flow
+    | Some l, Some r -> Cases.singleton (IntegerRange (l, r)) flow
+    | _ -> Cases.singleton IntegerEvalFail flow
+
+  let eval_number_exp_to_int exp man flow =
+    eval_number_exp_to_integer exp man flow >>$ fun res flow ->
+    match res with
+    | IntegerEvalFail -> Cases.singleton IntEvalFail flow
+    | Integer z ->
+      (try Cases.singleton (Int (Z.to_int z)) flow
+      with Z.Overflow -> Cases.singleton IntEvalFail flow)
+    | IntegerRange (l, r) ->
+      (try Cases.singleton (IntRange (Z.to_int l, Z.to_int r)) flow
+      with Z.Overflow -> Cases.singleton IntEvalFail flow)
+
+
+
 
   (** {2 Transformers} *)
   (** ============================================== *)
@@ -440,11 +452,21 @@ and shapes_deref man flow e range =
     eval_set_shape_var var sh range man flow
 
 
+  let exec_assert_ocaml_shape_var var constr_sh range man flow =
+    eval_ocaml_value_shape_of_var var range man flow >>$ fun var_sh flow ->
+    if OCamlValueExt.compat ~value:var_sh ~constr:constr_sh then
+      let flow = safe_ffi_shape_check range man flow in
+      Post.return flow
+    else
+      let flow = raise_ffi_shape_mismatch range (OCamlValue.to_string constr_sh) (OCamlValue.to_string var_sh)  man flow in
+      Cases.empty flow
+
+
   let exec_assert_shape exp sh range man flow =
     match ekind (remove_casts exp) with
     | E_var (v, _) ->
-      let ss = Shape.ocaml_value (OCamlValueExt.type_shape_to_shapes sh) in
-      eval_assert_shape_var v ss range man flow >>% fun flow ->
+      let ss = OCamlValueExt.type_shape_to_shapes sh in
+      exec_assert_ocaml_shape_var v ss range man flow >>%  fun flow ->
       Post.return flow
     | _ ->
       let flow = raise_ffi_shape_missing range pp_expr exp man flow in
@@ -617,15 +639,6 @@ and shapes_deref man flow e range =
       Cases.singleton (arg :: args) flow
 
 
-  let eval_number_exp_to_integer exp man flow =
-    man.eval ~translate:"Universal" exp flow >>$ fun exp' flow ->
-    let kind_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query exp') flow in
-    match Itv.bounds_opt kind_itv with
-    | Some l, Some r when Z.equal l r ->
-      Cases.singleton (Some l) flow
-    | _ ->
-      Cases.singleton None flow
-
 
   let eval_is_immediate_var var range man flow =
     let (m, l) = get_env T_cur man flow in
@@ -644,26 +657,36 @@ and shapes_deref man flow e range =
         let flow = set_env T_cur (m', l) man flow in
         Cases.singleton rt flow
 
+  (* Given an expression of type [enum ffi_shape], this function computes
+    the corresponding [OCamlValueShape.t] shape. *)
+  let eval_ocaml_shape_of_runtime_enum_expr int_expr range man flow =
+    eval_number_exp_to_int int_expr man flow >>$ fun num flow ->
+    match num with
+    | IntEvalFail | IntRange _ ->
+      let flow = raise_ffi_shape_number_error range pp_expr int_expr man flow in
+      Cases.empty flow
+    | Int n ->
+      begin match OCamlValueExt.shape_of_runtime_shape n with
+      | None ->
+        let flow = raise_ffi_shape_number_error range pp_expr int_expr man flow in
+        Cases.empty flow
+      | Some ss ->
+        Cases.singleton ss flow
+      end
+
+
   let eval_assert_shape v sh range man flow =
     unwrap_expr_as_var v man flow >>$ fun v flow ->
-    eval_number_exp_to_integer sh man flow >>$ fun sh' flow ->
-    let shapeset = OptionExt.bind (fun x -> (OCamlValueExt.shape_of_runtime_shape_Z x)) sh' in
-    begin match shapeset with
-    | Some ss ->
-      eval_assert_shape_var v (Shape.ocaml_value ss) range man flow >>% fun flow ->
-      Eval.singleton (mk_unit range) flow
-    | None ->
-      let flow = raise_ffi_shape_number_error range pp_expr sh man flow in
-      Cases.empty flow
-    end
+    eval_ocaml_shape_of_runtime_enum_expr sh range man flow >>$ fun ss flow ->
+    exec_assert_ocaml_shape_var v ss range man flow >>% fun flow ->
+    Eval.singleton (mk_unit range) flow
 
   let eval_is_immediate v range man flow =
     unwrap_expr_as_var v man flow >>$ fun v flow ->
     eval_is_immediate_var v range man flow >>$ fun rt flow ->
-    begin match rt with
+    match rt with
     | Pointer -> Eval.singleton (mk_int 0 ~typ:(T_c_integer C_signed_int) range) flow
     | Immediate -> Eval.singleton (mk_int 1 ~typ:(T_c_integer C_signed_int) range) flow
-    end
 
 
   let eval_set_shape ptr sh range man flow =
@@ -673,16 +696,10 @@ and shapes_deref man flow e range =
       let flow = raise_ffi_shape_missing range pp_expr ptr man flow in
       Cases.empty flow
     | Some v ->
-      eval_number_exp_to_integer sh man flow >>$ fun sh' flow ->
-      let shapeset = OptionExt.bind (fun x -> OCamlValueExt.shape_of_runtime_shape_Z x) sh' in
-      begin match shapeset with
-      | None ->
-        let flow = raise_ffi_shape_number_error range pp_expr sh man flow in
-        Cases.empty flow
-      | Some ss ->
-        eval_set_shape_var v (Shape.ocaml_value ss) range man flow >>% fun flow ->
-        Eval.singleton (mk_unit range) flow
-      end
+      eval_ocaml_shape_of_runtime_enum_expr sh range man flow >>$ fun ss flow ->
+      eval_set_shape_var v (Shape.ocaml_value ss) range man flow >>% fun flow ->
+      Eval.singleton (mk_unit range) flow
+
 
   let eval_unimplemented range man flow =
     let flow = raise_ffi_unimplemented range man flow in
@@ -702,11 +719,13 @@ and shapes_deref man flow e range =
       (* FIXME: maybe raise an error *)
       Post.return flow
     | Some cv ->
-      eval_number_exp_to_integer index man flow >>$ fun zo flow ->
-      match OptionExt.lift (fun z -> Z.to_int z) zo with
-      | exception Z.Overflow -> Post.return flow
-      | None -> Post.return flow
-      | Some z -> exec_pass_on_shape_var range pv z cv man flow
+      eval_number_exp_to_int index man flow >>$ fun res flow ->
+      (* FIXME: use the integer version and do something even for ranges *)
+        begin match res with
+      | IntEvalFail -> Post.return flow
+      | IntRange _ -> Post.return flow
+      | Int n -> exec_pass_on_shape_var range pv n cv man flow
+      end
 
   let eval_pass_on_shape range parent index child man flow =
     exec_pass_on_shape range parent index child man flow >>% fun flow ->

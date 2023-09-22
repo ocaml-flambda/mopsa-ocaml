@@ -140,9 +140,8 @@ struct
     | FFI_ABSTRACT  -> OCamlValue.abstract ()
     | FFI_ANY       -> OCamlValue.any ()
 
-  let shape_of_runtime_shape_Z (id: Z.t) : OCamlValue.t option =
-    match runtime_shape_of_integer (Z.to_int id) with
-    | exception Z.Overflow -> None
+  let shape_of_runtime_shape (id: int) : OCamlValue.t option =
+    match runtime_shape_of_integer id with
     | None -> None
     | Some sh -> Some (runtime_shape_to_shapes sh)
 
