@@ -380,7 +380,17 @@ and shapes_deref man flow e range =
     | P_null | P_invalid | P_top | P_fun _ ->
       Cases.singleton None flow
 
-
+  let eval_ocaml_value_shape_of_var var range man flow =
+    let (m, l) = get_env T_cur man flow  in
+    match lookup_shapes var m with
+    | None ->
+      let flow = raise_ffi_shape_missing range pp_var var man flow in
+      Cases.empty flow
+    | Some (TOP as sh) | Some (BOT as sh) | Some (Nbt (R _) as sh) ->
+      let flow = raise_ffi_shape_non_value range pp_var var Shape.pp_shapes sh man flow in
+      Cases.empty flow
+    | Some (Nbt (L sh)) ->
+      Cases.singleton sh flow
 
   (** {2 Transformers} *)
   (** ============================================== *)
@@ -678,22 +688,11 @@ and shapes_deref man flow e range =
     let flow = raise_ffi_unimplemented range man flow in
     Cases.empty flow
 
-
-
   let exec_pass_on_shape_var range pv i cv man flow =
-    let (m, l) = get_env T_cur man flow  in
-    match lookup_shapes pv m with
-    | None ->
-      let flow = raise_ffi_shape_missing range pp_var pv man flow in
-      Cases.empty flow
-    | Some TOP | Some BOT | Some (Nbt (R _)) ->
-      let flow = raise_ffi_shape_missing range pp_var pv man flow in
-      Cases.empty flow
-    | Some (Nbt (L sh)) ->
-      let sh = OCamlValue.field_shape_at_index sh i in
-      eval_set_shape_var cv (Shape.ocaml_value sh) range man flow >>$ fun _ flow ->
-      Post.return flow
-
+    eval_ocaml_value_shape_of_var pv range man flow >>$ fun sh flow ->
+    let sh = OCamlValue.field_shape_at_index sh i in
+    eval_set_shape_var cv (Shape.ocaml_value sh) range man flow >>$ fun _ flow ->
+    Post.return flow
 
   let exec_pass_on_shape range parent index child man flow =
     unwrap_expr_as_var parent man flow >>$ fun pv flow ->
@@ -713,6 +712,36 @@ and shapes_deref man flow e range =
     exec_pass_on_shape range parent index child man flow >>% fun flow ->
     Eval.singleton (mk_unit range) flow
 
+
+  let exec_assert_shape_subset_var v1 v2 range man flow =
+    eval_ocaml_value_shape_of_var v1 range man flow >>$ fun sh1 flow ->
+    eval_ocaml_value_shape_of_var v2 range man flow >>$ fun sh2 flow ->
+      if OCamlValue.subset sh1 sh2 then
+        Post.return flow
+      else
+        let flow = raise_ffi_shape_mismatch range (Format.asprintf "a subset of %a" OCamlValue.pp_shapes sh2) (OCamlValue.to_string sh1) man flow in
+        Cases.empty flow
+
+  let exec_assert_shape_compat_var v1 v2 range man flow =
+    eval_ocaml_value_shape_of_var v1 range man flow >>$ fun sh1 flow ->
+    eval_ocaml_value_shape_of_var v2 range man flow >>$ fun sh2 flow ->
+      if OCamlValueExt.compat ~value:sh1 ~constr:sh2 then
+        Post.return flow
+      else
+        let flow = raise_ffi_shape_mismatch range (Format.asprintf "a shape compatible with %a" OCamlValue.pp_shapes sh2) (OCamlValue.to_string sh1) man flow in
+        Cases.empty flow
+
+  let eval_assert_shape_subset e1 e2 range man flow =
+    unwrap_expr_as_var e1 man flow >>$ fun v1 flow ->
+    unwrap_expr_as_var e2 man flow >>$ fun v2 flow ->
+    exec_assert_shape_subset_var v1 v2 range man flow >>% fun flow ->
+    Eval.singleton (mk_unit range) flow
+
+  let eval_assert_shape_compat e1 e2 range man flow =
+    unwrap_expr_as_var e1 man flow >>$ fun v1 flow ->
+    unwrap_expr_as_var e2 man flow >>$ fun v2 flow ->
+    exec_assert_shape_compat_var v1 v2 range man flow >>% fun flow ->
+    Eval.singleton (mk_unit range) flow
 
   let eval_ffi_primtive f args range man flow =
     eval_ffi_primtive_args args man flow >>$ fun args flow ->
@@ -747,6 +776,10 @@ and shapes_deref man flow e range =
       eval_unimplemented range man flow
     | "_ffi_pass_on_shape", [parent; idx; child] ->
       eval_pass_on_shape range parent idx child man flow
+    | "_ffi_assert_shape_subset", [e1; e2] ->
+      eval_assert_shape_subset e1 e2 range man flow
+    | "_ffi_assert_shape_compat", [e1; e2] ->
+        eval_assert_shape_compat e1 e2 range man flow
     | _, _ ->
       (* let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in *)
       (* let flow = raise_or_fail_ffi_unsupported range msg man flow in *)
