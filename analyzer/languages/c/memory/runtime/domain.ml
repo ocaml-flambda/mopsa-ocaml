@@ -463,15 +463,10 @@ and shapes_deref man flow e range =
 
 
   let exec_assert_shape exp sh range man flow =
-    match ekind (remove_casts exp) with
-    | E_var (v, _) ->
-      let ss = OCamlValueExt.type_shape_to_shapes sh in
-      exec_assert_ocaml_shape_var v ss range man flow >>%  fun flow ->
-      Post.return flow
-    | _ ->
-      let flow = raise_ffi_shape_missing range pp_expr exp man flow in
-      Cases.empty flow
-
+    unwrap_expr_as_var exp man flow >>$ fun v flow ->
+    let ss = OCamlValueExt.type_shape_to_shapes sh in
+    exec_assert_ocaml_shape_var v ss range man flow >>%  fun flow ->
+    Post.return flow
 
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
