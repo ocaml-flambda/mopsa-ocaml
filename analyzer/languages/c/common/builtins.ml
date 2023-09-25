@@ -110,11 +110,12 @@ let _ =
       "_ffi_garbage_collect";
       "_ffi_mark_active_contents";
       "_ffi_mark_active_ptr";
+      "_ffi_assert_active";
+      "_ffi_assert_active_ptr";
       "_ffi_register_root";
       "_ffi_unregister_root";
       "_ffi_acquire_lock";
       "_ffi_release_lock";
-      "_ffi_assert_active";
       "_ffi_assert_locked";
       "_ffi_fresh_value_ptr";
       "_ffi_set_shape";

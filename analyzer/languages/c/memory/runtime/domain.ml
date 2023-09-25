@@ -769,8 +769,10 @@ and shapes_deref man flow e range =
     | "_ffi_register_root", [e] ->
       eval_register_root range e man flow
     | "_ffi_unregister_root", [e] ->
-        eval_unregister_root range e man flow
+      eval_unregister_root range e man flow
     | "_ffi_assert_active", [e] ->
+      eval_assert_valid e man flow
+    | "_ffi_assert_active_ptr", [e] ->
       eval_assert_valid e man flow
     | "_ffi_assert_shape", [v; sh] ->
       eval_assert_shape v sh range man flow
