@@ -223,7 +223,7 @@ struct
       let flow = raise_ffi_arity_mismatch range ~actual ~expected:2 man flow in
       Post.return flow
     else
-      (* let flow = safe_ffi_arity_check range man flow in *)
+      let flow = safe_ffi_arity_check range man flow in
       Post.return flow
 
   let exec_virtual_runtime_function_test_exn (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =

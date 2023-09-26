@@ -35,7 +35,7 @@ struct
     match status with
     | BOT | Nbt Untracked -> Post.return flow
     | Nbt Active ->
-      (* let flow = safe_ffi_value_liveness_check range man flow in *)
+      let flow = safe_ffi_value_liveness_check range man flow in
       Post.return flow
     | TOP | Nbt Stale ->
       let flow = raise_ffi_inactive_value (mk_var var range) man flow in
