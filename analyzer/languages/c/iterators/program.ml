@@ -226,7 +226,7 @@ struct
       let flow = safe_ffi_arity_check range man flow in
       Post.return flow
 
-  let exec_virtual_runtime_function_test (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =
+  let exec_virtual_runtime_function_test_exn (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =
     let range = f.c_func_name_range in
     let {Type_shapes.arguments = arg_shapes; return = ret_shape } = ty in
     let stmts, args = virtual_runtime_argument_array arg_shapes range in
@@ -244,6 +244,15 @@ struct
     else
       Post.return flow
 
+  let exec_virtual_runtime_function_test f ty man flow =
+    try
+      exec_virtual_runtime_function_test_exn f ty man flow
+    with e ->
+      (* something went wrong in the analysis *)
+      let flow = raise_ffi_unimplemented f.c_func_range man flow in
+      Post.return flow
+
+
   let rec exec_all_runtime_functions (fs: (c_fundec * Type_shapes.fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
     match fs with
     | [] ->
@@ -251,16 +260,13 @@ struct
       Cases.singleton (List.rev results) (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
     | (f, ty) :: fs ->
         let () = Debug.debug ~channel:"runtime_functions" "analyzing %s at %a" (f.c_func_org_name) pp_range f.c_func_range in
-        (* catching the exceptions like this is horrible, ideally there would be a better way *)
-        try
-          (exec_virtual_runtime_function_test f ty man flow >>% fun flow'' ->
-          let report = Flow.get_report flow'' in
-          let res = function_report_outcome report in
-          exec_all_runtime_functions fs man (flow'' :: flows) ((f.c_func_org_name, res) :: results) flow)
-        with e ->
-          (* something went wrong in the analysis *)
-          let flow' = raise_ffi_unimplemented f.c_func_range man flow in
-          exec_all_runtime_functions fs man (flow' :: flows) ((f.c_func_org_name, Unimplemented) :: results) flow
+        (* NOTE: This is tricky. This bind only works, because even if the flow is empty,
+           the monad will still execute the subsequent part. This is crucially different
+          from the usual [>>$], which silently drops empty.  *)
+        exec_virtual_runtime_function_test f ty man flow >>% fun flow' ->
+        let report = Flow.get_report flow' in
+        let res = function_report_outcome report in
+        exec_all_runtime_functions fs man (flow' :: flows) ((f.c_func_org_name, res) :: results) flow
 
 
   let output_results skipped_functions results to_test =
