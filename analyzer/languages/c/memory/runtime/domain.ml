@@ -455,7 +455,7 @@ and shapes_deref man flow e range =
   let exec_assert_ocaml_shape_var var constr_sh range man flow =
     eval_ocaml_value_shape_of_var var range man flow >>$ fun var_sh flow ->
     if OCamlValueExt.compat ~value:var_sh ~constr:constr_sh then
-      let flow = safe_ffi_shape_check range man flow in
+      (* let flow = safe_ffi_shape_check range man flow in *)
       Post.return flow
     else
       let flow = raise_ffi_shape_mismatch range (OCamlValue.to_string constr_sh) (OCamlValue.to_string var_sh)  man flow in
@@ -526,7 +526,7 @@ and shapes_deref man flow e range =
     let flow = match lookup_status var m with
     | Some BOT -> flow
     | Some Nbt Active ->
-      let flow = safe_ffi_value_liveness_check exp.erange man flow in
+      (* let flow = safe_ffi_value_liveness_check exp.erange man flow in *)
       flow
     | Some Nbt Stale | Some Nbt Untracked | None ->
       let flow = raise_ffi_inactive_value ~bottom:true exp man flow in
@@ -556,7 +556,7 @@ and shapes_deref man flow e range =
     | Some ((Nbt Active, Nbt NotRooted), shapes) ->
       let m' = Map.add var ((Nbt Active, Root.embed Rooted), shapes) m in
       let flow = set_env T_cur (m', l) man flow in
-      let flow = safe_ffi_roots_check range man flow in
+      (* let flow = safe_ffi_roots_check range man flow in *)
       Post.return flow
     | _ ->
       let flow = raise_ffi_rooting_failed ~bottom:true vexp man flow in
@@ -569,7 +569,7 @@ and shapes_deref man flow e range =
     | Some ((status, Nbt Rooted), shapes) ->
       let m' = Map.add var ((status, Root.embed NotRooted), shapes) m in
       let flow = set_env T_cur (m', l) man flow in
-      let flow = safe_ffi_roots_check range man flow in
+      (* let flow = safe_ffi_roots_check range man flow in *)
       Post.return flow
     | Some ((_, _), _) | None ->
       let flow = raise_ffi_not_rooted ~bottom:true vexp man flow in
@@ -599,7 +599,7 @@ and shapes_deref man flow e range =
     let (m, l): _ * Lock.t = get_env T_cur man flow in
     match l with
     | Nbt Locked ->
-      let flow = safe_ffi_runtime_lock_check range man flow in
+      (* let flow = safe_ffi_runtime_lock_check range man flow in *)
       Eval.singleton (mk_unit range) flow
     | _ ->
       let flow = raise_ffi_runtime_unlocked ~bottom:true range man flow in
