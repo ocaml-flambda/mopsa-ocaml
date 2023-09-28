@@ -249,7 +249,7 @@ struct
       exec_virtual_runtime_function_test_exn f ty man flow
     with e ->
       (* something went wrong in the analysis *)
-      let flow = raise_ffi_unimplemented f.c_func_range man flow in
+      let flow = raise_ffi_internal_error "An unexpected exception was raised during the analysis." f.c_func_range man flow in
       Post.return flow
 
 

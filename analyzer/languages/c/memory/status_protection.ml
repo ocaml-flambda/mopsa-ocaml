@@ -45,9 +45,8 @@ struct
  let eval_pointer expr man flow =
   match Common.Static_points_to.eval_opt expr with
   | None ->
-    let flow = raise_ffi_unimplemented expr.erange man flow in
+    let flow = raise_ffi_internal_error (Format.asprintf "evaluation of pointer expression %a not supported" pp_expr expr) expr.erange man flow in
     Cases.empty flow
-    (* panic_at expr.erange "evaluation of pointer expression %a not supported" pp_expr expr *)
   | Some (Null) -> Cases.singleton (P_null) flow
   | Some (Top) -> Cases.singleton (P_top) flow
   | Some (AddrOf (base, expr, mode)) ->

@@ -181,7 +181,7 @@ val mk_unreachable_diagnostic : check -> callstack -> range -> diagnostic
 val mk_info_diagnostic : alarm -> diagnostic
 (** Create a diagnostic that says that a certain issue is noteworthy *)
 
-val mk_unimplemented_diagnostic : check -> callstack -> range -> diagnostic
+val mk_unimplemented_diagnostic : alarm -> diagnostic
 (** Create a diagnostic that says that the desired functionality is not implemented *)
 
 val pp_diagnostic_kind : Format.formatter -> diagnostic_kind -> unit

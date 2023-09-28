@@ -162,8 +162,7 @@ struct
     | E_var (v, _) -> status_addr_of_var man flow v e.erange
     | E_c_function _ | E_function _ -> Cases.singleton (Nbt Untracked: Stat.t) flow
     | _ ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(&%a) unsupported for this expression; only variables supported" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "status(&%a) unsupported for this expression; only variables supported" pp_expr e) e.erange man flow in
       Cases.empty flow
 
 
@@ -195,14 +194,12 @@ struct
     | E_c_function _ | E_function _ | E_c_builtin_function _  ->
       Cases.singleton (Nbt Untracked: Stat.t) flow
     | _ ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(%a) unsupported for this kind of expression" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "status(%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
 and status_deref man flow e range =
     match Static_points_to.eval_opt e with
     | None | Some (Fun _) ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(*%a) unsupported for this kind of expression" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "status(*%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
     | Some (Eval(v, _, _)) ->
       (* NOTE: Thist state should be unreachable, because dereference is taken care of
@@ -215,8 +212,7 @@ and status_deref man flow e range =
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) ->
       status_var man flow v
     | Some (AddrOf ({ base_kind = Addr a; }, _, _)) ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "status(%a) unsupported for addresses" pp_addr a) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "status(%a) unsupported for addresses" pp_addr a) e.erange man flow in
       Cases.empty flow
     | Some (AddrOf ({ base_kind = String _; }, _, _)) ->
       Cases.singleton (Nbt Untracked: Stat.t) flow
@@ -258,8 +254,7 @@ and status_deref man flow e range =
     | E_var (v, _) -> shapes_addr_of_var man flow v e.erange
     | E_c_function _ | E_function _ -> Cases.singleton (Shape.non_ocaml_value) flow
     | _ ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shape(&%a) unsupported for this expression; only variables supported" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "shape(&%a) unsupported for this expression; only variables supported" pp_expr e) e.erange man flow in
       Cases.empty flow
 
   let shapes_cast man flow c s = Cases.singleton s flow
@@ -286,14 +281,12 @@ and status_deref man flow e range =
     | E_c_function _ | E_function _ | E_c_builtin_function _  ->
       Cases.singleton Shape.non_ocaml_value flow
     | _ ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(%a) unsupported for this kind of expression" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "shapes(%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
 and shapes_deref man flow e range =
     match Static_points_to.eval_opt e with
     | None | Some (Fun _) ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(*%a) unsupported for this kind of expression" pp_expr e) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "shapes(*%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
     | Some (Eval(v, _, _)) ->
       (* NOTE: Thist state should be unreachable, because dereference is taken care of
@@ -306,8 +299,7 @@ and shapes_deref man flow e range =
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) ->
       shapes_var man flow v
     | Some (AddrOf ({ base_kind = Addr a; }, _, _)) ->
-      let flow = raise_ffi_unimplemented e.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported e.erange (Format.asprintf "shapes(%a) unsupported for addresses" pp_addr a) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "shapes(%a) unsupported for addresses" pp_addr a)  e.erange man flow in
       Cases.empty flow
     | Some (AddrOf ({ base_kind = String _; }, _, _)) ->
       Cases.singleton (Shape.top) flow
@@ -501,8 +493,7 @@ and shapes_deref man flow e range =
     eval_deref_to_var exp man flow >>$ fun var flow ->
     begin match var with
     | None ->
-      let flow = raise_ffi_unimplemented exp.erange man flow in
-      (* let flow = raise_or_fail_ffi_unsupported exp.erange (Format.asprintf "attempting to mark the expression *%a active, which does not evaluate to a variable" pp_expr exp) man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "attempting to mark the expression *%a active, which does not evaluate to a variable" pp_expr exp) exp.erange man flow in
       Cases.empty flow
     | Some v ->
       mark_var_active v exp.erange man flow >>% fun flow ->
@@ -620,8 +611,7 @@ and shapes_deref man flow e range =
       man.exec (mk_add val_var range) flow >>% fun flow ->
       Cases.singleton (mk_c_address_of val_var range) flow
     | _ ->
-      let flow = raise_ffi_unimplemented range man flow in
-      (* let flow = raise_or_fail_ffi_unsupported range (Format.asprintf "failed to allocate a fresh address") man flow in *)
+      let flow = raise_ffi_internal_error (Format.asprintf "failed to allocate a fresh address") range man flow in
       Cases.empty flow
 
 
@@ -797,9 +787,8 @@ and shapes_deref man flow e range =
     | "_ffi_assert_shape_compat", [e1; e2] ->
         eval_assert_shape_compat e1 e2 range man flow
     | _, _ ->
-      (* let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in *)
-      (* let flow = raise_or_fail_ffi_unsupported range msg man flow in *)
-      let flow = raise_ffi_unimplemented range man flow in
+      let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
+      let flow = raise_ffi_internal_error msg range man flow in
       Cases.empty flow
 
 

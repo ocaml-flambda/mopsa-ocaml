@@ -279,10 +279,10 @@ struct
     | TOP -> Print.pp_string printer Top.top_string
     | BOT -> Print.pp_string printer Bot.bot_string
     | Nbt (L ss) when OCamlValue.is_top ss ->
-      Print.pp_string printer "OCaml Value"
+      Print.pp_string printer "OCaml value"
     | Nbt (L ss) -> OCamlValue.print printer ss
     | Nbt (R _) ->
-      Print.pp_string printer "Non-OCaml Value"
+      Print.pp_string printer "non-OCaml value"
 
   let pp_shapes fmt s =
     Print.format print fmt s

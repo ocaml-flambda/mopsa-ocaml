@@ -203,12 +203,12 @@ let mk_info_diagnostic alarm =
     diag_alarms = AlarmSet.singleton alarm;
     diag_callstack = alarm.alarm_callstack }
 
-let mk_unimplemented_diagnostic check callstack range =
-  { diag_range = range;
-    diag_check = check;
+let mk_unimplemented_diagnostic alarm =
+  { diag_range = alarm.alarm_range;
+    diag_check = alarm.alarm_check;
     diag_kind = Unimplemented;
-    diag_alarms = AlarmSet.empty;
-    diag_callstack = callstack }
+    diag_alarms = AlarmSet.singleton alarm;
+    diag_callstack = alarm.alarm_callstack }
 
 
 let pp_diagnostic_kind fmt = function

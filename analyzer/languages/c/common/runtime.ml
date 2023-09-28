@@ -150,7 +150,7 @@ type check +=
 
 let () =
   register_check (fun next fmt -> function
-      | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime value liveness"
+      | CHK_FFI_LIVENESS_VALUE -> Format.fprintf fmt "Runtime garbage collection"
       | CHK_FFI_SHAPE -> Format.fprintf fmt "Runtime value shapes"
       | CHK_FFI_ROOTS -> Format.fprintf fmt "Runtime roots"
       | CHK_FFI_RUNTIME_LOCK -> Format.fprintf fmt "Runtime lock"
@@ -165,7 +165,6 @@ type alarm_kind +=
   | A_ffi_not_rooted of expr
   | A_ffi_non_variable_root of expr
   | A_ffi_runtime_unlocked
-  | A_ffi_begin_end_roots
   | A_ffi_bad_shape of string
   | A_ffi_arity_mismatch of int * int
   | A_ffi_void_return
@@ -181,7 +180,7 @@ let () =
         CHK_FFI_LIVENESS_VALUE
       | A_ffi_runtime_unlocked ->
         CHK_FFI_RUNTIME_LOCK
-      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_begin_end_roots | A_ffi_not_rooted _  ->
+      | A_ffi_double_root _ | A_ffi_non_variable_root _ | A_ffi_not_rooted _  ->
         CHK_FFI_ROOTS
       | A_ffi_abort_analysis _ | A_ffi_not_variable _ | A_ffi_unimplemented ->
         CHK_FFI
@@ -197,7 +196,6 @@ let () =
       | A_ffi_double_root e1, A_ffi_double_root e2 -> compare_expr e1 e2
       | A_ffi_non_variable_root e1, A_ffi_non_variable_root e2 -> compare_expr e1 e2
       | A_ffi_not_rooted e1, A_ffi_not_rooted e2 -> compare_expr e1 e2
-      | A_ffi_begin_end_roots, A_ffi_begin_end_roots -> 0
       | A_ffi_abort_analysis s1, A_ffi_abort_analysis s2 -> String.compare s1 s2
       | A_ffi_bad_shape s1, A_ffi_bad_shape s2 -> String.compare s1 s2
       | A_ffi_arity_mismatch (n1, m1), A_ffi_arity_mismatch (n2, m2) ->
@@ -211,21 +209,15 @@ let () =
     print = (fun next fmt a ->
       match a with
       | A_ffi_non_active_value e ->
-        Format.fprintf fmt "'%a' is not active at this point" (Debug.bold pp_expr) e
+        Format.fprintf fmt "'%a' appears to be not active at this point" (Debug.bold pp_expr) e
       | A_ffi_double_root e ->
-        Format.fprintf fmt "'%a' is already registered as a root" (Debug.bold pp_expr) e
+        Format.fprintf fmt "'%a' appears to be registered as a root already" (Debug.bold pp_expr) e
       | A_ffi_non_variable_root e ->
-          Format.fprintf fmt "attempting to register '%a' as a root failed" (Debug.bold pp_expr) e
+          Format.fprintf fmt "Failed to register '%a' as a root" (Debug.bold pp_expr) e
       | A_ffi_not_rooted e ->
-        Format.fprintf fmt "attempting to unregister '%a' as a root failed, it appears to be not rooted" (Debug.bold pp_expr) e
+        Format.fprintf fmt "Attempting to unregister '%a' as a root failed, it appears to be not rooted" (Debug.bold pp_expr) e
       | A_ffi_runtime_unlocked ->
-        Format.fprintf fmt "runtime unlocked"
-      | A_ffi_begin_end_roots ->
-        Format.fprintf fmt "Begin_roots/End_roots is deprecated"
-      | A_ffi_abort_analysis s ->
-        Format.fprintf fmt "Analysis failed: %s" s
-      | A_ffi_not_variable e ->
-        Format.fprintf fmt "Cannot evaluate the expression %a to a logical variable known to the analysis." pp_expr e
+        Format.fprintf fmt "The runtime lock appears to be released."
       | A_ffi_bad_shape s ->
         Format.fprintf fmt "Shape mismatch: %s" s
       | A_ffi_arity_mismatch (n, m) ->
@@ -236,7 +228,11 @@ let () =
       | A_ffi_void_return ->
           Format.pp_print_string fmt "Type mismatch: Function returns void instead of an OCaml value."
       | A_ffi_unimplemented ->
-        Format.pp_print_string fmt "This operation is currently not supported by the FFI checker."
+        Format.pp_print_string fmt "Operation currently not supported by the analysis."
+      | A_ffi_abort_analysis s ->
+          Format.fprintf fmt "Analysis aborted due to an internal error: %s" s
+      | A_ffi_not_variable e ->
+          Format.fprintf fmt "Cannot evaluate the expression %a to a logical variable known to the analysis." pp_expr e
       | a -> next fmt a
     );
     join = (fun next a1 a2 -> next a1 a2);
@@ -275,27 +271,22 @@ let raise_ffi_rooting_failed ?(bottom=true) exp man flow =
   let alarm = mk_alarm (A_ffi_non_variable_root exp) cs exp.erange in
   Flow.raise_alarm alarm ~bottom ~warning:(not bottom) man.lattice flow
 
-let raise_ffi_begin_end_roots range man flow =
-  let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_ffi_begin_end_roots) cs range in
-  Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
-
 let raise_ffi_shape_error range s man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_bad_shape s) cs range in
   Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 let raise_ffi_shape_mismatch range s1 s2 man flow =
-  raise_ffi_shape_error range (Format.asprintf "expected %s, but has shape %s" s1 s2) man flow
+  raise_ffi_shape_error range (Format.asprintf "expected %s, but appears to have shape %s" s1 s2) man flow
 
 let raise_ffi_shape_missing range pp_term term man flow =
-  raise_ffi_shape_error range (Format.asprintf "cannot determine shape of %a" pp_term term) man flow
+  raise_ffi_shape_error range (Format.asprintf "failed to determine shape of %a" pp_term term) man flow
 
 let raise_ffi_shape_non_value range pp_term term pp_shape shape man flow =
-  raise_ffi_shape_error range (Format.asprintf "%a has shape %a, expected an OCaml value" pp_term term pp_shape shape) man flow
+  raise_ffi_shape_error range (Format.asprintf "%a appears to have shape %a, expected an OCaml value" pp_term term pp_shape shape) man flow
 
 let raise_ffi_shape_number_error range pp_term term man flow =
-  raise_ffi_shape_error range (Format.asprintf "cannot turn shape number %a into a shape description" pp_term term) man flow
+  raise_ffi_shape_error range (Format.asprintf "failed to turn shape number %a into a shape description" pp_term term) man flow
 
 let raise_ffi_arity_mismatch range ~expected ~actual man flow =
   let cs = Flow.get_callstack flow in
@@ -322,8 +313,14 @@ let raise_ffi_not_variable expr man flow =
 
 let raise_ffi_unimplemented range man flow =
   let cs = Flow.get_callstack flow in
-  (* let alarm = mk_alarm (A_ffi_unimplemented) cs range in *)
-  let diagnostic = mk_unimplemented_diagnostic CHK_FFI cs range in
+  let alarm = mk_alarm (A_ffi_unimplemented) cs range in
+  let diagnostic = mk_unimplemented_diagnostic alarm in
+  Flow.add_diagnostic diagnostic flow
+
+let raise_ffi_internal_error reason range man flow =
+  let cs = Flow.get_callstack flow in
+  let alarm = mk_alarm (A_ffi_abort_analysis reason) cs range in
+  let diagnostic = mk_unimplemented_diagnostic alarm in
   Flow.add_diagnostic diagnostic flow
 
 
