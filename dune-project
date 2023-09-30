@@ -23,6 +23,8 @@
 
 (using menhir 2.1)
 
+(accept_alternative_dune_file_name)
+
 (package
  (name mopsa)
  (synopsis "MOPSA: A Modular and Open Platform for Static Analysis using Abstract Interpretation")
