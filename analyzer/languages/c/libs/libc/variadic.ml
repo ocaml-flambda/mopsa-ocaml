@@ -171,8 +171,8 @@ struct
     resolve_pointer ap man flow >>$ fun pt flow ->
     match pt with
     | P_block ({ base_kind = Var ap; base_valid = true }, offset, mode) ->
-      let base_size = sizeof_type ap.vtyp in
-      let elem_size = sizeof_type (under_type ap.vtyp) in
+      let base_size = sizeof_type ap.vtyp flow in
+      let elem_size = sizeof_type (under_type ap.vtyp) flow in
 
       (* We do not consider the case of arrays of va_list *)
       if not (Z.equal base_size elem_size)

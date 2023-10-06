@@ -188,6 +188,8 @@ type ctx = {
 let input_files : string list ref = ref []
 (** List of input files *)
 
+let target_info = ref host_target_info
+(** Target information used for parsing *)
 
 let find_function_in_context ctx range (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
@@ -247,10 +249,11 @@ let rec parse_program (files: string list) =
 
   (* let's initialize target from the option *)
   if !opt_target_triple <> "" then 
-    Ast.target_info := get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple });
-  let target = !Ast.target_info in
-  Mopsa_c_stubs_parser.Cst.target_info := target;
-  let ctx = Clang_to_C.create_context "project" target in
+    target_info :=
+      get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple })
+  ;
+  Mopsa_c_stubs_parser.Cst.target_info := !target_info;
+  let ctx = Clang_to_C.create_context "project" !target_info in
   let nb = List.length files in
   input_files := [];
   let () =
@@ -349,7 +352,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
+  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
 
 
 and parse_stubs ctx () =
@@ -809,7 +812,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
      (* translate vector into array type *)
      let t = from_typ ctx v.vector_type in
      (* size is in bytes, length is in units of t *)
-     let len = Z.div (Z.of_int v.vector_size) (sizeof_type t) in
+     let len = Z.div (Z.of_int v.vector_size) (sizeof_type_in_target t !target_info) in
      Ast.T_c_array (t, Ast.C_array_length_cst len)
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function

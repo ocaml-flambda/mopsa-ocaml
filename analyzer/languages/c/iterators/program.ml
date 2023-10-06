@@ -105,7 +105,10 @@ struct
 
   let init prog man flow =
     match prog.prog_kind with
-    | C_program p -> set_c_program p flow
+    | C_program p -> 
+      set_c_program p flow |>
+      set_c_target_info !Frontend.target_info
+
     | _ -> flow
 
 
@@ -329,7 +332,7 @@ struct
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
     eval_bytes argv range man flow >>$ fun argv_bytes flow ->
-    let n = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in
+    let n = Z.mul (sizeof_type (T_c_pointer s8) flow) (Z.of_int (nargs + 2)) in
     man.exec (mk_assign argv_bytes (mk_z n range) range) flow >>% fun flow ->
 
     (* Initialize argv[0] with the name of the program *)
@@ -337,7 +340,7 @@ struct
     eval_bytes arg range man flow >>$ fun arg0_bytes flow ->
     let program_name = "a.out" in
     let min = mk_int (String.length program_name + 1) range in
-    let max = mk_z (snd (rangeof (size_type ()))) range in
+    let max = mk_z (snd (rangeof (size_type flow) flow)) range in
     man.exec (mk_assume (mk_in arg0_bytes min max range) range) flow >>% fun flow ->
     init_concrete_arg arg program_name range man flow >>% fun flow ->
     let argv0 = mk_c_subscript_access argv (mk_zero range) range in
@@ -453,7 +456,7 @@ struct
       match hi with
       | None -> lo'
       | Some hi -> hi + 1 in
-    let int_max = rangeof s32 |> snd |> Z.to_int in
+    let int_max = rangeof s32 flow |> snd |> Z.to_int in
     if (lo' > hi') || (hi' > int_max - 1) then
       panic "incorrect argc value [%d,%d]" lo' hi'
     ;
@@ -469,7 +472,7 @@ struct
     eval_bytes argv range man flow >>$ fun argv_bytes flow ->
     let n =
       mul (add argc (mk_one range) range)
-          (mk_z (sizeof_type (T_c_pointer s8)) range)
+          (mk_z (sizeof_type (T_c_pointer s8) flow) range)
           range
     in
     man.exec (mk_assume (eq argv_bytes n range) range) flow >>% fun flow ->
@@ -479,7 +482,7 @@ struct
 
     (* Initialize the size of arguments *)
     let min_size = mk_one range in
-    let max_size = mk_z (rangeof (size_type ()) |> snd) range in
+    let max_size = mk_z (rangeof (size_type flow) flow |> snd) range in
     let init_size arg flow =
       eval_bytes arg range man flow >>$ fun bytes flow ->
       man.exec (mk_assume (mk_in bytes min_size max_size range) range) flow
@@ -512,7 +515,7 @@ struct
         cvar_uid = 0;
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
-      }) (size_type ()) in
+      }) (size_type flow) in
     List.fold_left
       (fun acc arg -> acc >>% assume_valid_string arg qi range man)
       (Post.return flow) args
@@ -561,7 +564,7 @@ struct
         else
           call_main_with_symbolic_args main lo hi man flow
       | None, None ->
-        let hi = rangeof s16 |> snd |> Z.to_int in
+        let hi = rangeof s16 flow |> snd |> Z.to_int in
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else

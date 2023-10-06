@@ -109,7 +109,7 @@ struct
     (* Initialize it with the length expression *)
     man.eval (get_array_length_expr arr) flow >>$ fun e flow ->
     let ee = mul e
-        (under_array_type arr.vtyp |> void_to_char |> sizeof_type |> (fun z -> mk_z z range))
+        (under_array_type arr.vtyp |> void_to_char |> (fun t -> let z = sizeof_type t flow in mk_z z range))
         range
     in
     man.exec (mk_assign (mk_var len range) ee range) ~route:scalar flow >>% fun flow ->

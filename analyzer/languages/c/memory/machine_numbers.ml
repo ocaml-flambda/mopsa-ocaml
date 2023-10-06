@@ -234,7 +234,7 @@ struct
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check ?(exp=cexp) raise_alarm =
-      let rmin, rmax = rangeof typ in
+      let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
       if IntItv.subset itv ritv then
@@ -309,7 +309,7 @@ struct
     let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
     let range = cexp.erange in
     (* Condition: n ∈ [0, bits(t) - 1] *)
-    let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
+    let bits = sizeof_type t flow |> Z.mul (Z.of_int 8) in
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
@@ -418,7 +418,7 @@ struct
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
-      let l, u = rangeof t in
+      let l, u = rangeof t flow in
       let nexp = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
       Eval.singleton exp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -453,7 +453,7 @@ struct
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
       let ne = get_expr_translation "Universal" e in
-      let _,hi = rangeof exp.etyp in
+      let _,hi = rangeof exp.etyp flow in
       let nexp = sub (mk_z hi exp.erange) ne exp.erange in
       Eval.singleton cexp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -606,7 +606,7 @@ struct
 
   let add_var_bounds vv t flow =
     if is_c_int_type t then
-      let l,u = rangeof t in
+      let l,u = rangeof t flow in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
       Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (ItvUtils.IntBound.Finite l,ItvUtils.IntBound.Finite u)) flow
     else
@@ -628,7 +628,7 @@ struct
       | Variable_local _, None | Variable_func_static _, None ->
         (* The value of the variable is undetermined (C99 6.7.8.10) *)
         if is_c_int_type v.vtyp then
-          let l,u = rangeof v.vtyp in
+          let l,u = rangeof v.vtyp flow in
           Eval.singleton (mk_z_interval l u range) flow
         else
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
@@ -708,7 +708,7 @@ struct
       let vv = mk_num_var_expr v in
       let top =
         if is_c_int_type v.etyp then
-          let lo,hi = rangeof v.etyp in
+          let lo,hi = rangeof v.etyp flow in
           mk_z_interval lo hi stmt.srange
         else
           mk_top vv.etyp stmt.srange

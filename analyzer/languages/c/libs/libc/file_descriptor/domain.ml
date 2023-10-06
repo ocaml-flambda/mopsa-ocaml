@@ -192,22 +192,22 @@ struct
     cases, { a with first = not_inserted }
 
 
-  let bounds itv =
+  let bounds itv flow =
     if Itv.is_bounded itv then
       Itv.bounds itv
     else
-      let _, max = rangeof s32 in
+      let _, max = rangeof s32 flow in
       Z.of_int window, max
 
 
   (** Insert an address in the remaining part of the table *)
   let insert_addr_others addr range man flow =
     let a = get_env T_cur man flow in
-    let others, itv = Table.insert addr window a.others in
+    let others, itv = Table.insert addr window a.others flow in
     if Itv.is_bottom itv then
       []
     else
-      let l, u = bounds itv in
+      let l, u = bounds itv flow in
       let exp = mk_z_interval l u range in
       let flow = set_env T_cur { a with others } man flow in
       [Eval.singleton exp flow]

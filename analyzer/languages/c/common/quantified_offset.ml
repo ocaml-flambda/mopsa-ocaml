@@ -79,7 +79,7 @@ let rec bound offset quants : expr * expr =
 (** [is_aligned o n man flow] checks whether the value of an
       expression [o] is aligned w.r.t. size sz *)
 let is_aligned e sz man flow =
-  (sz = Z.one) || (is_c_expr_equals_z e Z.zero) ||
+  (sz = Z.one) || (is_c_expr_equals_z e Z.zero flow) ||
   (man.eval e flow ~translate:"Universal" |>
    Cases.for_all_result (fun ee flow ->
        let open Universal.Numeric.Common in

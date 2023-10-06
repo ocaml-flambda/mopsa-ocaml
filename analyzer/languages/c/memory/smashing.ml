@@ -418,8 +418,8 @@ struct
   (** [is_aligned o n man flow] checks whether the value of an
       expression [o] is aligned w.r.t. type [t] *)
   let is_aligned ?(route=toplevel) e t man flow =
-    let s = sizeof_type t in
-    if is_c_expr_equals_z e Z.zero then true else
+    let s = sizeof_type t flow in
+    if is_c_expr_equals_z e Z.zero flow then true else
     if Z.(s = one) then true
     else
       man.eval ~route e flow |>
@@ -462,27 +462,27 @@ struct
            let esmash' = mk_smash_expr s' range in
            match styp' with
            (* Case #1 *)
-           | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
-             let e = wrap_expr esmash' (rangeof_styp s.styp) range in
+           | Int _ when Z.(sizeof_styp s.styp flow = sizeof_styp styp' flow) ->
+             let e = wrap_expr esmash' (rangeof_styp s.styp flow) range in
              let cond = eq esmash_strong e range in
              Post.bind (man.exec (mk_assume cond range) ~route:scalar) acc
 
            (* Case #2 *)
            | Int C_unsigned_char ->
-             let n = sizeof_styp s.styp |> Z.to_int in
+             let n = sizeof_styp s.styp flow |> Z.to_int in
              let rec sum i =
                if i = 0 then esmash' else
                  let m = Z.(of_int 256 ** i) in
                  add (sum (i-1)) (mul (mk_z m range) esmash' range) range
              in
-             let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
+             let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp flow) range in
              let cond = eq esmash_strong e range in
              Post.bind (man.exec (mk_assume cond range) ~route:scalar) acc
 
            (* Case #3 *)
            | Int _ when int_type = C_unsigned_char ->
              acc >>% fun flow ->
-             let n = sizeof_styp styp' |> Z.to_int in
+             let n = sizeof_styp styp' flow |> Z.to_int in
              let rec aux i =
                if i = n then [] else
                  let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
@@ -866,7 +866,7 @@ struct
                          min
           *)
           let min, max = Common.Quantified_offset.bound offset quants in
-          let elm = mk_z (sizeof_type lval.etyp) range in
+          let elm = mk_z (sizeof_type lval.etyp flow) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq min zero range)
             ~fthen:(fun flow ->
@@ -933,7 +933,7 @@ struct
                          min
           *)
           let min, max = Common.Quantified_offset.bound offset quants in
-          let elm = mk_z (sizeof_type lval.etyp) range in
+          let elm = mk_z (sizeof_type lval.etyp flow) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (le min (add uninit elm range) range)
             ~fthen:(fun flow ->
@@ -974,7 +974,7 @@ struct
         let s = mk_smash base lval.etyp in
         let vsmash = mk_smash_var s in
         let esmash = mk_smash_expr s ~mode range in
-        let elm = mk_z (sizeof_type lval.etyp) range in
+        let elm = mk_z (sizeof_type lval.etyp flow) range in
         match State.find base a with
         | Init.Bot -> Post.return flow
 
@@ -1192,7 +1192,7 @@ struct
       phi s range man flow >>% fun flow ->
       (* Check valuation range of the offset *)
       let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-      let elm = mk_z (sizeof_type t) range in
+      let elm = mk_z (sizeof_type t flow) range in
       let uninit = mk_uninit_expr base ~mode range in
       eval_base_size base range man flow >>$ fun size flow ->
       assume (log_and
@@ -1229,7 +1229,7 @@ struct
       phi s range man flow >>% fun flow ->
       (* Check valuation range of the offset *)
       let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-      let elm = mk_z (sizeof_type t) range in
+      let elm = mk_z (sizeof_type t flow) range in
       eval_base_size base range man flow >>$ fun size flow ->
       assume (log_and
                 (eq min zero range)
@@ -1261,7 +1261,7 @@ struct
       (* Ensure that elements of a block that is entirely covered have values in the other block *)
       let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
         let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-        let elm = mk_z (sizeof_type t) range in
+        let elm = mk_z (sizeof_type t flow) range in
         eval_base_size base range man flow >>$ fun size flow ->
         assume (log_and
                   (eq min zero range)

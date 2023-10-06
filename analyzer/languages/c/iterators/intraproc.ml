@@ -188,7 +188,7 @@ struct
                                 is_c_num_type e.etyp ->
       begin
         man.eval e ~translate:"Universal" flow >>$ fun e flow ->
-        match c_expr_to_z e with
+        match c_expr_to_z e flow with
         | Some n ->
           if Z.(n = zero) then Eval.singleton one flow
                           else Eval.singleton zero flow
