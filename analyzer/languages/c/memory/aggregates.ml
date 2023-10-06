@@ -114,15 +114,15 @@ struct
 
   (** The following functions flatten the initialization expression
       into a list of scalar initializations *)
-  let rec flatten_init init offset typ range =
-    if is_c_scalar_type typ then flatten_scalar_init init offset typ range else
-    if is_c_array_type typ  then flatten_array_init init offset typ range else
-    if is_c_record_type typ then flatten_record_init init offset typ range
+  let rec flatten_init init offset typ range flow =
+    if is_c_scalar_type typ then flatten_scalar_init init offset typ range flow else
+    if is_c_array_type typ  then flatten_array_init init offset typ range flow else
+    if is_c_record_type typ then flatten_record_init init offset typ range flow
     else panic_at ~loc:__LOC__ range
         "init %a of type %a not supported"
         (OptionExt.print Pp.pp_c_init) init pp_typ typ
 
-  and flatten_scalar_init init offset typ range =
+  and flatten_scalar_init init offset typ range flow =
     match init with
     | None                 -> [],[(None,Z.one, offset, typ)]
     | Some (C_init_expr e) -> [(e,offset, typ)],[]
@@ -130,7 +130,7 @@ struct
     | Some (C_init_list ([C_init_expr e], _)) -> [(e,offset, typ)],[]
     | Some init -> panic_at range "unsupported scalar initializer %a for type %a" Pp.pp_c_init init pp_typ typ;
 
-  and flatten_array_init init offset typ range =
+  and flatten_array_init init offset typ range flow =
     if is_c_no_length_array_type typ
     || is_c_variable_length_array_type typ
     then [],[] else
@@ -142,23 +142,23 @@ struct
       if is_c_scalar_type under_typ then
         [],[(None,n,offset,under_typ)]
       else
-        let nn = Z.mul n (sizeof_type under_typ) in
+        let nn = Z.mul n (sizeof_type under_typ flow) in
         [],[(None,nn,offset,u8)]
 
     (* a string literal can be optionally enclosed in braces *)
     | Some (C_init_list ([C_init_expr {ekind = E_constant(C_c_string _); } as i], _))
          when is_c_int_array_type typ ->
-       flatten_array_init (Some i) offset typ range
+       flatten_array_init (Some i) offset typ range flow
 
     | Some (C_init_list (l, filler)) ->
       let rec aux i l acc1 acc2 =
-        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ flow)) in
         if Z.equal (Z.of_int i) n
         then acc1, acc2
         else
           match l with
           | elem::rest ->
-            let l1,l2 = flatten_init (Some elem) o under_typ range in
+            let l1,l2 = flatten_init (Some elem) o under_typ range flow in
             aux (i+1) rest (List.rev_append l1 acc1) (List.rev_append l2 acc2)
           | [] ->
             let remain = Z.sub n (Z.of_int i) in
@@ -167,7 +167,7 @@ struct
               if is_c_scalar_type under_typ then
                 acc1, (None,remain,o,under_typ)::acc2
               else
-                let nn = Z.mul remain (sizeof_type under_typ) in
+                let nn = Z.mul remain (sizeof_type under_typ flow) in
                 acc1, (None,nn,o,u8)::acc2
 
             | Some (C_init_list([], Some (C_init_expr e)))
@@ -185,7 +185,7 @@ struct
 
     | Some (C_init_expr {ekind = E_constant(C_c_string (s, C_char_ascii)); etyp = t; erange}) ->
       let rec aux i acc1 acc2 =
-        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ flow)) in
         if Z.equal (Z.of_int i) n
         then acc1, acc2
 
@@ -202,7 +202,7 @@ struct
 
     (* wide strings *)
     | Some (Ast.C_init_expr {ekind = E_constant(C_c_string (s, _)); etyp = t; erange}) ->
-      let char_size = sizeof_type under_typ in
+      let char_size = sizeof_type under_typ flow in
       let nchar_size = Z.to_int char_size in
       let len = String.length s / nchar_size in
       let rec aux i acc1 acc2 =
@@ -211,7 +211,7 @@ struct
         then acc1,acc2
 
         else if i < len
-        then aux (i+1) ((mk_c_multibyte_integer s (i * nchar_size) under_typ erange, o, under_typ)::acc1) acc2
+        then aux (i+1) ((mk_c_multibyte_integer s (i * nchar_size) under_typ flow erange, o, under_typ)::acc1) acc2
 
         else if i = len
         then aux (i+1) ((mk_zero ~typ:under_typ erange, o, under_typ)::acc1) acc2
@@ -223,12 +223,12 @@ struct
 
     | Some (Ast.C_init_expr e) ->
       let rec aux i acc1 acc2 =
-        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ)) in
+        let o = Z.add offset (Z.mul (Z.of_int i) (sizeof_type under_typ flow)) in
         if Z.equal (Z.of_int i) n
         then acc1,acc2
         else
           let init' = Some (C_init_expr (mk_lowlevel_subscript_access e (mk_int i e.erange) under_typ e.erange)) in
-          let l1,l2 = flatten_init init' o under_typ range in
+          let l1,l2 = flatten_init init' o under_typ range flow in
           aux (i+1) (List.rev_append l1 acc1) (List.rev_append l2 acc2)
       in
       let l1,l2 = aux 0 [] [] in
@@ -239,7 +239,7 @@ struct
              Pp.pp_c_init (OptionExt.none_to_exn init)
 
 
-  and flatten_record_init init offset typ range =
+  and flatten_record_init init offset typ range flow =
     let fields =
       match remove_typedef_qual typ with
       | T_c_record{c_record_fields} -> c_record_fields
@@ -254,7 +254,7 @@ struct
         | [] -> acc1,acc2
         | field :: tl ->
           let o = Z.add offset (Z.of_int field.c_field_offset) in
-          let l1,l2 = flatten_init None o field.c_field_type range in
+          let l1,l2 = flatten_init None o field.c_field_type range flow in
           aux (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
       let l1,l2 = aux [] [] fields in
@@ -284,15 +284,15 @@ struct
               | _ -> assert false in 
             let new_l, new_r = discard_same_offsets l records in
             let init_top = C_init_expr (mk_top under_bitfield_typ range) in 
-            let l1,l2 = flatten_init (Some init_top) o under_bitfield_typ range in
+            let l1,l2 = flatten_init (Some init_top) o under_bitfield_typ range flow in
             aux new_l (List.rev_append l1 acc1) (List.rev_append l2 acc2) new_r
           else 
             match l with
             | [] ->
-              let l1,l2 = flatten_init None o field.c_field_type range in
+              let l1,l2 = flatten_init None o field.c_field_type range flow in
               aux l (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
             | init :: tll ->
-              let l1,l2 = flatten_init (Some init) o field.c_field_type range in
+              let l1,l2 = flatten_init (Some init) o field.c_field_type range flow in
               aux tll (List.rev_append l1 acc1) (List.rev_append l2 acc2) tl
       in
       let l1,l2 = aux l [] [] fields in
@@ -310,7 +310,7 @@ struct
   (** 𝕊⟦ type v = init; ⟧ *)
   let declare v init scope range man flow =
     man.exec (mk_add_var v range) flow >>% fun flow ->
-    let initl,fill = flatten_init init Z.zero v.vtyp range in
+    let initl,fill = flatten_init init Z.zero v.vtyp range flow in
 
     (* Scalar variables can be handed directly by the underlying low-level domain *)
     if is_c_scalar_type v.vtyp then
@@ -366,7 +366,7 @@ struct
                  (mk_z o range)
                  ~typ:(pointer_type s8) range
              in
-             let bytes = Z.(n * sizeof_type t) in
+             let bytes = Z.(n * sizeof_type t flow) in
              (* Use memset if the size is greater than the threshold *)
              if Z.(bytes >= of_int !opt_init_memset_threshold) then
                let i = mk_zero range in
@@ -417,7 +417,7 @@ struct
         | C_union ->
           (* In case of union get the field with the greatest size *)
           let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
-              let size = field.c_field_type |> sizeof_type in
+              let size = sizeof_type field.c_field_type flow in 
               if Z.geq size accsize then
                 (Some field, size)
               else (accfield, accsize)
@@ -436,7 +436,7 @@ struct
 
           | T_c_array(t,C_array_length_cst n) ->
             (* Copying cell-by-cell maybe expensive, so use memcpy instead *)
-            acc >>% memcpy lval' rval' zero (mk_z Z.(n * sizeof_type t - one) range) range man
+            acc >>% memcpy lval' rval' zero (mk_z Z.(n * sizeof_type t flow - one) range) range man
 
           | T_c_array _ ->
             (* Flexible array members are not copied (CC99 6.7.2.1.22) *)

@@ -217,14 +217,14 @@ let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_
   let cs = Flow.get_callstack error_flow in
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
   let size_itv = man.ask (mk_int_interval_query size) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
+  let elm_itv = Bot.Nb (sizeof_type (void_to_char typ) input_flow |> I.cst) in
   let alarm = mk_alarm (A_c_out_of_bound(base, size_itv, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 let raise_c_opaque_access ?(bottom=true) base opaquefrom offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
+  let elm_itv = Bot.Nb (sizeof_type (void_to_char typ) input_flow |> I.cst) in
   let alarm = mk_alarm (A_c_opaque_access(base, opaquefrom, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
@@ -340,13 +340,10 @@ let () =
       );
     print = (fun next fmt -> function
         | A_c_integer_overflow(e,v,t) ->
-          let l,u = rangeof t in
-          let type_range = I.of_z l u in
-          fprintf fmt "'%a' has value %a that is larger than the range of '%a' = %a"
+          fprintf fmt "'%a' has value %a that is larger than the range of '%a'"
             (Debug.bold pp_expr) e
             pp_const_or_interval v
             (Debug.bold pp_typ) t
-            I.fprint type_range
         | A_c_pointer_to_integer_overflow(e,t) ->
           fprintf fmt "casting pointer '%a' to '%a' may result in an overflow"
             (Debug.bold pp_expr) e
@@ -413,13 +410,10 @@ let () =
       );
     print = (fun next fmt -> function
         | A_c_invalid_shift(e,shift,v) ->
-          let bits = Ast.sizeof_type e.etyp |> Z.mul (Z.of_int 8) in
-          let valid_shifts = I.of_z Z.zero (Z.pred bits) in
-          fprintf fmt "shift position '%a' = %a %a %a"
+          fprintf fmt "shift position '%a' = %a %a"
             (Debug.bold pp_expr) e
             pp_const_or_interval v
             pp_const_or_interval_not_eq v
-            I.fprint valid_shifts
         | a -> next fmt a
       );
     join = (fun next a1 a2 ->

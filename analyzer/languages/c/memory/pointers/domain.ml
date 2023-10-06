@@ -226,7 +226,7 @@ struct
   (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
     man.eval exp flow >>$? fun exp flow ->
-    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
+    Static_points_to.eval_opt exp flow |> OptionExt.lift @@ fun ptr ->
     match ptr with
     | AddrOf (base, offset, mode) ->
       (* XXX for backward compatibility, the offset is converted to Universal, but maybe it should be a C expression? *)
@@ -279,7 +279,7 @@ struct
     man.eval q flow >>$ fun q flow ->
     let a = get_env T_cur man flow in
     let vnew, onew =
-      match Static_points_to.eval q with
+      match Static_points_to.eval q flow with
       | AddrOf (b, offset, mode') ->
         PointerSet.base b, Some offset
 
@@ -482,10 +482,10 @@ struct
 
   (** Filter equal pointers *)
   let assume_eq p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
+    let v1, o1, p1 = Static_points_to.eval p flow |>
                      eval_static_points_to man flow
     in
-    let v2, o2, p2 = Static_points_to.eval q |>
+    let v2, o2, p2 = Static_points_to.eval q flow |>
                      eval_static_points_to man flow
     in
     let v = PointerSet.meet v1 v2 in
@@ -508,10 +508,10 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
+    let v1, o1, p1 = Static_points_to.eval p flow |>
                      eval_static_points_to man flow
     in
-    let v2, o2, p2 = Static_points_to.eval q |>
+    let v2, o2, p2 = Static_points_to.eval q flow |>
                      eval_static_points_to man flow
     in
     (* Case 1: p and q point to the same base *)
@@ -567,10 +567,10 @@ struct
 
   (** Filter ordered pointers *)
   let assume_order op p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
+    let v1, o1, p1 = Static_points_to.eval p flow |>
                      eval_static_points_to man flow
     in
-    let v2, o2, p2 = Static_points_to.eval q |>
+    let v2, o2, p2 = Static_points_to.eval q flow |>
                      eval_static_points_to man flow
     in
     let v1_valid, v1_invalid = PointerSet.filter_valid v1, PointerSet.filter_non_valid v1 in
@@ -826,8 +826,8 @@ struct
     man.eval p flow >>$ fun p flow ->
     man.eval q flow >>$ fun q flow ->
     (* p1 and p2 should point to the same type *)
-    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
-    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
+    let elem_size_p = sizeof_type (under_type p.etyp |> void_to_char) flow in
+    let elem_size_q = sizeof_type (under_type q.etyp |> void_to_char) flow in
     (* FIXME: do we need to check the sign also? *)
     if not @@ Z.equal elem_size_p elem_size_q
     then panic_at range
@@ -836,10 +836,10 @@ struct
     ;
 
     (* Evaluate the pointed bases symbolically *)
-    let v1, o1, p1 = Static_points_to.eval p |>
+    let v1, o1, p1 = Static_points_to.eval p flow |>
                      eval_static_points_to man flow
     in
-    let v2, o2, p2 = Static_points_to.eval q |>
+    let v2, o2, p2 = Static_points_to.eval q flow |>
                      eval_static_points_to man flow
     in
 
@@ -939,7 +939,7 @@ struct
       let exp' =
         match under_type p.etyp |> remove_typedef_qual with
         | T_c_void -> diff
-        | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
+        | tt -> mul (mk_z (sizeof_type tt flow) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
       in
       man.eval exp' flow |>
       OptionExt.return
@@ -1052,10 +1052,10 @@ struct
           | P_top | P_invalid | P_block _ | P_fun _ ->
             (* Check if an overflow is possible by comparing the size of the
                cast type and the size of `size_t` (which is the size of a pointer). *)
-            let s = sizeof_type exp.etyp in
-            let st = sizeof_type (size_type ()) in
+            let s = sizeof_type exp.etyp flow in
+            let st = sizeof_type (size_type flow) flow in
             let flow =
-              if Z.(s < st) then
+              if Z.lt s st then
                 raise_c_pointer_to_integer_overflow_alarm ~warning:true p exp.etyp exp.erange man flow
               else
                 safe_c_integer_overflow_check exp.erange man flow

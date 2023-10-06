@@ -176,7 +176,8 @@ module Domain =
 
     let init _ man flow =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
-      set_env T_cur EquivBaseAddrs.empty man flow
+      set_env T_cur EquivBaseAddrs.empty man flow |>
+      set_c_target_info !C.Frontend.target_info
 
     let materialize_builtin_val_addr addr man range flow =
       (* since integer addresses are always weak in python, this
@@ -702,7 +703,7 @@ module Domain =
           let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
           let bytes_size = match size with
             | None ->
-               let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) in
+               let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) flow in
                mk_z ~typ:(T_c_integer C_unsigned_long) size range
             | Some s -> s in
           let flow = EquivBaseAddrs.add_addr addr man flow in
@@ -1808,8 +1809,8 @@ module Domain =
          safe_get_name_of fname man flow >>$
            (fun ofname_str flow ->
              let fname_str = Top.top_to_exn (OptionExt.none_to_exn ofname_str) in
-             let min_args = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z minargs in
-             let additional_args  = (Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z maxargs) - min_args in
+             let min_args = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z minargs flow in
+             let additional_args  = (Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z maxargs flow) - min_args in
              let fmt_str = mk_c_string (Format.asprintf "%s%s:%s"
                                         (String.make min_args 'O')
                                         (if additional_args > 0 then "|" ^ (String.make additional_args 'O') else "")
@@ -2043,7 +2044,7 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyTuple_SetItem", [tuple;pos;item]) ->
-         let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos in
+         let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos flow in
          c_to_python_boundary tuple man flow range >>$ (fun tuple_obj flow ->
          let tuple_vars = Python.Objects.Tuple.Domain.var_of_eobj tuple_obj in
          c_to_python_boundary item man flow range

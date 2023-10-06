@@ -80,7 +80,7 @@ struct
                         raise_c_opaque_access base i offset typ range man flow eflow |> Cases.empty)
                  end
      | _ -> Post.return flow) >>% fun flow ->
-    let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ)) range) range) range in
+    let cond = mk_in offset zero (sub size (mk_z (sizeof_type (void_to_char typ) flow) range) range) range in
     assume_num cond man flow
       ~fthen:(fun tflow -> safe_c_memory_access_check range man tflow |>
                            Cases.singleton (Some (mk_lval base offset typ mode range)))

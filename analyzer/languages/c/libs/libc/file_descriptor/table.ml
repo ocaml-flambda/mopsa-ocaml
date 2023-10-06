@@ -86,7 +86,7 @@ let add addr itv a = {
 }
 
 (** Insert an address in the file table *)
-let insert addr window (t:table) =
+let insert addr window (t:table) flow =
   (* Compute the interval of allocated ids *)
   let allocated = AddrItvMap.fold (fun _ -> Itv.join) t.map Itv.bottom in
 
@@ -99,7 +99,7 @@ let insert addr window (t:table) =
     let u =
       match Itv.bounds_opt allocated with
       | _, Some b -> Z.succ b
-      | _, None   -> Ast.(rangeof s32) |> snd
+      | _, None   -> Ast.(rangeof s32 flow) |> snd
                   (* When allocated is not upper-bounded *)
     in
 
