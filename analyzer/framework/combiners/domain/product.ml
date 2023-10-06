@@ -489,13 +489,17 @@ struct
   let exec targets =
     let f = Pool.exec targets in
     (fun stmt man flow ->
-       apply_pointwise f stmt man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       simplify_pointwise_post |>
-       merge_intra_conflicts man flow |>
-       reduce_post stmt man flow)
+       with_effects
+         (fun () ->
+            apply_pointwise f stmt man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
+            merge_inter_conflicts man flow |>
+            simplify_pointwise_post |>
+            merge_intra_conflicts man flow |>
+            reduce_post stmt man flow
+         )
+    )
 
 
   (** {2 Abstract evaluations} *)
@@ -539,13 +543,17 @@ struct
   let eval targets =
     let f = Pool.eval targets in
     (fun exp man flow ->
-       apply_pointwise f exp man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       reduce_pointwise_eval exp man flow |>
-       Eval.remove_duplicates man.lattice |>
-       merge_intra_conflicts man flow)
+       with_effects
+         (fun () ->
+            apply_pointwise f exp man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
+            merge_inter_conflicts man flow |>
+            reduce_pointwise_eval exp man flow |>
+            Eval.remove_duplicates man.lattice |>
+            merge_intra_conflicts man flow
+         )
+    )
 
 end
 

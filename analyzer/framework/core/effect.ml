@@ -356,3 +356,16 @@ let generic_merge ~add ~find ~remove ?(custom=(fun stmt -> None)) (a1, e1) (a2, 
     let a2' = apply_var_effect ve1 a1 a2 ~add ~remove ~find in
     let a1' = apply_var_effect ve2 a2 a1 ~add ~remove ~find in
     a1',a2'
+
+let opt_effects_enabled = ref false
+let enable_effects () = opt_effects_enabled := true
+let disable_effects () = opt_effects_enabled := false
+let are_effects_enabled () = !opt_effects_enabled
+let set_effects_state b = opt_effects_enabled := b
+
+let with_effects f =
+  let old = are_effects_enabled () in
+  enable_effects ();
+  let ret = f () in
+  set_effects_state old;
+  ret

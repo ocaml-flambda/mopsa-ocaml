@@ -169,3 +169,10 @@ val generic_merge :
     and rename). Other statements can be handled using the [custom] function that
     returns the [var_effect] of a given statement.
 *)
+
+
+val enable_effects : unit -> unit
+val disable_effects : unit -> unit
+val are_effects_enabled : unit -> bool
+val set_effects_state : bool -> unit
+val with_effects : (unit -> 'a) -> 'a
