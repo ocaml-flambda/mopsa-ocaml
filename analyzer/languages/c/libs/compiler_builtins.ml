@@ -277,7 +277,7 @@ struct
       let range = erange exp in
       man.eval ~translate:"Universal" (mk_binop ~etyp:T_int e1 O_plus e2 range) flow >>$? fun eadd flow ->
       man.exec (mk_assign (mk_c_deref res range) {eadd with etyp = under_pointer_type (etyp res)} range) flow >>%? fun flow ->
-      let rmin, rmax = rangeof (under_pointer_type (etyp res)) in
+      let rmin, rmax = rangeof (under_pointer_type (etyp res)) flow in
       assume (
         log_and
           (le (mk_z rmin range) eadd range)
@@ -301,7 +301,7 @@ struct
       let range = erange exp in
       man.eval ~translate:"Universal" (mk_binop ~etyp:T_int e1 O_mult e2 range) flow >>$? fun emul flow ->
       man.exec (mk_assign (mk_c_deref res range) {emul with etyp = under_pointer_type (etyp res)} range) flow >>%? fun flow ->
-      let rmin, rmax = rangeof (under_pointer_type (etyp res)) in
+      let rmin, rmax = rangeof (under_pointer_type (etyp res)) flow in
       assume (
         log_and
           (le (mk_z rmin range) emul range)
