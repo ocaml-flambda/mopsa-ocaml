@@ -135,6 +135,7 @@ test-c:
           echo $C_FILE
           $MOPSA_C analyzer/tests/c/$C_FILE
         done
+    - $MOPSA_C -config=c/cell-rel-itv.json analyzer/tests/c/libc/builtin_overflow_tests.c
 
 ###################
 # Universal tests #
