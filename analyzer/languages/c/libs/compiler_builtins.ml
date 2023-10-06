@@ -265,6 +265,53 @@ struct
          ) man flow |>
          OptionExt.return
 
+    | E_c_builtin_call(
+        (
+          "__builtin_sadd_overflow" |
+          "__builtin_saddl_overflow" |
+          "__builtin_saddll_overflow" |
+          "__builtin_uadd_overflow" |
+          "__builtin_uaddl_overflow" |
+          "__builtin_uaddll_overflow"
+        ), [e1;e2;res]) ->
+      let range = erange exp in
+      man.eval ~translate:"Universal" (mk_binop ~etyp:T_int e1 O_plus e2 range) flow >>$? fun eadd flow ->
+      man.exec (mk_assign (mk_c_deref res range) {eadd with etyp = under_pointer_type (etyp res)} range) flow >>%? fun flow ->
+      let rmin, rmax = rangeof (under_pointer_type (etyp res)) in
+      assume (
+        log_and
+          (le (mk_z rmin range) eadd range)
+          (le eadd (mk_z rmax range) range)
+          range
+      ) man flow
+        ~fthen:(fun flow ->
+            let () = debug "%a" (format @@ man.lattice.print) (Flow.get T_cur man.lattice flow) in Eval.singleton (mk_zero range) flow)
+        ~felse:(Eval.singleton (mk_one range))
+      |> OptionExt.return
+
+    | E_c_builtin_call(
+        (
+          "__builtin_smul_overflow" |
+          "__builtin_smull_overflow" |
+          "__builtin_smulll_overflow" |
+          "__builtin_umul_overflow" |
+          "__builtin_umull_overflow" |
+          "__builtin_umulll_overflow"
+        ), [e1;e2;res]) ->
+      let range = erange exp in
+      man.eval ~translate:"Universal" (mk_binop ~etyp:T_int e1 O_mult e2 range) flow >>$? fun emul flow ->
+      man.exec (mk_assign (mk_c_deref res range) {emul with etyp = under_pointer_type (etyp res)} range) flow >>%? fun flow ->
+      let rmin, rmax = rangeof (under_pointer_type (etyp res)) in
+      assume (
+        log_and
+          (le (mk_z rmin range) emul range)
+          (le emul (mk_z rmax range) range)
+          range
+      ) man flow
+        ~fthen:(Eval.singleton (mk_zero range))
+        ~felse:(Eval.singleton (mk_one range))
+      |> OptionExt.return
+
     | _ -> None
 
   let ask _ _ _  = None
