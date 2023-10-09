@@ -796,7 +796,9 @@ struct
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
         man.exec (mk_add_var smash range) ~route:scalar flow >>% fun flow ->
-        let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
+        let ecells = List.map (fun c ->
+            if is_pointer_cell c then mk_pointer_cell_var_expr c t range
+            else mk_numeric_cell_var_expr c range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
         man.exec (mk_assign strong_smash hd range) ~route:scalar flow >>% fun flow ->
