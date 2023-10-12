@@ -34,7 +34,11 @@ struct
   let rec init prog =
     Toplevel.init prog man
 
-  and exec ?(route=toplevel)stmt flow =
+  and analyze stmt flow =
+    Toplevel.exec stmt man flow |>
+    post_to_flow man
+
+  and exec ?(route=toplevel) stmt flow =
     Toplevel.exec ~route stmt man flow
 
   and eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp flow =

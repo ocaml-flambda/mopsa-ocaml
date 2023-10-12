@@ -142,10 +142,10 @@ struct
       let f1 = D1.ask targets in
       let f2 = D2.ask targets in
       (fun q man flow ->
-         OptionExt.neutral2
-           (join_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) q)
-           (f1 q (fst_pair_man man) flow)
-           (f2 q (snd_pair_man man) flow))
+         match f1 q (fst_pair_man man) flow with
+         | None -> f2 q (snd_pair_man man) flow
+         | Some _ as r1 -> r1
+      )
 
 
   (** Pretty printer of states *)

@@ -357,3 +357,7 @@ val fold2zo_report :
   (diagnostic -> 'b -> 'b) ->
   (diagnostic -> diagnostic -> 'b -> 'b) ->
   report -> report -> 'b -> 'b
+
+val fold_report :
+  (diagnostic -> 'b -> 'b) ->
+  report -> 'b -> 'b

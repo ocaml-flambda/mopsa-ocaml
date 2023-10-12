@@ -1164,7 +1164,7 @@ struct
       let a = get_env T_cur man flow in
       let v = Map.find var a in
       pprint printer ~path:[ Key "pointers";
-                             fkey "%a" pp_var var ]
+                             Obj (Var var)]
         (pbox PointerSet.print v)
       ;
       if not (PointerSet.is_top v) then

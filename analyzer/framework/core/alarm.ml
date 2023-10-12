@@ -563,6 +563,11 @@ let fold2zo_report f1 f2 f r1 r2 init =
     )
     r1.report_diagnostics r2.report_diagnostics init
 
+let fold_report f r init =
+  RangeCallStackMap.fold
+    (fun range checks acc -> CheckMap.fold (fun check -> f) checks acc)
+    r.report_diagnostics init
+
 module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
 
 module RangeDiagnosticWoCsMap = MapExt.Make(
