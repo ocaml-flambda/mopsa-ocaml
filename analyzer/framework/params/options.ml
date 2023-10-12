@@ -373,6 +373,18 @@ let () = register_builtin_option {
     default = "false";
   }
 
+let () = register_builtin_option {
+    key = "-working-dir";
+    category = "Configuration";
+    doc = " set the working directory, used when resolving relative paths";
+    spec = ArgExt.String (fun s ->
+        if Sys.file_exists s
+        then Sys.chdir s
+        else Exceptions.panic "'%s' does not exist" s
+      );
+    default = "";
+  }
+
 (** Help message *)
 let help () =
   let options =

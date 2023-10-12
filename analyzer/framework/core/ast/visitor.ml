@@ -147,6 +147,8 @@ let stmt_visit_chain : (stmt -> stmt structure) ref =
         {exprs = []; stmts = sl},
         (fun parts -> {stmt with skind = S_block(parts.stmts,vl)})
 
+      | S_breakpoint _ -> leaf stmt
+
       | _ -> Exceptions.panic "stmt_visit_chain: unknown statement"
     )
 

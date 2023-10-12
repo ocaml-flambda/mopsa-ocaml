@@ -494,7 +494,14 @@ struct
       eval e map |> OptionExt.bind @@ fun (v,ve) ->
       Value.avalue av v
 
-    | _ -> Value.ask (value_man empty_vexpr map) query
+    | Q_defined_variables ->
+      VarMap.bindings map |>
+      List.map fst |>
+      OptionExt.return
+
+
+    | _ ->
+      Value.ask (value_man empty_vexpr map) query
 
   let print_state printer a =
     Print.pprint printer ~path:[Key Value.display]
@@ -506,6 +513,8 @@ struct
     | Some (v,_) ->
       Print.pprint printer
         ~path:[ Key Value.display;
-                fkey "%a" pp_expr exp ]
+                match ekind exp with
+                | E_var (v, _) -> Obj (Var v)
+                | _ -> fkey "%a" pp_expr exp ]
         (pbox Value.print v)
 end

@@ -33,7 +33,10 @@ type breakpoint =
   (** Break at the beginning of a function  *)
 
   | B_line of string (** file *) * int (** line *)
-(** Break at line *)
+  (** Break at line *)
+
+  | B_named of string
+  (** Named breakpoint *) 
 
 
 (** Compare two breakpoints *)
@@ -45,6 +48,9 @@ let compare_breakpoint b1 b2 : int =
   | B_line(file1,line1), B_line(file2,line2) ->
     Compare.pair compare compare (file1,line1) (file2,line2)
 
+  | B_named b1, B_named b2 ->
+    String.compare b1 b2
+
   | _ -> compare b1 b2
 
 
@@ -52,6 +58,7 @@ let compare_breakpoint b1 b2 : int =
 let pp_breakpoint fmt = function
   | B_function f -> Format.fprintf fmt "%s" f
   | B_line(file,line) -> Format.fprintf fmt "%s:%d" file line
+  | B_named b -> Format.fprintf fmt "@%s" b
 
 
 (** Set of breakpoints *)
@@ -74,17 +81,16 @@ exception Invalid_breakpoint_syntax
 
 
 (** Parse a breakpoint string *)
-let parse_breakpoint range (s:string) : breakpoint =
+let parse_breakpoint (s:string) : breakpoint =
+  if Str.string_match (Str.regexp "@\\(.+\\)$") s 0
+  then
+    let name = Str.matched_group 1 s in
+    B_named name else
+
   if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") s 0
   then
     let file = Str.matched_group 1 s in
     let line = int_of_string (Str.matched_group 2 s) in
-    B_line(file, line) else
-
-  if Str.string_match (Str.regexp "\\([0-9]+\\)$") s 0
-  then
-    let file = get_range_file range in
-    let line = int_of_string (Str.matched_group 1 s) in
     B_line(file, line) else
 
   if Str.string_match (Str.regexp "\\([^0-9].*\\)$") s 0
@@ -93,3 +99,6 @@ let parse_breakpoint range (s:string) : breakpoint =
     B_function(func)
 
   else raise Invalid_breakpoint_syntax
+
+(** Set of active breakpoints *)
+let breakpoints = ref BreakpointSet.empty

@@ -223,33 +223,37 @@ struct
     in
     try
       let post =
-        match Cache.exec fexec route stmt man flow with
-        | None ->
-          if Flow.is_bottom man.lattice flow
-          then Post.return flow
-          else
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
+        match skind stmt with
+        | S_breakpoint _ ->
+          Post.return flow
+        | _ ->
+          match Cache.exec fexec route stmt man flow with
+          | None ->
+            if Flow.is_bottom man.lattice flow
+            then Post.return flow
+            else
+              Exceptions.panic_at stmt.srange
+                "unable to analyze statement %a in %a"
+                pp_stmt stmt
+                pp_route route
 
-        | Some post ->
-          (* Check that all cases were handled *)
-          let not_handled = Cases.exists (fun c flow ->
-              match c with
-              | NotHandled ->
-                (* Not handled cases with empty flows are OK *)
-                not (Flow.is_bottom man.lattice flow)
-              | _ -> false
-            ) post
-          in
-          if not_handled then
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
-          ;
-          post
+          | Some post ->
+            (* Check that all cases were handled *)
+            let not_handled = Cases.exists (fun c flow ->
+                match c with
+                | NotHandled ->
+                  (* Not handled cases with empty flows are OK *)
+                  not (Flow.is_bottom man.lattice flow)
+                | _ -> false
+              ) post
+            in
+            if not_handled then
+              Exceptions.panic_at stmt.srange
+                "unable to analyze statement %a in %a"
+                pp_stmt stmt
+                pp_route route
+            ;
+            post
       in
       let clean_post = exec_cleaners man post in
       let minimized_post = Post.remove_duplicates man.lattice clean_post in
@@ -272,13 +276,13 @@ struct
         (Printexc.get_raw_backtrace())
 
     | Sys.Break -> raise (SysBreak flow)
-    
+
     | Apron.Manager.Error exc ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
         (Printexc.get_raw_backtrace())
 
-    | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
+    | e when (match e with Exit | Exceptions.PanicAtFrame _ -> false | _ -> true) ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())
