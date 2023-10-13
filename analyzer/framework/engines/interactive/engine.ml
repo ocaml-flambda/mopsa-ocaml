@@ -300,8 +300,8 @@ struct
       ( if new_loc then
           let range = action_range action in
           state.loc <- Some range;
-          let cs = Flow.get_callstack flow in
-          envdb := add_envdb (interface_action action) cs cur man !envdb
+          let ctx = Flow.get_ctx flow in
+          envdb := add_envdb (interface_action action) ctx cur man !envdb
       );
       (* Check if we reached an interaction point *)
       let interaction = is_interaction_point old action &&

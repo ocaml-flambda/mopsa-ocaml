@@ -87,10 +87,11 @@ type 'a envdb = (action * 'a CallstackMap.t) LineMap.t FileMap.t
 
 let empty_envdb = FileMap.empty
 
-let add_envdb action cs (env:'a) man (db:'a envdb) =
+let add_envdb action ctx (env:'a) man (db:'a envdb) =
   let range = action_range action in
   let file = Location.get_range_file range |> Params.Paths.absolute_path in
   let line = Location.get_range_line range in
+  let cs = find_ctx callstack_ctx_key ctx in
   match FileMap.find_opt file db with
   | None ->
     FileMap.add file (LineMap.singleton line (action, CallstackMap.singleton cs env)) db
@@ -103,7 +104,7 @@ let add_envdb action cs (env:'a) man (db:'a envdb) =
       | None ->
         FileMap.add file (LineMap.add line (action, CallstackMap.add cs env cmap) lmap) db
       | Some env' ->
-        let env'' = man.lattice.join empty_ctx env env' in
+        let env'' = man.lattice.join ctx env env' in
         FileMap.add file (LineMap.add line (action, CallstackMap.add cs env'' cmap) lmap) db
 
 let find_envdb file line (db: 'a envdb) =
