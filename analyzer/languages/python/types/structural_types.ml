@@ -219,7 +219,7 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | E_py_object (_, Some e) ->
            let open Universal.Strings.Powerset in
-           let r = man.ask (mk_strings_powerset_query e) flow in
+           let r = ask_and_reduce man.ask (mk_strings_powerset_query e) flow in
            assert(StringPower.cardinal r = 1);
            StringPower.choose r
         | _ ->
@@ -299,7 +299,7 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | E_py_object (_, Some e) ->
            let open Universal.Strings.Powerset in
-           let r = man.ask (mk_strings_powerset_query e) flow in
+           let r = ask_and_reduce man.ask (mk_strings_powerset_query e) flow in
            assert(StringPower.cardinal r = 1);
            StringPower.choose r
         | _ -> assert false in
@@ -380,7 +380,7 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | E_py_object (_, Some e) ->
            let open Universal.Strings.Powerset in
-           let r = man.ask (mk_strings_powerset_query e) flow in
+           let r = ask_and_reduce man.ask (mk_strings_powerset_query e) flow in
            assert(StringPower.cardinal r = 1);
            StringPower.choose r
         | _ -> assert false in
@@ -419,7 +419,7 @@ struct
         | E_py_object (_, Some {ekind = E_constant (C_string s)}) -> s
         | E_py_object (_, Some e) ->
            let open Universal.Strings.Powerset in
-           let r = man.ask (mk_strings_powerset_query e) flow in
+           let r = ask_and_reduce man.ask (mk_strings_powerset_query e) flow in
            assert(StringPower.cardinal r = 1);
            StringPower.choose r
         | _ -> assert false in
@@ -445,24 +445,28 @@ struct
       None
 
 
-  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr (a, _)} as e) ->
-       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings; !Addr_env.addr_bytes] then Some VarSet.empty
+       if List.exists (fun a' -> compare_addr_kind (akind a) (akind @@ OptionExt.none_to_exn a') = 0) [!Addr_env.addr_bool_top; !Addr_env.addr_false; !Addr_env.addr_true; !Addr_env.addr_float; !Addr_env.addr_integers; !Addr_env.addr_none; !Addr_env.addr_notimplemented; !Addr_env.addr_strings; !Addr_env.addr_bytes] then
+         Some(Cases.singleton VarSet.empty flow)
        else
        let range = erange e in
        let cur = get_env T_cur man flow in
        let oas = find_opt a cur in
        OptionExt.lift
          (fun attrset ->
-           AttrSet.fold_u
-             (fun attr acc ->
-               let v = mk_addr_attr a attr (T_py None) in
-               let linked_to_v = man.ask (Q_variables_linked_to (mk_var v range)) flow in
-               VarSet.union (VarSet.add v acc) linked_to_v
-             )
-             attrset VarSet.empty
+            let r =
+              AttrSet.fold_u
+                (fun attr acc ->
+                   let v = mk_addr_attr a attr (T_py None) in
+                   let linked_to_v = ask_and_reduce man.ask (Q_variables_linked_to (mk_var v range)) flow in
+                   VarSet.union (VarSet.add v acc) linked_to_v
+                )
+                attrset VarSet.empty
+            in
+            Cases.singleton r flow
          )
          oas
 
@@ -489,17 +493,17 @@ struct
                Cases.reduce_result (fun etuple flow ->
                    let var = List.hd @@ Objects.Tuple.Domain.var_of_eobj etuple in
                    (* FIXME *)
-                   man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow
+                   ask_and_reduce man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (mk_var (Utils.change_var_type T_string var) range)) flow
                  )
                  ~join:(Universal.Strings.Powerset.StringPower.join)
                  ~meet:(Universal.Strings.Powerset.StringPower.meet)
-                 ~bottom:Universal.Strings.Powerset.StringPower.empty
+                 ~bottom:(fun () -> Universal.Strings.Powerset.StringPower.empty)
            else
              Universal.Strings.Powerset.StringPower.empty
          in
          name, message in
        let () = debug "answer to query is %s %a@\n" exc (format Universal.Strings.Powerset.StringPower.print) message in
-       Some (exc, message)
+       Some (Cases.singleton (exc, message) flow)
 
     | Framework.Engines.Interactive.Query.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
        let open Framework.Engines.Interactive.Query in
@@ -512,9 +516,13 @@ struct
                                else attr in
                              let attr_var = mk_addr_attr addr attr (T_py None) in
                              debug "asking for var %a" pp_var attr_var;
-                             let value_attr = man.ask (Q_debug_variable_value attr_var) flow in
+                             let value_attr = ask_and_reduce man.ask (Q_debug_variable_value attr_var) flow in
                              (attr, value_attr) :: acc) attrset [] in
-       Some {var_value = None; var_value_type = (T_py None); var_sub_value = Some (Named_sub_value attrs_descr)}
+       Some (Cases.singleton {
+           var_value = None;
+           var_value_type = (T_py None);
+           var_sub_value = Some (Named_sub_value attrs_descr)
+         } flow)
 
       | _ -> None
 

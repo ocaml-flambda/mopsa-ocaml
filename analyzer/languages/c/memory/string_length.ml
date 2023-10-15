@@ -485,7 +485,7 @@ struct
         [mk_in offset zero (mk_z (Z.pred length) range) range],
         (fun flow ->
            (* Get the interval of the offset *)
-           let itv = man.ask (mk_int_interval_query offset) flow in
+           let itv = ask_and_reduce man.ask (mk_int_interval_query offset) flow in
            (* itv should be included in [0,length-1] *)
            let max = I.of_z Z.zero (Z.pred length) in
            begin match I.meet_bot itv (Bot.Nb max) with

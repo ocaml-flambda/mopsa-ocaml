@@ -469,8 +469,8 @@ struct
         | [] ->
           List.map (fun v -> asprintf "%a" pp_var v) (action_line_vars action)
         | _ -> names in
-      let vars = man.ask Q_defined_variables flow in
-      let addrs = man.ask Q_allocated_addresses flow in
+      let vars = ask_and_reduce man.ask Q_defined_variables flow in
+      let addrs = ask_and_reduce man.ask Q_allocated_addresses flow in
       let vmap =
         List.fold_left
           (fun acc v ->
@@ -704,7 +704,7 @@ struct
       read_command action envdb man flow
 
     | Info Variables ->
-      let vars = man.ask Q_defined_variables flow in
+      let vars = ask_and_reduce man.ask Q_defined_variables flow in
       printf "@[<v>%a@]@."
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
            (fun fmt v -> Query.pp_var_with_type fmt (v,v.vtyp))

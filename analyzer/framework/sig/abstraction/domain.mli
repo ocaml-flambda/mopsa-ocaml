@@ -106,7 +106,7 @@ sig
   val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> ('a, 'r) cases option
   (** Handler of queries *)
 
 

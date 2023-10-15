@@ -56,7 +56,7 @@ type ('a, 't) man = {
   (* Toplevel transfer functions *)
   exec : ?route:route -> stmt -> 'a flow -> 'a post;
   eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> 'a flow -> 'a eval;
-  ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> 'r;
+  ask : 'r. ?route:route -> ('a,'r) query -> 'a flow -> ('a, 'r) cases;
   print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
 
   (* Accessors to the domain's effects tree *)

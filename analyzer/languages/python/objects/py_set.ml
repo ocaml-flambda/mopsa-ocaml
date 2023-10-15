@@ -286,16 +286,19 @@ struct
 
     | _ -> None
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Framework.Engines.Interactive.Query.Q_debug_addr_value ({addr_kind = A_py_set} as addr) ->
        let open Framework.Engines.Interactive.Query in
-       let content_set = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
-       Some {var_value = None;
-             var_value_type = T_any;
-             var_sub_value = Some (Named_sub_value
-                                     ["set content", content_set])}
+       let content_set = ask_and_reduce man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
+       Some (Cases.singleton {
+           var_value = None;
+           var_value_type = T_any;
+           var_sub_value = Some (Named_sub_value
+                                   ["set content", content_set])
+         } flow)
+
 
     | _ -> None
 

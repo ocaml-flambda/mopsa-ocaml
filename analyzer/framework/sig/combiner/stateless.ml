@@ -33,7 +33,7 @@ sig
   val routing_table : routing_table
   val exec : DomainSet.t option -> stmt -> ('a,unit) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,unit) man -> 'a flow -> 'a eval option
-  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,unit) man -> 'a flow -> 'r option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,unit) man -> 'a flow -> ('a, 'r) cases option
   val print_expr : DomainSet.t option -> ('a,unit) man -> 'a flow -> printer -> expr -> unit
 end
 

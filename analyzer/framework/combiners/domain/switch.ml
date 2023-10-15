@@ -112,41 +112,15 @@ struct
   let init prog man flow =
     D1.init prog (fst_pair_man man) flow |>
     D2.init prog (snd_pair_man man)
-
   
   (** Execution of statements *)
   let exec targets = cascade_call targets D1.exec D1.domains D2.exec D2.domains
-
 
   (** Evaluation of expressions *)
   let eval targets = cascade_call targets D1.eval D1.domains D2.eval D2.domains
 
   (** Query handler *)
-  let ask targets =
-    match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D2.domains
-    with
-    | false, false -> raise Not_found
-
-    | true, false ->
-      let f = D1.ask targets in
-      (fun q man flow ->
-         f q (fst_pair_man man) flow)
-
-    | false, true ->
-      let f = D2.ask targets in
-      (fun q man flow ->
-         f q (snd_pair_man man) flow)
-
-    | true, true ->
-      let f1 = D1.ask targets in
-      let f2 = D2.ask targets in
-      (fun q man flow ->
-         match f1 q (fst_pair_man man) flow with
-         | None -> f2 q (snd_pair_man man) flow
-         | Some _ as r1 -> r1
-      )
-
+  let ask targets = broadcast_call targets D1.ask D1.domains D2.ask D2.domains
 
   (** Pretty printer of states *)
   let print_state targets =
@@ -172,7 +146,6 @@ struct
          f1 printer a1;
          f2 printer a2
       )
-
 
   (** Pretty printer of expressions *)
   let print_expr targets =

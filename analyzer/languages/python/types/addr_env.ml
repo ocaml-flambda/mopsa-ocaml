@@ -183,7 +183,7 @@ struct
        let vars = List.fold_left (fun acc v ->
                       debug "asking for variables linked to %a" pp_expr v;
                       let acc = VarSet.add (match ekind v with E_var (v, _) -> v | _ -> assert false) acc in
-                      VarSet.union acc (man.ask (Q_variables_linked_to v) flow)
+                      VarSet.union acc (ask_and_reduce man.ask (Q_variables_linked_to v) flow)
                     ) VarSet.empty vs in
        let cur = get_env T_cur man flow in
        let addrs = VarSet.fold (fun var acc ->
@@ -489,7 +489,7 @@ struct
        | A_py_instance _ ->
           debug "instance encountered, renaming methods too";
           (* FIXME: PERF: in function.ml, store inst -> method binding and use it here? / ask function.ml to perform the stmt? *)
-          let aaddr = man.ask Q_allocated_addresses flow in
+          let aaddr = ask_and_reduce man.ask Q_allocated_addresses flow in
           let flow = List.fold_left (fun flow addr ->
                          match akind addr with
                          | A_py_method(func, (ainst, oe), mclass) when compare_addr a ainst = 0 ->
@@ -736,27 +736,31 @@ struct
 
     | _ -> None
 
-  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
       match query with
       | Universal.Heap.Recency.Q_alive_addresses ->
            let cur = get_env T_cur man flow in
            let aset = AMap.fold (fun var aset acc ->
                           ASet.join aset acc) cur ASet.empty in
-           List.rev @@
+           let ret =
+             List.rev @@
              ASet.fold (fun pyaddr acc -> match pyaddr with
                                           | Def a -> a :: acc
                                           | _ -> acc) aset []
-         |> OptionExt.return
+           in
+           Some (Cases.singleton ret flow)
 
       | Universal.Heap.Recency.Q_alive_addresses_aspset ->
          let cur = get_env T_cur man flow in
          let aset = AMap.fold (fun _ aset acc ->
                         ASet.join aset acc) cur ASet.empty in
-         ASet.fold (fun pyaddr acc -> match pyaddr with
+         let ret =
+           ASet.fold (fun pyaddr acc -> match pyaddr with
                                       | Def a -> Universal.Heap.Recency.Pool.add a acc
                                       | _ -> acc) aset Universal.Heap.Recency.Pool.empty
-         |> OptionExt.return
+         in
+         Some (Cases.singleton ret flow)
 
 
       | Q_variables_linked_to ({ekind = E_var(v, _)} as e) ->
@@ -764,7 +768,7 @@ struct
          let acc = VarSet.add v VarSet.empty in
          begin match AMap.find_opt v cur with
          | None ->
-            Some acc
+            Some (Cases.singleton acc flow)
          | Some aset ->
              let r =
                ASet.fold
@@ -772,7 +776,7 @@ struct
                    match pyaddr with
                    | Def a ->
                       debug "asking for %a" pp_addr a;
-                      VarSet.union acc (man.ask (Q_variables_linked_to (mk_addr a e.erange)) flow)
+                      VarSet.union acc (ask_and_reduce man.ask (Q_variables_linked_to (mk_addr a e.erange)) flow)
                    | _ -> acc) aset VarSet.empty in
 
              let check_baddr a  = ASet.mem (Def (OptionExt.none_to_exn !a)) aset in
@@ -784,7 +788,7 @@ struct
              let r = if float then VarSet.add (Utils.change_var_type (T_float F_DOUBLE) v) r else r in
              let r = if str then VarSet.add (Utils.change_var_type T_string v) r else r in
              let r = if bytes then VarSet.add (Utils.change_var_type T_string v) r else r in
-             Some (VarSet.union acc r)
+             Some (Cases.singleton (VarSet.union acc r) flow)
          end
 
       | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->
@@ -803,29 +807,29 @@ struct
                           [!addr_none; !addr_notimplemented; !addr_true; !addr_false; !addr_bool_top] then
                        (s, {var_value = None; var_value_type = T_any; var_sub_value = None}) :: acc
                      else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_integers) (akind addr) = 0 then
-                       let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query (Utils.change_evar_type T_int (mk_var var (Location.mk_fresh_range ())))) flow in
                        let int_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv); var_value_type = T_int; var_sub_value = None} in
                        (s, int_info) :: acc
                      else if compare_addr_kind  (akind @@ OptionExt.none_to_exn !addr_float) (akind addr) = 0 then
-                       let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query (Utils.change_evar_type (T_float F_DOUBLE) (mk_var var (Location.mk_fresh_range ())))) flow in
                        let float_info = {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_float_interval itv); var_value_type = T_float F_DOUBLE; var_sub_value = None} in
                        (s, float_info) :: acc
                      else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_strings) (akind addr) = 0 then
-                       let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let str = ask_and_reduce man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
                        let str_info =
                          {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
                           var_value_type = T_string;
                           var_sub_value = None} in
                        (s, str_info) :: acc
                      else if compare_addr_kind (akind @@ OptionExt.none_to_exn !addr_strings) (akind addr) = 0 then
-                       let str =  man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
+                       let str = ask_and_reduce man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.change_evar_type T_string (mk_var var (Location.mk_fresh_range ())))) flow in
                        let str_info =
                          {var_value = Some (Format.asprintf "%a" (format Universal.Strings.Powerset.StringPower.print) str);
                           var_value_type = T_string;
                           var_sub_value = None} in
                        (s, str_info) :: acc
                      else
-                       let addr_info = man.ask (Q_debug_addr_value addr) flow in
+                       let addr_info = ask_and_reduce man.ask (Q_debug_addr_value addr) flow in
                        (s, addr_info) :: acc
                   | _ -> acc
                 ) aset []
@@ -834,7 +838,7 @@ struct
               {var_value = None;
                var_value_type = T_any;
                var_sub_value = Some (Named_sub_value subvalues)} in
-            r |> OptionExt.return
+            Some (Cases.singleton r flow)
          end
 
       | _ -> None

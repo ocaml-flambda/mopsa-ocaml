@@ -72,7 +72,7 @@ sig
 
   val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
 
-  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
+  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> (t, 'r) cases
 
 
   (** {2 Pretty printing} *)
@@ -459,7 +459,7 @@ struct
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
+  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> (t, r) cases =
     fun ?(route=toplevel) query man flow ->
     (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
     let domains = if compare_route route toplevel = 0 then None else Some (resolve_route route Domain.routing_table) in

@@ -122,7 +122,7 @@ struct
 
     | _ -> None
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow -> None
 
   let print_expr man flow printer exp = ()

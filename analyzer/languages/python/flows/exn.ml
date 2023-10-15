@@ -139,7 +139,7 @@ module Domain =
                    man.exec (mk_block (StmtSet.elements cleaners) range) true_flow >>% fun true_flow ->
                    let cur = Flow.get T_cur man.lattice true_flow in
                    debug "asking...@\ntrue_flow = %a" (format (Flow.print man.lattice.print)) true_flow;
-                   let exc_str, exc_message = man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
+                   let exc_str, exc_message = ask_and_reduce man.ask (Types.Structural_types.Q_exn_string_query exp) true_flow in
                    debug "ok@\n";
                    let tk =
                      if List.exists (fun x ->
@@ -261,7 +261,7 @@ module Domain =
                           | Uncaught -> Flow.bottom_from flow, flow)
                         ~join:(fun (c, u) (c', u') -> Flow.join man.lattice c c', Flow.join man.lattice u u')
                         ~meet:(fun (c, u) (c', u') -> Flow.meet man.lattice c c', Flow.meet man.lattice u u')
-                        ~bottom:(Flow.bottom_from flow, Flow.bottom_from flow) flow' in
+                        ~bottom:(fun () -> Flow.bottom_from flow, Flow.bottom_from flow) flow' in
                     c, exc_name :: excs, u
                  | _ -> (caught, excs, uncaught))
                (flow0, [], flow0) flow in
@@ -300,7 +300,7 @@ module Domain =
         )
         ~join:(fun (c, u) (c', u') -> Flow.join man.lattice c c', Flow.join man.lattice u u')
         ~meet:(fun (c, u) (c', u') -> Flow.meet man.lattice c c', Flow.meet man.lattice u u')
-        ~bottom:(Flow.bottom_from flow, Flow.bottom_from flow)
+        ~bottom:(fun () -> Flow.bottom_from flow, Flow.bottom_from flow)
         cases
 
 

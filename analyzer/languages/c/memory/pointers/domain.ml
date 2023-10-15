@@ -1090,13 +1090,13 @@ struct
   (** {2 Handler of queries} *)
   (** ====================== *)
 
-  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
+  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> (a, r) cases option = fun query man flow ->
     match query with
     | Q_c_points_to e -> eval_points_to e man flow
     | Q_defined_variables ->
       let a = get_env T_cur man flow in
       let vars = try Map.fold (fun v _ acc -> v :: acc) a [] with Top.Found_TOP -> [] in
-      Some vars
+      Some (Cases.singleton vars flow)
     | Universal.Heap.Recency.Q_alive_addresses_aspset ->
       let a = get_env T_cur man flow in
       (* we start from the roots: non addr bases, and iterate until everything has been covered *)
@@ -1143,7 +1143,7 @@ struct
               | Addr a -> Pool.add a acc
               | _ -> acc) bases Pool.empty 
       in
-      begin try Some (reachable_addrs roots)
+      begin try Some (Cases.singleton (reachable_addrs roots) flow)
       with Not_found -> assert false end
 
   (* ask the heap domain for all allocated addresses, then check if all allocated Memory is still reachable from main's locals + the globals *)

@@ -197,7 +197,7 @@ struct
     | hd :: tl -> hd
     | [] -> raise Not_found
 
-  let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
+  let ask : type r. ('a, r) query -> _ man -> _ flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_defined_variables ->
@@ -216,7 +216,7 @@ struct
 
              ) globals cs
          in
-         Some allvars
+         Some (Cases.singleton allvars flow)
        with Not_found ->
          None)
 
