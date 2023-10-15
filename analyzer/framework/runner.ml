@@ -25,6 +25,7 @@ open Mopsa_utils
 open Core.All
 open Params.Options
 
+let () = Sys.catch_break true
 
  (** {2 Command-line options} *)
 (** ************************ *)
