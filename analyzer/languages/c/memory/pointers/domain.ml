@@ -182,7 +182,6 @@ struct
 
     | Fun f ->
        PointerSet.cfun f, None, None
-      (* panic ~loc:__LOC__ "symbolic_to_value: function pointers not supported" *)
 
 
   (** Set value of an optional pointer *)
@@ -222,6 +221,7 @@ struct
       if PointerSet.is_valid v && not (PointerSet.is_valid v')
       then man.exec ~route:universal (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
+
 
   (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
@@ -270,6 +270,8 @@ struct
       Cases.singleton mk_c_points_to_top flow
 
 
+
+
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
@@ -287,7 +289,7 @@ struct
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
         let vq = Map.find q a in
-        let vq, offset = 
+        let vq, offset =
           match PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_valid vq) > 0,
                 PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_non_valid vq) > 0,
                 expr_to_z offset with
@@ -315,7 +317,7 @@ struct
           | false, false, _ ->
             vq, None
         in
-        vq, offset 
+        vq, offset
 
       | Fun f ->
         PointerSet.cfun f, None
@@ -335,24 +337,35 @@ struct
     let vnew = Map.find p a' in
     let o = mk_offset p mode range in
     match PointerSet.is_valid vold, PointerSet.is_valid vnew, onew with
-    | false, false, _ -> Post.return flow
-
+    (* The pointer set was valid and is still valid with an offset: we must
+       update the offset variable. *)
     | true, true, Some offset ->
       man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:universal (mk_assign o offset range) flow
 
-    | true, true, None -> Post.return flow
+    (* The pointer set was valid and is still valid, but there is no offeset to
+       update. *)
+    | true, true, None ->
+      Post.return flow
 
+    (* The pointer set was not valid and is still not valid: we do not have to
+       update the offset variable. *)
+    | false, false, _ ->
+      Post.return flow
+
+    (* The pointer set was not valid and became valid with some offeset: we must
+       add the offset variable and assign it. *)
     | false, true, Some offset ->
       man.exec ~route:universal (mk_add o range) flow >>% fun flow ->
       man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:universal (mk_assign (strongify_var_expr o) offset range) flow
 
-    | true, false, _ -> man.exec ~route:universal (mk_remove o range) flow
+    (* The pointer set was valid and it is no longer: we must remove the offset
+       variable. *)
+    | true, false, _ ->
+      man.exec ~route:universal (mk_remove o range) flow
 
-    | _ -> assert false
-
-
+    | false, true, None -> assert false
 
 
   (* Declaration of a scalar pointer variable *)
@@ -374,7 +387,6 @@ struct
       assign v e None range man flow
 
     | _ -> assert false
-
 
 
   (** Add a pointer variable to the support of the non-rel map *)
@@ -666,7 +678,7 @@ struct
     if PointerSet.is_valid value' then
       let o = mk_offset p None range in
       let ol = ListExt.map_filter (fun q ->
-          if PointerSet.is_valid (Map.find q a) then 
+          if PointerSet.is_valid (Map.find q a) then
             Some (mk_offset q None range)
           else None
         ) ql in
@@ -792,23 +804,28 @@ struct
       forget_deref p stmt.srange man flow |>
       OptionExt.return
 
-    | S_invalidate e when is_c_type e.etyp  ->
+    | S_invalidate e
+      when is_c_type e.etyp  ->
       exec_invalidate_base e stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename(e,e') when is_c_block_object_type e.etyp ->
+    | S_rename(e,e')
+      when is_c_block_object_type e.etyp ->
       exec_rename_base (of_c_block_object e) (of_c_block_object e') stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_c_block_object_type  e.etyp ->
+    | S_expand(e,el)
+      when is_c_block_object_type  e.etyp ->
       exec_expand_base (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_c_block_object_type e.etyp ->
+    | S_fold(e,el)
+      when is_c_block_object_type e.etyp ->
       exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume(p) when is_c_pointer_type p.etyp ->
+    | S_assume(p)
+      when is_c_pointer_type p.etyp ->
       man.eval p flow >>$ (fun p flow ->
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
@@ -1083,7 +1100,6 @@ struct
       eval_deref p exp.erange man flow |>
       OptionExt.return
 
-
     | _ -> None
 
 
@@ -1115,7 +1131,7 @@ struct
         let reachable_from_bases =
           Map.fold
             (fun v oaset new_acc ->
-               let base = 
+               let base =
                  match vkind v with
                  | V_c_cell c -> c.base
                  |_ -> mk_base (Var v) in
@@ -1141,7 +1157,7 @@ struct
           let open Universal.Heap.Recency in
           BaseSet.fold (fun c acc -> match c.base_kind with
               | Addr a -> Pool.add a acc
-              | _ -> acc) bases Pool.empty 
+              | _ -> acc) bases Pool.empty
       in
       begin try Some (Cases.singleton (reachable_addrs roots) flow)
       with Not_found -> assert false end

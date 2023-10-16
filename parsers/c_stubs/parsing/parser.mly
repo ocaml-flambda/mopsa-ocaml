@@ -234,8 +234,7 @@ ensures:
 
 (* Message sections *)
 message:
-  | message_kind COLON STRING_CONST SEMICOL { { message_kind = $1;
-						message_body = $3; } }
+  | message_kind COLON STRING_CONST SEMICOL { { message_kind = $1; message_body = $3; } }
 
 message_kind:
   | WARN    { WARN }
@@ -244,19 +243,19 @@ message_kind:
 
 (* Logic formula *)
 primary_formula:
-  | with_range(TRUE)                                  { F_bool true }
-  | with_range(FALSE)                                 { F_bool false }
-  | with_range(expr)                                  { F_expr $1 }
-  | with_range(expr) IN set                           { F_in ($1, $3) }
+  | with_range(TRUE)        { F_bool true }
+  | with_range(FALSE)       { F_bool false }
+  | with_range(expr)        { F_expr $1 }
+  | with_range(expr) IN set { F_in ($1, $3) }
 
 composed_formula:
-  | with_range(formula) log_binop with_range(formula) { F_binop ($2, $1, $3) }
-  | NOT with_range(formula)                           { F_not $2 }
-  | FORALL type_name var IN set COLON with_range(formula) { F_forall ($3, $2, $5, $7) } %prec FORALL
-  | EXISTS type_name var IN set COLON with_range(formula) { F_exists ($3, $2, $5, $7) } %prec EXISTS
-  | with_range(formula) OTHERWISE with_range(expr) { F_otherwise($1, $3) }
+  | with_range(formula) log_binop with_range(formula)                            { F_binop ($2, $1, $3) }
+  | NOT with_range(formula)                                                      { F_not $2 }
+  | FORALL type_name var IN set COLON with_range(formula)                        { F_forall ($3, $2, $5, $7) } %prec FORALL
+  | EXISTS type_name var IN set COLON with_range(formula)                        { F_exists ($3, $2, $5, $7) } %prec EXISTS
+  | with_range(formula) OTHERWISE with_range(expr)                               { F_otherwise($1, $3) }
   | IF with_range(formula) THEN with_range(formula) ELSE with_range(formula) END { F_if($2, $4, $6) }
-  | IF with_range(formula) THEN with_range(formula) END { F_if($2, $4, with_range (F_bool true) (from_lexing_range $startpos $endpos)) }
+  | IF with_range(formula) THEN with_range(formula) END                          { F_if($2, $4, with_range (F_bool true) (from_lexing_range $startpos $endpos)) }
 
 formula:
   | LPAR composed_formula RPAR { $2 }
@@ -272,17 +271,17 @@ primary_expr:
   | LPAR expr RPAR             { $2 }
 
 postfix_expr:
-  | primary_expr                                 { $1 }
+  | primary_expr                                             { $1 }
   | with_range(postfix_expr) LBRACK with_range(expr) RBRACK  { E_subscript ($1, $3) }
-  | with_range(postfix_expr) PRIME               { E_builtin_call (PRIMED, [$1]) }
-  | builtin LPAR args RPAR                       { E_builtin_call ($1, $3) }
-  | with_range(postfix_expr) DOT IDENT           { E_member ($1, $3) }
-  | with_range(postfix_expr) ARROW IDENT         { E_arrow ($1, $3) }
-  | RAISE LPAR STRING_CONST RPAR                 { E_raise $3 }
+  | with_range(postfix_expr) PRIME                           { E_builtin_call (PRIMED, [$1]) }
+  | builtin LPAR args RPAR                                   { E_builtin_call ($1, $3) }
+  | with_range(postfix_expr) DOT IDENT                       { E_member ($1, $3) }
+  | with_range(postfix_expr) ARROW IDENT                     { E_arrow ($1, $3) }
+  | RAISE LPAR STRING_CONST RPAR                             { E_raise $3 }
 
 unary_expr:
   | postfix_expr { $1 }
-  | SIZEOF_TYPE LPAR with_range(type_name) RPAR { E_sizeof_type $3 }
+  | SIZEOF_TYPE LPAR with_range(type_name)  RPAR { E_sizeof_type $3 }
   | SIZEOF_EXPR LPAR with_range(unary_expr) RPAR { E_sizeof_expr $3 }
   | unop with_range(cast_expr)                   { E_unop ($1, $2) }
   | STAR with_range(cast_expr)                   { E_deref $2 }
@@ -327,11 +326,11 @@ bor_expr:
 
 land_expr:
   | bor_expr { $1 }
-  | with_range(land_expr) LAND with_range(bor_expr)       { E_binop (LAND, $1, $3) }
+  | with_range(land_expr) LAND with_range(bor_expr)        { E_binop (LAND, $1, $3) }
 
 lor_expr:
   | land_expr { $1 }
-  | with_range(lor_expr) LOR with_range(land_expr)        { E_binop (LOR, $1, $3) }
+  | with_range(lor_expr) LOR with_range(land_expr)         { E_binop (LOR, $1, $3) }
 
 conditional_expr:
   | lor_expr { $1 }
@@ -341,43 +340,43 @@ expr:
   | conditional_expr { $1 }
 
 
- 
+
 (* Types *)
 type_specifier_except_typedef:
-  | VOID               { T_void }
-  | CHAR               { T_char }
-  | UNSIGNED CHAR      { T_unsigned_char }
-  | SIGNED CHAR        { T_signed_char }
-  | SHORT              { T_signed_short }
-  | SHORT INT          { T_signed_short }
-  | UNSIGNED SHORT     { T_unsigned_short }
-  | UNSIGNED SHORT INT { T_unsigned_short }
-  | SIGNED SHORT       { T_signed_short }
-  | SIGNED SHORT INT   { T_signed_short }
-  | INT                { T_signed_int }
-  | UNSIGNED           { T_unsigned_int }
-  | UNSIGNED INT       { T_unsigned_int }
-  | SIGNED             { T_signed_int }
-  | SIGNED INT         { T_signed_int }
-  | LONG               { T_signed_long }
-  | LONG INT           { T_signed_long }
-  | UNSIGNED LONG      { T_unsigned_long }
-  | UNSIGNED LONG INT  { T_unsigned_long }
-  | SIGNED LONG        { T_signed_long }
-  | SIGNED LONG INT    { T_signed_long }
-  | LONG LONG          { T_signed_long_long }
-  | LONG LONG INT      { T_signed_long_long }
-  | SIGNED LONG LONG   { T_signed_long_long }
-  | SIGNED LONG LONG INT  { T_signed_long_long }
-  | UNSIGNED LONG LONG { T_unsigned_long_long }
+  | VOID                   { T_void }
+  | CHAR                   { T_char }
+  | UNSIGNED CHAR          { T_unsigned_char }
+  | SIGNED CHAR            { T_signed_char }
+  | SHORT                  { T_signed_short }
+  | SHORT INT              { T_signed_short }
+  | UNSIGNED SHORT         { T_unsigned_short }
+  | UNSIGNED SHORT INT     { T_unsigned_short }
+  | SIGNED SHORT           { T_signed_short }
+  | SIGNED SHORT INT       { T_signed_short }
+  | INT                    { T_signed_int }
+  | UNSIGNED               { T_unsigned_int }
+  | UNSIGNED INT           { T_unsigned_int }
+  | SIGNED                 { T_signed_int }
+  | SIGNED INT             { T_signed_int }
+  | LONG                   { T_signed_long }
+  | LONG INT               { T_signed_long }
+  | UNSIGNED LONG          { T_unsigned_long }
+  | UNSIGNED LONG INT      { T_unsigned_long }
+  | SIGNED LONG            { T_signed_long }
+  | SIGNED LONG INT        { T_signed_long }
+  | LONG LONG              { T_signed_long_long }
+  | LONG LONG INT          { T_signed_long_long }
+  | SIGNED LONG LONG       { T_signed_long_long }
+  | SIGNED LONG LONG INT   { T_signed_long_long }
+  | UNSIGNED LONG LONG     { T_unsigned_long_long }
   | UNSIGNED LONG LONG INT { T_unsigned_long_long }
-  | FLOAT              { T_float }
-  | DOUBLE             { T_double }
-  | LONG DOUBLE        { T_long_double }
-  | FLOAT128           { T_float128 }
-  | STRUCT var         { T_struct($2) }
-  | UNION var          { T_union($2) }
-  | ENUM var           { T_enum($2) }
+  | FLOAT                  { T_float }
+  | DOUBLE                 { T_double }
+  | LONG DOUBLE            { T_long_double }
+  | FLOAT128               { T_float128 }
+  | STRUCT var             { T_struct($2) }
+  | UNION var              { T_union($2) }
+  | ENUM var               { T_enum($2) }
 
 type_specifier:
   | type_specifier_except_typedef { $1 }
@@ -405,7 +404,7 @@ type_name:
   | specifier_qualifier_list { $1 }
 
 type_name_except_typedef:
-  | type_specifier_except_typedef           { $1, no_c_qual }
+  | type_specifier_except_typedef { $1, no_c_qual }
   | type_name_except_typedef STAR { T_pointer $1, no_c_qual }
 
 
