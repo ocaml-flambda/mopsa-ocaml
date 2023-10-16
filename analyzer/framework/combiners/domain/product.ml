@@ -156,7 +156,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) query)
+           Cases.meet
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 

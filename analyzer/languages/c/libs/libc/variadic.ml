@@ -228,7 +228,7 @@ struct
       ~fthen:(fun flow ->
           let flow = safe_variadic_args_number range man flow in
           (* Compute the interval of the counter *)
-          let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query valc) flow |>
+          let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query valc) flow |>
                     Itv.meet (Itv.of_int 0 (List.length unnamed - 1))
           in
 

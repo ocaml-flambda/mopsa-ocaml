@@ -135,7 +135,12 @@ let rec mem_domain : type b c. target:b id -> tree:c id -> bool = fun ~target ~t
     | Some Eq -> true
     | None -> false
 
-
+let pp_domains fmt s =
+  Format.(pp_print_list
+            ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
+            pp_print_string)
+    fmt
+    (DomainSet.elements s)
 
 (** Apply transfer functions [f1] and [f2] in cascade. Function [f1]
     is called first. When [f1] returns [None] or not-handled cases,
@@ -147,13 +152,6 @@ let cascade_call targets f1 domains1 f2 domains2 =
   with
   | false, false ->
     (* Both domains do not provide an [exec] for such targets *)
-    let pp_domains fmt s =
-      Format.(pp_print_list
-                ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-                pp_print_string)
-        fmt
-        (DomainSet.elements s)
-    in
     Exceptions.panic "switch: targets '%a' not found in %a nor %a"
       (OptionExt.print pp_domains) targets
       pp_domains domains1
@@ -194,3 +192,106 @@ let cascade_call targets f1 domains1 f2 domains2 =
            (* Call [D2] on not-handled cases *)
            let ret2 = not_handled1' >>=? fun _ flow -> ff2 cmd (snd_pair_man man) flow in
            OptionExt.neutral2 Cases.join handled1 ret2)
+
+let cascade_stateless_call targets f1 domains1 f2 domains2 =
+  match sat_targets ~targets ~domains:domains1,
+        sat_targets ~targets ~domains:domains2
+  with
+  | false, false ->
+    (* Both domains do not provide an [exec] for such targets *)
+    Exceptions.panic "switch: targets '%a' not found in %a nor %a"
+      (OptionExt.print pp_domains) targets
+      pp_domains domains1
+      pp_domains domains2
+
+  | true, false ->
+    (* Only [D1] provides a transfer function for such targets *)
+    f1 targets
+
+  | false, true ->
+    (* Only [D2] provides a transfer function for such targets *)
+    f2 targets
+
+  | true, true ->
+    (* Both [D1] and [D2] provide a transfer function for such targets *)
+    let ff1 = f1 targets in
+    let ff2 = f2 targets in
+    (fun cmd man flow ->
+       match ff1 cmd man flow with
+       | None ->
+         ff2 cmd man flow
+
+       | Some ret1 ->
+         (* Collect cases not handled by [D1] and pass them to [D2] *)
+         match Cases.partition
+                 (fun c flow ->
+                    match c with NotHandled -> true | _ -> false)
+                 ret1
+         with
+         | None, _ -> Some ret1
+         | Some not_handled1, handled1 ->
+           (* Fusion all not-handled cases to speedup the analysis *)
+           let not_handled1' = Cases.remove_duplicates compare man.lattice not_handled1 in
+           (* Call [D2] on not-handled cases *)
+           let ret2 = not_handled1' >>=? fun _ flow -> ff2 cmd man flow in
+           OptionExt.neutral2 Cases.join handled1 ret2)
+
+let broadcast_call targets f1 domains1 f2 domains2 =
+  match sat_targets ~targets ~domains:domains1,
+        sat_targets ~targets ~domains:domains2
+  with
+  | false, false ->
+    (* Both domains do not provide an [exec] for such targets *)
+    Exceptions.panic "broadcast_call: targets '%a' not found in %a nor %a"
+      (OptionExt.print pp_domains) targets
+      pp_domains domains1
+      pp_domains domains2
+
+  | true, false ->
+    (* Only [D1] provides a transfer function for such targets *)
+    let f = f1 targets in
+    (fun cmd man flow ->
+       f cmd (fst_pair_man man) flow)
+
+  | false, true ->
+    (* Only [D2] provides a transfer function for such targets *)
+    let f = f2 targets in
+    (fun cmd man flow ->
+       f cmd (snd_pair_man man) flow)
+
+  | true, true ->
+    (* Both [D1] and [D2] provide a transfer function for such targets *)
+    let ff1 = f1 targets in
+    let ff2 = f2 targets in
+    (fun cmd man flow ->
+       OptionExt.neutral2 Cases.join 
+         (ff1 cmd (fst_pair_man man) flow)
+         (ff2 cmd (snd_pair_man man) flow))
+
+let broadcast_stateless_call targets f1 domains1 f2 domains2 =
+  match sat_targets ~targets ~domains:domains1,
+        sat_targets ~targets ~domains:domains2
+  with
+  | false, false ->
+    (* Both domains do not provide an [exec] for such targets *)
+    Exceptions.panic "broadcast_stateless_call: targets '%a' not found in %a nor %a"
+      (OptionExt.print pp_domains) targets
+      pp_domains domains1
+      pp_domains domains2
+
+  | true, false ->
+    (* Only [D1] provides a transfer function for such targets *)
+    f1 targets
+
+  | false, true ->
+    (* Only [D2] provides a transfer function for such targets *)
+    f2 targets
+
+  | true, true ->
+    (* Both [D1] and [D2] provide a transfer function for such targets *)
+    let ff1 = f1 targets in
+    let ff2 = f2 targets in
+    (fun cmd man flow ->
+       OptionExt.neutral2 Cases.join 
+         (ff1 cmd man flow)
+         (ff2 cmd man flow))

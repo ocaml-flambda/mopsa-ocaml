@@ -177,7 +177,7 @@ val reduce_result :
   ('r -> 'a flow -> 'b) ->
   join:('b -> 'b -> 'b) ->
   meet:('b -> 'b -> 'b) ->
-  bottom:'b ->
+  bottom:(unit -> 'b) ->
   ('a,'r) cases -> 'b
 (** [reduce_result f ~join ~meet bottom c] is similar to [reduce f
     join meet c], except that empty and not-handled cases are replaced

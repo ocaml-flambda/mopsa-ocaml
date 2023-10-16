@@ -47,7 +47,7 @@ module AddrSet=
 let rec eval_offset man flow e =
   Visitor.map_expr (fun e -> match ekind e with
                              | E_var _ ->
-                                let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                                let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                                 if ItvUtils.IntItv.is_singleton (Bot.bot_to_exn itv) then
                                   let (a, b) = Bot.bot_to_exn itv in
                                   match a with
@@ -281,7 +281,7 @@ module Domain =
            else
             man.eval ~translate:"Universal" (mk_c_member_access_by_name methd "ml_flags" range) flow >>$ fun methd_flags flow ->
            let oflags =
-             match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query methd_flags) flow with
+             match Bot.bot_to_exn @@ ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query methd_flags) flow with
              | Finite l, Finite r when Z.compare l r = 0 -> Some (Z.to_int l)
              | _ -> assert false in
             alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, oflags, (binder_addr, None))) range flow) >>$
@@ -498,7 +498,7 @@ module Domain =
                  (* get callstack used when this exception was raised *)
                  let exc_cs = match exc_pt with
                    | P_block ({base_kind = Addr a}, _, _) ->
-                      man.ask (Callstack_tracking.Q_cpython_attached_callstack a) flow
+                      ask_and_reduce man.ask (Callstack_tracking.Q_cpython_attached_callstack a) flow
                    | _ -> assert false in
                  (* clean C exception state for next times *)
                  let old_cs = Flow.get_callstack flow in
@@ -1227,7 +1227,7 @@ module Domain =
                 )
                 ~felse:(fun flow ->
                   man.eval (Python.Utils.mk_builtin_call "len" [obj] range) flow >>$ fun py_len flow ->
-                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.extract_oobject py_len)) flow in
+                  let itv_len = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.extract_oobject py_len)) flow in
                   c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, not of length %a"
                                                        Universal.Numeric.Common.pp_int_interval itv_len)
                     range man flow >>% Cases.return 0)
@@ -1566,7 +1566,7 @@ module Domain =
           if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
             (* FIXME: conversion is not the best thing to do, maybe we could have a cast? Or a string expression? *)
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (if StringPower.is_top strp then
                  [Eval.singleton (mk_top (T_c_array(s8, C_array_no_length)) range) flow]
@@ -1658,7 +1658,7 @@ module Domain =
           let addr_unicode, oe_unicode = object_of_expr py_unicode in
           if compare_addr_kind (akind addr_unicode) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (StringPower.fold (fun s acc ->
                    Eval.singleton (mk_c_string ~kind:C_char_wide s range) flow :: acc
@@ -1685,7 +1685,7 @@ module Domain =
             | Some TOP -> assert false
             ) >>% fun flow ->
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (StringPower.fold (fun s acc ->
                    Eval.singleton (mk_c_string s range) flow :: acc
@@ -1988,7 +1988,7 @@ module Domain =
          if compare_expr  py_right (mk_c_null range) = 0 then Eval.singleton (mk_int (-1) range) flow
          else
          man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
-         let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
+         let op = match Bot.bot_to_exn @@ ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
            | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
            | _ -> assert false in
          let py_op = match op with
@@ -2029,7 +2029,7 @@ module Domain =
       | E_c_builtin_call ("PyTuple_New", [size]) ->
          (* FIXME: the allocation can also fail *)
          man.eval ~translate:"Universal" size flow >>$ (fun size flow ->
-          let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+          let size_itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
           let size = match size_itv with
             | Nb (Finite l, Finite u) when Z.equal l u -> Z.to_int l
             | _ -> panic_at range "PyTuple_New, got %a" ItvUtils.IntItv.fprint_bot size_itv in
@@ -2459,7 +2459,7 @@ module Domain =
            man flow
            ~fthen:(fun flow ->
              let post =
-               match man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
+               match ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
                | Some _ -> Post.return flow
                | None ->
                   let open Filename in
@@ -2471,7 +2471,7 @@ module Domain =
                   man.exec ~route:(Semantic "Python") weakref_import flow
              in
              post >>% fun flow ->
-             let weakref = OptionExt.none_to_exn @@  man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
+             let weakref = OptionExt.none_to_exn @@ ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
              c_to_python_boundary refto man flow range >>$ fun py_refto flow ->
              let () = Debug.debug ~channel:"bug" "%a" (format @@ Flow.print man.lattice.print) flow in
              man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object (weakref, None) range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
@@ -2489,7 +2489,7 @@ module Domain =
          let py_ssize_t = C.Ast.ul in
          man.exec (mk_assign (mk_c_deref ppos range) (mk_top py_ssize_t range) range) flow >>% (fun flow ->
          c_to_python_boundary p man flow range >>$ fun py_p flow ->
-          let els = man.ask (Python.Objects.Constant_dict.Q_py_dict_items py_p) flow in
+          let els = ask_and_reduce man.ask (Python.Objects.Constant_dict.Q_py_dict_items py_p) flow in
           let assigns = List.map (fun (k, v) ->
               let ok = object_of_expr k and ov = object_of_expr v in
               let c_k, flow = python_to_c_boundary (fst ok) None (snd ok) range man flow in

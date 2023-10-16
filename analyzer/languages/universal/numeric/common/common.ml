@@ -134,7 +134,7 @@ let round () : ItvUtils.FloatItvNan.round =
 let interval_of_num_expr e man flow : int_itv =
   match expr_to_z e with
   | Some n -> I.of_range_bot n n
-  | None -> man.ask (mk_int_interval_query ~fast:true e) flow
+  | None -> ask_and_reduce man.ask (mk_int_interval_query ~fast:true e) flow
 
 (** Evaluate a numeric condition using intervals *)
 let eval_num_cond cond man flow : bool option =

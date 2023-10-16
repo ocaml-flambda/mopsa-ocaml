@@ -707,12 +707,12 @@ struct
       eval_base_size base range man flow >>$ fun size flow ->
 
       (* Compute the interval and create a finite number of cells *)
-      let offset_itv, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
+      let offset_itv, c = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       match c with
       | Bot.BOT -> Cases.empty flow
       | Bot.Nb (stride,_) ->
         let step = if Z.equal stride Z.zero then Z.one else stride in
-        let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+        let size_itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
         let lo, uo = Itv.bounds_opt offset_itv in
         let _, us = Itv.bounds_opt size_itv in
 
@@ -906,10 +906,10 @@ struct
   let offset_interval offset range man flow : Itv.t =
     let evl = man.eval offset flow ~translate:"Universal" in
     Cases.reduce_result
-      (fun ee flow -> man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
+      (fun ee flow -> ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ee) flow)
       ~join:Itv.join
       ~meet:Itv.meet
-      ~bottom:Itv.bottom
+      ~bottom:(fun () -> Itv.bottom)
       evl
 
   (** {2 Initial state} *)
@@ -1330,7 +1330,7 @@ struct
     else
       let pp_base_offset printer (base, offset) =
         (* Get the interval of the offset *)
-        let itv = man.ask (mk_int_interval_query offset) flow |>
+        let itv = ask_and_reduce man.ask (mk_int_interval_query offset) flow |>
                   Itv.meet (let l,u=rangeof ull flow in Itv.of_z l u)
         in
         let l,u = Itv.bounds itv in

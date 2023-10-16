@@ -70,7 +70,7 @@ struct
   let rec constant_folding e man flow =
     match ekind e with
     | E_var (v,_) when is_int_type v.vtyp ->
-      let itv = man.ask (mk_int_interval_query e) flow in
+      let itv = ask_and_reduce man.ask (mk_int_interval_query e) flow in
       ( match itv with
         | Bot.Nb(I.B.Finite lo, I.B.Finite hi) when Z.(lo = hi) ->
           (* Note that we return both the variable and its value. *)

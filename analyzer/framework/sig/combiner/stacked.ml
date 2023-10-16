@@ -33,7 +33,7 @@ sig
   val merge : t -> t * teffect -> t * teffect -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
-  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   val print_state : DomainSet.t option -> printer -> t -> unit
   val print_expr  : DomainSet.t option -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end

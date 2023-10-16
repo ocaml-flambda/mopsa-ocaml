@@ -188,8 +188,28 @@ let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stac
   let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
   man.get aa, sman.get_sub aa
 
+let ask_and_reduce_cases f q ?(bottom = fun () -> assert false) a =
+  let cases = f q a in
+  Cases.reduce_result
+    (fun r flow -> r)
+    ~join:(Query.join_query q)
+    ~meet:(Query.meet_query q)
+    ~bottom
+    cases
+
+let ask_and_reduce_list f q ?(bottom = fun () -> assert false) a =
+  let l = f q a in
+  match l with
+  | [] -> bottom ()
+  | (_,r)::tl ->
+    List.fold_left
+      (fun acc (_,r) -> Query.join_query q acc r)
+      r tl
+
+let ask_and_reduce = ask_and_reduce_cases
+
 let find_var_by_name name man flow =
-  let vars = man.ask Query.Q_defined_variables flow in
+  let vars = ask_and_reduce man.ask Query.Q_defined_variables flow in
   List.find
     (fun v ->
        name = Format.asprintf "%a" Ast.Var.pp_var v

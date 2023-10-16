@@ -992,8 +992,8 @@ struct
           let self, sep, maxsplit = match eargs with
             | a :: b :: c :: [] -> a, b, c
             | _ -> assert false in
-          let u_self = man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject self)) flow in
-          let u_sep = man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject sep)) flow in
+          let u_self = ask_and_reduce man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject self)) flow in
+          let u_sep = ask_and_reduce man.ask (Powerset.mk_strings_powerset_query (Utils.extract_oobject sep)) flow in
           let u_maxsplit = Utils.get_eobj_itv man flow maxsplit in
             let maxsplit = match (Bot.bot_to_exn u_maxsplit) with
               | ItvUtils.IntBound.Finite l, _ ->
@@ -1283,32 +1283,34 @@ struct
     | _ -> None
 
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_list} as addr, _)} as e) ->
        let range = erange e in
        let content_var = var_of_addr addr in
        let length_var = length_var_of_addr addr in
-       man.ask (Q_variables_linked_to (mk_var content_var range)) flow |>
-         VarSet.add length_var |>
-         VarSet.add content_var |>
-         OptionExt.return
+       let ret = ask_and_reduce man.ask (Q_variables_linked_to (mk_var content_var range)) flow |>
+                 VarSet.add length_var |>
+                 VarSet.add content_var
+       in
+       Some (Cases.singleton ret flow)
 
     | Framework.Engines.Interactive.Query.Q_debug_addr_value ({addr_kind = A_py_list} as addr) ->
        let open Framework.Engines.Interactive.Query in
-       let content_list = man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
+       let content_list = ask_and_reduce man.ask (Q_debug_variable_value (var_of_addr addr)) flow in
        let length_list =
-         let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query (mk_var (length_var_of_addr addr) (Location.mk_fresh_range ()))) flow in
+         let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query (mk_var (length_var_of_addr addr) (Location.mk_fresh_range ()))) flow in
          {var_value = Some (Format.asprintf "%a" Universal.Numeric.Common.pp_int_interval itv);
           var_value_type = T_int;
           var_sub_value = None} in
-       Some {var_value = None;
-             var_value_type = T_any;
-             var_sub_value = Some (Named_sub_value
-                                     (("list contents", content_list)::
-                                     ("list length", length_list)::[]))
-         }
+       Some (Cases.singleton {
+           var_value = None;
+           var_value_type = T_any;
+           var_sub_value = Some (Named_sub_value
+                                   (("list contents", content_list)::
+                                    ("list length", length_list)::[]))
+         } flow)
 
     | _ -> None
 

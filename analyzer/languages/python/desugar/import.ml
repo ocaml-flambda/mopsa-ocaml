@@ -523,16 +523,18 @@ module Domain =
 
     let eval _ _ _ = None
 
-    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
       fun query man flow ->
       match query with
       | Q_python_addr_of_module s ->
          let cur = get_env T_cur man flow in
-         Some (OptionExt.lift (fun cs ->
+         let ret = OptionExt.lift (fun cs ->
              assert(Modules.cardinal cs = 1);
              let (a, _), _ = Modules.choose cs in
              a)
-           (find_opt s cur))
+             (find_opt s cur)
+         in
+         Some (Cases.singleton ret flow)
 
       | _ -> None
 

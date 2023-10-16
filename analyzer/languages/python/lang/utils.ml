@@ -196,7 +196,7 @@ let get_eobj_itv man flow e =
   | _ ->
      let e_num = extract_oobject e in
      debug "need to ask the numerical domain for the value of %a" pp_expr e_num;
-     man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
+     ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query e_num) flow
 
 (* tries to evaluate python expr.
    If the evaluation fails and raises an exception, the exception flow is caught, put back to cur and `on_empty` is then run *)

@@ -375,7 +375,7 @@ struct
   and eval ?(route=toplevel) ?(translate=any_semantic) ?(translate_when=[]) exp flow =
     interact_or_apply_action (Eval (exp, route, translate)) exp.erange flow
 
-  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> r =
+  and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> (Toplevel.t, r) cases =
     fun ?(route=toplevel)query flow ->
       Toplevel.ask query man flow
 

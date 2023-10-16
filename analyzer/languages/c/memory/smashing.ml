@@ -425,7 +425,7 @@ struct
       man.eval ~route e flow |>
       Cases.for_all_result (fun ee flow ->
           (* Compute the step-interval of ee *)
-          let _, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query ee) flow in
+          let _, c = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_congr_interval_query ee) flow in
           let c' = Bot.Nb (s,Z.zero) in
           Universal.Numeric.Common.C.included_bot c c'
         )

@@ -301,7 +301,7 @@ struct
 
   let merge _ _ _ = assert false
 
-  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_py_dict_items dict ->
@@ -311,7 +311,8 @@ struct
        let ds = find dict_addr cur in
        (* ok as ds should have <= 1 element. Otherwise need to fold *)
        let dict = Dicts.choose ds in
-       OptionExt.return @@ List.map (fun (k, v) -> mk_py_object k range, mk_py_object v range) dict
+       let ret = List.map (fun (k, v) -> mk_py_object k range, mk_py_object v range) dict in
+       Some (Cases.singleton ret flow)
 
     | _ -> None
 end

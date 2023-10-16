@@ -161,8 +161,8 @@ struct
     (* debug "%a" (format @@ Flow.print man.lattice.print) flow; *)
     let open Universal.Heap.Recency in
     let dead_addrs =
-      let alive_addrs = man.ask Q_alive_addresses_aspset flow in
-      let all_addrs = man.ask Q_allocated_addresses_aspset flow in
+      let alive_addrs = ask_and_reduce man.ask Q_alive_addresses_aspset flow in
+      let all_addrs = ask_and_reduce man.ask Q_allocated_addresses_aspset flow in
       debug "All addrs: %a@.Alive addrs %a" (format Pool.print) all_addrs (format Pool.print) alive_addrs;
       Pool.diff all_addrs alive_addrs in
     let interesting_dead_addrs =
@@ -227,7 +227,7 @@ struct
         let evl = man.eval nb flow ~translate:"Universal" in
         Cases.fold_result
           (fun acc nb flow ->
-             man.ask (mk_int_interval_query nb) flow |>
+             ask_and_reduce man.ask (mk_int_interval_query nb) flow |>
              I.join_bot acc
           ) Bot.BOT evl
       in
@@ -660,7 +660,7 @@ struct
   (** Handler of queries *)
   (** ================== *)
 
-  let ask : type r. ('a,r) query -> _ man -> _ flow -> r option = fun query man flow ->
+  let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
@@ -691,7 +691,7 @@ struct
                     r.c_record_fields
              ))
         records;
-      Some all_vars
+      Some (Cases.singleton all_vars flow)
 
 
     (* Get the value of a variable *)
@@ -715,7 +715,7 @@ struct
         let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
-              let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
+              let itv = ask_and_reduce man.ask (mk_int_interval_query ~fast:false ee) flow in
               I.join_bot itv acc
             ) Bot.BOT evl
         in
@@ -729,7 +729,7 @@ struct
         let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
-               let itv = man.ask (mk_float_interval_query ee) flow in
+               let itv = ask_and_reduce man.ask (mk_float_interval_query ee) flow in
                ItvUtils.FloatItvNan.join itv acc
             ) ItvUtils.FloatItvNan.bot evl
         in
@@ -844,7 +844,7 @@ struct
 
       (* All together! *)
       let vname = Format.asprintf "%a" pp_var var in
-      Some (get_var_value PointsToSet.empty vname (mk_var var range))
+      Some (Cases.singleton (get_var_value PointsToSet.empty vname (mk_var var range)) flow)
 
     | _ -> None
 

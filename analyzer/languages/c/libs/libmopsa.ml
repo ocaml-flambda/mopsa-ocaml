@@ -137,7 +137,7 @@ struct
     Format.fprintf fmt "%s = %a"
       display
       (Cases.print_result (fun fmt e flow ->
-           let itv = man.ask (mk_int_interval_query e) flow in
+           let itv = ask_and_reduce man.ask (mk_int_interval_query e) flow in
            pp_int_interval fmt itv
          )
       ) evl
@@ -148,7 +148,7 @@ struct
     Format.fprintf fmt "%s = %a"
       display
       (Cases.print_result (fun fmt e flow ->
-           let itv = man.ask (mk_float_interval_query e) flow in
+           let itv = ask_and_reduce man.ask (mk_float_interval_query e) flow in
            pp_float_interval fmt itv
          )
       ) evl
@@ -166,7 +166,7 @@ struct
              Format.fprintf fmt "&(%a%a)"
                pp_base base
                (Cases.print_result (fun fmt e flow ->
-                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                     (format Universal.Numeric.Values.Intervals.Integer.Value.print) fmt itv
                   )
                ) evl

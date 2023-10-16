@@ -166,14 +166,14 @@ let reduce_result
     (f:'r -> 'a flow -> 'b)
     ~(join:'b -> 'b -> 'b)
     ~(meet:'b -> 'b -> 'b)
-    ~(bottom:'b)
+    ~(bottom:unit -> 'b)
     (cases:('a,'r) cases)
   : 'b =
   reduce
     (fun case flow ->
        match case with
        | Result (r,effects,cleaners) -> f r flow
-       | Empty | NotHandled      -> bottom)
+       | Empty | NotHandled      -> bottom ())
     ~join ~meet cases
 
 

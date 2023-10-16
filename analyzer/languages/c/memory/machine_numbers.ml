@@ -236,7 +236,7 @@ struct
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
       if IntItv.subset itv ritv then
         safe_c_integer_overflow_check range man flow |>
         Eval.singleton cexp |>
@@ -328,7 +328,7 @@ struct
   let check_float_valid cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     let prec = get_c_float_precision typ in
-    let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
     let flow', nexp' =
       if !opt_float_invalid_operation then
         if itv.nan then
@@ -375,7 +375,7 @@ struct
     let zero = mk_float ~prec 0. range in
     let cond = ne denominator zero range in
     if !opt_float_division_by_zero then
-      let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
       if FltItv.contains_zero itv then
         (* division by zero possible, make two cases *)
         assume cond

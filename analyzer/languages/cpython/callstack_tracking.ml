@@ -115,14 +115,14 @@ module Domain =
          |> OptionExt.return
       | _ -> None
 
-    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
       fun query man flow ->
       match query with
       | Q_cpython_attached_callstack a ->
          let cur = get_env T_cur man flow in
          OptionExt.lift (fun cs ->
              assert(Callstacks.cardinal cs = 1);
-             Callstacks.choose cs)
+             Cases.singleton (Callstacks.choose cs) flow)
            (find_opt a cur)
 
       | _ -> None

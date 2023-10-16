@@ -92,7 +92,7 @@ struct
                         post_to_flow man |>
                         get_env T_cur man
            );
-    ask = (fun query -> man.Core.Manager.ask query flow);
+    ask = (fun query -> ask_and_reduce man.Core.Manager.ask query flow);
   }
 
   let exec domains =
@@ -126,7 +126,10 @@ struct
   let ask domains =
     let f = D.ask domains in
     (fun query man flow ->
-       f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow)
+       let rep = f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow) in
+       match rep with
+       | None -> None
+       | Some r -> Some (Cases.singleton r flow)
     )
 
   let print_expr domains =
