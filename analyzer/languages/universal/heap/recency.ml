@@ -27,8 +27,6 @@ open Mopsa
 open Sig.Abstraction.Domain
 open Ast
 
-(* open Policies *)
-
 module Pool =
   Framework.Lattices.Powerset.Make
     (struct
