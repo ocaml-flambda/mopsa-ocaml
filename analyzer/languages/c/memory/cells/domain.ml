@@ -789,6 +789,7 @@ struct
       (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
       let nb_cells = List.length cells in
       if nb_cells = 0 || Z.(of_int nb_cells < (div (hi - lo) step) + one) then
+        let () = debug "not covering nb_cells=%d, hi=%s, lo=%s, step=%s, results in T" nb_cells (Z.to_string hi) (Z.to_string lo) (Z.to_string step) in 
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
@@ -933,13 +934,37 @@ struct
     | Top ->
       man.eval (mk_top (void_to_char t) range) flow
 
-    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.lt lo (Z.of_int @@ String.length s) ->
+    (* dereferencing one character of a string *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) ->
       man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow 
 
-    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.equal lo (Z.of_int @@ String.length s) ->
+    (* dereferencing characters of a string, abstracted as interval here *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.geq lo Z.zero && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) &&
+         String.length s < 20 ->
+      (* ^^would it make sense to check cell-deref-expand param? *)
+      let chars =
+        let hi = Z.to_int hi in 
+        let rec aux pos =
+          if pos <= hi then
+            let c_pos = String.get s pos in
+            let c_int = int_of_char c_pos in
+            let c_int = if is_signed t && c_int >= 128 then c_int - 256 else c_int in 
+            c_int :: (aux (pos+1))
+          else []
+        in aux (Z.to_int lo)
+      in
+      (* let chars = List.sort_uniq chars in  *)
+      (* FIXME: do rather a smashing like the other function does, so the underlying numerical domain chooses its representation *)
+      let min_c, max_c  = List.fold_left (fun (min_c, max_c) c ->
+          min min_c c, max max_c c) (List.hd chars, List.hd chars) (List.tl chars) in
+      man.eval (mk_int_interval min_c max_c ~typ:t range) ~route:scalar flow
+
+    (* dereferencing null delimiter of a string *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.equal hi (Z.of_int @@ String.length s) ->
       man.eval (mk_zero ~typ:t range) ~route:scalar flow 
 
     | Region (base,lo,hi,step) ->
+      let () = debug "%a" pp_expansion expansion in 
       smash_region base lo hi step t range man flow >>$ fun ret flow ->
       man.eval ret flow ~route:scalar
 
