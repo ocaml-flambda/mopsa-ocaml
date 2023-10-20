@@ -208,11 +208,14 @@ module Domain =
                   match points_to with
                   | P_block({base_kind = String (s, _, _)}, offset, _) ->
                      Cases.singleton (Some (Top.Nt s)) flow
-                  | P_top ->
-                     Cases.singleton (Some Top.TOP) flow
                   | P_null ->
                      Cases.singleton None flow
-                  | _ -> panic "safe_get_name_of points_to %a" pp_points_to points_to
+                  | P_top  ->
+                    Cases.singleton (Some Top.TOP) flow
+                  | _ ->
+                    warn "safe_get_name_of points_to %a, abstracted as T" pp_points_to points_to;
+                    Cases.singleton (Some Top.TOP) flow
+
                 ) in
       r
 

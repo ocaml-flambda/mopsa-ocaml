@@ -1425,7 +1425,14 @@ let asprintf_stub (dst:expr) range man flow =
   let exp = mk_c_call f [dst] range in
   man.eval exp flow
 
-
+let vasprintf_stub is_constant_string format (dst:expr) range man flow =
+  let f =
+    if is_constant_string then "_mopsa_constant_vasprintf"
+    else "_mopsa_general_vasprintf" in
+  let f = find_c_fundec_by_name f flow in
+  let exp = mk_c_call f (dst::format::[]) range in 
+  man.eval exp flow
+ 
 (********************)
 (** Stack variables *)
 (********************)
