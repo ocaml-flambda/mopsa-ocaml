@@ -27,7 +27,7 @@
 
 
   let mk_output_placeholder width precision typ =
-    let mk w p t = {
+    let mk w p t = Placeholder {
 	op_width = w;
 	op_precision = p;
 	op_typ = t;
@@ -58,11 +58,12 @@
 %token H HH L LL CAP_L
 %token D I U F G E A P S WS X O C
 %token EOF
+%token <string> TOK_string 
 
 %start parse_output_format
 %start parse_input_format
 
-%type <Placeholder.output_placeholder list> parse_output_format
+%type <Placeholder.output_format list> parse_output_format
 %type <Placeholder.input_placeholder list> parse_input_format
 
 %type<input_placeholder> input_placeholder
@@ -70,7 +71,7 @@
 %type<placeholder_type> input_typ
 %type<int option> input_width
 %type<unit> output_flag output_flag_list
-%type<output_placeholder list> output_placeholder output_placeholder_list
+%type<output_format list> output_format output_format_list
 %type<int option * bool> output_precision
 %type<placeholder_type> output_typ
 %type<int option * bool> output_width
@@ -81,13 +82,14 @@
 (** Parser of output formats *)
 
 parse_output_format:
-  |  l=output_placeholder_list EOF { l }
+  |  l=output_format_list EOF { l }
 
-output_placeholder_list:
+output_format_list:
   | { [] }
-  | hd=output_placeholder tl=output_placeholder_list { hd @ tl }
+  | hd=output_format tl=output_format_list { hd @ tl }
 
-output_placeholder:
+output_format:
+  | v=TOK_string { [String v] }
   | output_flag_list w=output_width p=output_precision t=output_typ { mk_output_placeholder w p t }
 
 
@@ -150,6 +152,7 @@ parse_input_format:
 
 input_placeholder_list:
   | { [] }
+  | TOK_string tl=input_placeholder_list { tl }
   | STAR input_placeholder tl=input_placeholder_list { tl }
   | hd=input_placeholder tl=input_placeholder_list   { hd :: tl }
 

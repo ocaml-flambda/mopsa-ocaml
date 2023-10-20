@@ -45,6 +45,7 @@ let _ =
       "__builtin___sprintf_chk";
       "snprintf";
       "asprintf";
+      "vasprintf";
       "fscanf";
       "scanf";
       "sscanf";

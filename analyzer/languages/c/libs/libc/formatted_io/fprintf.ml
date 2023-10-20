@@ -113,14 +113,17 @@ struct
 
   (** Check that arguments correspond to the format *)
   let check_args ?wide format args range man flow =
-    parse_output_format ?wide format range man flow >>$ fun placeholders flow ->
-    match placeholders with
+    parse_output_format ?wide format range man flow >>$ fun oof flow ->
+    match oof with
     | None ->
       raise_c_invalid_format_arg_type_warning range man flow |>
       raise_c_insufficient_format_args_warning range man |>
       Post.return
 
-    | Some placeholders ->
+    | Some output_format ->
+      let placeholders = List.filter_map (function
+          | String s -> None
+          | Placeholder p -> Some p) output_format in
       let nb_required = List.length placeholders in
       let nb_given = List.length args in
       if nb_required > nb_given then
@@ -194,6 +197,34 @@ struct
       check_args format args exp.erange man flow >>%? fun flow ->
       asprintf_stub dst exp.erange man flow |>
       OptionExt.return
+
+    (* 𝔼⟦ vasprintf(...) ⟧ *)
+    | E_c_builtin_call("vasprintf", dst :: format :: _) -> (*va_list) ->*)
+      (* variadic checking is not performed, we split the analysis in two cases
+         1. No % placeholders, constant string: we can do something precise
+         2. % placeholders: warn the analysis is unsound in this case *)
+      parse_output_format ~wide:false format exp.erange man flow >>$ (fun oof flow ->
+          match oof with
+          | None ->
+            raise_c_invalid_format_arg_type_warning exp.erange man flow |>
+            raise_c_insufficient_format_args_warning exp.erange man |>
+            Cases.empty
+
+          | Some output_format ->
+            List.iter (function
+                | Placeholder p -> debug "placeholder %a" pp_output_placeholder p
+                | String s -> debug "string %s" s) output_format;
+            let placeholders, strings = List.partition_map (function
+                | Placeholder p -> Left p
+                | String s -> Right s) output_format in
+            if List.length placeholders = 0 && List.length strings <= 1 then
+              (* case 1 *)
+              vasprintf_stub true (mk_c_string (match strings with [] -> "" | hd :: _ -> hd) exp.erange) dst exp.erange man flow
+            else
+              (* case 2 *)
+              vasprintf_stub false format dst exp.erange man flow
+        )
+      |> OptionExt.return
 
     (* 𝔼⟦ error(...) ⟧ *)
     | E_c_builtin_call("error", status :: errnum :: format :: args) ->
