@@ -510,7 +510,7 @@ struct
       in
       remove_offset_opt p1 v1 v range man flow >>% fun flow ->
       remove_offset_opt p2 v2 v range man flow >>% fun flow ->
-      match mk_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range with
+      match mk_offset_constraint_opt O_eq p1 v o1 p2 v o2 range with
       | None -> Post.return flow
       | Some cond ->
         man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
