@@ -43,17 +43,10 @@ struct
   let semantics = SemanticSet.union D1.semantics D2.semantics
 
   let routing_table =
-    let t1 = DomainSet.fold
-        (fun d1 acc -> add_routes (Below d1) D2.domains acc)
-        D1.domains
-        (join_routing_table D1.routing_table D2.routing_table)
-    in
-    let t2 = SemanticSet.fold
-        (fun s1 acc -> add_routes (Semantic s1) D2.domains acc)
-        D1.semantics
-        t1
-    in
-    t2
+    let t = join_routing_table D1.routing_table D2.routing_table in
+    DomainSet.fold
+      (fun d1 acc -> add_routes (Below d1) D2.domains acc)
+      D1.domains t
 
   let checks = D1.checks @ D2.checks |> List.sort_uniq compare
 
@@ -97,6 +90,7 @@ struct
       )
 
 end
+
 
 
 let rec make (domains:(module STATELESS_COMBINER) list) : (module STATELESS_COMBINER) =

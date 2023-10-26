@@ -922,16 +922,16 @@ struct
       Eval.empty flow
 
     | P_block ({ base_kind = Var v; base_valid = true}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
-      assume (eq offset zero range) ~route:scalar
+      assume (eq offset zero range)
         ~fthen:(man.eval ~route:scalar (mk_var v ~mode range))
-        ~felse:(man.eval ~route:scalar (mk_top ctype range))
+        ~felse:(man.eval (mk_top ctype range))
         man flow
 
     | P_block _ ->
-      man.eval ~route:scalar (mk_top ctype range) flow
+      man.eval (mk_top ctype range) flow
 
     | P_top ->
-      man.eval ~route:scalar (mk_top ctype range) flow
+      man.eval (mk_top ctype range) flow
 
     | P_fun _ ->
       assert false

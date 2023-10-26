@@ -57,10 +57,10 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let subset _ _ _ ((),s) ((),s') = true,s,s'
-  let join _ _ _ ((),s) ((),s') = (),s,s'
-  let meet _ _ _ ((),s) ((),s') = (),s,s'
-  let widen _ _ _ ((),s) ((),s') = (),s,s',true
+  let subset _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
   let merge _ _ _ = ()
   let init _ _ flow = flow
   let exec _ _ _ flow = []
@@ -88,24 +88,24 @@ struct
 
   let is_bottom (s,p) = S.is_bottom s || P.is_bottom p
 
-  let subset man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = S.subset (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let b2, s, s' = P.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, s, s' = S.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let b2, s, s' = P.subset (snd_pair_man man) ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
-  let join man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.join (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.join (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.join (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let meet man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.meet (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.meet (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let widen man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s', stable1 = S.widen (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s', stable2 = P.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s', stable1 = S.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s', stable2 = P.widen (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =

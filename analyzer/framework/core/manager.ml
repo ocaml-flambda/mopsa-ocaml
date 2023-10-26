@@ -103,11 +103,3 @@ type ('a, 't) man = {
   set_effects : teffect -> teffect -> teffect;
   (** Sets the effect tree. *)
 }
-
-
-(** Managers provide access to the sub-tree of stacked domain *)
-type ('a, 's) stack_man = {
-  (* Accessors the sub-domain's abstract element ['s] within ['a] *)
-  get_sub : 'a -> 's;
-  set_sub : 's -> 'a -> 'a;
-}

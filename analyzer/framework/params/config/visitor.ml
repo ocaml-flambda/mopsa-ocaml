@@ -32,7 +32,7 @@ type 'a visitor = {
   switch : string option -> Yojson.Basic.t list -> 'a;
   compose : string option -> Yojson.Basic.t list -> 'a;
   union : string option -> Yojson.Basic.t list -> 'a;
-  apply : string option -> string -> Yojson.Basic.t -> 'a;
+  apply : string option -> Yojson.Basic.t -> Yojson.Basic.t -> 'a;
   nonrel : string option -> Yojson.Basic.t -> 'a;
   product : string option -> Yojson.Basic.t list -> string list -> 'a;
 }
@@ -58,7 +58,7 @@ let visit_compose visitor obj =
   visitor.compose (get_semantic obj) l
 
 let visit_apply visitor obj =
-  let f = List.assoc "apply" obj |> to_string in
+  let f = List.assoc "apply" obj in
   let d = List.assoc "on" obj in
   visitor.apply (get_semantic obj) f d
 
@@ -87,4 +87,3 @@ let rec visit visitor json =
   | `Assoc obj when List.mem_assoc "union" obj -> visit_union visitor obj
   | _ -> Exceptions.panic "parsing error: configuration not supported@  %a"
            (pretty_print ~std:true) json
-

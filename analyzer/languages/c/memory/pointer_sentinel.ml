@@ -420,7 +420,7 @@ struct
             let before = mk_before_var_expr base ~mode range in
             let ptr = mk_z (sizeof_type void_ptr flow) range in
 
-            switch ~route:universal [
+            switch [
               (* Case 1: set after
                                                      offset
                  -----|------------------#-------------?------|--->
@@ -608,7 +608,7 @@ struct
             let top = mk_top void_ptr range in
 
 
-            switch ~route:scalar [
+            switch [
               (* Case 1: before sentinel
                  Offset condition: offset <= sentinel_pos - |ptr|
                  Transformation: weak(before)

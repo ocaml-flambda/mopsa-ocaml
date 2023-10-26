@@ -1,4 +1,5 @@
 (****************************************************************************)
+(****************************************************************************)
 (*                                                                          *)
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
@@ -73,10 +74,10 @@ struct
   let merge _ _ _ = ()
   let print _ _ = ()
 
-  let subset () () = true
-  let join () () = ()
-  let meet () () = ()
-  let widen _ () () = ()
+  let subset _ _ _ _ = true
+  let join _ _ _ _ = ()
+  let meet _ _ _ _ = ()
+  let widen _ _ _ _ = ()
 
   let print_state _ _ () = ()
 

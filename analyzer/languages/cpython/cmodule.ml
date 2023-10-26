@@ -714,8 +714,8 @@ module Domain =
           (
             man.exec ~route:(Semantic "C") (mk_add obj range) flow >>% fun flow ->
               let () = debug "adding bytes var %a" pp_var bytes in
-              man.exec ~route:(Semantic "C") (mk_add_var bytes range) flow >>%
-              man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
+              man.exec ~route:(Semantic "Universal") (mk_add_var bytes range) flow >>%
+              man.exec ~route:(Semantic "Universal") (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
               let set_tp_alloc_py_class = C.Ast.find_c_fundec_by_name "set_tp_alloc_py_class" flow in
@@ -2132,7 +2132,7 @@ module Domain =
           let els_var = Python.Objects.Py_list.Domain.var_of_addr (Addr.from_expr list_eaddr) in
           let list_length = Python.Objects.Py_list.Domain.length_var_of_addr (Addr.from_expr list_eaddr) in
           man.exec ~route:(Semantic "Python") (mk_add_var els_var range) flow >>%
-            man.exec ~route:(Semantic "Python") (mk_assign (mk_var list_length range) size range) >>%
+          man.exec ~route:(Semantic "Universal") (mk_assign (mk_var list_length range) size range) >>%
             Eval.singleton c_addr
         )
          |> OptionExt.return

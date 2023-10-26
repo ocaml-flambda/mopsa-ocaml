@@ -28,7 +28,7 @@
 
 open Mopsa_utils
 open Core.All
-open Sig.Combiner.Stacked
+open Sig.Combiner.Domain
 
 
 (** Signature of the toplevel abstraction *)
@@ -94,7 +94,7 @@ let debug fmt = Debug.debug ~channel:"framework.abstraction.toplevel" fmt
 
 
 (** Encapsulate a domain into a top-level abstraction *)
-module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
+module Make(Domain:DOMAIN_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
 
@@ -115,26 +115,17 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let sman : (t,unit) stack_man = {
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
-  }
-
   let subset man ctx a a' =
-    let b, (), () = Domain.subset man sman ctx (a,()) (a',()) in
-    b
+    Domain.subset man ctx (a,a) (a',a') 
 
   let join man ctx a a' =
-    let a, (), () = Domain.join man sman ctx (a,()) (a',()) in
-    a
+    Domain.join man ctx (a,a) (a',a')
 
   let meet man ctx a a' =
-    let a, (), () = Domain.meet man sman ctx (a,()) (a',()) in
-    a
+    Domain.meet man ctx (a,a) (a',a')
 
   let widen man ctx a a' =
-    let a, (), (), _ = Domain.widen man sman ctx (a,()) (a',()) in
-    a
+    Domain.widen man ctx (a,a) (a',a')
 
   let merge = Domain.merge
 
