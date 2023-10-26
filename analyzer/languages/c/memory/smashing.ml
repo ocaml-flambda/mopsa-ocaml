@@ -531,19 +531,19 @@ struct
   (** Singleton unification range *)
   let unify_range = tag_range (mk_fresh_range ()) "smashing-unification"
 
-  let unify man sman ctx ((a,s):t*'s) ((a',s'):t*'s) : t * 's * t * 's =
+  let unify man ctx ((a,s):t*'s) ((a',s'):t*'s) : 's * 's =
     State.fold2zo
       (* No unification for bases present in one branch only *)
       (fun b init acc -> acc)
       (fun b' init' acc -> acc)
-      (fun base init init' (a,s,a',s') ->
-         let doit a init s other_init =
+      (fun base init init' (s,s') ->
+         let doit init s other_init =
            match init, other_init with
-           | Init.Bot, _ | _, Init.Bot -> a,s
+           | Init.Bot, _ | _, Init.Bot -> s
 
-           | Init.None, Init.None -> a,s
+           | Init.None, Init.None -> s
 
-           | Init.Partial _, Init.None -> a,s
+           | Init.Partial _, Init.None -> s
 
            (* The base becomes partially initialized from offset 0 *)
            | Init.None, Init.Partial _
@@ -551,41 +551,41 @@ struct
              (* Add the uninit variable and initialize it to 0 *)
              (* Note that there is no need to add a smashes in order
                 to keep the values of the other flow *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             sub_env_exec (man.exec (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~route:scalar) ctx man sman a s
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (man.exec (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~route:scalar) ctx man
 
            (* The base becomes partially initialized from offset size(base) *)
            | Init.Full _, Init.None ->
              (* Add the uninit variable and initialize it to size *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             sub_env_exec (set_uninit_to_base_size base unify_range man) ctx man sman a s
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (set_uninit_to_base_size base unify_range man) ctx man
 
            (* The base becomes partially initialized from offset size(base) with possible synthesis of missing smashes *)
            | Init.Full ts1, Init.Partial ts2 ->
              (* Add the uninit variable and initialize it to size(base) *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             let a,s = sub_env_exec (set_uninit_to_base_size base unify_range man) ctx man sman a s in
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (set_uninit_to_base_size base unify_range man) ctx man |>
              (* Synthesize missing smashes *)
              STypeSet.fold
-               (fun styp (a,s) ->
-                  sub_env_exec (phi {base; styp} unify_range man) ctx man sman a s
-               ) (STypeSet.diff ts2 ts1) (a,s)
+               (fun styp s ->
+                  env_exec (phi {base; styp} unify_range man) ctx man s
+               ) (STypeSet.diff ts2 ts1)
 
            (* Initialization state will not change, but possible synthesis of missing smashes *)
            | Init.Partial ts1, Init.Full ts2
            | Init.Partial ts1, Init.Partial ts2
            | Init.Full ts1, Init.Full ts2 ->
              STypeSet.fold
-               (fun styp (a,s) ->
-                  sub_env_exec (phi {base; styp} unify_range man) ctx man sman a s
-               ) (STypeSet.diff ts2 ts1) (a,s)
+               (fun styp s ->
+                  env_exec (phi {base; styp} unify_range man) ctx man s
+               ) (STypeSet.diff ts2 ts1) s
 
          in
-         let a,s = doit a init s init' in
-         let a',s' = doit a' init' s' init in
-         (a,s,a',s')
+         let s = doit init s init' in
+         let s' = doit init' s' init in
+         (s,s')
       )
-      a a' (a,s,a',s')
+      a a' (s,s')
 
 
 
@@ -598,20 +598,20 @@ struct
 
   let is_bottom _ = false
 
-  let subset man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let subset man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     true, s, s'
 
-  let join man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let join man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     State.join a a', s, s'
 
-  let meet man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let meet man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     State.join a a', s, s'
 
-  let widen man sman ctx (a,s) (a',s') =
-    let (a, s, s') = join man sman ctx (a,s) (a',s') in
+  let widen man ctx (a,s) (a',s') =
+    let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
   let merge _ _ _  = assert false

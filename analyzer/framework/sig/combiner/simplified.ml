@@ -79,6 +79,11 @@ struct
 
   include D
 
+  let subset _ _ (a,_) (a',_) = D.subset a a'
+  let join _ _ (a,_) (a',_) = D.join a a'
+  let meet _ _ (a,_) (a',_) = D.meet a a'
+  let widen _ ctx (a,_) (a',_) = D.widen ctx a a'
+
   let init prog man flow =
     let a' = D.init prog in
     set_env T_cur a' man flow
@@ -126,8 +131,7 @@ struct
   let ask domains =
     let f = D.ask domains in
     (fun query man flow ->
-       let rep = f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow) in
-       match rep with
+       match f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow) with
        | None -> None
        | Some r -> Some (Cases.singleton r flow)
     )

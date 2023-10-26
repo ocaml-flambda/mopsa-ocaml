@@ -80,7 +80,7 @@ and make_simplified_domain_without_semantic (domain:domain) : (module SIMPLIFIED
          (F.Functor
             (CombinerToSimplified
                (val make_simplified_domain d : SIMPLIFIED_COMBINER))))
-  | _ -> Exceptions.panic "Invalid configuration of simplified domain: %a" pp_domain domain
+  | _ -> Exceptions.panic "Invalid configuration: %a" pp_domain domain
 
 and make_simplified_domain (domain:domain) : (module SIMPLIFIED_COMBINER) =
   match domain.domain_semantic with
@@ -111,7 +111,7 @@ let rec make_stateless_domain_without_semantic (domain:domain) : (module STATELE
   match domain.domain_kind with
   | D_stateless d -> (module StatelessToCombiner(val d))
   | D_switch dl -> Combiners.Domain.Stateless_switch.make (List.map make_stateless_domain dl)
-  | _ -> Exceptions.panic "Invalid configuration of stateless domain: %a" pp_domain domain
+  | _ -> Exceptions.panic "Invalid configuration: %a" pp_domain domain 
 
 and make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
   match domain.domain_semantic with
@@ -132,34 +132,51 @@ and make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
 (** {2 Standard domains} *)
 (** ******************** *)
 
-let is_standard_domain d =
+let rec is_standard_domain d =
   match d.domain_kind with
   | D_domain _ -> true
-  | D_functor(F_domain _, _) -> true
-  | _ -> false
+  | D_functor(F_stacked _, dd) -> is_standard_domain dd
+  | D_switch dl -> List.for_all is_standard_domain dl
+  | _ -> is_stateless_domain d || is_simplified_domain d
 
-let rec make_standard_domain (domain:domain) : (module DOMAIN_COMBINER) =
+let rec make_standard_domain_without_semantic (domain:domain) : (module DOMAIN_COMBINER) =
   if is_simplified_domain domain then
     (module SimplifiedToStandard(val (make_simplified_domain domain))) else
   if is_stateless_domain domain then
-    (module StatelessToDomain(val (make_stateless_domain domain)))
-  else
+    (module StatelessToDomain(val (make_stateless_domain domain))) else
+  if is_standard_domain domain then
     match domain.domain_kind with
     | D_domain d -> (module DomainToCombiner(val d))
-    | D_functor(F_domain f, d) ->
-      let module F = (val f) in
-      (module DomainToCombiner
-           (F.Functor
-              (CombinerToDomain
-                 (val make_standard_domain d : DOMAIN_COMBINER))))
-    | _ -> Exceptions.panic "Invalid configuration of standard domain: %a" pp_domain domain
+    | D_functor(F_stacked s, dd) ->
+      (module Combiners.Domain.Apply.Make(val make_stacked_domain s : STACKED_COMBINER)(val make_standard_domain dd : DOMAIN_COMBINER))
+    | D_switch domains -> 
+      Combiners.Domain.Domain_switch.make (List.map make_standard_domain domains)
 
+    | _ -> Exceptions.panic "Invalid configuration"
+  else
+    (* Stacked domain *)
+    Exceptions.panic "mk_standard_domain: invalid domain@\n  @[%a@]"
+      pp_domain domain
+
+and make_standard_domain (domain:domain) : (module DOMAIN_COMBINER) =
+  match domain.domain_semantic with
+  | None -> make_standard_domain_without_semantic domain
+  | Some semantic ->
+    let module D = (val (make_standard_domain_without_semantic domain)) in
+    (module
+      (struct
+        include D
+        let semantics = Core.Semantic.SemanticSet.add semantic D.semantics
+        let routing_table = add_routes (Semantic semantic) domains D.routing_table
+      end)
+      : DOMAIN_COMBINER
+    )
 
 
 (** {2 Stacked domains} *)
 (** ******************** *)
 
-let rec prepare_stacked_switch (domains:domain list) : (module STACKED_COMBINER) list =
+and prepare_stacked_switch (domains:domain list) : (module STACKED_COMBINER) list =
   match domains with
   | [] -> []
   | { domain_kind = D_stateless _ } :: _ ->
@@ -183,20 +200,8 @@ and make_stacked_domain_without_semantic (domain:domain) : (module STACKED_COMBI
   | D_stateless d   -> (module StandardToStacked(StatelessToDomain(StatelessToCombiner(val d))))
   | D_nonrel(value) -> (module StandardToStacked(SimplifiedToStandard(val (make_nonrel_domain value))))
 
-  | D_functor(F_stacked f,d) ->
-    let module F = (val f) in
-    (module StackedToCombiner
-         (F.Functor
-            (CombinerToStacked
-               (val make_stacked_domain d : STACKED_COMBINER))))
-
-  | D_functor(F_domain f,d) ->
-    let module F = (val f) in
-    (module StandardToStacked
-         (DomainToCombiner
-            (F.Functor
-               (CombinerToDomain
-                  (val make_standard_domain d : DOMAIN_COMBINER)))))
+  | D_functor(F_stacked s, dd) ->
+    (module StandardToStacked(Combiners.Domain.Apply.Make(val make_stacked_domain s : STACKED_COMBINER)(val make_standard_domain dd : DOMAIN_COMBINER)))
 
   | D_functor(F_simplified f,d) ->
     let module F = (val f) in
@@ -238,8 +243,10 @@ and make_stacked_domain (domain:domain) : (module STACKED_COMBINER) =
       : STACKED_COMBINER
     )
 
-let from_json (domain:domain) : (module STACKED_COMBINER) =
+let from_json (domain:domain) : (module DOMAIN_COMBINER) =
   let d = make_stacked_domain domain in
   (* Add an empty domain below the abstraction to ensure that leave domains
      have always a [Below] route *)
-  Combiners.Domain.Compose.make [d; (module EmptyDomain)]
+  let module D = (val Combiners.Domain.Compose.make [d; (module EmptyDomain)]) in
+  (* Translate the stacked domain into a standard domain *)
+  (module Sig.Combiner.Domain.StackedToStandard(D))

@@ -591,12 +591,11 @@ struct
 
   let is_optional_base b a = not (BaseSet.mem b a.bases)
 
-  (** [unify a a'] finds non-common cells in [a] and [a'] and adds them. *)
-  let unify man sman ctx (a,s) (a',s') =
-    let doit ss aa acc =
+  let unify man ctx (a,s) (a',s') =
+    let doit ss acc =
       Cells.fold
         (fun c acc ->
-          sub_env_exec (add_cell c unify_range man) ctx man sman aa acc |> snd )
+          env_exec (add_cell c unify_range man) ctx man acc )
         ss acc
     in
     CellSet.fold2zo
@@ -604,24 +603,24 @@ struct
          if is_optional_base b a' then
            (acc1,acc2)
          else
-           acc1, OffCells.fold (fun _ s1 acc2 -> doit s1 a' acc2) m1 acc2
+           acc1, OffCells.fold (fun _ s1 acc2 -> doit s1 acc2) m1 acc2
       )
       (fun b m2 (acc1,acc2) ->
          if is_optional_base b a then
            (acc1,acc2) else
-           OffCells.fold (fun _ s2 acc1 -> doit s2 a acc1) m2 acc1, acc2
+           OffCells.fold (fun _ s2 acc1 -> doit s2 acc1) m2 acc1, acc2
       )
       (fun b m1 m2 acc ->
          OffCells.fold2zo
            (fun _ s1 (acc1,acc2) ->
-              acc1, doit s1 a' acc2
+              acc1, doit s1 acc2
            )
            (fun _ s2 (acc1,acc2) ->
-              doit s2 a acc1, acc2
+              doit s2 acc1, acc2
            )
            (fun _ s1 s2 (acc1,acc2) ->
-              doit (Cells.diff s2 s1) a acc1,
-              doit (Cells.diff s1 s2) a' acc2
+              doit (Cells.diff s2 s1) acc1,
+              doit (Cells.diff s1 s2) acc2
            )
            m1 m2 acc
       )
@@ -633,12 +632,12 @@ struct
 
   let is_bottom _ = false
 
-  let subset man sman ctx (a,s) (a',s') =
-    let s, s' = unify man sman ctx (a, s) (a', s') in
+  let subset man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a, s) (a', s') in
     (true, s, s')
 
-  let join man sman ctx (a,s) (a',s') =
-    let s, s' = unify man sman ctx (a,s) (a',s') in
+  let join man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     let a = {
       cells = CellSet.join a.cells a'.cells;
       bases = BaseSet.join a.bases a'.bases;
@@ -648,8 +647,8 @@ struct
 
   let meet = join
 
-  let widen man sman ctx (a,s) (a',s') =
-    let (a, s, s') = join man sman ctx (a,s) (a',s') in
+  let widen man ctx (a,s) (a',s') =
+    let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
   let merge pre (a,e) (a',e') =

@@ -23,15 +23,15 @@
 (** Switch combiner *)
 
 open Core.All
-open Sig.Combiner.Stacked
+open Sig.Combiner.Domain
 open Common
 open Mopsa_utils
 
 
 module Make
-    (D1:STACKED_COMBINER)
-    (D2:STACKED_COMBINER)
-  : STACKED_COMBINER with type t = D1.t * D2.t
+    (D1:DOMAIN_COMBINER)
+    (D2:DOMAIN_COMBINER)
+  : DOMAIN_COMBINER with type t = D1.t * D2.t
 =
 struct
 
@@ -70,25 +70,24 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = D1.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let b2, s, s' = D2.subset (snd_pair_man man) ctx (a2,s) (a2',s') in
-    b1 && b2, s, s'
+  let subset man ctx ((a1,a2), s) ((a1',a2'), s') =
+    D1.subset (fst_pair_man man) ctx (a1, s) (a1', s') &&
+    D2.subset (snd_pair_man man) ctx (a2, s) (a2', s')
 
-  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = D1.join (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let aa2, s, s' = D2.join (snd_pair_man man) ctx (a2,s) (a2',s') in
-    (aa1,aa2), s, s'
+  let join man ctx ((a1,a2), s) ((a1',a2'), s') =
+    let aa1 = D1.join (fst_pair_man man) ctx (a1, s) (a1', s') in
+    let aa2 = D2.join (snd_pair_man man) ctx (a2, s) (a2', s') in
+    (aa1,aa2)
 
-  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = D1.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let aa2, s, s' = D2.meet (snd_pair_man man) ctx (a2,s) (a2',s') in
-    (aa1,aa2), s, s'
+  let meet man ctx ((a1,a2), s) ((a1',a2'), s') =
+    let aa1 = D1.meet (fst_pair_man man) ctx (a1, s) (a1', s') in
+    let aa2 = D2.meet (snd_pair_man man) ctx (a2, s) (a2', s') in
+    (aa1,aa2)
 
-  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s', stable1 = D1.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let aa2, s, s', stable2 = D2.widen (snd_pair_man man) ctx (a2,s) (a2',s') in
-    (aa1,aa2), s, s', stable1 && stable2
+  let widen man ctx ((a1,a2), s) ((a1',a2'), s') =
+    let aa1 = D1.widen (fst_pair_man man) ctx (a1, s) (a1', s') in
+    let aa2 = D2.widen (snd_pair_man man) ctx (a2, s) (a2', s') in
+    (aa1,aa2)
 
   let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
     D1.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
@@ -169,11 +168,11 @@ struct
 end
 
 
-let rec make (domains:(module STACKED_COMBINER) list) : (module STACKED_COMBINER) =
+let rec make (domains:(module DOMAIN_COMBINER) list) : (module DOMAIN_COMBINER) =
   match domains with
   | [] -> assert false
   | [d] -> d
   | l ->
     let a,b = ListExt.split l in
     let aa, bb = make a, make b in
-    (module Make(val aa : STACKED_COMBINER)(val bb : STACKED_COMBINER))
+    (module Make(val aa : DOMAIN_COMBINER)(val bb : DOMAIN_COMBINER))

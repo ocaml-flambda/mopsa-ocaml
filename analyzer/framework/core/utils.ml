@@ -184,10 +184,6 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   let flow' = f flow |> post_to_flow man in
   Flow.get T_cur man.lattice flow'
 
-let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
-  let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
-  man.get aa, sman.get_sub aa
-
 let ask_and_reduce_cases f q ?(bottom = fun () -> assert false) a =
   let cases = f q a in
   Cases.reduce_result

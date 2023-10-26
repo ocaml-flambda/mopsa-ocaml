@@ -197,6 +197,10 @@ struct
        let flow = set_env T_cur ncur man flow in
        man.exec   to_remove_stmt flow |> OptionExt.return
 
+    | S_add ({ekind = E_addr ({addr_kind = A_py_c_function _ | A_py_c_module _ }, om)}) ->
+      flow |> Post.return |> OptionExt.return 
+
+    | S_add ({ekind = E_addr ({addr_kind = A_py_c_class _ } as a, om)})
     | S_add ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, om)}) ->
       debug "S_add";
       let cur = get_env T_cur man flow in
@@ -207,6 +211,8 @@ struct
       set_env T_cur (if addr_mode a om = STRONG then ncur else join cur ncur) man flow |>
       Post.return |>
       OptionExt.return
+
+
 
     | _ -> None
 
