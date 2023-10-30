@@ -370,5 +370,6 @@ if __name__ == "__main__":
         Config("c/cell-string-length-itv.json", []), # regarder si ça va pas créer plus de timeouts
         Config("c/cell-string-length-pointer-sentinel-pack-rel-itv.json", []),
         Config("c/cell-string-length-pointer-sentinel-pack-rel-itv-congr.json", ["-widening-delay=1", "-hook constant_widening_thresholds"])
+        Config("c/cell-string-length-pointer-sentinel-pack-rel-itv-congr.json", ["-widening-delay=1", "-hook constant_widening_thresholds", "-goto-down"])
     ]
     try_configs(configs, args, prop)

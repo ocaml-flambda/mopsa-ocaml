@@ -26,6 +26,24 @@ open Sig.Abstraction.Stateless
 open Ast
 open Common.Scope_update
 
+let name = "c.iterators.goto"
+
+(*==========================================================================*)
+(**                       {2 Command line options}                          *)
+(*==========================================================================*)
+
+let opt_goto_down : bool ref = ref false
+(** Enable down iterations for goto *)
+
+let () =
+  register_domain_option name {
+    key = "-goto-down";
+    category = "Goto";
+    doc = " perform a down iteration after goto stabilization";
+    spec = ArgExt.Set opt_goto_down;
+    default = "false";
+  };
+
 
 
 (*==========================================================================*)
@@ -76,7 +94,7 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_c_goto (s,upd) ->
-      (* Save TCur env in T_goto s token, then set T_cur to bottom. *)
+      (* Save T_cur env in T_goto s token, then set T_cur to bottom. *)
       update_scope upd stmt.srange man flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
       let flow0 = Flow.add (T_goto s) cur man.lattice flow |>
@@ -99,33 +117,37 @@ struct
       let bottom = Flow.bottom_from flow in
       let nogotos, gotos = Flow.fold (fun (nogotos, gotos) k v ->
           match k with
-          | T_goto s -> (nogotos, Flow.add k v man.lattice gotos)
+          | T_goto _ -> (nogotos, Flow.add k v man.lattice gotos)
           | _       -> (Flow.add k v man.lattice nogotos, gotos)
         ) (bottom, bottom) flow in
       let init_report = Flow.get_report flow in
-      let next f f' i wid_limit =
-        let get_gotos f = Flow.filter
-            (fun t e -> match t with | T_goto s -> true | _ -> false)
-            f
-        in
+      let get_gotos f = Flow.filter
+          (fun t e -> match t with | T_goto _ -> true | _ -> false)
+          f
+      in
+      let drop_gotos f = Flow.filter
+          (fun t e -> match t with | T_goto s -> false | _ -> true)
+          f
+      in
+      let rec next f i wid_limit =
+        man.exec stmt' f >>% fun f' ->
         let f1, f1' = get_gotos f, get_gotos f' in
         if Flow.subset man.lattice f1' f1 then
-          None
+          if !opt_goto_down then
+            down (drop_gotos f |> Flow.join man.lattice f1' |> Flow.set_report init_report)
+          else
+            Post.return f'
         else
           (* Join the input with the new goto flows *)
           let f2' = Flow.join man.lattice f f1' in
           if i >= wid_limit
-          then Some (Flow.widen man.lattice f f2')
-          else Some f2'
-      in
-      let rec stabilization f i wid_limit =
-        let f = Flow.set_report init_report f in
+          then next (Flow.widen man.lattice f f2') (i+1) wid_limit
+          else next f2' (i+1) wid_limit
+      and down f =
         man.exec stmt' f >>% fun f' ->
-        match next (Flow.copy_ctx f' f) f' i wid_limit with
-        | None -> Post.return f'
-        | Some f'' -> stabilization f'' (i+1) wid_limit
+        Post.return f'
       in
-      stabilization nogotos 0 1 >>%? fun flow1 ->
+      next nogotos 0 1 >>%? fun flow1 ->
       let flow1_minus_gotos = Flow.filter (fun k v ->
           match k with
           | T_goto s -> false | _ -> true
