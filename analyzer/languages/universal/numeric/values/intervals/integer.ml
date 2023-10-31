@@ -143,6 +143,7 @@ struct
     | O_bit_xor -> bot_lift2 I.bit_xor a1 a2
     | O_bit_rshift -> bot_absorb2 I.shift_right a1 a2
     | O_bit_lshift -> bot_absorb2 I.shift_left a1 a2
+    | O_convex_join -> bot_lift2 I.join a1 a2
     | _     -> top_of_typ tr
 
 

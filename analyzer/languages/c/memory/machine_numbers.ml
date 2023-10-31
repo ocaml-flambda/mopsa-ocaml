@@ -137,6 +137,17 @@ struct
       default = "false";
     }
 
+  let opt_symbolic_rewriting = ref true
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-rewriting";
+      category = "C";
+      doc = " enable rewriting of arithmetic expressions into sum, product or division of linear forms (experimental)";
+      spec = ArgExt.Bool (fun b -> opt_symbolic_rewriting := b);
+      default = "true";
+    }
+    
+
 
 
   (** Numeric variables *)
@@ -734,6 +745,41 @@ struct
       let vv = mk_num_var v in
       man.print_expr flow printer (mk_var vv exp.erange)
     | _ -> ()
+
+
+  module Symbolic_rewriting = struct
+    let exec stmt man flow = exec stmt man flow
+
+    let eval exp (man: ('a,_) man) flow =
+      if not !opt_symbolic_rewriting then eval exp man flow else
+
+      try
+        let iota (e: expr): IntItv.I.t =
+          match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
+          | BOT -> raise Rewriting.No_representation
+          | Nb res -> res
+        in
+        let env : 'a Rewriting.env = {
+          iota;
+          mk_num_var;
+          lattice = man.lattice;
+          opt_signed_arithmetic_overflow = !opt_signed_arithmetic_overflow;
+          opt_unsigned_arithmetic_overflow = !opt_unsigned_arithmetic_overflow;
+          opt_signed_implicit_cast_overflow = !opt_signed_implicit_cast_overflow;
+          opt_unsigned_implicit_cast_overflow = !opt_unsigned_implicit_cast_overflow;
+          opt_explicit_cast_overflow = !opt_explicit_cast_overflow;
+        } in
+        let (exp', flow') = Rewriting.abstract env exp flow in
+        Eval.singleton exp flow' |>
+        Eval.add_translation "Universal" exp' |>
+        OptionExt.return
+      with Rewriting.No_representation ->
+        eval exp man flow
+
+    let ask query man flow = ask query man flow
+
+  end
+  include Symbolic_rewriting
 
 end
 

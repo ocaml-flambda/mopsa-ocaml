@@ -255,6 +255,36 @@ struct
         let abs = Apron.Abstract1.expand ApronManager.man abs x_apr [| x_apr' |] in
         (Apron.Texpr1.Var x_apr', abs, bnd, x_apr' :: l)
 
+      | E_binop(O_convex_join, e1, e2) ->
+        (* add tmp variable *)
+        let tmp = mktmp ~typ:exp.etyp () in
+        let tmp_apr, _ = Binding.mopsa_to_apron_var tmp bnd in
+        let env = Apron.Abstract1.env abs in
+        let env' = Apron.Environment.add env [|tmp_apr|] [||] in
+        let abs = Apron.Abstract1.change_environment ApronManager.man abs env' false in
+
+        let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
+        let e2', abs, bnd, l = exp_to_apron isnan e2 (abs,bnd) l in
+        let typ' = typ_to_apron exp.etyp in
+        let round = if typ' = Apron.Texpr1.Int then Apron.Texpr1.Zero else !opt_float_rounding in
+
+        (* case 1: e1 <= tmp <= e2 *)
+        let constraints_1 = tcons_array_of_tcons_list env [
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env' tmp_apr) (Apron.Texpr1.of_expr env' e1') typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env' e2') (Apron.Texpr1.var env' tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
+        ] in
+        let abs_1 = Apron.Abstract1.meet_tcons_array ApronManager.man abs constraints_1 in
+
+        (* case 2: e2 <= tmp <= e1 *)
+        let constraints_2 = tcons_array_of_tcons_list env [
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env' tmp_apr) (Apron.Texpr1.of_expr env' e2') typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env' e1') (Apron.Texpr1.var env' tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
+        ] in
+        let abs_2 = Apron.Abstract1.meet_tcons_array ApronManager.man abs constraints_2 in
+
+        let abs = Apron.Abstract1.join ApronManager.man abs_1 abs_2 in
+        (Apron.Texpr1.Var tmp_apr, abs, bnd, tmp_apr :: l)
+
       | E_binop((O_ediv|O_erem) as binop, e1, e2) ->
         let binop' = binop_to_apron binop in
         let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
@@ -364,7 +394,7 @@ struct
         (Dnf.singleton (Apron.Tcons1.SUP, e1', T_int, e0', exp.etyp)),
       abs, bnd, l
 
-  let tcons_array_of_tcons_list env l =
+  and tcons_array_of_tcons_list env l =
     let n = List.length l in
     let cond_array = Apron.Tcons1.array_make env n in
     let () = List.iteri (fun i c ->
