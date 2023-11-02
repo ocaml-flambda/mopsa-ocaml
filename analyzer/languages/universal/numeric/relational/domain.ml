@@ -352,9 +352,31 @@ struct
     else
       Values.Intervals.Integer.Value.top
 
-  let eval_interval man e (abs,bnd) =
+  let rec eval_interval man e (abs,bnd) =
     match ekind e with
-    | E_var (v,_) -> Some (bound_var v (abs,bnd))
+    | E_var (v,_) ->
+      (* we meet with the interval computed by non-relational domains so that the interval of `unsigned x` is positive *)
+      let int_nonrel = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in 
+      let int_rel = bound_var v (abs,bnd) in
+      Some (ItvUtils.IntItv.meet_bot int_nonrel int_rel)
+    | E_binop (O_mult, e1, e2) -> (* TODO improve bounds computation of expressions *)
+      let int1 = eval_interval man e1 (abs,bnd) in
+      let int2 = eval_interval man e2 (abs,bnd) in
+      begin match int1, int2 with
+      | Some int1, Some int2 ->
+        Bot.bot_lift2 ItvUtils.IntItv.mul int1 int2 |>
+        OptionExt.return
+      | _ -> None
+      end
+    | E_binop (O_convex_join, e1, e2) ->
+      let int1 = eval_interval man e1 (abs,bnd) in
+      let int2 = eval_interval man e2 (abs,bnd) in
+      begin match int1, int2 with
+      | Some int1, Some int2 ->
+        ItvUtils.IntItv.join_bot int1 int2 |>
+        OptionExt.return
+      | _ -> None
+      end
     | _ ->
       try
         let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in

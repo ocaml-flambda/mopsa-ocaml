@@ -748,36 +748,40 @@ struct
 
 
   module Symbolic_rewriting = struct
-    let exec stmt man flow = exec stmt man flow
+    let debug fmt = Debug.debug ~channel:"c_rewriting" fmt
 
     let eval exp (man: ('a,_) man) flow =
       if not !opt_symbolic_rewriting then eval exp man flow else
 
-      try
-        let iota (e: expr): IntItv.I.t =
-          match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
-          | BOT -> raise Rewriting.No_representation
-          | Nb res -> res
-        in
-        let env : 'a Rewriting.env = {
-          iota;
-          mk_num_var;
-          lattice = man.lattice;
-          opt_signed_arithmetic_overflow = !opt_signed_arithmetic_overflow;
-          opt_unsigned_arithmetic_overflow = !opt_unsigned_arithmetic_overflow;
-          opt_signed_implicit_cast_overflow = !opt_signed_implicit_cast_overflow;
-          opt_unsigned_implicit_cast_overflow = !opt_unsigned_implicit_cast_overflow;
-          opt_explicit_cast_overflow = !opt_explicit_cast_overflow;
-        } in
-        let (exp', flow') = Rewriting.abstract env exp flow in
-        Eval.singleton exp flow' |>
-        Eval.add_translation "Universal" exp' |>
-        OptionExt.return
-      with Rewriting.No_representation ->
-        eval exp man flow
-
-    let ask query man flow = ask query man flow
-
+      match exp.etyp with
+      | T_c_integer _ ->
+        begin try
+          let iota (e: expr): IntItv.I.t =
+            match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
+            | BOT -> raise Rewriting.No_representation
+            | Nb res -> res
+          in
+          let env : 'a Rewriting.env = {
+            iota;
+            mk_num_var;
+            lattice = man.lattice;
+            opt_signed_arithmetic_overflow = !opt_signed_arithmetic_overflow;
+            opt_unsigned_arithmetic_overflow = !opt_unsigned_arithmetic_overflow;
+            opt_signed_implicit_cast_overflow = !opt_signed_implicit_cast_overflow;
+            opt_unsigned_implicit_cast_overflow = !opt_unsigned_implicit_cast_overflow;
+            opt_explicit_cast_overflow = !opt_explicit_cast_overflow;
+          } in
+          let (exp', flow') = Rewriting.abstract env exp flow in
+          let () = debug "Rewritten expression %a into %a." pp_expr exp pp_expr exp' in
+          Eval.singleton exp flow' |>
+          Eval.add_translation "Universal" exp' |>
+          OptionExt.return
+        with Rewriting.No_representation ->
+          let () = debug "Failed to rewrite %a." pp_expr exp in
+          let () = if Debug.can_print "c_rewriting" then Printexc.print_backtrace stdout in
+          eval exp man flow
+        end
+      | _ -> eval exp man flow
   end
   include Symbolic_rewriting
 

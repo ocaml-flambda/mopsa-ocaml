@@ -23,8 +23,7 @@
 
 (* TODO missing:
    - symbolic constant propagation domain
-   - propagate right hand side of integer comparisons with the corresponding modulo elimination rule
-   - remove remaining `assert false`
+   - int shift by a constant
 *)
 
 open Mopsa
@@ -76,6 +75,10 @@ let minf_mone: IntItv.t = (IntBound.PINF, IntBound.Finite Z.minus_one)
 
 let fake_range = mk_fresh_range ()
 
+let pp_mod fmt = function
+  | NoMod -> Format.fprintf fmt "ℤ"
+  | Mod (l,u) -> Format.fprintf fmt "[%a,%a[" Z.pp_print l Z.pp_print u
+
 
 (* are two abstract expressions equal. In particular, variables coefficiented by 0 are discarded *)
 let rec abstract_equal = function
@@ -90,15 +93,16 @@ let rec abstract_equal = function
 let rec to_expr env aexpr = match aexpr with
   | LinearForm { constant; coeffs } ->
     let e = VarMap.fold (fun v coeff e ->
+      let v = mk_var v fake_range in
       let to_add =
         if Z.equal coeff Z.zero then
           None
         else if Z.equal coeff Z.one then
-          Some (mk_var (env.mk_num_var v) fake_range)
+          Some v
         else if Z.equal coeff Z.minus_one then
-          Some (mk_unop ~etyp:T_int O_minus (mk_var (env.mk_num_var v) fake_range) fake_range)
+          Some (mk_unop ~etyp:T_int O_minus v fake_range)
         else
-          Some (mk_binop ~etyp:T_int (mk_constant ~etyp:T_int (C_int coeff) fake_range) O_mult (mk_var (env.mk_num_var v) fake_range) fake_range)
+          Some (mk_binop ~etyp:T_int (mk_constant ~etyp:T_int (C_int coeff) fake_range) O_mult v fake_range)
       in
       (* we try to use as few operators as possible. In particular we avoid adding unnecessary 0 as constants *)
       match e, to_add with
@@ -159,8 +163,8 @@ let is_var = function
     end
   | _ -> None
 
-(* is an abtract expression a difference of variables mutliplied by a non-zero constant (e.g., k(X-A)).
-    In such case, the tuple is returned is (k, X, A) *)
+(* is an abstract expression a difference of variables multiplied by a non-zero constant (e.g., k(X-A)).
+    In such case, the tuple returned is (k, X, A) *)
 let is_difference = function
   | LinearForm { constant; coeffs } ->
     if not (Z.equal constant Z.zero) then None else
@@ -216,7 +220,7 @@ let is_m_k_splittable k m =
 
 let id _ c = c
 
-let rec check_int_overflow env cexp range (aexpr, m, flow) =
+let rec check_int_overflow env cexp (aexpr, m, flow) =
   let typ = cexp.etyp in
   (* Function that performs the actual check *)
   let do_check ?(exp=cexp) raise_alarm =
@@ -243,14 +247,14 @@ let rec check_int_overflow env cexp range (aexpr, m, flow) =
 
     if IntItv.included itv ritv then
       (* the resulting expression will be wrapped into the *)
-      (aexpr', m', Flow.add_safe_check CHK_C_INTEGER_OVERFLOW range flow)
+      (aexpr', m', Flow.add_safe_check CHK_C_INTEGER_OVERFLOW cexp.erange flow)
     else
       (* the wrap-around will be applied latter by the function abstract *)
       if raise_alarm
       then
         let cs = Flow.get_callstack flow in
         let cexp' = get_orig_expr exp in
-        let alarm = mk_alarm (A_c_integer_overflow(cexp',Nb itv,typ)) cs range in
+        let alarm = mk_alarm (A_c_integer_overflow(cexp',Nb itv,typ)) cs cexp.erange in
         (aexpr', m', Flow.raise_alarm alarm ~bottom:false ~warning:true env.lattice flow)
       else
         (aexpr', m', flow)
@@ -276,7 +280,7 @@ let rec check_int_overflow env cexp range (aexpr, m, flow) =
   | E_c_cast(e, true) ->
     do_check ~exp:e env.opt_explicit_cast_overflow
 
-  | _ -> panic_at range "check_int_overflow: unsupported expression %a" pp_expr cexp
+  | _ -> panic_at cexp.erange "check_int_overflow(rewriting): unsupported expression %a" pp_expr cexp
 
 
 (* try to remove the modulo from an abstract expression. Otherwise, raise an error *)
@@ -290,6 +294,8 @@ and rm_mod env = function
     if IntItv.included int (Finite l, Finite (Z.pred u)) then
       aexpr
     else
+      (* TODO debug *)
+      let () = Format.printf "%a is included in %a and failed to be proven in %a\n" pp_expr (to_expr env aexpr) IntItv.fprint int pp_mod (Mod (l,u)) in
       raise No_representation
 
 (* given an abstract expression, return its opposite *)
@@ -318,7 +324,8 @@ and abstract env (exp: expr) flow =
 
   (* 𝔼⟦ var ⟧ *)
   | E_var (v,_) when is_c_num_type v.vtyp ->
-    begin match env.iota (mk_var (env.mk_num_var v) fake_range) with
+    let v = env.mk_num_var v in
+    begin match env.iota (mk_var v fake_range) with
     (* constant propagation *)
     | (IntBound.Finite l, IntBound.Finite u) when Z.equal l u ->
       (lf_const l, NoMod, flow)
@@ -328,25 +335,105 @@ and abstract env (exp: expr) flow =
 
   (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
   | E_unop((O_plus | O_minus) as unop, e) when exp |> etyp |> is_c_int_type ->
-    let (aexpr, m', flow') = abstract env e flow in
+    let (aexpr, m', flow) = abstract env e flow in
     let (aexpr',m') = match unop, m' with
       | O_plus, _ -> (aexpr, m')
       | O_minus, NoMod -> (reduce env (opposite aexpr), NoMod)
       | O_minus, Mod (l,u) -> (reduce env (opposite aexpr), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
       | _ -> assert false
     in
-    check_int_overflow env exp exp.erange (aexpr', m', flow')
+    check_int_overflow env exp (aexpr', m', flow)
 
-  (* 𝔼⟦ e / e' ⟧, type(exp) = int *)
-  | E_binop(O_div, e, e') when exp |> etyp |> is_c_int_type -> assert false
+  (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -} and type(exp) = int *)
+  | E_binop((O_plus|O_minus) as op, e, e') when exp |> etyp |> is_c_int_type ->
+    let (aexpr1, m1, flow) = abstract env e flow in
+    let (aexpr2, m2, flow) = abstract env e' flow in
+    let (aexpr2, m2) = match op, m2 with
+      | O_minus, NoMod -> (reduce env (opposite aexpr2), m2)
+      | O_minus, Mod (l,u) -> (reduce env (opposite aexpr2), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
+      | _ -> (aexpr2, m2)
+    in
+    let (aexpr, m) =
+      match (is_constant aexpr1, aexpr1, m1), (is_constant aexpr2, aexpr2, m2) with
+      | (Some alpha1, _, m1), (Some alpha2, _, m2) ->
+        (lf_const (Z.add (apply_mod alpha1 m1) (apply_mod alpha2 m2)), NoMod)
+      | (Some alpha, _, m_alpha), (None, aexpr, Mod (l,u))
+      | (None, aexpr, Mod (l,u)), (Some alpha, _, m_alpha) ->
+        let alpha' = apply_mod alpha m_alpha in
+        (Abinary_expr (Add, lf_const alpha', aexpr)), Mod (Z.add l alpha', Z.add u alpha')
+      | _ ->
+        let rmin, rmax = rangeof exp.etyp flow in
+        let rlen = Z.succ (Z.sub rmax rmin) in
+        if is_m_k_splittable rlen m1 && is_m_k_splittable rlen m2 then
+          (Abinary_expr (Add, aexpr1, aexpr2)), Mod (rmin, Z.succ rmax)
+        else
+          (Abinary_expr (Add, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+    in
+    check_int_overflow env exp (reduce env aexpr, m, flow)
 
-  (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
-  | E_binop((O_mult|O_plus|O_minus) as op, e, e') when exp |> etyp |> is_c_int_type -> assert false
+    (* 𝔼⟦ e * e' ⟧ and type(exp) = int *)
+  | E_binop(O_mult, e, e') when exp |> etyp |> is_c_int_type ->
+    let (aexpr1, m1, flow) = abstract env e flow in
+    let (aexpr2, m2, flow) = abstract env e' flow in
+    let (aexpr, m) =
+      match (is_constant aexpr1, aexpr1, m1), (is_constant aexpr2, aexpr2, m2) with
+      | (Some alpha1, _, m1), (Some alpha2, _, m2) ->
+        (lf_const (Z.mul (apply_mod alpha1 m1) (apply_mod alpha2 m2)), NoMod)
+      | (Some alpha, _, m_alpha), (None, aexpr, Mod (l,u))
+      | (None, aexpr, Mod (l,u)), (Some alpha, _, m_alpha) ->
+        let alpha' = apply_mod alpha m_alpha in
+        if Z.lt Z.zero alpha' then
+          (Abinary_expr (Mult, aexpr, lf_const alpha'), Mod (Z.mul l alpha', Z.mul u alpha'))
+        else
+          (Abinary_expr (Mult, aexpr, lf_const alpha'), Mod (Z.succ (Z.mul u alpha'), Z.succ (Z.mul l alpha')))
+      | _ ->
+        let rmin, rmax = rangeof exp.etyp flow in
+        let rlen = Z.succ (Z.sub rmax rmin) in
+        if is_m_k_splittable rlen m1 && is_m_k_splittable rlen m2 then
+          (Abinary_expr (Mult, aexpr1, aexpr2), Mod (rmin, Z.succ rmax))
+        else
+          (Abinary_expr (Mult, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+    in
+    check_int_overflow env exp (reduce env aexpr, m, flow)
+
+    (* 𝔼⟦ e / e' ⟧, type(exp) = int *)
+  | E_binop(O_div, e, e') when exp |> etyp |> is_c_int_type ->
+    let (aexpr1, m1, flow) = abstract env e flow in
+    let (aexpr2, m2, flow) = abstract env e' flow in
+    let flow =
+      if (aexpr2, m2) |> rm_mod env |> to_expr env |> env.iota |> IntItv.contains_zero then
+        raise No_representation (* first approximation *)
+      else
+        Flow.add_safe_check CHK_C_DIVIDE_BY_ZERO exp.erange flow
+    in
+    let (aexpr, m) =
+      match is_constant aexpr2, m1 with
+      | Some alpha, Mod (l,u) ->
+        let alpha' = apply_mod alpha m2 in
+        if Z.lt Z.zero alpha' && Z.leq Z.zero l && Z.divisible l alpha' && Z.divisible u alpha' then
+          (Abinary_expr (Div, aexpr1, lf_const alpha'), Mod (Z.divexact l alpha', Z.divexact u alpha'))
+        else if Z.gt Z.zero alpha' && Z.gt Z.zero u && Z.divisible (Z.succ u) alpha' && Z.divisible (Z.succ l) alpha' then
+          (Abinary_expr (Div, aexpr1, lf_const alpha'), Mod (Z.divexact (Z.succ u) alpha', Z.divexact (Z.succ l) alpha'))
+        else
+          (Abinary_expr (Div, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+      | _ ->
+        (Abinary_expr (Div, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+    in
+    check_int_overflow env exp (reduce env aexpr, m, flow)
+
+  (* 𝔼⟦ e ⋓ e' ⟧, ⋄ ∈ {+, -, *} and type(exp) = int *)
+  | E_binop(O_convex_join, e, e') when exp |> etyp |> is_c_int_type ->
+    let (aexpr1, m1, flow) = abstract env e flow in
+    let (aexpr2, m2, flow) = abstract env e' flow in
+    let aexpr1' = rm_mod env (aexpr1, m1) in
+    let aexpr2' = rm_mod env (aexpr2, m2) in
+    let aexpr = reduce env (Abinary_expr (ConvexJoin, aexpr1', aexpr2')) in
+    (aexpr, NoMod, flow)
 
   (* 𝔼⟦ (int)int ⟧ *)
   | E_c_cast(e, _) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
     abstract env e flow |>
-    check_int_overflow env exp exp.erange
+    check_int_overflow env exp
 
   | _ -> raise No_representation
 
@@ -455,7 +542,7 @@ and [@warning "-57"] reduce env e =
     else if Z.equal lf2.constant Z.minus_one then
       opposite e1
     else
-      failwith "rewriting.ml: reduce: case should not happen"
+      assert false
   | Abinary_expr (Div, e1, e2) ->
     let res = ref None in
     
@@ -589,7 +676,26 @@ and [@warning "-57"] reduce env e =
     end
   | _ -> e
 
-let abstract env e flow =
-  let (aexpr,m,flow') = abstract env e flow in
-  let e' = to_expr env (rm_mod env (aexpr, m)) in
-  (e',flow')
+let abstract env exp flow =
+  match ekind exp with
+
+  (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {<, <=, >, >=, ==, !=} *)
+  | E_binop((O_gt | O_ge | O_lt | O_le | O_eq | O_ne) as comp_op, e, e') ->
+    let (aexpr1, m1, flow) = abstract env e flow in
+    let (aexpr2, m2, flow) = abstract env e' flow in
+    let zero = mk_int 0 ~typ:T_int fake_range in
+    begin match m1, m2 with
+    | Mod (l1,u1), Mod (l2,u2) when
+        Z.equal l2 (Z.succ (Z.neg u1)) &&
+        Z.equal u2 (Z.succ (Z.neg l1)) &&
+        is_constant (reduce env (Abinary_expr (Add, aexpr1, aexpr2))) = Some Z.zero ->
+      (mk_binop ~etyp:T_int zero comp_op zero fake_range, flow)
+    | _ ->
+      let aexpr = mk_binop ~etyp:T_int ((aexpr1, m1) |> rm_mod env |> to_expr env) O_minus ((aexpr2, m1) |> rm_mod env |> to_expr env) fake_range in
+      (mk_binop ~etyp:T_int aexpr comp_op zero fake_range, flow)
+    end
+
+  | _ ->
+    let (aexpr,m,flow') = abstract env exp flow in
+    let e' = to_expr env (rm_mod env (aexpr, m)) in
+    (e',flow')

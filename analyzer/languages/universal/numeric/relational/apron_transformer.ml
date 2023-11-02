@@ -259,9 +259,8 @@ struct
         (* add tmp variable *)
         let tmp = mktmp ~typ:exp.etyp () in
         let tmp_apr, _ = Binding.mopsa_to_apron_var tmp bnd in
-        let env = Apron.Abstract1.env abs in
-        let env' = Apron.Environment.add env [|tmp_apr|] [||] in
-        let abs = Apron.Abstract1.change_environment ApronManager.man abs env' false in
+        let env = Apron.Environment.add (Apron.Abstract1.env abs) [|tmp_apr|] [||] in
+        let abs = Apron.Abstract1.change_environment ApronManager.man abs env false in
 
         let e1', abs, bnd, l = exp_to_apron isnan e1 (abs,bnd) l in
         let e2', abs, bnd, l = exp_to_apron isnan e2 (abs,bnd) l in
@@ -270,15 +269,15 @@ struct
 
         (* case 1: e1 <= tmp <= e2 *)
         let constraints_1 = tcons_array_of_tcons_list env [
-          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env' tmp_apr) (Apron.Texpr1.of_expr env' e1') typ' round) Apron.Lincons0.SUPEQ;
-          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env' e2') (Apron.Texpr1.var env' tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env tmp_apr) (Apron.Texpr1.of_expr env e1') typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env e2') (Apron.Texpr1.var env tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
         ] in
         let abs_1 = Apron.Abstract1.meet_tcons_array ApronManager.man abs constraints_1 in
 
         (* case 2: e2 <= tmp <= e1 *)
         let constraints_2 = tcons_array_of_tcons_list env [
-          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env' tmp_apr) (Apron.Texpr1.of_expr env' e2') typ' round) Apron.Lincons0.SUPEQ;
-          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env' e1') (Apron.Texpr1.var env' tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.var env tmp_apr) (Apron.Texpr1.of_expr env e2') typ' round) Apron.Lincons0.SUPEQ;
+          Apron.Tcons1.make (Apron.Texpr1.binop Apron.Texpr0.Sub (Apron.Texpr1.of_expr env e1') (Apron.Texpr1.var env tmp_apr) typ' round) Apron.Lincons0.SUPEQ;
         ] in
         let abs_2 = Apron.Abstract1.meet_tcons_array ApronManager.man abs constraints_2 in
 
