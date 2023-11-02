@@ -691,8 +691,8 @@ let abstract env exp flow =
         is_constant (reduce env (Abinary_expr (Add, aexpr1, aexpr2))) = Some Z.zero ->
       (mk_binop ~etyp:T_int zero comp_op zero fake_range, flow)
     | _ ->
-      let aexpr = mk_binop ~etyp:T_int ((aexpr1, m1) |> rm_mod env |> to_expr env) O_minus ((aexpr2, m1) |> rm_mod env |> to_expr env) fake_range in
-      (mk_binop ~etyp:T_int aexpr comp_op zero fake_range, flow)
+      let aexpr = reduce env (Abinary_expr (Add, rm_mod env (aexpr1, m1), opposite (rm_mod env (aexpr2, m2)))) in
+      (mk_binop ~etyp:T_int (to_expr env aexpr) comp_op zero fake_range, flow)
     end
 
   | _ ->
