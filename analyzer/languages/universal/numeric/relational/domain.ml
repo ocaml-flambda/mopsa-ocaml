@@ -356,7 +356,7 @@ struct
     match ekind e with
     | E_var (v,_) ->
       (* we meet with the interval computed by non-relational domains so that the interval of `unsigned x` is positive *)
-      let int_nonrel = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in 
+      let int_nonrel = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
       let int_rel = bound_var v (abs,bnd) in
       Some (ItvUtils.IntItv.meet_bot int_nonrel int_rel)
     | E_binop (O_mult, e1, e2) -> (* TODO improve bounds computation of expressions *)

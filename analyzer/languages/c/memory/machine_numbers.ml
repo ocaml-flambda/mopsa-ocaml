@@ -760,6 +760,12 @@ struct
             match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
             | BOT -> raise Rewriting.No_representation
             | Nb res -> res
+            | exception _ ->
+              (* let _ = man.exec (mk_stmt S_print_state e.erange) flow in  *)
+              let () = if Debug.can_print "c_rewriting" then Printexc.print_backtrace stdout in
+              let () = debug "couldn't query interval of %a" pp_expr e in
+              (* raise Rewriting.No_representation *)
+              Exceptions.panic "error"
           in
           let env : 'a Rewriting.env = {
             iota;

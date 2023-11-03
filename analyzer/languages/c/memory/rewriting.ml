@@ -325,13 +325,8 @@ and abstract env (exp: expr) flow =
   (* 𝔼⟦ var ⟧ *)
   | E_var (v,_) when is_c_num_type v.vtyp ->
     let v = env.mk_num_var v in
-    begin match env.iota (mk_var v fake_range) with
-    (* constant propagation *)
-    | (IntBound.Finite l, IntBound.Finite u) when Z.equal l u ->
-      (lf_const l, NoMod, flow)
-    | _ ->
-      (lf_var v, NoMod, flow)
-    end
+    (* impossible to do constant propagation because lhs of assignment are also translated *)
+    (lf_var v, NoMod, flow)
 
   (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
   | E_unop((O_plus | O_minus) as unop, e) when exp |> etyp |> is_c_int_type ->
