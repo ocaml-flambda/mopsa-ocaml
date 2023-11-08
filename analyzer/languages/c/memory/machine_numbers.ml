@@ -663,6 +663,7 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
+      (* let lval = { lval with erange = R_tagged (String_tag "lval", lval.erange) } in *)
       man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
       man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
@@ -764,8 +765,8 @@ struct
               (* let _ = man.exec (mk_stmt S_print_state e.erange) flow in  *)
               let () = if Debug.can_print "c_rewriting" then Printexc.print_backtrace stdout in
               let () = debug "couldn't query interval of %a" pp_expr e in
-              (* raise Rewriting.No_representation *)
-              Exceptions.panic "error"
+              raise Rewriting.No_representation
+              (* Exceptions.panic "error" *)
           in
           let env : 'a Rewriting.env = {
             iota;

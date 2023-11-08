@@ -22,8 +22,11 @@
 (** Symbolic representation of expressions as sum, product or quotient of linear forms *)
 
 (* TODO missing:
-   - symbolic constant propagation domain
    - int shift by a constant
+   - tag_range
+   - share options with machine_numbers
+   - share types with machine_numbers
+   - better handling of convex join operator
 *)
 
 open Mopsa
@@ -84,7 +87,7 @@ let pp_mod fmt = function
 let rec abstract_equal = function
   | (LinearForm lf1, LinearForm lf2) ->
     Z.equal lf1.constant lf2.constant &&
-    VarMap.for_all2o is_zero is_zero (fun _ -> Z.equal) lf1.coeffs lf2.coeffs
+    VarMap.for_all2zo is_zero is_zero (fun _ -> Z.equal) lf1.coeffs lf2.coeffs
   | Abinary_expr (op1, aexpr11, aexpr12), Abinary_expr (op2, aexpr21, aexpr22) ->
     op1 = op2 && abstract_equal (aexpr11,aexpr21) && abstract_equal (aexpr12,aexpr22)
   | _ -> false
@@ -295,7 +298,7 @@ and rm_mod env = function
       aexpr
     else
       (* TODO debug *)
-      let () = Format.printf "%a is included in %a and failed to be proven in %a\n" pp_expr (to_expr env aexpr) IntItv.fprint int pp_mod (Mod (l,u)) in
+      (* let () = Format.printf "%a is included in %a and failed to be proven in %a\n" pp_expr (to_expr env aexpr) IntItv.fprint int pp_mod (Mod (l,u)) in *)
       raise No_representation
 
 (* given an abstract expression, return its opposite *)
@@ -314,16 +317,20 @@ and opposite = function
 and abstract env (exp: expr) flow =
   match ekind exp with
   (* 𝔼⟦ n ⟧ *)
-  | E_constant(C_int c) when is_c_num_type exp.etyp ->
+  | E_constant(C_int c) when is_c_int_type exp.etyp ->
     (lf_const c, NoMod, flow)
 
   (* 𝔼⟦ [l,u] ⟧ *)
-  | E_constant(C_int_interval (Finite l, Finite u)) when is_c_num_type exp.etyp ->
+  | E_constant(C_int_interval (Finite l, Finite u)) when is_c_int_type exp.etyp ->
     let aexpr = reduce env (Abinary_expr (ConvexJoin, lf_const l, lf_const u)) in
     (aexpr, NoMod, flow)
 
+  (* 𝔼⟦ 'c' ⟧ *)
+  | E_constant(C_c_character (c, _)) when is_c_int_type exp.etyp ->
+    (lf_const c, NoMod, flow)
+
   (* 𝔼⟦ var ⟧ *)
-  | E_var (v,_) when is_c_num_type v.vtyp ->
+  | E_var (v,_) when is_c_int_type v.vtyp ->
     let v = env.mk_num_var v in
     (* impossible to do constant propagation because lhs of assignment are also translated *)
     (lf_var v, NoMod, flow)

@@ -188,6 +188,7 @@ struct
         | O_bit_xor -> bot_to_exn (I.bwd_bit_xor a1 a2 r)
         | O_bit_rshift -> bot_to_exn (I.bwd_shift_right a1 a2 r)
         | O_bit_lshift -> bot_to_exn (I.bwd_shift_left a1 a2 r)
+        | O_convex_join -> bot_to_exn (I.bwd_convex_join a1 a2 r)
         | _ -> Exceptions.panic "bwd_binop: unknown operator %a" pp_operator op
       in
       Nb aa1, Nb aa2
