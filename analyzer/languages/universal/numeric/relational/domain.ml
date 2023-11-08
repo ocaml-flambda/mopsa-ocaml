@@ -238,9 +238,23 @@ struct
 
   let rec exec stmt man ctx (a,bnd) =
     match skind stmt with
-    | S_add { ekind = E_var (var, _) } when is_var_numeric_type var ->
-      add_missing_vars (a,bnd) [var] |>
-      OptionExt.return
+    | S_add ({ ekind = E_var (var, _) } as e) when is_var_numeric_type var ->
+      let res = add_missing_vars (a,bnd) [var] in
+
+      let fake_range = mk_tagged_range (String_tag "var sign constraint") stmt.srange in
+      (* Add sign constraints to Apron *)
+      begin match Framework.Combiners.Value.Nonrel.find_var_bounds_ctx_opt var ctx with
+      | Some (C_int_interval (Finite l, Finite u)) when Z.equal l u -> 
+        let stmt = mk_assume (mk_binop ~etyp:T_int e O_eq (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+        assume stmt man.ask res
+      | Some (C_int_interval (Finite l, _)) when Z.leq Z.zero l ->
+        let stmt = mk_assume (mk_binop ~etyp:T_int e O_ge (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+        assume stmt man.ask res
+      | Some (C_int_interval (_, Finite u)) when Z.geq Z.zero u ->
+        let stmt = mk_assume (mk_binop ~etyp:T_int e O_le (mk_constant ~etyp:T_int (C_int u) fake_range) fake_range) fake_range in
+        assume stmt man.ask res
+      | _ -> res |> OptionExt.return
+      end
 
     | S_remove { ekind = E_var (var, _) } when is_var_numeric_type var ->
       remove_var var (a,bnd) |>
