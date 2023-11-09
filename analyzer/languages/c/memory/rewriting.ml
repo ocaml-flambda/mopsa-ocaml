@@ -386,6 +386,8 @@ and abstract env (exp: expr) flow =
         let alpha' = apply_mod alpha m_alpha in
         if Z.lt Z.zero alpha' then
           (Abinary_expr (Mult, aexpr, lf_const alpha'), Mod (Z.mul l alpha', Z.mul u alpha'))
+        else if Z.equal Z.zero alpha' then
+          (lf_const Z.zero, NoMod)
         else
           (Abinary_expr (Mult, aexpr, lf_const alpha'), Mod (Z.succ (Z.mul u alpha'), Z.succ (Z.mul l alpha')))
       | _ ->

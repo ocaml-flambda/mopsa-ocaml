@@ -305,8 +305,26 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with ImpreciseExpression -> exec (mk_forget_var var stmt.srange) man ctx (a,bnd)
-           | UnsupportedExpression -> None
+        with
+          | ImpreciseExpression ->
+            exec (mk_forget_var var stmt.srange) man ctx (a,bnd) |>
+            let fake_range = mk_tagged_range (String_tag "var sign constraint") stmt.srange in
+            (* Add sign constraints to Apron *)
+            begin match Framework.Combiners.Value.Nonrel.find_var_bounds_ctx_opt var ctx with
+            | Some (C_int_interval (Finite l, Finite u)) when Z.equal l u -> 
+              let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_eq (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+              OptionExt.bind (assume stmt man.ask)
+            | Some (C_int_interval (Finite l, _)) when Z.leq Z.zero l ->
+              let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_ge (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+              OptionExt.bind (assume stmt man.ask)
+            | Some (C_int_interval (_, Finite u)) when Z.geq Z.zero u ->
+              let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_le (mk_constant ~etyp:T_int (C_int u) fake_range) fake_range) fake_range in
+              OptionExt.bind (assume stmt man.ask)
+            | _ ->
+              Fun.id
+            end
+          | UnsupportedExpression ->
+            None
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK && is_var_numeric_type var ->
