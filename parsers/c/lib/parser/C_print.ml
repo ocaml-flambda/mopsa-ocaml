@@ -488,7 +488,7 @@ and c_buf_for_init indent buf b =
   | [S_expression e,_] -> c_buf_expr indent buf e
   | _ -> c_buf_expr indent buf (E_statement b, (T_void, no_qual), empty_range)
             
-and c_buf_statement indent buf ((s,_):statement) =
+and c_buf_statement indent buf ((s,r):statement) =
   let indent2 = inc_indent indent in
   match s with
   | S_local_declaration v ->
@@ -543,9 +543,16 @@ and c_buf_statement indent buf ((s,_):statement) =
         
   | S_target (S_label s) -> bp buf "%s%s:;\n" indent s
                                
-  | S_target (S_case (e1, u)) ->
+  | S_target (S_case ([e1], u)) ->
      bp buf "%scase %a:;%a\n"
         indent (c_buf_expr indent2) e1 c_buf_update u
+
+  | S_target (S_case ([], u)) -> assert false
+
+  | S_target (S_case (e1::tl, u)) ->
+    bp buf "%scase %a:;%a\n"
+      indent (c_buf_expr indent2) e1
+      (c_buf_statement indent) (S_target (S_case (tl, u)), r)
 
   | S_target (S_default u) -> bp buf "%sdefault:;%a\n" indent c_buf_update u
 

@@ -792,8 +792,8 @@ let resolve_scope (b:block) : block =
        (* remember label scopes to fix gotos later *)
        Hashtbl.add labels label cur
 
-    | S_target (S_case (e,upd)) ->
-       expr ctx e;
+    | S_target (S_case (es,upd)) ->
+      List.iter (expr ctx) es;
        (* jump from switch point to current scope *)
        update upd swt cur
 

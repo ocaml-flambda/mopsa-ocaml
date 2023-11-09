@@ -332,7 +332,7 @@ and type_qual = typ * qualifier
 
  and target_kind =
    | S_label of string
-   | S_case of expr * scope_update
+   | S_case of expr list * scope_update
    | S_default of scope_update
  (** various targets of jumps *)
 

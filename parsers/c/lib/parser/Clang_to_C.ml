@@ -792,7 +792,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     | C.ReturnStmt None -> [S_jump (S_return (None, empty_scope())), range]
 
     | C.SwitchStmt s ->
-       if s.C.switch_init <> None
+      if s.C.switch_init <> None
        then error range "unsupported init in switch statement" "";
        let c = expr func s.C.switch_cond
        and b = deblock (stmt func s.C.switch_body)
@@ -803,8 +803,16 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        (* TODO: constant folding? *)
        if s.C.case_end <> None
        then error range "unsupported case statement extension" "";
-       (S_target (S_case (expr func s.C.case_value, empty_scope())), range)::
-         (stmt func s.C.case_stmt)
+       (* in case of nested case stmts, we extract all of them in other_values, and keep the leaf statements *)
+       let process s =
+         let rec aux acc s = match s.C.stmt_kind with
+           | C.CaseStmt s -> aux (s.C.case_value :: acc) s.C.case_stmt
+           | _ -> List.rev acc, s in
+         aux [] s in 
+       let other_values, statements = process s.C.case_stmt in
+       let values = s.C.case_value :: other_values in 
+       (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+         (stmt func statements)
 
     | C.DefaultStmt s ->
        (S_target (S_default (empty_scope())), range)::(stmt func s)

@@ -189,10 +189,10 @@ struct
              let upd' = visit_scope_update upd in
              let s' = { s with skind = S_c_goto(label, upd') } in
              Keep s'
-           | S_c_switch_case(e, upd) ->
-             let e' = visit_expr e in
+           | S_c_switch_case(es, upd) ->
+             let es' = List.map visit_expr es in
              let upd' = visit_scope_update upd in
-             let s' = { s with skind = S_c_switch_case(e', upd') } in
+             let s' = { s with skind = S_c_switch_case(es', upd') } in
              Keep s'
            | S_c_switch_default upd ->
              let upd' = visit_scope_update upd in
