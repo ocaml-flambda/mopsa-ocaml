@@ -108,6 +108,18 @@ struct
     }
 
 
+  let opt_arg_min_size = ref None 
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args-min-size";
+      category = "C";
+      doc = " set the maximum allocated size of all symbolic arguments";
+      spec = ArgExt.Int (fun s -> opt_arg_min_size := Some s);
+      default = "1"
+    }
+
+
 
   let checks = []
 
@@ -493,7 +505,10 @@ struct
     alloc_symbolic_args lo' hi' range man flow >>$ fun (args,smash_arg) flow ->
 
     (* Initialize the size of arguments *)
-    let min_size = mk_one range in
+    let min_size =
+      match !opt_arg_min_size with
+      | None -> mk_one range
+      | Some s -> mk_int s range in
     let max_size =
       match !opt_arg_max_size with
       | None -> mk_z (rangeof (size_type flow) flow |> snd) range
