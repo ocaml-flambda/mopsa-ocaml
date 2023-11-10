@@ -3549,9 +3549,42 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
         });
 
       GENERATE_NODE_INDIRECT(CaseStmt, ret, node, 3, {
+          CAMLenterblock();
+          value tmp;
+          value tmp2;
+          value tmp3;
+          value tmp4;
+          CAMLxparam4(tmp,tmp2,tmp3,tmp4);
+          const Stmt* s;
+
           Store_field(ret, 0, TranslateExpr(x->getLHS()));
           Store_field_option(ret, 1, x->getRHS(), TranslateExpr(x->getRHS()));
-          Store_field(ret, 2, TranslateStmt(x->getSubStmt()));
+          tmp = ret;
+          // optimize long sequences of cases using a loop instead of
+          // recursive calls
+          s = x->getSubStmt();
+          while (isa<CaseStmt>(s)) {
+            x = cast<CaseStmt>(s);
+
+            tmp2 = caml_alloc_tuple(3);
+            Store_field(tmp2, 0, TranslateExpr(x->getLHS()));
+            Store_field_option(tmp2, 1, x->getRHS(), TranslateExpr(x->getRHS()));
+            // field 2 to be filled in the next iteration, or after the loop
+
+            tmp3 = caml_alloc(1, MLTAG_CaseStmt);
+            Store_field(tmp3, 0, tmp2);
+
+            tmp4 = caml_alloc_tuple(2);
+            Store_field(tmp4, 0, tmp3);
+            Store_field(tmp4, 1, loc.TranslateSourceRange(x->getSourceRange()));
+
+            Store_field(tmp, 2, tmp4);
+            tmp = tmp2;
+            s = x->getSubStmt();
+          }
+          Store_field(tmp, 2, TranslateStmt(s));
+
+          CAMLexitblock();
         });
 
       GENERATE_NODE(DefaultStmt, ret, node, 1, {
