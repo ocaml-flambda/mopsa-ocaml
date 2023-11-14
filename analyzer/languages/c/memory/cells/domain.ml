@@ -481,10 +481,37 @@ struct
   (** ======================== *)
 
   (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
-  let phi (c:cell) (a:t) range flow : expr option =
-    if cell_set_mem c a.cells then None
+  let phi (c:cell) (a:t) range man flow = 
+    let () = debug "phi %a at %a" pp_cell c pp_range range in 
+    if cell_set_mem c a.cells then Cases.singleton None flow
 
-    else if not (is_c_int_type @@ cell_type c) then None
+    else if is_c_pointer_type @@ cell_type c then
+      (* synthesizes a NULL pointer if applicable *)
+      let cells = cell_set_find_overlapping_cell c a.cells flow in
+      let () = debug "overlapping cells: %a, %s"
+          (Format.pp_print_list
+             (fun fmt c ->
+                Format.fprintf fmt "%a:%s, "
+                  pp_cell c
+                  (Z.to_string (sizeof_cell c flow))))
+             cells
+             (Z.to_string (sizeof_cell c flow)) in
+      (* TODO: more general case? This should fit the memset usecase *)
+      if List.length cells = (Z.to_int @@ sizeof_cell c flow) &&
+         List.for_all (fun c -> Z.(sizeof_cell c flow = one)) cells then
+        let cell_is_not_zero_expr c = ne (mk_numeric_cell_var_expr c range) (mk_zero range) range in
+        let rec aux cells = match cells with
+          | [] -> Cases.singleton (Some (mk_zero ~typ:(cell_type c) range)) flow
+          | c::cells ->
+            let flow_ko = man.exec (mk_assume (cell_is_not_zero_expr c) range) flow |> post_to_flow man in
+            if man.lattice.is_bottom (Flow.get T_cur man.lattice flow_ko) then aux cells
+            else Cases.singleton None flow in
+        aux cells
+      else
+        Cases.singleton None flow 
+
+    else if not (is_c_int_type @@ cell_type c) then
+      Cases.singleton None flow
 
     else
       match
@@ -497,7 +524,7 @@ struct
       with
       | c'::_ ->
         let v = mk_numeric_cell_var_expr c' range in
-        Some (wrap_expr v (rangeof_int_cell c flow) range)
+        Cases.singleton (Some (wrap_expr v (rangeof_int_cell c flow) range)) flow
 
       | [] ->
         match
@@ -515,13 +542,13 @@ struct
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
-          Some (
+          Cases.singleton (Some (
             (_mod_
                (div v (mk_z base range) range)
                (mk_int 256 range)
                range
             )
-          )
+          )) flow
 
         | _ ->
           let exception NotPossible in
@@ -558,11 +585,11 @@ struct
                   time',res'
                 ) (Z.of_int 1,(mk_int 0 range)) ll
               in
-              Some e
+              Cases.singleton (Some e) flow
             else
               raise NotPossible
           with
-          | NotPossible -> None
+          | NotPossible -> Cases.singleton None flow
 
 
 
@@ -575,15 +602,13 @@ struct
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells flow } man flow in
       let v = mk_cell_var c in
       man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
-      if is_pointer_cell c then
-        Post.return flow
-      else
-        match phi c a range flow with
-        | Some e ->
-          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.exec stmt flow
+      phi c a range man flow >>$ fun phi_oe flow ->
+      match phi_oe with 
+      | Some e ->
+        let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+        man.exec stmt flow
 
-        | None -> Post.return flow
+      | None -> Post.return flow
 
 
   (** Range used for tagging unification statements *)
