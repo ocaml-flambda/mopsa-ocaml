@@ -57,7 +57,7 @@ struct
 
   let opt_signed_arithmetic_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-arithmetic-overflow";
       category = "C";
       doc = " check overflows in signed integer arithmetic";
@@ -67,7 +67,7 @@ struct
 
   let opt_unsigned_arithmetic_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
       doc = " check overflows in unsigned integer arithmetic";
@@ -77,7 +77,7 @@ struct
 
   let opt_signed_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to signed integer";
@@ -87,7 +87,7 @@ struct
 
   let opt_unsigned_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to unsigned integer";
@@ -98,7 +98,7 @@ struct
 
   let opt_explicit_cast_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-explicit-cast-overflow";
       category = "C";
       doc = " check overflows in explicit casts";
@@ -136,17 +136,6 @@ struct
       spec = ArgExt.Bool (fun b -> opt_float_overflow := b);
       default = "false";
     }
-
-  let opt_symbolic_rewriting = ref true
-  let () =
-    register_domain_option name {
-      key = "-c-symbolic-rewriting";
-      category = "C";
-      doc = " enable rewriting of arithmetic expressions into sum, product or division of linear forms (experimental)";
-      spec = ArgExt.Bool (fun b -> opt_symbolic_rewriting := b);
-      default = "true";
-    }
-    
 
 
 
@@ -746,51 +735,6 @@ struct
       let vv = mk_num_var v in
       man.print_expr flow printer (mk_var vv exp.erange)
     | _ -> ()
-
-
-  module Symbolic_rewriting = struct
-    let debug fmt = Debug.debug ~channel:"c_rewriting" fmt
-
-    let eval exp (man: ('a,_) man) flow =
-      if not !opt_symbolic_rewriting then eval exp man flow else
-
-      match exp.etyp with
-      | T_c_integer _ ->
-        begin try
-          let iota (e: expr): IntItv.I.t =
-            match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
-            | BOT -> raise Rewriting.No_representation
-            | Nb res -> res
-            | exception _ ->
-              (* let _ = man.exec (mk_stmt S_print_state e.erange) flow in  *)
-              let () = if Debug.can_print "c_rewriting" then Printexc.print_backtrace stdout in
-              let () = debug "couldn't query interval of %a" pp_expr e in
-              raise Rewriting.No_representation
-              (* Exceptions.panic "error" *)
-          in
-          let env : 'a Rewriting.env = {
-            iota;
-            mk_num_var;
-            lattice = man.lattice;
-            opt_signed_arithmetic_overflow = !opt_signed_arithmetic_overflow;
-            opt_unsigned_arithmetic_overflow = !opt_unsigned_arithmetic_overflow;
-            opt_signed_implicit_cast_overflow = !opt_signed_implicit_cast_overflow;
-            opt_unsigned_implicit_cast_overflow = !opt_unsigned_implicit_cast_overflow;
-            opt_explicit_cast_overflow = !opt_explicit_cast_overflow;
-          } in
-          let (exp', flow') = Rewriting.abstract env exp flow in
-          let () = debug "Rewritten expression %a into %a." pp_expr exp pp_expr exp' in
-          Eval.singleton exp flow' |>
-          Eval.add_translation "Universal" exp' |>
-          OptionExt.return
-        with Rewriting.No_representation ->
-          let () = debug "Failed to rewrite %a." pp_expr exp in
-          let () = if Debug.can_print "c_rewriting" then Printexc.print_backtrace stdout in
-          eval exp man flow
-        end
-      | _ -> eval exp man flow
-  end
-  include Symbolic_rewriting
 
 end
 
