@@ -467,9 +467,7 @@ struct
       check_int_overflow env exp
 
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {>>, <<} *)
-    | E_binop(op, e, e') when
-        op |> is_c_shift_op &&
-        exp |> etyp |> is_c_int_type ->
+    | E_binop(op, e, e') when op |> is_c_shift_op && exp |> etyp |> is_c_int_type ->
       let (aexpr2, m2, flow) = abstract env e' flow in
       let aexpr2' = rm_mod env (aexpr2, m2) in
       (* when the shift is *by a constant* and is safe, transform it in a product or a quotient *)
@@ -733,13 +731,26 @@ struct
       end
     | _ -> e
 
+  (** Are the operators of a given expression supported by the [abstract] function *)
+  let rec is_supported_expr exp = is_c_int_type exp.etyp && match ekind exp with
+    | E_constant(C_int _ | C_int_interval (Finite _, Finite _) | C_c_character _) ->
+      true
+    | E_var (v,_) ->
+      is_c_int_type v.vtyp
+    | E_unop((O_plus | O_minus), e)
+    | E_c_cast(e, _) ->
+      is_supported_expr e
+    | E_binop((O_plus | O_minus | O_mult | O_div | O_convex_join | O_bit_lshift | O_bit_rshift), e, e') ->
+      is_supported_expr e && is_supported_expr e'
+    | _ -> false
+
   (** Translate comparison of integer expressions into comparison to [0],
       otherwise call [abstract] and try to remove the modular ring in which the abstract expression is evaluated.
       If this fails, [No_representation] is raised.  *)
   let abstract_with_comparisons env exp flow =
     match ekind exp with
       (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {<, <=, >, >=, ==, !=} *)
-      | E_binop((O_gt | O_ge | O_lt | O_le | O_eq | O_ne) as comp_op, e, e') ->
+      | E_binop((O_gt | O_ge | O_lt | O_le | O_eq | O_ne) as comp_op, e, e') when is_supported_expr e && is_supported_expr e'->
         let (aexpr1, m1, flow) = abstract env e flow in
         let (aexpr2, m2, flow) = abstract env e' flow in
         let zero = mk_int 0 ~typ:T_int env.range in
@@ -753,10 +764,12 @@ struct
           let aexpr = reduce env (BinExpr (Add, rm_mod env (aexpr1, m1), opposite env (rm_mod env (aexpr2, m2)))) in
           (mk_binop ~etyp:T_int (to_expr env aexpr) comp_op zero env.range, flow)
         end
-      | _ ->
+      | _ when is_supported_expr exp ->
         let (aexpr,m,flow') = abstract env exp flow in
         let e' = to_expr env (rm_mod env (aexpr, m)) in
         (e', flow')
+      | _ ->
+        raise No_representation
 
 
   (** {2 Transfer functions} *)
