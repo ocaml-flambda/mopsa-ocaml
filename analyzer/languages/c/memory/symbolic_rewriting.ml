@@ -439,10 +439,11 @@ struct
       let (aexpr, m) =
         match is_constant aexpr2, m1 with
         | Some alpha, Mod (l,u) ->
+          let aexpr1_positive = env.is_in (to_expr env aexpr1) IntItv.zero_inf in
           let alpha' = apply_mod alpha m2 in
-          if Z.lt Z.zero alpha' && Z.leq Z.zero l && Z.divisible l alpha' && Z.divisible u alpha' then
+          if aexpr1_positive && Z.lt Z.zero alpha' && Z.leq Z.zero l && Z.divisible l alpha' && Z.divisible u alpha' then
             (BinExpr (Div, aexpr1, lf_const alpha'), Mod (Z.divexact l alpha', Z.divexact u alpha'))
-          else if Z.gt Z.zero alpha' && Z.gt Z.zero u && Z.divisible (Z.succ u) alpha' && Z.divisible (Z.succ l) alpha' then
+          else if aexpr1_positive && Z.gt Z.zero alpha' && Z.gt Z.zero u && Z.divisible (Z.succ u) alpha' && Z.divisible (Z.succ l) alpha' then
             (BinExpr (Div, aexpr1, lf_const alpha'), Mod (Z.divexact (Z.succ u) alpha', Z.divexact (Z.succ l) alpha'))
           else
             (BinExpr (Div, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
