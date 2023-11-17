@@ -8,3 +8,4 @@ module Protection = Protection
 module Smashing = Smashing
 module String_length = String_length
 module Variable_length_array = Variable_length_array
+module Symbolic_rewriting = Symbolic_rewriting

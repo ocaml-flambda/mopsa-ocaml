@@ -26,7 +26,6 @@ open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
 open Bot
-open Stubs.Ast
 open Common.Alarms
 open Machine_numbers.Domain
 

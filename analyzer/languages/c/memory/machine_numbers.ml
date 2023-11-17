@@ -652,7 +652,6 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
-      (* let lval = { lval with erange = R_tagged (String_tag "lval", lval.erange) } in *)
       man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
       man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
