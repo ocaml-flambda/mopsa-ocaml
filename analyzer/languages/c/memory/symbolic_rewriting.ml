@@ -216,7 +216,7 @@ struct
       end
     | _ -> None
 
-  (** Is an abstract expression representic a deterministic expression *)
+  (** Is an abstract expression representing a deterministic expression *)
   let rec is_deterministic (e: a_expr): bool = match e with
     | LinearForm _ -> true
     | BinExpr (ConvexJoin, _, _) -> false
