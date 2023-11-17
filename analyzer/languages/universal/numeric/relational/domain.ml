@@ -379,7 +379,7 @@ struct
       let int_nonrel = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
       let int_rel = bound_var v (abs,bnd) in
       Some (ItvUtils.IntItv.meet_bot int_nonrel int_rel)
-    | E_binop (O_mult, e1, e2) -> (* TODO improve bounds computation of expressions *)
+    | E_binop (O_mult, e1, e2) ->
       let int1 = eval_interval man e1 (abs,bnd) in
       let int2 = eval_interval man e2 (abs,bnd) in
       begin match int1, int2 with
