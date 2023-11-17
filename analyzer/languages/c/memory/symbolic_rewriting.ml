@@ -60,7 +60,7 @@ struct
   
   (** Rewriting environment *)
   type ('a,'b) env = {
-    iota: expr -> IntItv.t_with_bot; (* returns an over-approximation of the values of integer expressions *)
+    iota: expr -> IntItv.t; (* returns an over-approximation of the values of expressions *)
     is_in: expr -> IntItv.t -> bool; (* check if an expression is within the bounds of a given interval *)
     man: ('a,'b) man;
     range: range; (* range to use for all rewritten expressions *)
@@ -95,9 +95,6 @@ struct
 
   let minf_mone: IntItv.t = (IntBound.PINF, IntBound.Finite Z.minus_one)
   (** [-∞,-1] *)
-
-  let itv_included_no_bot a b =
-    match a with BOT -> false | Nb a -> IntItv.included a b
 
   let pp_mod fmt = function
     | NoMod -> Format.fprintf fmt "ℤ"
@@ -277,7 +274,7 @@ struct
         let flow' =
           if raise_alarm
           then
-            if IntItv.meet_bot itv (Nb ritv) = BOT then
+            if IntItv.meet itv ritv = BOT then
               raise_c_integer_overflow_alarm ~warning:false exp nexp typ cexp.erange env.man flow flow
             else
               raise_c_integer_overflow_alarm ~warning:true exp nexp typ cexp.erange env.man flow flow
@@ -322,7 +319,7 @@ struct
         let () = if Debug.can_print debug_channel then
           let nexp = to_expr env aexpr in
           let int = env.iota nexp in
-          debug "%a is included in %a and failed to be proven in %a" pp_expr nexp IntItv.fprint_bot int pp_mod (Mod (l,u))
+          debug "%a is included in %a and failed to be proven in %a" pp_expr nexp IntItv.fprint int pp_mod (Mod (l,u))
         in
         raise No_representation
 
@@ -471,7 +468,7 @@ struct
       let aexpr2' = rm_mod env (aexpr2, m2) in
       (* when the shift is *by a constant* and is safe, transform it in a product or a quotient *)
       begin match env.iota (to_expr env aexpr2') with
-      | Nb (Finite l, Finite u) when Z.equal l u ->
+      | (Finite l, Finite u) when Z.equal l u ->
         (* Condition: l ∈ [0, bits(t) - 1] *)
         let bits = sizeof_type exp.etyp flow |> Z.mul (Z.of_int 8) in
         if Z.leq Z.zero l && Z.lt l bits then
@@ -549,9 +546,9 @@ struct
       | Some e1, Some e2 ->
         let int1 = env.iota (to_expr env e1) in
         let int2 = env.iota (to_expr env e2) in
-        if itv_included_no_bot int1 IntItv.zero_inf && itv_included_no_bot int2 IntItv.zero_inf then
+        if IntItv.included int1 IntItv.zero_inf && IntItv.included int2 IntItv.zero_inf then
           reduce env (BinExpr (ConvexJoin, lf_const Z.zero, reduce env (BinExpr (op, e1, e2))))
-        else if itv_included_no_bot int1 IntItv.minf_zero && itv_included_no_bot int2 IntItv.minf_zero then
+        else if IntItv.included int1 IntItv.minf_zero && IntItv.included int2 IntItv.minf_zero then
           reduce env (BinExpr (ConvexJoin, lf_const Z.zero, reduce env (BinExpr (op, e1, e2))))
         else e
       | _ -> e
@@ -622,22 +619,22 @@ struct
               in
               match vars with
               | Some (a, b, x) when
-                  itv_included_no_bot (env.iota (mk_binop ~etyp:T_int (mk_var x env.range) O_minus (mk_var a env.range) env.range)) IntItv.zero_inf &&
-                  itv_included_no_bot (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var x env.range) env.range)) IntItv.zero_inf &&
-                  itv_included_no_bot (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var a env.range) env.range)) one_inf ->
+                  IntItv.included (env.iota (mk_binop ~etyp:T_int (mk_var x env.range) O_minus (mk_var a env.range) env.range)) IntItv.zero_inf &&
+                  IntItv.included (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var x env.range) env.range)) IntItv.zero_inf &&
+                  IntItv.included (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var a env.range) env.range)) one_inf ->
                 let ez' = reduce env (BinExpr (Mult, lf_const (Z.divexact k1 k2), ez)) in
 
                 (* if X<B and the result is named R, then |R| <= |ez'| - 1
                   (if ez'=0 it goes well because 0 is added afterward via the convex join) *)
                 let ez' =
-                  if itv_included_no_bot (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var x env.range) env.range)) one_inf
+                  if IntItv.included (env.iota (mk_binop ~etyp:T_int (mk_var b env.range) O_minus (mk_var x env.range) env.range)) one_inf
                   then
                     let int = env.iota (to_expr env ez') in
-                    if itv_included_no_bot int (Finite Z.zero, Finite Z.zero) then
+                    if IntItv.included int IntItv.zero then
                       lf_const Z.zero
-                    else if itv_included_no_bot int IntItv.zero_inf then
+                    else if IntItv.included int IntItv.zero_inf then
                       reduce env (BinExpr (Add, lf_const Z.minus_one, ez'))
-                    else if itv_included_no_bot int IntItv.minf_zero then
+                    else if IntItv.included int IntItv.minf_zero then
                       reduce env (BinExpr (Add, lf_const Z.one, ez'))
                     else
                       ez'
@@ -670,7 +667,7 @@ struct
           | None -> false
           | Some (k, x, a) ->
             begin match env.iota (mk_binop ~etyp:T_int (mk_var x env.range) O_minus (mk_var a env.range) env.range) with
-            | Nb (Finite mi, Finite ma) ->
+            | (Finite mi, Finite ma) ->
               let (kmi,kma) =
                 if Z.leq Z.zero k
                 then (Z.mul k mi, Z.mul k ma)
@@ -684,9 +681,9 @@ struct
 
               let to_add =
                 let int = env.iota (to_expr env ez) in
-                if itv_included_no_bot int one_inf then
+                if IntItv.included int one_inf then
                   Some Z.one
-                else if itv_included_no_bot int minf_mone then
+                else if IntItv.included int minf_mone then
                   Some Z.minus_one
                 else
                   None
@@ -775,24 +772,34 @@ struct
   (** ====================== *)
 
   let eval exp (man: ('a,'b) man) flow =
+    (* abort trying to rewrite expressions if the abstract state is bottom *)
+    if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then None else
+    
     match exp.etyp with
     | T_c_integer _ ->
 
       (* rewriting environment *)
-      let iota (e: expr): IntItv.t_with_bot =
+      let iota (e: expr): IntItv.t =
         try
-          ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow
+          begin match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
+          | BOT -> raise No_representation
+          | Nb int -> int
+          end
         with Not_found ->
           let () = debug "Couldn't query interval of %a, the backtrace is:" pp_expr e in
           let () = if Debug.can_print debug_channel then Printexc.print_backtrace stdout in
           raise No_representation
       in
-      let is_in (e: expr) (int: IntItv.t): bool =
+      let is_in (e: expr) (target: IntItv.t): bool =
         try
-          if itv_included_no_bot (ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:true e) flow) int then
-            true
-          else
-            itv_included_no_bot (ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow) int
+          begin match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:true e) flow with
+          | BOT -> raise No_representation
+          | Nb int_no_rel when IntItv.included int_no_rel target -> true
+          | _ ->
+            match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false e) flow with
+            | BOT -> raise No_representation
+            | Nb int -> IntItv.included int target
+          end
         with Not_found ->
           let () = debug "Couldn't query interval of %a, the backtrace is:" pp_expr e in
           let () = if Debug.can_print debug_channel then Printexc.print_backtrace stdout in
@@ -802,7 +809,7 @@ struct
           iota;
           is_in;
           man;
-          range = mk_tagged_range (String_tag debug_channel) exp.erange;
+          range = mk_tagged_range (String_tag "c.symbolic_rewriting") exp.erange;
         } in
 
       begin try
