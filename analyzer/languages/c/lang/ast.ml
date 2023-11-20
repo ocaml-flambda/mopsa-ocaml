@@ -963,23 +963,28 @@ let () =
       | T_c_builtin_fn, T_c_builtin_fn -> 0
       | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
       | T_c_record r1, T_c_record r2 ->
-         let compare_c_record_field f1 f2 =
-           Compare.compose [
-               (* also compare field names, as field swaps should be detected *)
-               (fun () -> Stdlib.compare f1.c_field_org_name f2.c_field_org_name);
-               (fun () -> Stdlib.compare f1.c_field_offset f2.c_field_offset);
-               (fun () -> Stdlib.compare f1.c_field_bit_offset f2.c_field_bit_offset);
-               (fun () -> compare_typ f1.c_field_type f2.c_field_type);
-               (fun () -> Stdlib.compare f1.c_field_index f2.c_field_index)
-             ]
-         in
-         Compare.compose [
-             (fun () -> Stdlib.compare r1.c_record_kind r2.c_record_kind);
-             (fun () -> Stdlib.compare r1.c_record_defined r2.c_record_defined);
-             (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
-             (fun () -> Z.compare r1.c_record_alignof r2.c_record_alignof);
-             (fun () -> Compare.list compare_c_record_field r1.c_record_fields r2.c_record_fields)
-           ]
+        if r1 == r2 then 0
+        else
+          let compare_c_record_field f1 f2 =
+            if f1 == f2 then 0
+            else
+              Compare.compose [
+                (* also compare field names, as field swaps should be detected *)
+                (fun () -> Stdlib.compare f1.c_field_org_name f2.c_field_org_name);
+                (fun () -> Stdlib.compare f1.c_field_offset f2.c_field_offset);
+                (fun () -> Stdlib.compare f1.c_field_bit_offset f2.c_field_bit_offset);
+                (fun () -> compare_typ f1.c_field_type f2.c_field_type);
+                (fun () -> Stdlib.compare f1.c_field_index f2.c_field_index)
+              ]
+          in
+          Compare.compose [
+            (fun () -> String.compare r1.c_record_unique_name r2.c_record_unique_name);
+            (fun () -> Stdlib.compare r1.c_record_kind r2.c_record_kind);
+            (fun () -> Stdlib.compare r1.c_record_defined r2.c_record_defined);
+            (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
+            (fun () -> Z.compare r1.c_record_alignof r2.c_record_alignof);
+            (fun () -> Compare.list compare_c_record_field r1.c_record_fields r2.c_record_fields)
+          ]
       | T_c_enum e1, T_c_enum e2 ->
          let compare_c_enum_value v1 v2 =
            Z.compare v1.c_enum_val_value v2.c_enum_val_value
