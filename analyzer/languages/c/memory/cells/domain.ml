@@ -158,14 +158,21 @@ struct
           (* Record case *)
           | T_c_record r ->
             (* new candiate: .field *)
-            let field = List.find (fun f ->
+            let field = List.find_opt (fun f ->
                 Z.leq (Z.of_int f.c_field_offset) offset &&
                 Z.lt offset Z.(of_int f.c_field_offset + sizeof_type_in_target f.c_field_type target)
               ) r.c_record_fields
             in
-            let candidate' = Format.asprintf ".%s" field.c_field_org_name in
-            let offset' = Z.(offset - of_int field.c_field_offset) in
-            get_access_path path' candidate' offset' field.c_field_type
+            begin match field with
+              | None ->
+                let () = debug "WARN: get_access_path failed for record %a, offset %s@." pp_typ typ (Z.to_string offset) in
+                pp_cell_lowlevel fmt c; []
+
+              | Some field -> 
+                let candidate' = Format.asprintf ".%s" field.c_field_org_name in
+                let offset' = Z.(offset - of_int field.c_field_offset) in
+                get_access_path path' candidate' offset' field.c_field_type
+            end
 
           |_ -> assert false
       in
