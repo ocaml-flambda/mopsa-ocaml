@@ -746,15 +746,15 @@ struct
   let abstract_with_comparisons env exp flow =
     match ekind exp with
       (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {<, <=, >, >=, ==, !=} *)
-      | E_binop((O_gt | O_ge | O_lt | O_le | O_eq | O_ne) as comp_op, e, e') when is_supported_expr e && is_supported_expr e'->
+      | E_binop((O_gt | O_ge | O_lt | O_le | O_eq | O_ne) as comp_op, e, e') when is_supported_expr e && is_supported_expr e' ->
         let (aexpr1, m1, flow) = abstract env e flow in
         let (aexpr2, m2, flow) = abstract env e' flow in
         let zero = mk_int 0 ~typ:T_int env.range in
         begin match m1, m2 with
         | Mod (l1,u1), Mod (l2,u2) when
-            Z.equal l2 (Z.succ (Z.neg u1)) &&
-            Z.equal u2 (Z.succ (Z.neg l1)) &&
-            is_constant (reduce env (BinExpr (Add, aexpr1, aexpr2))) = Some Z.zero ->
+            Z.equal l1 l2 &&
+            Z.equal u1 u2 &&
+            is_constant (reduce env (BinExpr (Add, aexpr1, opposite env aexpr2))) = Some Z.zero ->
           (mk_binop ~etyp:T_int zero comp_op zero env.range, flow) (* rule PlusEqZero *)
         | _ ->
           let aexpr = reduce env (BinExpr (Add, rm_mod env (aexpr1, m1), opposite env (rm_mod env (aexpr2, m2)))) in
