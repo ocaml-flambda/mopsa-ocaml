@@ -40,6 +40,7 @@ let parse_file
     (keep_static:bool)
     (only_parse:bool)
     (ctx:Clang_to_C.context)
+    (forced_stub_list: string list)
   =
   (* remove some options that are in the way *)
   let filtered_opts =
@@ -80,7 +81,7 @@ let parse_file
       Clang_to_C.add_translation_unit
         ctx (Filename.basename file)
         r.parse_decl r.parse_files r.parse_comments r.parse_macros
-        keep_static
+        keep_static forced_stub_list
   )
   else
     let errors =

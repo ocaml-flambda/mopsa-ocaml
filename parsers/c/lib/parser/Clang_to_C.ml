@@ -167,7 +167,7 @@ let has_stub_comment l =
     ) l
 
 
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) (forced_stub_list: string list) =
   (* utilities *)
   (* ********* *)
 
@@ -744,12 +744,16 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       (* favor argument names from functions with a body, a
          non-empty argument list, or from stubs
       *)
-      if f.C.function_body <> None ||
+      if
+        (f.C.function_body <> None ||
          (func.func_parameters = [||] &&  params <> [||]) ||
-         (has_stub_comment f.C.function_com &&
-          (match func.func_body with
-           | None -> true
-           | Some b -> List.length b.blk_stmts = 0)) then (
+         has_stub_comment f.C.function_com)
+        &&
+        ((match func.func_body with
+         | None -> true
+         | Some b -> List.length b.blk_stmts = 0) || List.mem func.func_org_name forced_stub_list)
+      then
+      (
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
       );

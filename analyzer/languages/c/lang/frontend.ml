@@ -373,7 +373,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
+  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx !opt_use_stub
 
 
 and parse_stubs ctx () =
