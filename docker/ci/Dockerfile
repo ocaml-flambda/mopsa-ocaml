@@ -3,16 +3,16 @@
 #
 ###############################################
 
-FROM ubuntu:20.04
+FROM ubuntu:23.10
 
 
 # configuration: required packages
 ##
 
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
-             llvm-10-dev libclang-10-dev libclang-cpp10-dev clang-10  \
+             llvm-16-dev libclang-16-dev libclang-cpp16-dev clang-16  \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget
+             rsync m4 curl wget adduser less
 
 ENV OPAM_DEPS dune apron zarith menhir yojson
 
