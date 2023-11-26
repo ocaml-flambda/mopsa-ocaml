@@ -1,4 +1,6 @@
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <string.h>
 
 void test_constant_strings() {
   char *i1 = "blabliblu";
