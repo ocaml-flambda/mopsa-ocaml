@@ -368,10 +368,10 @@ struct
       let e2' = remove_wraps env e2 in
       if e1 == e1' && e2 == e2'
       then e
-      else BinExpr (op, reduce env e1', reduce env e2')
+      else reduce env (BinExpr (op, e1', e2'))
     | Wrap (e1, s, _) ->
       let e1' = remove_wraps env e1 in
-      if s then e1 else opposite env e1'
+      if s then e1 else reduce env (opposite env e1')
 
   and get_k = function
     | NoMod -> assert false
