@@ -91,7 +91,7 @@ static inline void _noop(PyObject *op) {}
 /* // stubs used by the analysis */
 typedef struct exc_data {
     PyObject* exc_state;
-    char* exc_msg;
+    const char* exc_msg;
 } exc_data;
 
 int _mopsa_pyerr_bind_cs_to(exc_data*);
