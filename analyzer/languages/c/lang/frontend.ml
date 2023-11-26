@@ -343,6 +343,11 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               "-Wall" ::
+              (* recent versions of Clang promote warnings as errors
+                 -> we revert them to warnings
+               *)
+              "-Wno-error=incompatible-function-pointer-types" ::
+              "-Wno-error=implicit-function-declaration" ::
               "-Qunused-arguments"::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               opts @
