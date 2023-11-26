@@ -57,24 +57,23 @@ let parse_file
 
   let is_error =
     List.exists
-      (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false)
+      (function Clang_AST.({diag_level = Level_Fatal}) -> true | _ -> false)
        r.parse_diag
   in
 
   if not is_error then (
-    if warn_all then
-      List.iter (fun d ->
-          match d.Clang_AST.diag_level with
-          | Level_Warning ->
-            let pos = Location.mk_pos
-                d.diag_loc.loc_file
-                d.diag_loc.loc_line
-                d.diag_loc.loc_column
-            in
-            let range = Location.mk_orig_range pos pos in
-            Exceptions.warn_at range "%s" d.diag_message
-          | _ -> ()
-        ) r.parse_diag;
+    List.iter (fun d ->
+        if d.Clang_AST.diag_level = Level_Error ||
+           d.Clang_AST.diag_level = Level_Warning && warn_all
+        then
+          let pos = Location.mk_pos
+                      d.diag_loc.loc_file
+                      d.diag_loc.loc_line
+                      d.diag_loc.loc_column
+          in
+          let range = Location.mk_orig_range pos pos in
+          Exceptions.warn_at range "%s" d.diag_message
+      ) r.parse_diag;
     if only_parse then ()
     else
       Clang_to_C.add_translation_unit
