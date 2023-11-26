@@ -12,7 +12,7 @@ FROM ubuntu:23.10
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
              llvm-16-dev libclang-16-dev libclang-cpp16-dev clang-16  \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget adduser less
+             rsync m4 curl wget adduser less emacs-nox
 
 ENV OPAM_DEPS dune apron zarith menhir yojson
 
