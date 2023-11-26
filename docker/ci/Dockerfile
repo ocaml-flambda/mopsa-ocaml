@@ -10,7 +10,7 @@ FROM ubuntu:23.10
 ##
 
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
-             llvm-16-dev libclang-16-dev libclang-cpp16-dev clang-16  \
+             llvm-13-dev libclang-13-dev libclang-cpp13-dev clang-13  \
              python3-dev python3-setuptools python3-pip python3-requests \
              rsync m4 curl wget adduser less emacs-nox
 
