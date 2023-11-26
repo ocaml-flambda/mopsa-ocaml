@@ -81,9 +81,10 @@ struct
   type a_expr =
     | LinearForm of linear_form
     | BinExpr of abstract_binop * a_expr * a_expr
+    | Wrap of a_expr * bool * (Z.t * Z.t)
 
   (** The modular ring in which an expression has to be interpreted, the upper-bound of the ring is excluded *)
-  type modulo = NoMod | Mod of Z.t * Z.t
+  type modulo = NoMod | Mod of Z.t * Z.t | ToBeKSplitted of Z.t
 
   (** Exception raised when the expression cannot be rewritten using this domain *)
   exception No_representation
@@ -99,6 +100,7 @@ struct
   let pp_mod fmt = function
     | NoMod -> Format.fprintf fmt "ℤ"
     | Mod (l,u) -> Format.fprintf fmt "[%a,%a[" Z.pp_print l Z.pp_print u
+    | ToBeKSplitted k -> Format.fprintf fmt "to-%a-split" Z.pp_print k
 
   (** Are two abstract expressions equal. In particular, variables coefficiented by [0] are discarded *)
   let rec abstract_equal = function
@@ -154,6 +156,10 @@ struct
         | ConvexJoin -> O_convex_join
       in
       mk_binop ~etyp:T_int (to_expr env e1) binop (to_expr env e2) env.range
+    | Wrap (e1, s, (l,u)) ->
+      let e1' = to_expr env e1 in
+      let e1' = wrap_expr e1' (l, Z.pred u) env.range in
+      if s then e1' else mk_unop ~etyp:T_int O_minus e1' env.range
 
   (** Return [Some a] if an abstract expression is the constant [a], otherwise return [None] *)
   let is_constant = function
@@ -219,6 +225,7 @@ struct
     | BinExpr (ConvexJoin, _, _) -> false
     | BinExpr ((Add|Mult|Div), e1, e2) ->
       is_deterministic e1 && is_deterministic e2
+    | Wrap _ -> false
 
   (** Return an abstract expression that represents the given variable *)
   let lf_var v =
@@ -232,12 +239,14 @@ struct
   let apply_mod c = function
     | NoMod -> c
     | Mod (l,u) -> Z.add l (Z.erem (Z.sub c l) (Z.sub u l))
+    | ToBeKSplitted _ -> assert false
 
   (** Can a modular ring [m] be split in [k] sets of same cardinality *)
   let is_m_k_splittable k m =
     match m with
     | NoMod -> true
     | Mod (l,u) -> Z.divisible (Z.sub u l) k
+    | ToBeKSplitted k' -> Z.divisible k' k
 
   (** [check_int_overflow env cexp (aexpr, m, flow)] checks whether the C expression
       [cexp] produces an integer overflow and transforms its abstract counterpart
@@ -248,30 +257,45 @@ struct
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let (aexpr',m') = match m with
-        | _ when is_m_k_splittable (Z.sub rmax rmin |> Z.succ) m -> (aexpr, Mod (rmin, Z.succ rmax)) (* rule ModIdentity *)
-        | Mod (l,u) ->
-          let alpha = apply_mod l (Mod (rmin, Z.succ rmax)) in
-          if Z.leq (Z.sub (Z.add alpha u) l) (Z.succ rmax) && Z.divisible (Z.sub alpha l) (Z.sub u l) then
-            (aexpr, Mod (alpha, Z.sub (Z.add alpha u) l)) (* rule ModTranslation *)
-          else
-            (rm_mod env (aexpr, m), Mod (rmin, Z.succ rmax)) (* rule ModIdentityNoMod *)
-        | _ -> assert false
+      let (l',u') = (rmin, Z.succ rmax) in
+      let rlen = Z.sub u' l' in
+      let (aexpr, m) = match m with
+        | _ when is_m_k_splittable rlen m ->
+          let aexpr = match m with
+            | ToBeKSplitted _ -> remove_wraps env aexpr
+            | NoMod | Mod _ -> aexpr
+          in 
+          (aexpr, Mod (l',u')) (* rule ModIdentity *)
+        | NoMod -> assert false (* handled by rule ModIdentity *)
+        | Mod (l,u) when
+            let alpha = apply_mod l (Mod (l',u')) in
+            Z.leq (Z.sub (Z.add alpha u) l) u' && Z.divisible (Z.sub alpha l) (Z.sub u l) ->
+          let alpha = apply_mod l (Mod (l',u')) in
+          (aexpr, Mod (alpha, Z.sub (Z.add alpha u) l)) (* rule ModTranslation *)
+        | _ ->
+          try
+            (rm_mod env (aexpr, m), Mod (l',u')) (* rule ModIdentityNoMod *)
+          with No_representation ->
+            if env.is_in (to_expr env aexpr) ritv then
+              (aexpr, m)
+            else
+              let aexpr' = Wrap (aexpr, true, (l',u')) in
+              (aexpr', ToBeKSplitted (Z.gcd rlen (get_k m)))
       in
-      let nexp = to_expr env aexpr' in
+      let nexp = to_expr env aexpr in
 
       (* the possible wrap-around is kept separate and will be applied latter *)
       if env.is_in nexp ritv then
         (* try to remove the modulo as soon as possible because [ritv] is included into the possible values of [nexp] *)
-        let m' = match m' with
+        let m = match m with
           | Mod (l,u) when IntItv.included ritv (Finite l, Finite (Z.pred u)) -> NoMod
-          | _ -> m'
+          | _ -> m
         in
-        let flow' = safe_c_integer_overflow_check cexp.erange env.man flow in
-        (aexpr', m', flow')
+        let flow = safe_c_integer_overflow_check cexp.erange env.man flow in
+        (aexpr, m, flow)
       else
         let itv = env.iota nexp in
-        let flow' =
+        let flow =
           if raise_alarm
           then
             if IntItv.meet itv ritv = BOT then
@@ -280,7 +304,7 @@ struct
               raise_c_integer_overflow_alarm ~warning:true exp nexp typ cexp.erange env.man flow flow
           else flow
         in
-        (aexpr', m', flow')
+        (aexpr, m, flow)
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
@@ -310,7 +334,7 @@ struct
   and rm_mod env = function
     | (aexpr, NoMod) ->
       aexpr
-    | (LinearForm { constant; coeffs }, m) when VarMap.for_all is_zero coeffs ->
+    | (LinearForm { constant; coeffs }, (Mod _ as m)) when VarMap.for_all is_zero coeffs ->
       lf_const (apply_mod constant m)
     | (aexpr, Mod (l,u)) ->
       if env.is_in (to_expr env aexpr) (Finite l, Finite (Z.pred u)) then
@@ -322,6 +346,8 @@ struct
           debug "%a is included in %a and failed to be proven in %a" pp_expr nexp IntItv.fprint int pp_mod (Mod (l,u))
         in
         raise No_representation
+    | (aexpr, ToBeKSplitted _) ->
+      raise No_representation
 
   (** Given an abstract expression, return its opposite *)
   and opposite env = function
@@ -333,6 +359,30 @@ struct
       BinExpr (Add, opposite env aexpr1, opposite env aexpr2)
     | BinExpr ((Mult|Div) as op, aexpr1, aexpr2) ->
       BinExpr (op, opposite env aexpr1, aexpr2)
+    | Wrap (e1, s, k) -> Wrap (e1, not s, k)
+
+  and remove_wraps env e = match e with
+    | LinearForm _ -> e
+    | BinExpr (op, e1, e2) ->
+      let e1' = remove_wraps env e1 in
+      let e2' = remove_wraps env e2 in
+      if e1 == e1' && e2 == e2'
+      then e
+      else BinExpr (op, reduce env e1', reduce env e2')
+    | Wrap (e1, s, _) ->
+      let e1' = remove_wraps env e1 in
+      if s then e1 else opposite env e1'
+
+  and get_k = function
+    | NoMod -> assert false
+    | Mod (l,u) -> Z.sub u l
+    | ToBeKSplitted k -> k
+
+  and to_split m1 m2 = match m1,m2 with
+    | NoMod, NoMod -> NoMod
+    | NoMod, m
+    | m, NoMod -> ToBeKSplitted (get_k m)
+    | _ -> ToBeKSplitted (Z.gcd (get_k m1) (get_k m2))
 
   (** Translates an integer expression into an abstract expression *)
   and abstract (env: ('a,'b) env) (exp: expr) flow =
@@ -370,27 +420,39 @@ struct
     (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {+, -} and type(exp) = int *)
     | E_binop((O_plus|O_minus) as op, e, e') when exp |> etyp |> is_c_int_type ->
       let (aexpr1, m1, flow) = abstract env e flow in
-      let (aexpr2, m2, flow) = abstract env e' flow in
+      let (aexpr2_pos, m2, flow) = abstract env e' flow in
       let (aexpr2, m2) = match op, m2 with
-        | O_minus, NoMod -> (reduce env (opposite env aexpr2), m2)
-        | O_minus, Mod (l,u) -> (reduce env (opposite env aexpr2), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
-        | _ -> (aexpr2, m2)
+        | O_minus, NoMod -> (reduce env (opposite env aexpr2_pos), m2)
+        | O_minus, Mod (l,u) -> (reduce env (opposite env aexpr2_pos), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
+        | _ -> (aexpr2_pos, m2)
       in
       let (aexpr, m) =
         match (is_constant aexpr1, aexpr1, m1), (is_constant aexpr2, aexpr2, m2) with
-        | (Some alpha1, _, m1), (Some alpha2, _, m2) ->
+        | (Some alpha1, _, (NoMod | Mod _)), (Some alpha2, _, (NoMod | Mod _)) ->
           (lf_const (Z.add (apply_mod alpha1 m1) (apply_mod alpha2 m2)), NoMod)
-        | (Some alpha, _, m_alpha), (None, aexpr, Mod (l,u))
-        | (None, aexpr, Mod (l,u)), (Some alpha, _, m_alpha) ->
+        | (Some alpha, _, (NoMod|Mod _ as m_alpha)), (None, aexpr, Mod (l,u))
+        | (None, aexpr, Mod (l,u)), (Some alpha, _, (NoMod|Mod _ as m_alpha)) ->
           let alpha' = apply_mod alpha m_alpha in
           (BinExpr (Add, lf_const alpha', aexpr)), Mod (Z.add l alpha', Z.add u alpha')
+        | (_,_,NoMod), (_,_,NoMod) ->
+          (BinExpr (Add, aexpr1, aexpr2), NoMod)
         | _ ->
-          let rmin, rmax = rangeof exp.etyp flow in
-          let rlen = Z.succ (Z.sub rmax rmin) in
-          if is_m_k_splittable rlen m1 && is_m_k_splittable rlen m2 then
-            (BinExpr (Add, aexpr1, aexpr2)), Mod (rmin, Z.succ rmax)
-          else
+          try
             (BinExpr (Add, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+          with No_representation ->
+            let rmin1, rmax1 = rangeof e.etyp flow in
+            let ritv1 = IntItv.of_z rmin1 rmax1 in
+            let aexpr1 = match m1 with
+              | NoMod -> aexpr1
+              | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
+              | _ -> Wrap (aexpr1, true, (rmin1, Z.succ rmax1)) in
+            let rmin2, rmax2 = rangeof e'.etyp flow in
+            let ritv2 = IntItv.of_z rmin2 rmax2 in
+            let aexpr2 = match m2 with
+              | NoMod -> aexpr2
+              | _ when env.is_in (to_expr env aexpr2_pos) ritv2 -> aexpr2
+              | _ -> Wrap (aexpr2_pos, op=O_plus, (rmin2, Z.succ rmax2)) in
+            (BinExpr (Add, aexpr1, aexpr2), to_split m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
 
@@ -400,10 +462,10 @@ struct
       let (aexpr2, m2, flow) = abstract env e' flow in
       let (aexpr, m) =
         match (is_constant aexpr1, aexpr1, m1), (is_constant aexpr2, aexpr2, m2) with
-        | (Some alpha1, _, m1), (Some alpha2, _, m2) ->
+        | (Some alpha1, _, (NoMod | Mod _)), (Some alpha2, _, (NoMod | Mod _)) ->
           (lf_const (Z.mul (apply_mod alpha1 m1) (apply_mod alpha2 m2)), NoMod)
-        | (Some alpha, _, m_alpha), (None, aexpr, Mod (l,u))
-        | (None, aexpr, Mod (l,u)), (Some alpha, _, m_alpha) ->
+        | (Some alpha, _, (NoMod | Mod _ as m_alpha)), (None, aexpr, Mod (l,u))
+        | (None, aexpr, Mod (l,u)), (Some alpha, _, (NoMod | Mod _ as m_alpha)) ->
           let alpha' = apply_mod alpha m_alpha in
           if Z.lt Z.zero alpha' then
             (BinExpr (Mult, aexpr, lf_const alpha'), Mod (Z.mul l alpha', Z.mul u alpha'))
@@ -412,12 +474,22 @@ struct
           else
             (BinExpr (Mult, aexpr, lf_const alpha'), Mod (Z.succ (Z.mul u alpha'), Z.succ (Z.mul l alpha')))
         | _ ->
-          let rmin, rmax = rangeof exp.etyp flow in
-          let rlen = Z.succ (Z.sub rmax rmin) in
-          if is_m_k_splittable rlen m1 && is_m_k_splittable rlen m2 then
-            (BinExpr (Mult, aexpr1, aexpr2), Mod (rmin, Z.succ rmax))
-          else
+          try
             (BinExpr (Mult, rm_mod env (aexpr1, m1), rm_mod env (aexpr2, m2)), NoMod)
+          with No_representation ->
+            let rmin1, rmax1 = rangeof e.etyp flow in
+            let ritv1 = IntItv.of_z rmin1 rmax1 in
+            let aexpr1 = match m1 with
+              | NoMod -> aexpr1
+              | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
+              | _ -> Wrap (aexpr1, true, (rmin1, Z.succ rmax1)) in
+            let rmin2, rmax2 = rangeof e'.etyp flow in
+            let ritv2 = IntItv.of_z rmin2 rmax2 in
+            let aexpr2 = match m2 with
+              | NoMod -> aexpr2
+              | _ when env.is_in (to_expr env aexpr2) ritv2 -> aexpr2
+              | _ -> Wrap (aexpr2, true, (rmin2, Z.succ rmax2)) in
+            (BinExpr (Mult, aexpr1, aexpr2), to_split m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
 
@@ -433,8 +505,8 @@ struct
           Flow.add_safe_check CHK_C_DIVIDE_BY_ZERO exp.erange flow
       in
       let (aexpr, m) =
-        match is_constant aexpr2, m1 with
-        | Some alpha, Mod (l,u) ->
+        match is_constant aexpr2, m1, m2 with
+        | Some alpha, Mod (l,u), (NoMod | Mod _) ->
           let aexpr1_positive = env.is_in (to_expr env aexpr1) IntItv.zero_inf in
           let alpha' = apply_mod alpha m2 in
           if aexpr1_positive && Z.lt Z.zero alpha' && Z.leq Z.zero l && Z.divisible l alpha' && Z.divisible u alpha' then
