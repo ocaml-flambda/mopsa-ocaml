@@ -77,14 +77,15 @@ struct
     | Div
     | ConvexJoin
 
-  (** Abstract expression that is either a linear form, or sum, product, quotient or convex join of abstract expressions *)
+  (** Abstract expression that is either a linear form, or sum, product, quotient or convex join of abstract expressions.
+      It can also be a wrapped abstract expression when interpreted in a [ToBeKSplit] modular ring. *)
   type a_expr =
     | LinearForm of linear_form
     | BinExpr of abstract_binop * a_expr * a_expr
-    | Wrap of a_expr * bool * (Z.t * Z.t)
+    | Wrap of a_expr * bool * IntItv.t (** [Wrap (e,s,itv)] is the abstract expression [e] wrapped in the interval [itv] with a unary minus if [not s] *)
 
   (** The modular ring in which an expression has to be interpreted, the upper-bound of the ring is excluded *)
-  type modulo = NoMod | Mod of Z.t * Z.t | ToBeKSplitted of Z.t
+  type modulo = NoMod | Mod of Z.t * Z.t | ToBeKSplit of Z.t
 
   (** Exception raised when the expression cannot be rewritten using this domain *)
   exception No_representation
@@ -100,7 +101,7 @@ struct
   let pp_mod fmt = function
     | NoMod -> Format.fprintf fmt "ℤ"
     | Mod (l,u) -> Format.fprintf fmt "[%a,%a[" Z.pp_print l Z.pp_print u
-    | ToBeKSplitted k -> Format.fprintf fmt "to-%a-split" Z.pp_print k
+    | ToBeKSplit k -> Format.fprintf fmt "to-%a-split" Z.pp_print k
 
   (** Are two abstract expressions equal. In particular, variables coefficiented by [0] are discarded *)
   let rec abstract_equal = function
@@ -156,10 +157,11 @@ struct
         | ConvexJoin -> O_convex_join
       in
       mk_binop ~etyp:T_int (to_expr env e1) binop (to_expr env e2) env.range
-    | Wrap (e1, s, (l,u)) ->
+    | Wrap (e1, s, (IntBound.Finite l, IntBound.Finite h)) ->
       let e1' = to_expr env e1 in
-      let e1' = wrap_expr e1' (l, Z.pred u) env.range in
+      let e1' = wrap_expr e1' (l,h) env.range in
       if s then e1' else mk_unop ~etyp:T_int O_minus e1' env.range
+    | Wrap _ -> assert false
 
   (** Return [Some a] if an abstract expression is the constant [a], otherwise return [None] *)
   let is_constant = function
@@ -239,14 +241,14 @@ struct
   let apply_mod c = function
     | NoMod -> c
     | Mod (l,u) -> Z.add l (Z.erem (Z.sub c l) (Z.sub u l))
-    | ToBeKSplitted _ -> assert false
+    | ToBeKSplit _ -> assert false
 
   (** Can a modular ring [m] be split in [k] sets of same cardinality *)
   let is_m_k_splittable k m =
     match m with
     | NoMod -> true
     | Mod (l,u) -> Z.divisible (Z.sub u l) k
-    | ToBeKSplitted k' -> Z.divisible k' k
+    | ToBeKSplit k' -> Z.divisible k' k
 
   (** [check_int_overflow env cexp (aexpr, m, flow)] checks whether the C expression
       [cexp] produces an integer overflow and transforms its abstract counterpart
@@ -262,7 +264,7 @@ struct
       let (aexpr, m) = match m with
         | _ when is_m_k_splittable rlen m ->
           let aexpr = match m with
-            | ToBeKSplitted _ -> remove_wraps env aexpr
+            | ToBeKSplit _ -> remove_wraps env aexpr
             | NoMod | Mod _ -> aexpr
           in 
           (aexpr, Mod (l',u')) (* rule ModIdentity *)
@@ -271,7 +273,7 @@ struct
             let alpha = apply_mod l (Mod (l',u')) in
             Z.leq (Z.sub (Z.add alpha u) l) u' && Z.divisible (Z.sub alpha l) (Z.sub u l) ->
           let alpha = apply_mod l (Mod (l',u')) in
-          (aexpr, Mod (alpha, Z.sub (Z.add alpha u) l)) (* rule ModTranslation *)
+          (aexpr, Mod (alpha, Z.add alpha (Z.sub u l))) (* rule ModTranslation *)
         | _ ->
           try
             (rm_mod env (aexpr, m), Mod (l',u')) (* rule ModIdentityNoMod *)
@@ -279,8 +281,8 @@ struct
             if env.is_in (to_expr env aexpr) ritv then
               (aexpr, m)
             else
-              let aexpr' = Wrap (aexpr, true, (l',u')) in
-              (aexpr', ToBeKSplitted (Z.gcd rlen (get_k m)))
+              let aexpr' = Wrap (aexpr, true, ritv) in
+              (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
       in
       let nexp = to_expr env aexpr in
 
@@ -346,7 +348,7 @@ struct
           debug "%a is included in %a and failed to be proven in %a" pp_expr nexp IntItv.fprint int pp_mod (Mod (l,u))
         in
         raise No_representation
-    | (aexpr, ToBeKSplitted _) ->
+    | (_, ToBeKSplit _) ->
       raise No_representation
 
   (** Given an abstract expression, return its opposite *)
@@ -359,7 +361,7 @@ struct
       BinExpr (Add, opposite env aexpr1, opposite env aexpr2)
     | BinExpr ((Mult|Div) as op, aexpr1, aexpr2) ->
       BinExpr (op, opposite env aexpr1, aexpr2)
-    | Wrap (e1, s, k) -> Wrap (e1, not s, k)
+    | Wrap (e1, s, itv) -> Wrap (e1, not s, itv)
 
   and remove_wraps env e = match e with
     | LinearForm _ -> e
@@ -373,16 +375,18 @@ struct
       let e1' = remove_wraps env e1 in
       if s then e1 else reduce env (opposite env e1')
 
-  and get_k = function
+  (** Return the cardinal of a non-infinite modular ring *)
+  and get_m_cardinal = function
     | NoMod -> assert false
     | Mod (l,u) -> Z.sub u l
-    | ToBeKSplitted k -> k
+    | ToBeKSplit k -> k
 
-  and to_split m1 m2 = match m1,m2 with
+  (** Return the modular ring that splits both arguments *)
+  and split_both m1 m2 = match m1,m2 with
     | NoMod, NoMod -> NoMod
     | NoMod, m
-    | m, NoMod -> ToBeKSplitted (get_k m)
-    | _ -> ToBeKSplitted (Z.gcd (get_k m1) (get_k m2))
+    | m, NoMod -> ToBeKSplit (get_m_cardinal m)
+    | _ -> ToBeKSplit (Z.gcd (get_m_cardinal m1) (get_m_cardinal m2))
 
   (** Translates an integer expression into an abstract expression *)
   and abstract (env: ('a,'b) env) (exp: expr) flow =
@@ -445,14 +449,14 @@ struct
             let aexpr1 = match m1 with
               | NoMod -> aexpr1
               | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
-              | _ -> Wrap (aexpr1, true, (rmin1, Z.succ rmax1)) in
+              | _ -> Wrap (aexpr1, true, ritv1) in
             let rmin2, rmax2 = rangeof e'.etyp flow in
             let ritv2 = IntItv.of_z rmin2 rmax2 in
             let aexpr2 = match m2 with
               | NoMod -> aexpr2
               | _ when env.is_in (to_expr env aexpr2_pos) ritv2 -> aexpr2
-              | _ -> Wrap (aexpr2_pos, op=O_plus, (rmin2, Z.succ rmax2)) in
-            (BinExpr (Add, aexpr1, aexpr2), to_split m1 m2)
+              | _ -> Wrap (aexpr2_pos, op=O_plus, ritv2) in
+            (BinExpr (Add, aexpr1, aexpr2), split_both m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
 
@@ -482,14 +486,14 @@ struct
             let aexpr1 = match m1 with
               | NoMod -> aexpr1
               | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
-              | _ -> Wrap (aexpr1, true, (rmin1, Z.succ rmax1)) in
+              | _ -> Wrap (aexpr1, true, ritv1) in
             let rmin2, rmax2 = rangeof e'.etyp flow in
             let ritv2 = IntItv.of_z rmin2 rmax2 in
             let aexpr2 = match m2 with
               | NoMod -> aexpr2
               | _ when env.is_in (to_expr env aexpr2) ritv2 -> aexpr2
-              | _ -> Wrap (aexpr2, true, (rmin2, Z.succ rmax2)) in
-            (BinExpr (Mult, aexpr1, aexpr2), to_split m1 m2)
+              | _ -> Wrap (aexpr2, true, ritv2) in
+            (BinExpr (Mult, aexpr1, aexpr2), split_both m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
 
