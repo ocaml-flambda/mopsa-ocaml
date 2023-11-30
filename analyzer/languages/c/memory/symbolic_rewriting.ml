@@ -503,7 +503,8 @@ struct
       let (aexpr2, m2, flow) = abstract env e' flow in
       let nexp2 = (aexpr2, m2) |> rm_mod env |> to_expr env in
       let flow =
-        if env.is_in nexp2 IntItv.zero then
+        let itv_denom = env.iota nexp2 in
+        if IntItv.contains_zero itv_denom then
           raise No_representation (* first approximation *)
         else
           Flow.add_safe_check CHK_C_DIVIDE_BY_ZERO exp.erange flow
