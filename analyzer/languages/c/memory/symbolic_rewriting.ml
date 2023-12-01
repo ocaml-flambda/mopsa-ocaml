@@ -91,10 +91,10 @@ struct
   type modulo =
     | NoMod
     | Mod of Z.t * Z.t (** [Mod (l,u)] means that the associated abstract expression has to be interpreted in the modular ring \[l,u\[ *)
-    | ToBeKSplit of Z.t (** [ToBeKSplit k] means that the current abstract expression cannot be interpreted in a modular ring,
-        but that if it is later interpeted in a modular ring that is split by [k], it will be just interpreted in the latter modular ring.
+    | ToBeKSplit of Z.t (** [ToBeKSplit k] means that the current abstract expression cannot be interpreted in a modular ring, but that, if
+        it is later interpeted in a modular ring that splits [ℤ_k], it will be exactly the abstract expression intepreted in the latter modular ring.
         Then, and only in that case, abstract expressions can contain [Wrap]s that preserve the soundness of the intermediate checks,
-        but which will be deleted at the same time as the [ToBeKSplit].
+        but which will be removed at the same time as the [ToBeKSplit].
         This is used to delay the need for a modular ring in which we interpret the abstract expression (that contains no [Mod]).
         For example, `(uint8_t) ((uint8_t) a + (uint8_t) b + (uint8_t) c) = a + b + c` if it can be represented by an `uint8_t`. *)
 
