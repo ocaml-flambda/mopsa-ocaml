@@ -3,6 +3,7 @@
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
 (* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Author Jérôme Boillot <jerome.boillot@ens.fr>                            *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
@@ -19,7 +20,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Symbolic rewriting of expressions as sum, product or quotient of linear forms *)
+(** Symbolic rewriting of expressions as sum, product or quotient of linear forms
+    Mainly inspired by the article Symbolic transformation of expressions in modular arithmetic SAS'23
+*)
 
 open Mopsa
 open Sig.Abstraction.Stateless
@@ -47,9 +50,7 @@ struct
                  CHK_C_INVALID_SHIFT;
                ]
 
-  let debug_channel = "c.symbolic_rewriting"
-  let debug fmt = Debug.debug ~channel:debug_channel fmt
-
+  let debug_channel = name
 
   (** Command-line options *)
   (** ==================== *)
@@ -82,10 +83,20 @@ struct
   type a_expr =
     | LinearForm of linear_form
     | BinExpr of abstract_binop * a_expr * a_expr
-    | Wrap of a_expr * bool * IntItv.t (** [Wrap (e,s,itv)] is the abstract expression [e] wrapped in the interval [itv] with a unary minus if [not s] *)
+    | Wrap of a_expr * bool * IntItv.t
+      (** [Wrap (e,s,itv)] is the abstract expression [e] wrapped in the interval [itv] with a unary minus if [not s].
+          It can appear in an abstract expression only when associated with a [ToBeKSplit] *)
 
   (** The modular ring in which an expression has to be interpreted, the upper-bound of the ring is excluded *)
-  type modulo = NoMod | Mod of Z.t * Z.t | ToBeKSplit of Z.t
+  type modulo =
+    | NoMod
+    | Mod of Z.t * Z.t (** [Mod (l,u)] means that the associated abstract expression has to be interpreted in the modular ring \[l,u\[ *)
+    | ToBeKSplit of Z.t (** [ToBeKSplit k] means that the current abstract expression cannot be interpreted in a modular ring,
+        but that if it is later interpeted in a modular ring that is split by [k], it will be just interpreted in the latter modular ring.
+        Then, and only in that case, abstract expressions can contain [Wrap]s that preserve the soundness of the intermediate checks,
+        but which will be deleted at the same time as the [ToBeKSplit].
+        This is used to delay the need for a modular ring in which we interpret the abstract expression (that contains no [Mod]).
+        For example, `(uint8_t) ((uint8_t) a + (uint8_t) b + (uint8_t) c) = a + b + c` if it can be represented by an `uint8_t`. *)
 
   (** Exception raised when the expression cannot be rewritten using this domain *)
   exception No_representation
