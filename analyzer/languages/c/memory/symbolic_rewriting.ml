@@ -270,31 +270,7 @@ struct
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let (l',u') = (rmin, Z.succ rmax) in
-      let rlen = Z.sub u' l' in
-      let (aexpr, m) = match m with
-        | _ when is_m_k_splittable rlen m ->
-          let aexpr = match m with
-            | ToBeKSplit _ -> remove_wraps env aexpr
-            | NoMod | Mod _ -> aexpr
-          in 
-          (aexpr, Mod (l',u')) (* rule ModIdentity *)
-        | NoMod -> assert false (* handled by rule ModIdentity *)
-        | Mod (l,u) when
-            let alpha = apply_mod l (Mod (l',u')) in
-            Z.leq (Z.sub (Z.add alpha u) l) u' && Z.divisible (Z.sub alpha l) (Z.sub u l) ->
-          let alpha = apply_mod l (Mod (l',u')) in
-          (aexpr, Mod (alpha, Z.add alpha (Z.sub u l))) (* rule ModTranslation *)
-        | _ ->
-          try
-            (rm_mod env (aexpr, m), Mod (l',u')) (* rule ModIdentityNoMod *)
-          with No_representation ->
-            if env.is_in (to_expr env aexpr) ritv then
-              (aexpr, m)
-            else
-              let aexpr' = Wrap (aexpr, true, ritv) in
-              (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
-      in
+      let (aexpr, m) = apply_mod_aexpr env (aexpr, m) (rmin, Z.succ rmax) in
       let nexp = to_expr env aexpr in
 
       (* the possible wrap-around is kept separate and will be applied latter *)
@@ -398,6 +374,32 @@ struct
     | NoMod, m
     | m, NoMod -> ToBeKSplit (get_m_cardinal m)
     | _ -> ToBeKSplit (Z.gcd (get_m_cardinal m1) (get_m_cardinal m2))
+
+  and apply_mod_aexpr env (aexpr, m) (l',u') =
+    let rlen = Z.sub u' l' in
+    match m with
+    | _ when is_m_k_splittable rlen m ->
+      let aexpr = match m with
+        | ToBeKSplit _ -> remove_wraps env aexpr
+        | NoMod | Mod _ -> aexpr
+      in 
+      (aexpr, Mod (l',u')) (* rule ModIdentity *)
+    | NoMod -> assert false (* handled by rule ModIdentity *)
+    | Mod (l,u) when
+        let alpha = apply_mod l (Mod (l',u')) in
+        Z.leq (Z.sub (Z.add alpha u) l) u' && Z.divisible (Z.sub alpha l) (Z.sub u l) ->
+      let alpha = apply_mod l (Mod (l',u')) in
+      (aexpr, Mod (alpha, Z.add alpha (Z.sub u l))) (* rule ModTranslation *)
+    | _ ->
+      try
+        (rm_mod env (aexpr, m), Mod (l',u')) (* rule ModIdentityNoMod *)
+      with No_representation ->
+        let ritv = IntItv.of_z l' (Z.pred u') in
+        if env.is_in (to_expr env aexpr) ritv then
+          (aexpr, m)
+        else
+          let aexpr' = Wrap (aexpr, true, ritv) in
+          (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
 
   (** Translates an integer expression into an abstract expression *)
   and abstract (env: ('a,'b) env) (exp: expr) flow =
@@ -518,7 +520,7 @@ struct
         if IntItv.contains_zero itv_denom then
           raise No_representation (* first approximation *)
         else
-          Flow.add_safe_check CHK_C_DIVIDE_BY_ZERO exp.erange flow
+          safe_c_divide_by_zero_check exp.erange env.man flow
       in
       let (aexpr, m) =
         match is_constant aexpr2, m1, m2 with
@@ -571,6 +573,36 @@ struct
           abstract env exp' flow
         else
           raise No_representation
+      | _ -> raise No_representation
+      end
+
+    (* 𝔼⟦ e % e' ⟧, and type(exp) = int *)
+    | E_binop(O_mod, e, e') when exp |> etyp |> is_c_int_type ->
+      let (aexpr2, m2, flow) = abstract env e' flow in
+      let aexpr2' = rm_mod env (aexpr2, m2) in
+      (* when the modulo is *by a nonzero constant* and the numerator is either positive xor negative, transform the modulo *)
+      begin match env.iota (to_expr env aexpr2') with
+      | (Finite l, Finite u) when Z.equal l u && not (Z.equal Z.zero l) ->
+        let flow = safe_c_divide_by_zero_check exp.erange env.man flow in
+        let (aexpr1, m1, flow) = abstract env e flow in
+        let num_expr =
+          match m1 with
+          | Mod (l,u) -> wrap_expr (to_expr env aexpr1) (l, Z.pred u) env.range
+          | NoMod | ToBeKSplit _ -> to_expr env aexpr1
+        in
+        let num_int = env.iota num_expr in
+        let (l',u') =
+          if IntItv.is_positive num_int then
+            (* if a >= 0, a % n = a mod [0,|n|[ *)
+            (Z.zero, Z.abs l)
+          else if IntItv.is_negative num_int then
+            (* if a <= 0, a % n = a mod [-|n|+1,1[ *)
+            (Z.succ (Z.neg (Z.abs l)), Z.one)
+          else
+            raise No_representation
+        in
+        let (aexpr, m) = apply_mod_aexpr env (aexpr1, m1) (l',u') in
+        check_int_overflow env exp (aexpr, m, flow)
       | _ -> raise No_representation
       end
 
@@ -824,7 +856,7 @@ struct
     | E_unop((O_plus | O_minus), e)
     | E_c_cast(e, _) ->
       is_supported_expr e
-    | E_binop((O_plus | O_minus | O_mult | O_div | O_convex_join | O_bit_lshift | O_bit_rshift), e, e') ->
+    | E_binop((O_plus | O_minus | O_mult | O_div | O_convex_join | O_bit_lshift | O_bit_rshift | O_mod), e, e') ->
       is_supported_expr e && is_supported_expr e'
     | _ -> false
 
