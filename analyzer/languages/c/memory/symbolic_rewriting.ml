@@ -519,6 +519,8 @@ struct
         let itv_denom = env.iota nexp2 in
         if IntItv.contains_zero itv_denom then
           raise No_representation (* first approximation *)
+        else if exp.erange == env.range then
+          flow (* if the expression is just a rewritten shift-right expression *)
         else
           safe_c_divide_by_zero_check exp.erange env.man flow
       in
@@ -569,7 +571,7 @@ struct
             | O_bit_rshift -> O_div
             | _ -> assert false
           in
-          let exp' = { exp with ekind = E_binop(op', e, e') } in
+          let exp' = mk_binop ~etyp:exp.etyp e op' e' env.range in
           abstract env exp' flow
         else
           raise No_representation
