@@ -79,12 +79,15 @@ struct
     | ConvexJoin
 
   (** Abstract expression that is either a linear form, or sum, product, quotient or convex join of abstract expressions.
-      It can also be a wrapped abstract expression when interpreted in a [ToBeKSplit] modular ring. *)
+      It can also be delayed operation over an abstract expression when interpreted in a [ToBeKSplit] modular ring. *)
   type a_expr =
     | LinearForm of linear_form
     | BinExpr of abstract_binop * a_expr * a_expr
-    | Wrap of a_expr * bool * IntItv.t
-      (** [Wrap (e,s,itv)] is the abstract expression [e] wrapped in the interval [itv] with a unary minus if [not s].
+    | DelayedWrap of a_expr * bool * IntItv.t
+      (** [DelayedWrap (e,s,itv)] is the abstract expression [e] wrapped in the interval [itv], with a unary minus if [not s].
+          It can appear in an abstract expression only when associated with a [ToBeKSplit] *)
+    | DelayedMod of a_expr * bool * Z.t
+      (** [DelayedMod (e,s,n)] is the abstract expression [e] evaluated [% n], with a unary minus if [not s].
           It can appear in an abstract expression only when associated with a [ToBeKSplit] *)
 
   (** The modular ring in which an expression has to be interpreted, the upper-bound of the ring is excluded *)
@@ -93,8 +96,8 @@ struct
     | Mod of Z.t * Z.t (** [Mod (l,u)] means that the associated abstract expression has to be interpreted in the modular ring \[l,u\[ *)
     | ToBeKSplit of Z.t (** [ToBeKSplit k] means that the current abstract expression cannot be interpreted in a modular ring, but that, if
         it is later interpeted in a modular ring that splits [ℤ_k], it will be exactly the abstract expression intepreted in the latter modular ring.
-        Then, and only in that case, abstract expressions can contain [Wrap]s that preserve the soundness of the intermediate checks,
-        but which will be removed at the same time as the [ToBeKSplit].
+        Then, and only in that case, abstract expressions can contain [DelayedWrap] and [DelayedMod] that preserve the soundness of the
+        intermediate checks, but which will be removed at the same time as the [ToBeKSplit].
         This is used to delay the need for a modular ring in which we interpret the abstract expression (that contains no [Mod]).
         For example, `(uint8_t) ((uint8_t) a + (uint8_t) b + (uint8_t) c) = a + b + c` if it can be represented by an `uint8_t`. *)
 
@@ -110,9 +113,9 @@ struct
   (** [-∞,-1] *)
 
   let pp_mod fmt = function
-    | NoMod -> Format.fprintf fmt "ℤ"
-    | Mod (l,u) -> Format.fprintf fmt "[%a,%a[" Z.pp_print l Z.pp_print u
-    | ToBeKSplit k -> Format.fprintf fmt "to-%a-split" Z.pp_print k
+    | NoMod -> ()
+    | Mod (l,u) -> Format.fprintf fmt " mod [%a,%a[" Z.pp_print l Z.pp_print u
+    | ToBeKSplit k -> Format.fprintf fmt " to-%a-split" Z.pp_print k
 
   (** Are two abstract expressions equal. In particular, variables coefficiented by [0] are discarded *)
   let rec abstract_equal = function
@@ -168,11 +171,15 @@ struct
         | ConvexJoin -> O_convex_join
       in
       mk_binop ~etyp:T_int (to_expr env e1) binop (to_expr env e2) env.range
-    | Wrap (e1, s, (IntBound.Finite l, IntBound.Finite h)) ->
+    | DelayedWrap (e1, s, (IntBound.Finite l, IntBound.Finite h)) ->
       let e1' = to_expr env e1 in
       let e1' = wrap_expr e1' (l,h) env.range in
       if s then e1' else mk_unop ~etyp:T_int O_minus e1' env.range
-    | Wrap _ -> assert false
+    | DelayedWrap _ -> assert false
+    | DelayedMod (e1, s, n) ->
+      let e1' = to_expr env e1 in
+      let e1' = mk_binop ~etyp:T_int e1' O_mod (mk_z n ~typ:T_int env.range) env.range in
+      if s then e1' else mk_unop ~etyp:T_int O_minus e1' env.range
 
   (** Return [Some a] if an abstract expression is the constant [a], otherwise return [None] *)
   let is_constant = function
@@ -238,7 +245,7 @@ struct
     | BinExpr (ConvexJoin, _, _) -> false
     | BinExpr ((Add|Mult|Div), e1, e2) ->
       is_deterministic e1 && is_deterministic e2
-    | Wrap _ -> false
+    | DelayedWrap _ | DelayedMod _ -> false
 
   (** Return an abstract expression that represents the given variable *)
   let lf_var v =
@@ -253,6 +260,18 @@ struct
     | NoMod -> c
     | Mod (l,u) -> Z.add l (Z.erem (Z.sub c l) (Z.sub u l))
     | ToBeKSplit _ -> assert false
+
+  (** Apply a modular ring evaluation to all the coefficients of the linear forms of abstract expressions *)
+  let rec simplify_linear_forms m = function
+    | LinearForm { constant; coeffs } ->
+      let f c = apply_mod c m in
+      LinearForm {
+        constant = f constant;
+        coeffs = VarMap.map f coeffs;
+      }
+    | BinExpr ((Add | Mult as op), e1, e2) ->
+      BinExpr (op, simplify_linear_forms m e1, simplify_linear_forms m e2)
+    | e -> e
 
   (** Can a modular ring [m] be split in [k] sets of same cardinality *)
   let is_m_k_splittable k m =
@@ -270,18 +289,18 @@ struct
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let (aexpr, m) = apply_mod_aexpr env (aexpr, m) (rmin, Z.succ rmax) in
       let nexp = to_expr env aexpr in
+      let (aexpr', m') = apply_mod_aexpr env (aexpr, m) (rmin, Z.succ rmax) in
 
       (* the possible wrap-around is kept separate and will be applied latter *)
       if env.is_in nexp ritv then
         (* try to remove the modulo as soon as possible because [ritv] is included into the possible values of [nexp] *)
-        let m = match m with
+        let m' = match m' with
           | Mod (l,u) when IntItv.included ritv (Finite l, Finite (Z.pred u)) -> NoMod
-          | _ -> m
+          | _ -> m'
         in
         let flow = safe_c_integer_overflow_check cexp.erange env.man flow in
-        (aexpr, m, flow)
+        (aexpr', m', flow)
       else
         let itv = env.iota nexp in
         let flow =
@@ -293,7 +312,7 @@ struct
               raise_c_integer_overflow_alarm ~warning:true exp nexp typ cexp.erange env.man flow flow
           else flow
         in
-        (aexpr, m, flow)
+        (aexpr', m', flow)
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
@@ -332,7 +351,7 @@ struct
         let () = if Debug.can_print debug_channel then
           let nexp = to_expr env aexpr in
           let int = env.iota nexp in
-          debug "%a is included in %a and failed to be proven in %a" pp_expr nexp IntItv.fprint int pp_mod (Mod (l,u))
+          debug "%a is included in %a and failed to be proven in [%a,%a]" pp_expr nexp IntItv.fprint int Z.pp_print l Z.pp_print (Z.pred u)
         in
         raise No_representation
     | (_, ToBeKSplit _) ->
@@ -348,18 +367,22 @@ struct
       BinExpr (Add, opposite env aexpr1, opposite env aexpr2)
     | BinExpr ((Mult|Div) as op, aexpr1, aexpr2) ->
       BinExpr (op, opposite env aexpr1, aexpr2)
-    | Wrap (e1, s, itv) -> Wrap (e1, not s, itv)
+    | DelayedWrap (e1, s, itv) -> DelayedWrap (e1, not s, itv)
+    | DelayedMod (e1, s, n) -> DelayedMod (e1, not s, n)
 
-  and remove_wraps env e = match e with
+  and remove_delayed env e = match e with
     | LinearForm _ -> e
     | BinExpr (op, e1, e2) ->
-      let e1' = remove_wraps env e1 in
-      let e2' = remove_wraps env e2 in
+      let e1' = remove_delayed env e1 in
+      let e2' = remove_delayed env e2 in
       if e1 == e1' && e2 == e2'
       then e
       else reduce env (BinExpr (op, e1', e2'))
-    | Wrap (e1, s, _) ->
-      let e1' = remove_wraps env e1 in
+    | DelayedWrap (e1, s, _) ->
+      let e1' = remove_delayed env e1 in
+      if s then e1 else reduce env (opposite env e1')
+    | DelayedMod (e1, s, _) ->
+      let e1' = remove_delayed env e1 in
       if s then e1 else reduce env (opposite env e1')
 
   (** Return the cardinal of a non-infinite modular ring *)
@@ -380,10 +403,10 @@ struct
     match m with
     | _ when is_m_k_splittable rlen m ->
       let aexpr = match m with
-        | ToBeKSplit _ -> remove_wraps env aexpr
+        | ToBeKSplit _ -> remove_delayed env aexpr
         | NoMod | Mod _ -> aexpr
       in 
-      (aexpr, Mod (l',u')) (* rule ModIdentity *)
+      (simplify_linear_forms (Mod (l',u')) aexpr, Mod (l',u')) (* rule ModIdentity *)
     | NoMod -> assert false (* handled by rule ModIdentity *)
     | Mod (l,u) when
         let alpha = apply_mod l (Mod (l',u')) in
@@ -398,7 +421,7 @@ struct
         if env.is_in (to_expr env aexpr) ritv then
           (aexpr, m)
         else
-          let aexpr' = Wrap (aexpr, true, ritv) in
+          let aexpr' = DelayedWrap (aexpr, true, ritv) in
           (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
 
   (** Translates an integer expression into an abstract expression *)
@@ -462,13 +485,13 @@ struct
             let aexpr1 = match m1 with
               | NoMod -> aexpr1
               | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
-              | _ -> Wrap (aexpr1, true, ritv1) in
+              | _ -> DelayedWrap (aexpr1, true, ritv1) in
             let rmin2, rmax2 = rangeof e'.etyp flow in
             let ritv2 = IntItv.of_z rmin2 rmax2 in
             let aexpr2 = match m2 with
               | NoMod -> aexpr2
               | _ when env.is_in (to_expr env aexpr2_pos) ritv2 -> aexpr2
-              | _ -> Wrap (aexpr2_pos, op=O_plus, ritv2) in
+              | _ -> DelayedWrap (aexpr2_pos, op=O_plus, ritv2) in
             (BinExpr (Add, aexpr1, aexpr2), split_both m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
@@ -499,13 +522,13 @@ struct
             let aexpr1 = match m1 with
               | NoMod -> aexpr1
               | _ when env.is_in (to_expr env aexpr1) ritv1 -> aexpr1
-              | _ -> Wrap (aexpr1, true, ritv1) in
+              | _ -> DelayedWrap (aexpr1, true, ritv1) in
             let rmin2, rmax2 = rangeof e'.etyp flow in
             let ritv2 = IntItv.of_z rmin2 rmax2 in
             let aexpr2 = match m2 with
               | NoMod -> aexpr2
               | _ when env.is_in (to_expr env aexpr2) ritv2 -> aexpr2
-              | _ -> Wrap (aexpr2, true, ritv2) in
+              | _ -> DelayedWrap (aexpr2, true, ritv2) in
             (BinExpr (Mult, aexpr1, aexpr2), split_both m1 m2)
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
@@ -584,7 +607,7 @@ struct
       let aexpr2' = rm_mod env (aexpr2, m2) in
       (* when the modulo is *by a nonzero constant* and the numerator is either positive xor negative, transform the modulo *)
       begin match env.iota (to_expr env aexpr2') with
-      | (Finite l, Finite u) when Z.equal l u && not (Z.equal Z.zero l) ->
+      | (Finite n, Finite n') when Z.equal n n' && not (Z.equal Z.zero n) ->
         let flow = safe_c_divide_by_zero_check exp.erange env.man flow in
         let (aexpr1, m1, flow) = abstract env e flow in
         let num_expr =
@@ -593,17 +616,21 @@ struct
           | NoMod | ToBeKSplit _ -> to_expr env aexpr1
         in
         let num_int = env.iota num_expr in
-        let (l',u') =
+        let (aexpr, m) =
           if IntItv.is_positive num_int then
             (* if a >= 0, a % n = a mod [0,|n|[ *)
-            (Z.zero, Z.abs l)
+            apply_mod_aexpr env (aexpr1, m1) (Z.zero, Z.abs n)
           else if IntItv.is_negative num_int then
             (* if a <= 0, a % n = a mod [-|n|+1,1[ *)
-            (Z.succ (Z.neg (Z.abs l)), Z.one)
+            apply_mod_aexpr env (aexpr1, m1) (Z.succ (Z.neg (Z.abs n)), Z.one)
           else
-            raise No_representation
+            let aexpr = DelayedMod (aexpr1, true, n) in
+            let m = match m1 with
+              | NoMod -> ToBeKSplit n
+              | Mod _ | ToBeKSplit _ -> ToBeKSplit (Z.gcd n (get_m_cardinal m1))
+            in
+            (aexpr, m)
         in
-        let (aexpr, m) = apply_mod_aexpr env (aexpr1, m1) (l',u') in
         check_int_overflow env exp (aexpr, m, flow)
       | _ -> raise No_representation
       end
@@ -884,6 +911,7 @@ struct
         end
       | _ when is_supported_expr exp ->
         let (aexpr,m,flow') = abstract env exp flow in
+        let () = debug "Could have rewritten expression %a into %a%a." pp_expr exp pp_expr (to_expr env aexpr) pp_mod m in
         let e' = to_expr env (rm_mod env (aexpr, m)) in
         (e', flow')
       | _ ->
