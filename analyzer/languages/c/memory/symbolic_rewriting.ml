@@ -261,18 +261,6 @@ struct
     | Mod (l,u) -> Z.add l (Z.erem (Z.sub c l) (Z.sub u l))
     | ToBeKSplit _ -> assert false
 
-  (** Apply a modular ring evaluation to all the coefficients of the linear forms of abstract expressions *)
-  let rec simplify_linear_forms m = function
-    | LinearForm { constant; coeffs } ->
-      let f c = apply_mod c m in
-      LinearForm {
-        constant = f constant;
-        coeffs = VarMap.map f coeffs;
-      }
-    | BinExpr ((Add | Mult as op), e1, e2) ->
-      BinExpr (op, simplify_linear_forms m e1, simplify_linear_forms m e2)
-    | e -> e
-
   (** Can a modular ring [m] be split in [k] sets of same cardinality *)
   let is_m_k_splittable k m =
     match m with
@@ -293,26 +281,19 @@ struct
       let (aexpr', m') = apply_mod_aexpr env (aexpr, m) (rmin, Z.succ rmax) in
 
       (* the possible wrap-around is kept separate and will be applied latter *)
-      if env.is_in nexp ritv then
-        (* try to remove the modulo as soon as possible because [ritv] is included into the possible values of [nexp] *)
-        let m' = match m' with
-          | Mod (l,u) when IntItv.included ritv (Finite l, Finite (Z.pred u)) -> NoMod
-          | _ -> m'
-        in
-        let flow = safe_c_integer_overflow_check cexp.erange env.man flow in
-        (aexpr', m', flow)
-      else
-        let itv = env.iota nexp in
-        let flow =
-          if raise_alarm
-          then
+      let flow =
+        if env.is_in nexp ritv then
+          safe_c_integer_overflow_check cexp.erange env.man flow
+        else
+          let itv = env.iota nexp in
+          if raise_alarm then
             if IntItv.meet itv ritv = BOT then
               raise_c_integer_overflow_alarm ~warning:false exp nexp typ cexp.erange env.man flow flow
             else
               raise_c_integer_overflow_alarm ~warning:true exp nexp typ cexp.erange env.man flow flow
           else flow
-        in
-        (aexpr', m', flow)
+      in
+      (aexpr', m', flow)
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
@@ -406,7 +387,7 @@ struct
         | ToBeKSplit _ -> remove_delayed env aexpr
         | NoMod | Mod _ -> aexpr
       in 
-      (simplify_linear_forms (Mod (l',u')) aexpr, Mod (l',u')) (* rule ModIdentity *)
+      (simplify_linear_forms env rlen aexpr, Mod (l',u')) (* rule ModIdentity *)
     | NoMod -> assert false (* handled by rule ModIdentity *)
     | Mod (l,u) when
         let alpha = apply_mod l (Mod (l',u')) in
@@ -423,6 +404,33 @@ struct
         else
           let aexpr' = DelayedWrap (aexpr, true, ritv) in
           (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
+
+  (** Simplify the coefficients of the linear forms of abstract expressions when interpreted in a modular ring of cardinal [n] within [[-floor(n/2),ceil(n/2)]] *)
+  and simplify_linear_forms env n e =
+    let (nd2,nd2_rem) = Z.ediv_rem n (Z.of_int 2) in
+    let (l,u) = (Z.neg nd2, (Z.add nd2 nd2_rem)) in
+    let rec aux e = match e with
+      | LinearForm { constant; coeffs } ->
+        let modified_lf = ref false in
+        let f c =
+          if Z.leq l c && Z.lt c u then c
+          else (modified_lf := true ; apply_mod c (Mod (l,u)))
+        in
+        let e' = LinearForm {
+            constant = f constant;
+            coeffs = VarMap.map f coeffs;
+          }
+        in
+        if !modified_lf then e' else e
+      | BinExpr ((Add | Mult as op), e1, e2) ->
+        let e1' = aux e1 in
+        let e2' = aux e2 in
+        if e1 == e1' && e2 == e2'
+        then e
+        else reduce env (BinExpr (op, e1', e2'))
+      | e -> e
+    in
+    aux e
 
   (** Translates an integer expression into an abstract expression *)
   and abstract (env: ('a,'b) env) (exp: expr) flow =
