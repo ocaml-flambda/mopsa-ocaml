@@ -580,6 +580,10 @@ struct
       let aexpr = reduce env (BinExpr (ConvexJoin, aexpr1', aexpr2')) in
       (aexpr, NoMod, flow)
 
+    (* 𝔼⟦ (int)int ⟧ like in [Intraproc], this reduces the number of safe checks *)
+    | E_c_cast(e, _) when is_c_type e.etyp && compare_typ exp.etyp e.etyp = 0 ->
+      abstract env e flow
+
     (* 𝔼⟦ (int)int ⟧ *)
     | E_c_cast(e, _) when exp |> etyp |> is_c_int_type && e |> etyp |> is_c_int_type ->
       abstract env e flow |>
