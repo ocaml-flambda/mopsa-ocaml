@@ -137,14 +137,14 @@ struct
       default = "false";
     }
 
-  let opt_mnum_relational_query = ref false 
+  let opt_mnum_fast_query = ref true
   let () =
     register_domain_option name {
       key = "-c-check-overflows-with-relational";
       category = "C";
       doc = " check for overflows using the relational abstract domains too (more expensive but can be more precise)";
-      spec = ArgExt.Set opt_mnum_relational_query;
-      default = string_of_bool !opt_mnum_relational_query;
+      spec = ArgExt.Clear opt_mnum_fast_query;
+      default = string_of_bool !opt_mnum_fast_query;
     }
 
 
@@ -245,7 +245,7 @@ struct
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:!opt_mnum_relational_query nexp) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:!opt_mnum_fast_query nexp) flow in
       if IntItv.subset itv ritv then
         safe_c_integer_overflow_check range man flow |>
         Eval.singleton cexp |>
