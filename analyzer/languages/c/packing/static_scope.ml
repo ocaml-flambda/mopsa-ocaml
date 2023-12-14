@@ -115,6 +115,19 @@ struct
       default  = "";
     }
 
+  let symargs_pack_string = "@argv,@arg,argc,%main,%getopt_long,optind,%execvp,@arg#0,@arg#+1"
+
+  let add_symargs_pack () =
+    parse_user_pack symargs_pack_string
+
+  let () = register_domain_option "c.memory.packing.static_scope"  {
+      key      = "-c-pack-symargs";
+      category = "Numeric";
+      doc      = " create a user pack for variables related to symbolic arguments. This is equivalent to -c-pack=" ^ symargs_pack_string;
+      spec    = ArgExt.Unit add_symargs_pack;
+      default = "";
+
+    }
 
   (** {2 Packs} *)
   (** ********* *)
