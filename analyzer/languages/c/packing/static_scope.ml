@@ -129,6 +129,17 @@ struct
 
     }
 
+  let opt_pack_only_stubs = ref false
+
+  let () = register_domain_option "c.memory.packing.static_scope" {
+      key      = "-c-pack-only-stub-initialization";
+      category = "Numeric";
+      doc      = " pack only during Mopsa's stub initialization";
+      spec     = ArgExt.Set opt_pack_only_stubs;
+      default  = "";
+    }
+
+
   (** {2 Packs} *)
   (** ********* *)
 
@@ -219,6 +230,16 @@ struct
     List.map (fun u -> User u)
 
 
+  let is_outside_stub_init cs =
+    let is_range_in_mopsa_stubs range =
+      let file = get_range_file range in
+      try let _ = Str.search_forward (Str.regexp_string "share/mopsa/stubs/c/") file 0 in true
+      with Not_found -> false in 
+    (
+      Callstack.callstack_length cs > 0 &&
+      not (is_range_in_mopsa_stubs @@ (ListExt.last cs).call_range)
+      (* not (is_range_in_mopsa_stubs range) *)
+    )
   (** Get the packs of a base *)
   let rec packs_of_base ?(user_only=false) ctx b =
     (* Invalid bases are not packed *)
@@ -227,7 +248,8 @@ struct
     (* Global variables *)
     | Var ({ vkind = V_cvar ({cvar_scope = Variable_global} as cvar); vtyp })
       ->
-      user_packs_of_cvar cvar
+      user_packs_of_cvar cvar @
+      (if !opt_pack_only_stubs then [Globals] else [])
 
     (* Local temporary variables are not packed *)
     | Var { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
@@ -384,6 +406,10 @@ struct
 
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
+    if !opt_pack_only_stubs && is_outside_stub_init (find_ctx callstack_ctx_key ctx) then
+      let () = debug "packs_of_var %a, globals due to pack_only_stubs" pp_var v in [Globals]
+    else
+    let () = debug "packs_of_var %a" pp_var v in
     match v.vkind with
     | Memory.Cells.Domain.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
       let user_only = not (is_c_scalar_type v.vtyp) in
