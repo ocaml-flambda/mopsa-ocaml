@@ -56,7 +56,8 @@ struct
   (** ==================== *)
 
   let () =
-    import_shared_option "c.memory.scalars.machine_numbers" name
+    import_shared_option "c.memory.scalars.machine_numbers" name;
+    import_shared_option "universal.numeric.relational" name
 
   
   (** Rewriting environment *)
@@ -1011,7 +1012,11 @@ struct
 
     | _ -> None
 
-  let init _ _ flow = flow
+  let init _ _ flow =
+    debug "Enable the \"-enforce-sign-constraints\" option of the relational domain";
+    Relational.Domain.opt_enforce_sign_constraints := true;
+    flow
+
   let ask _ _ _ = None
   let exec _ _ _ = None
   let print_expr _ _ _ _ = ()

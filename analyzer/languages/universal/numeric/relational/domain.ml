@@ -40,6 +40,16 @@ let () =
     default = "false";
   }
 
+let opt_enforce_sign_constraints = ref false
+let () =
+  register_shared_option "universal.numeric.relational" {
+    key = "-enforce-sign-constraints";
+    category = "Numeric";
+    doc = " enforce sign constraints of variables in the relational domain";
+    spec = ArgExt.Set opt_enforce_sign_constraints;
+    default = "false";
+  }
+
 (** Query to retrieve relational variables *)
 
 type ('a,_) query +=
@@ -237,7 +247,8 @@ struct
     | _ -> assert false
 
   (** Add the sign contraint (if existing) of a given variable into the relationnal domain *)
-  let add_sign_constraint var ask ctx range =
+  let enforce_sign_constraint var ask ctx range =
+    if not !opt_enforce_sign_constraints then Fun.id else
     let fake_range = mk_tagged_range (String_tag "var sign constraint") range in
     match Framework.Combiners.Value.Nonrel.find_var_bounds_ctx_opt var ctx with
     | Some (C_int_interval (Finite l, Finite u)) when Z.equal l u -> 
@@ -256,7 +267,7 @@ struct
     match skind stmt with
     | S_add { ekind = E_var (var, _) } when is_var_numeric_type var ->
       add_missing_vars (a,bnd) [var] |> OptionExt.return |>
-      add_sign_constraint var man.ask ctx stmt.srange
+      enforce_sign_constraint var man.ask ctx stmt.srange
 
     | S_remove { ekind = E_var (var, _) } when is_var_numeric_type var ->
       remove_var var (a,bnd) |>
@@ -310,7 +321,7 @@ struct
         with
           | ImpreciseExpression ->
             exec (mk_forget_var var stmt.srange) man ctx (a,bnd) |>
-            add_sign_constraint var man.ask ctx stmt.srange
+            enforce_sign_constraint var man.ask ctx stmt.srange
           | UnsupportedExpression ->
             None
       end
