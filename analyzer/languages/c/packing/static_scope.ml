@@ -82,7 +82,7 @@ struct
   let parse_user_pack (s:string) : unit =
     (* Utility function to parse an identifier *)
     let ensure_is_id s =
-      if Str.string_match (Str.regexp "^[A-Za-z].*$") s 0 then
+      if Str.string_match (Str.regexp "^[A-Za-z_-].*$") s 0 then
         s
       else
         panic "incorrect argument '%s' for option -c-pack" s
