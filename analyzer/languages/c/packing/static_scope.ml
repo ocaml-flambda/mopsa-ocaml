@@ -136,8 +136,19 @@ struct
       category = "Numeric";
       doc      = " pack only during Mopsa's stub initialization";
       spec     = ArgExt.Set opt_pack_only_stubs;
-      default  = "";
+      default  = string_of_bool !opt_pack_only_stubs;
     }
+
+  let opt_pack_resources = ref false
+
+  let () = register_domain_option "c.memory.packing.static_scope" {
+      key      = "-c-pack-resources";
+      category = "Numeric";
+      doc      = " pack variables based on resources (such as dynamically allocated blocks)";
+      spec     = ArgExt.Set opt_pack_resources;
+      default  = string_of_bool !opt_pack_resources;
+    }
+
 
 
   (** {2 Packs} *)
@@ -328,10 +339,7 @@ struct
         let f1, f2 =
           let rec process cs = match cs with
             | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then Some f, Some f' else process (f'::tl)
-            | [f] ->
-              if f.call_fun_orig_name = fname then
-                Some f, None
-              else None, None
+            | [f] -> Some f, None 
             | [] -> assert false 
           in
           process (List.rev cs) in
@@ -397,6 +405,30 @@ struct
     (*       [Locals f.c_func_unique_name] *)
     (*   in *)
     (*   packs @ user_packs_of_resource r  *)
+        
+    | Addr { addr_kind = Stubs.Ast.A_stub_resource r;
+             addr_partitioning = Universal.Heap.Policies.G_stack_range (cs, range) } when !opt_pack_resources ->
+      let prog = find_ctx Ast.c_program_ctx ctx in
+      let is_c_stub func =
+        not (List.exists (fun c -> c.c_func_unique_name = func && c.c_func_stub = None) prog.c_functions) in
+      let path_contains p1 p2 =
+        let l1 = String.split_on_char '/' p1 in
+        let l2 = String.split_on_char '/' p2 in
+        List.for_all (fun el1 ->
+            List.mem el1 l2
+          ) l1
+      in
+      let packs = match List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions with
+        | None ->
+          if List.length cs > 0 && not @@ List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then
+            List.map (fun c -> Locals c.call_fun_uniq_name) cs
+          else [Globals]
+        | Some f ->
+          if List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then []
+          else
+          [Locals f.c_func_unique_name]
+      in
+      packs @ user_packs_of_resource r
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
       user_packs_of_resource r
