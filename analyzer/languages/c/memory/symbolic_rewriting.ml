@@ -638,6 +638,7 @@ struct
       (* when the modulo is *by a nonzero constant* and the numerator is either positive xor negative, transform the modulo *)
       begin match env.iota (to_expr env aexpr2') with
       | (Finite n, Finite n') when Z.equal n n' && not (Z.equal Z.zero n) ->
+        let n = Z.abs n in
         let flow = safe_c_divide_by_zero_check exp.erange env.man flow in
         let (aexpr1, m1, flow) = abstract env e flow in
         let num_expr =
@@ -649,10 +650,10 @@ struct
         let (aexpr, m) =
           if IntItv.is_positive num_int then
             (* if a >= 0, a % n = a mod [0,|n|[ *)
-            apply_mod_aexpr env (aexpr1, m1) (Z.zero, Z.abs n)
+            apply_mod_aexpr env (aexpr1, m1) (Z.zero, n)
           else if IntItv.is_negative num_int then
             (* if a <= 0, a % n = a mod [-|n|+1,1[ *)
-            apply_mod_aexpr env (aexpr1, m1) (Z.succ (Z.neg (Z.abs n)), Z.one)
+            apply_mod_aexpr env (aexpr1, m1) (Z.succ (Z.neg n), Z.one)
           else
             let aexpr = DelayedMod (aexpr1, true, n) in
             let m = match m1 with
