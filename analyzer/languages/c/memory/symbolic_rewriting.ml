@@ -270,17 +270,34 @@ struct
 
   (** [check_int_overflow env cexp (aexpr, m, flow)] checks whether the C expression
       [cexp] produces an integer overflow and transforms its abstract counterpart
-      [(aexpr,m)] accordingly *)
+      [(aexpr',m')] accordingly *)
   let rec check_int_overflow env cexp (aexpr, m, flow) =
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check ?(exp=cexp) raise_alarm =
       let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let nexp = to_expr env aexpr in
+
+      (* to produce no overflows, the inner expression [aexpr] evaluated in the modular ring [m], called [nexp], has to be within [[rmin,rmax]]... *)
+      let (nexp, aexpr, m) =
+        try
+          let aexpr' = rm_mod env (aexpr, m) in
+          (to_expr env aexpr, aexpr', NoMod)
+        with No_representation ->
+          let nexp = to_expr env aexpr in
+          match m with
+          | NoMod -> assert false
+          | Mod (l,u) -> (wrap_expr nexp (l, Z.pred u) env.range, aexpr, m)
+          | ToBeKSplit _ -> (nexp, aexpr, m) (* in this case, all the wraps are already made explicit in [aexpr] *)
+      in
+
+      (* ...but, when later evaluated in the modular ring [[rmin,rmax]], [aexpr] can be modified without compromising the soundness of the rewriting. *)
       let (aexpr', m') = apply_mod_aexpr env (aexpr, m) (rmin, Z.succ rmax) in
 
-      (* the possible wrap-around is kept separate and will be applied latter *)
+      (* An example of the importance of the previous simplification order is: `(unsigned char) (x + 256)`.
+         This expression can be rewritten as `x mod [0,256[` but only after checking the possible overflow of the addition.
+      *)
+
       let flow =
         if env.is_in nexp ritv then
           safe_c_integer_overflow_check cexp.erange env.man flow
@@ -393,6 +410,7 @@ struct
         let alpha = apply_mod l (Mod (l',u')) in
         Z.leq (Z.sub (Z.add alpha u) l) u' && Z.divisible (Z.sub alpha l) (Z.sub u l) ->
       let alpha = apply_mod l (Mod (l',u')) in
+      let aexpr = simplify_linear_forms env (Z.sub u l) aexpr in
       (aexpr, Mod (alpha, Z.add alpha (Z.sub u l))) (* rule ModTranslation *)
     | _ ->
       try
@@ -405,10 +423,10 @@ struct
           let aexpr' = DelayedWrap (aexpr, true, ritv) in
           (aexpr', ToBeKSplit (Z.gcd rlen (get_m_cardinal m)))
 
-  (** Simplify the coefficients of the linear forms of abstract expressions when interpreted in a modular ring of cardinal [n] within [[-floor(n/2),ceil(n/2)]] *)
+  (** Simplify the coefficients of the linear forms of abstract expressions when interpreted in a modular ring of cardinal [n] within [[-floor((n-1)/2), ceil((n-1)/2)+1]] *)
   and simplify_linear_forms env n e =
-    let (nd2,nd2_rem) = Z.ediv_rem n (Z.of_int 2) in
-    let (l,u) = (Z.neg nd2, (Z.add nd2 nd2_rem)) in
+    let (nd2,nd2_rem) = Z.ediv_rem (Z.pred n) (Z.of_int 2) in
+    let (l,u) = (Z.neg nd2, Z.succ (Z.add nd2 nd2_rem)) in
     let rec aux e = match e with
       | LinearForm { constant; coeffs } ->
         let modified_lf = ref false in
@@ -923,9 +941,13 @@ struct
         end
       | _ when is_supported_expr exp ->
         let (aexpr,m,flow') = abstract env exp flow in
-        let () = debug "Could have rewritten expression %a into %a%a." pp_expr exp pp_expr (to_expr env aexpr) pp_mod m in
-        let e' = to_expr env (rm_mod env (aexpr, m)) in
-        (e', flow')
+        begin try
+          let e' = to_expr env (rm_mod env (aexpr, m)) in
+          (e', flow')
+        with No_representation ->
+          let () = debug "Could have rewritten expression %a into %a%a." pp_expr exp pp_expr (to_expr env aexpr) pp_mod m in
+          raise No_representation
+        end
       | _ ->
         raise No_representation
 
