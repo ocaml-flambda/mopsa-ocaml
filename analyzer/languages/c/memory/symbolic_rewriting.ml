@@ -283,7 +283,7 @@ struct
       let (nexp, aexpr, m) =
         try
           let aexpr' = rm_mod env (aexpr, m) in
-          (to_expr env aexpr, aexpr', NoMod)
+          (to_expr env aexpr', aexpr', NoMod)
         with No_representation ->
           let nexp = to_expr env aexpr in
           match m with
