@@ -48,7 +48,7 @@ struct
     struct
         type nonrec t = t
         let name = "universal.numeric.values.powersets.standard"
-        let display = "const"
+        let display = "powerset"
     end
     )
 
