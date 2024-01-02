@@ -53,7 +53,7 @@ opam install --deps-only --with-doc --with-test .
 
 For Ubuntu 22.04, you can use:
 ```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev
+sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config zlib1g-dev
 opam init
 eval $(opam env)
 opam install --deps-only --with-doc --with-test .
