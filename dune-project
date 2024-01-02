@@ -13,7 +13,7 @@
 
 (maintainers "Antoine Miné <antoine.mine@lip6.fr>")
 
-(license "GNU Lesser General Public License version 3")
+(license "LGPL-3.0-or-later")
 
 (homepage "https://gitlab.com/mopsa/mopsa-analyzer")
 
@@ -32,4 +32,4 @@
 It features a modular architecture to support different kinds of languages, iterators, and abstract domains.
 For the moment, MOPSA can analyze programs written in a subset of C and Python.
 It reports run-time errors on C programs and uncaught exceptions on Python programs.")
- (depends ocaml dune conf-autoconf ocamlfind apron conf-libclang menhir mlgmpidl yojson zarith zlib))
+ (depends (ocaml (>= 12.0)) dune conf-autoconf ocamlfind apron conf-libclang menhir mlgmpidl yojson zarith zlib))

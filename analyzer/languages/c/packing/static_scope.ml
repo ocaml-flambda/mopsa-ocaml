@@ -411,7 +411,7 @@ struct
       let prog = find_ctx Ast.c_program_ctx ctx in
       let is_c_stub func =
         not (List.exists (fun c -> c.c_func_unique_name = func && c.c_func_stub = None) prog.c_functions) in
-      let path_contains p1 p2 =
+      let _path_contains p1 p2 =
         let l1 = String.split_on_char '/' p1 in
         let l2 = String.split_on_char '/' p2 in
         List.for_all (fun el1 ->
