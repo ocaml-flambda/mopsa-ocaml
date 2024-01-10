@@ -483,6 +483,17 @@ struct
       default = "";
     }
 
+  let opt_smash_only_pointers = ref false
+  let () =
+    register_domain_option name {
+      key = "-cell-smash-only-pointers";
+      category = "C";
+      doc = " the on-demand smashing happens only on pointers";
+      spec = ArgExt.Set opt_smash;
+      default = "";
+    }
+
+
 
   (** {2 Unification of cells} *)
   (** ======================== *)
@@ -802,7 +813,7 @@ struct
     let top = Eval.singleton (mk_top (void_to_char t) range) flow in
     if not !opt_smash
     || not (is_interesting_base base)
-       (* || not (is_c_pointer_type t) *) (* For performance reasons, we smash only pointer cells *)
+    || !opt_smash_only_pointers && not (is_c_pointer_type t)
     then
       let () = debug "%a: expansion %a not worth smashing, results in T" pp_range range pp_expansion (Region (base,lo,hi,step)) in
       top
@@ -810,11 +821,12 @@ struct
       (* In order to smash a region in something useful, we ensure
          that all covered cells do exist *)
       let a = get_env T_cur man flow in
+      let (=>) a b = not a || b in
       let cells = cell_set_filter_range
           (fun c ->
              (* Get only pointer cells that are correctly aligned with the step *)
-             (* c.typ = Pointer *)
-             (* && *)
+             (!opt_smash_only_pointers => (c.typ = Pointer))
+             &&
              Z.(rem (c.offset - lo) step = zero)
           )
           base lo hi a.cells in
@@ -967,11 +979,11 @@ struct
       man.eval (mk_top (void_to_char t) range) flow
 
     (* dereferencing one character of a string *)
-    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) ->
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) ->
       man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow 
 
     (* dereferencing characters of a string, abstracted as interval here *)
-    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.geq lo Z.zero && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) &&
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.geq lo Z.zero && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) &&
          String.length s < 20 ->
       (* ^^would it make sense to check cell-deref-expand param? *)
       let chars =
@@ -992,7 +1004,7 @@ struct
       man.eval (mk_int_interval min_c max_c ~typ:t range) ~route:scalar flow
 
     (* dereferencing null delimiter of a string *)
-    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when Z.equal lo hi && Z.equal step Z.one && Z.equal hi (Z.of_int @@ String.length s) ->
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.equal hi (Z.of_int @@ String.length s) ->
       man.eval (mk_zero ~typ:t range) ~route:scalar flow 
 
     | Region (base,lo,hi,step) ->
