@@ -800,9 +800,26 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        [S_jump (S_switch (c,b)), range]
 
     | C.CaseStmt s ->
-       (* TODO: constant folding? *)
-       if s.C.case_end <> None
-       then error range "unsupported case statement extension" "";
+      (* TODO: constant folding? *)
+      begin match s.C.case_end with
+        | Some case_end ->
+          let values = match s.C.case_value.expr_kind, case_end.expr_kind with
+            | ConstantExpr {expr_kind = IntegerLiteral b},
+              ConstantExpr {expr_kind = IntegerLiteral e} ->
+              let rec process i acc =
+                if Z.(i <= e) then
+                  process Z.(i + one) ({case_end with expr_kind = IntegerLiteral i}::acc)
+                else
+                  List.rev acc
+              in
+              process b []
+            | _ ->
+              error range "range case statement extension currently supports constant integers" (Format.asprintf "%s" (Clang_dump.string_of_expr (OptionExt.none_to_exn s.C.case_end)));
+          in 
+          (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+          (stmt func s.C.case_stmt)
+
+        | None ->
        (* in case of nested case stmts, we extract all of them in other_values, and keep the leaf statements *)
        let process s =
          let rec aux acc s = match s.C.stmt_kind with
@@ -813,6 +830,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        let values = s.C.case_value :: other_values in 
        (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
          (stmt func statements)
+      end
 
     | C.DefaultStmt s ->
        (S_target (S_default (empty_scope())), range)::(stmt func s)
