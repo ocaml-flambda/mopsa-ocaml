@@ -79,6 +79,11 @@ struct
 
   include D
 
+  let subset _ _ (a,_) (a',_) = D.subset a a'
+  let join _ _ (a,_) (a',_) = D.join a a'
+  let meet _ _ (a,_) (a',_) = D.meet a a'
+  let widen _ ctx (a,_) (a',_) = D.widen ctx a a'
+
   let init prog man flow =
     let a' = D.init prog in
     set_env T_cur a' man flow
@@ -92,7 +97,7 @@ struct
                         post_to_flow man |>
                         get_env T_cur man
            );
-    ask = (fun query -> man.Core.Manager.ask query flow);
+    ask = (fun query -> ask_and_reduce man.Core.Manager.ask query flow);
   }
 
   let exec domains =
@@ -106,14 +111,19 @@ struct
        else
          f stmt (simplified_man man flow) (Flow.get_ctx flow) a |>
          OptionExt.lift @@ fun a' ->
-         set_env T_cur a' man flow |>
-         Post.return |>
-         Cases.map_effects (fun effects ->
-             man.set_effects (
-               man.get_effects effects |>
-               add_stmt_to_teffect stmt
-             ) effects
-           )
+         let post =
+           set_env T_cur a' man flow |>
+           Post.return
+         in
+         if are_effects_enabled () then
+           post |> Cases.map_effects (fun effects ->
+               man.set_effects (
+                 man.get_effects effects |>
+                 add_stmt_to_teffect stmt
+               ) effects
+             )
+         else
+           post
     )
 
   let eval domains exp man flow = None
@@ -121,7 +131,9 @@ struct
   let ask domains =
     let f = D.ask domains in
     (fun query man flow ->
-       f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow)
+       match f query (simplified_man man flow) (Flow.get_ctx flow) (get_env T_cur man flow) with
+       | None -> None
+       | Some r -> Some (Cases.singleton r flow)
     )
 
   let print_expr domains =

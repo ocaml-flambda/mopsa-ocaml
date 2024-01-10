@@ -192,22 +192,22 @@ struct
     cases, { a with first = not_inserted }
 
 
-  let bounds itv =
+  let bounds itv flow =
     if Itv.is_bounded itv then
       Itv.bounds itv
     else
-      let _, max = rangeof s32 in
+      let _, max = rangeof s32 flow in
       Z.of_int window, max
 
 
   (** Insert an address in the remaining part of the table *)
   let insert_addr_others addr range man flow =
     let a = get_env T_cur man flow in
-    let others, itv = Table.insert addr window a.others in
+    let others, itv = Table.insert addr window a.others flow in
     if Itv.is_bottom itv then
       []
     else
-      let l, u = bounds itv in
+      let l, u = bounds itv flow in
       let exp = mk_z_interval l u range in
       let flow = set_env T_cur { a with others } man flow in
       [Eval.singleton exp flow]
@@ -255,7 +255,7 @@ struct
         [
           [ge slot (mk_int window range) range],
           (fun flow ->
-             let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
+             let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
              let flow = map_env T_cur (fun a ->
                  { a with others = Table.insert_at addr itv a.others }
                ) man flow
@@ -292,7 +292,7 @@ struct
 
     and find_addr_others flow =
       let a = get_env T_cur man flow in
-      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query i) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query i) flow in
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)
       let case1 =

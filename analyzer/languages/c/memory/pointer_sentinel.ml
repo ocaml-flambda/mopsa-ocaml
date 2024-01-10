@@ -235,7 +235,7 @@ struct
       when is_c_array_type v.vtyp -> Cases.singleton false flow
     | E_constant C_c_invalid      -> Cases.singleton true flow
     | _ ->
-      match c_expr_to_z (remove_casts e) with
+      match c_expr_to_z (remove_casts e) flow with
       | Some e -> Cases.singleton (Z.equal e Z.zero) flow
       | None ->
         (* If the above heuristics fails, fall back to dynamic evaluations *)
@@ -409,7 +409,7 @@ struct
     (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
        optional as the domain does not raise out-of-bound alarms *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr flow) range) range) range)
       ~fthen:(fun flow ->
           if not (is_interesting_base base)
           then Post.return flow
@@ -418,9 +418,9 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
-            let ptr = mk_z (sizeof_type void_ptr) range in
+            let ptr = mk_z (sizeof_type void_ptr flow) range in
 
-            switch ~route:universal [
+            switch [
               (* Case 1: set after
                                                      offset
                  -----|------------------#-------------?------|--->
@@ -596,7 +596,7 @@ struct
 
     (* Safety condition: offset ∈ [0, size - pointer_size] *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr flow) range) range) range)
       ~fthen:(fun flow ->
           if is_scalar_base base then Cases.not_handled flow else
           if not (is_interesting_base base) then Eval.singleton (mk_top typ range) flow
@@ -604,11 +604,11 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
-            let ptr = mk_z (sizeof_type void_ptr) range in
+            let ptr = mk_z (sizeof_type void_ptr flow) range in
             let top = mk_top void_ptr range in
 
 
-            switch ~route:scalar [
+            switch [
               (* Case 1: before sentinel
                  Offset condition: offset <= sentinel_pos - |ptr|
                  Transformation: weak(before)
@@ -680,7 +680,7 @@ struct
     let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
     let sentinel = mk_sentinel_var_expr base ~mode range in
     let before = mk_before_var_expr base ~mode range in
-    let ptr = mk_z (sizeof_type void_ptr) range in
+    let ptr = mk_z (sizeof_type void_ptr flow) range in
 
     (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
     assume

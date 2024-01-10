@@ -1,4 +1,0 @@
-tree a;
-tree b;
-b = Tree(10);
-a = Tree("s",{Tree(10),Tree(10)});

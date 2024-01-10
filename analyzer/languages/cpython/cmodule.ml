@@ -47,7 +47,7 @@ module AddrSet=
 let rec eval_offset man flow e =
   Visitor.map_expr (fun e -> match ekind e with
                              | E_var _ ->
-                                let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                                let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                                 if ItvUtils.IntItv.is_singleton (Bot.bot_to_exn itv) then
                                   let (a, b) = Bot.bot_to_exn itv in
                                   match a with
@@ -176,7 +176,8 @@ module Domain =
 
     let init _ man flow =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
-      set_env T_cur EquivBaseAddrs.empty man flow
+      set_env T_cur EquivBaseAddrs.empty man flow |>
+      set_c_target_info !C.Frontend.target_info
 
     let materialize_builtin_val_addr addr man range flow =
       (* since integer addresses are always weak in python, this
@@ -207,11 +208,14 @@ module Domain =
                   match points_to with
                   | P_block({base_kind = String (s, _, _)}, offset, _) ->
                      Cases.singleton (Some (Top.Nt s)) flow
-                  | P_top ->
-                     Cases.singleton (Some Top.TOP) flow
                   | P_null ->
                      Cases.singleton None flow
-                  | _ -> panic "safe_get_name_of points_to %a" pp_points_to points_to
+                  | P_top  ->
+                    Cases.singleton (Some Top.TOP) flow
+                  | _ ->
+                    warn "safe_get_name_of points_to %a, abstracted as T" pp_points_to points_to;
+                    Cases.singleton (Some Top.TOP) flow
+
                 ) in
       r
 
@@ -280,7 +284,7 @@ module Domain =
            else
             man.eval ~translate:"Universal" (mk_c_member_access_by_name methd "ml_flags" range) flow >>$ fun methd_flags flow ->
            let oflags =
-             match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query methd_flags) flow with
+             match Bot.bot_to_exn @@ ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query methd_flags) flow with
              | Finite l, Finite r when Z.compare l r = 0 -> Some (Z.to_int l)
              | _ -> assert false in
             alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, oflags, (binder_addr, None))) range flow) >>$
@@ -497,7 +501,7 @@ module Domain =
                  (* get callstack used when this exception was raised *)
                  let exc_cs = match exc_pt with
                    | P_block ({base_kind = Addr a}, _, _) ->
-                      man.ask (Callstack_tracking.Q_cpython_attached_callstack a) flow
+                      ask_and_reduce man.ask (Callstack_tracking.Q_cpython_attached_callstack a) flow
                    | _ -> assert false in
                  (* clean C exception state for next times *)
                  let old_cs = Flow.get_callstack flow in
@@ -702,7 +706,7 @@ module Domain =
           let bytes = C.Cstubs.Aux_vars.mk_bytes_var addr in
           let bytes_size = match size with
             | None ->
-               let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) in
+               let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) flow in
                mk_z ~typ:(T_c_integer C_unsigned_long) size range
             | Some s -> s in
           let flow = EquivBaseAddrs.add_addr addr man flow in
@@ -710,8 +714,8 @@ module Domain =
           (
             man.exec ~route:(Semantic "C") (mk_add obj range) flow >>% fun flow ->
               let () = debug "adding bytes var %a" pp_var bytes in
-              man.exec ~route:(Semantic "C") (mk_add_var bytes range) flow >>%
-              man.exec (mk_assign (mk_var bytes range) bytes_size  range) >>%
+              man.exec ~route:(Semantic "Universal") (mk_add_var bytes range) flow >>%
+              man.exec ~route:(Semantic "Universal") (mk_assign (mk_var bytes range) bytes_size  range) >>%
               fun flow ->
               let set_default_flags_func = C.Ast.find_c_fundec_by_name "set_default_flags" flow in
               let set_tp_alloc_py_class = C.Ast.find_c_fundec_by_name "set_tp_alloc_py_class" flow in
@@ -1226,7 +1230,7 @@ module Domain =
                 )
                 ~felse:(fun flow ->
                   man.eval (Python.Utils.mk_builtin_call "len" [obj] range) flow >>$ fun py_len flow ->
-                  let itv_len = man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.extract_oobject py_len)) flow in
+                  let itv_len = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query (Python.Utils.extract_oobject py_len)) flow in
                   c_set_exception "PyExc_TypeError" (Format.asprintf "expected a byte string of length 1, not of length %a"
                                                        Universal.Numeric.Common.pp_int_interval itv_len)
                     range man flow >>% Cases.return 0)
@@ -1565,7 +1569,7 @@ module Domain =
           if compare_addr_kind (akind addr) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_bytes) = 0 then
             (* FIXME: conversion is not the best thing to do, maybe we could have a cast? Or a string expression? *)
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (if StringPower.is_top strp then
                  [Eval.singleton (mk_top (T_c_array(s8, C_array_no_length)) range) flow]
@@ -1657,7 +1661,7 @@ module Domain =
           let addr_unicode, oe_unicode = object_of_expr py_unicode in
           if compare_addr_kind (akind addr_unicode) (akind @@ OptionExt.none_to_exn !Python.Types.Addr_env.addr_strings) = 0 then
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (StringPower.fold (fun s acc ->
                    Eval.singleton (mk_c_string ~kind:C_char_wide s range) flow :: acc
@@ -1684,7 +1688,7 @@ module Domain =
             | Some TOP -> assert false
             ) >>% fun flow ->
             let open Universal.Strings.Powerset in
-            let strp = man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
+            let strp = ask_and_reduce man.ask (mk_strings_powerset_query (OptionExt.none_to_exn oe_unicode)) flow in
             Eval.join_list ~empty:(fun () -> assert false)
               (StringPower.fold (fun s acc ->
                    Eval.singleton (mk_c_string s range) flow :: acc
@@ -1808,8 +1812,8 @@ module Domain =
          safe_get_name_of fname man flow >>$
            (fun ofname_str flow ->
              let fname_str = Top.top_to_exn (OptionExt.none_to_exn ofname_str) in
-             let min_args = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z minargs in
-             let additional_args  = (Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z maxargs) - min_args in
+             let min_args = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z minargs flow in
+             let additional_args  = (Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z maxargs flow) - min_args in
              let fmt_str = mk_c_string (Format.asprintf "%s%s:%s"
                                         (String.make min_args 'O')
                                         (if additional_args > 0 then "|" ^ (String.make additional_args 'O') else "")
@@ -1987,7 +1991,7 @@ module Domain =
          if compare_expr  py_right (mk_c_null range) = 0 then Eval.singleton (mk_int (-1) range) flow
          else
          man.eval ~translate:"Universal" op flow >>$ fun u_op flow ->
-         let op = match Bot.bot_to_exn @@ man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
+         let op = match Bot.bot_to_exn @@ ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query u_op) flow with
            | Finite l, Finite r when Z.compare l r = 0 -> Z.to_int l
            | _ -> assert false in
          let py_op = match op with
@@ -2028,7 +2032,7 @@ module Domain =
       | E_c_builtin_call ("PyTuple_New", [size]) ->
          (* FIXME: the allocation can also fail *)
          man.eval ~translate:"Universal" size flow >>$ (fun size flow ->
-          let size_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
+          let size_itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query size) flow in
           let size = match size_itv with
             | Nb (Finite l, Finite u) when Z.equal l u -> Z.to_int l
             | _ -> panic_at range "PyTuple_New, got %a" ItvUtils.IntItv.fprint_bot size_itv in
@@ -2043,7 +2047,7 @@ module Domain =
          |> OptionExt.return
 
       | E_c_builtin_call ("PyTuple_SetItem", [tuple;pos;item]) ->
-         let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos in
+         let pos = Z.to_int @@ OptionExt.none_to_exn @@ c_expr_to_z pos flow in
          c_to_python_boundary tuple man flow range >>$ (fun tuple_obj flow ->
          let tuple_vars = Python.Objects.Tuple.Domain.var_of_eobj tuple_obj in
          c_to_python_boundary item man flow range
@@ -2128,7 +2132,7 @@ module Domain =
           let els_var = Python.Objects.Py_list.Domain.var_of_addr (Addr.from_expr list_eaddr) in
           let list_length = Python.Objects.Py_list.Domain.length_var_of_addr (Addr.from_expr list_eaddr) in
           man.exec ~route:(Semantic "Python") (mk_add_var els_var range) flow >>%
-            man.exec ~route:(Semantic "Python") (mk_assign (mk_var list_length range) size range) >>%
+          man.exec ~route:(Semantic "Universal") (mk_assign (mk_var list_length range) size range) >>%
             Eval.singleton c_addr
         )
          |> OptionExt.return
@@ -2458,7 +2462,7 @@ module Domain =
            man flow
            ~fthen:(fun flow ->
              let post =
-               match man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
+               match ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
                | Some _ -> Post.return flow
                | None ->
                   let open Filename in
@@ -2470,7 +2474,7 @@ module Domain =
                   man.exec ~route:(Semantic "Python") weakref_import flow
              in
              post >>% fun flow ->
-             let weakref = OptionExt.none_to_exn @@  man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
+             let weakref = OptionExt.none_to_exn @@ ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
              c_to_python_boundary refto man flow range >>$ fun py_refto flow ->
              let () = Debug.debug ~channel:"bug" "%a" (format @@ Flow.print man.lattice.print) flow in
              man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object (weakref, None) range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
@@ -2488,7 +2492,7 @@ module Domain =
          let py_ssize_t = C.Ast.ul in
          man.exec (mk_assign (mk_c_deref ppos range) (mk_top py_ssize_t range) range) flow >>% (fun flow ->
          c_to_python_boundary p man flow range >>$ fun py_p flow ->
-          let els = man.ask (Python.Objects.Constant_dict.Q_py_dict_items py_p) flow in
+          let els = ask_and_reduce man.ask (Python.Objects.Constant_dict.Q_py_dict_items py_p) flow in
           let assigns = List.map (fun (k, v) ->
               let ok = object_of_expr k and ov = object_of_expr v in
               let c_k, flow = python_to_c_boundary (fst ok) None (snd ok) range man flow in

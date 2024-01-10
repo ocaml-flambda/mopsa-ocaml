@@ -234,9 +234,9 @@ struct
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check ?(exp=cexp) raise_alarm =
-      let rmin, rmax = rangeof typ in
+      let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
       if IntItv.subset itv ritv then
         safe_c_integer_overflow_check range man flow |>
         Eval.singleton cexp |>
@@ -309,7 +309,7 @@ struct
     let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
     let range = cexp.erange in
     (* Condition: n ∈ [0, bits(t) - 1] *)
-    let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
+    let bits = sizeof_type t flow |> Z.mul (Z.of_int 8) in
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
@@ -328,7 +328,7 @@ struct
   let check_float_valid cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     let prec = get_c_float_precision typ in
-    let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
     let flow', nexp' =
       if !opt_float_invalid_operation then
         if itv.nan then
@@ -375,7 +375,7 @@ struct
     let zero = mk_float ~prec 0. range in
     let cond = ne denominator zero range in
     if !opt_float_division_by_zero then
-      let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
       if FltItv.contains_zero itv then
         (* division by zero possible, make two cases *)
         assume cond
@@ -418,7 +418,7 @@ struct
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
-      let l, u = rangeof t in
+      let l, u = rangeof t flow in
       let nexp = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
       Eval.singleton exp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -453,7 +453,7 @@ struct
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
       let ne = get_expr_translation "Universal" e in
-      let _,hi = rangeof exp.etyp in
+      let _,hi = rangeof exp.etyp flow in
       let nexp = sub (mk_z hi exp.erange) ne exp.erange in
       Eval.singleton cexp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -606,7 +606,7 @@ struct
 
   let add_var_bounds vv t flow =
     if is_c_int_type t then
-      let l,u = rangeof t in
+      let l,u = rangeof t flow in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
       Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (ItvUtils.IntBound.Finite l,ItvUtils.IntBound.Finite u)) flow
     else
@@ -628,7 +628,7 @@ struct
       | Variable_local _, None | Variable_func_static _, None ->
         (* The value of the variable is undetermined (C99 6.7.8.10) *)
         if is_c_int_type v.vtyp then
-          let l,u = rangeof v.vtyp in
+          let l,u = rangeof v.vtyp flow in
           Eval.singleton (mk_z_interval l u range) flow
         else
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
@@ -652,7 +652,7 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
-      man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
+      let lval' = mk_num_var_expr lval in
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
       man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
       OptionExt.return
@@ -708,7 +708,7 @@ struct
       let vv = mk_num_var_expr v in
       let top =
         if is_c_int_type v.etyp then
-          let lo,hi = rangeof v.etyp in
+          let lo,hi = rangeof v.etyp flow in
           mk_z_interval lo hi stmt.srange
         else
           mk_top vv.etyp stmt.srange

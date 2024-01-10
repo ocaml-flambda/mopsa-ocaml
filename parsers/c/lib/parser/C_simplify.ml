@@ -33,8 +33,8 @@ type context = {
     target: C.target_info;
   }
 
-let create_context (target:C.target_info) = {
-    uid = 0;
+let create_context ?(min_uid=0) (target:C.target_info) = {
+    uid = min_uid;
     target = target;
   }
 

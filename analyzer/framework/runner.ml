@@ -25,6 +25,7 @@ open Mopsa_utils
 open Core.All
 open Params.Options
 
+let () = Sys.catch_break true
 
  (** {2 Command-line options} *)
 (** ************************ *)
@@ -95,10 +96,10 @@ let analyze_files (files:string list) (args:string list option) : int =
       (val
         match !opt_interactive with
         | "interactive"   ->
-           let module E = Engines.Interactive.Engine.Make(Toplevel) in
+           let module E = Engines.Interactive.Engine.Make(Toplevel)(Engines.Interactive.Terminal.Make) in
            (module E)
         | "dap"   ->
-           let module E = Engines.Dap.Make(Toplevel) in
+           let module E = Engines.Interactive.Engine.Make(Toplevel)(Engines.Interactive.Dap.Make) in
            (module E)
         | "automatic" ->
           let module E = Engines.Automatic.Make(Toplevel) in
@@ -111,7 +112,7 @@ let analyze_files (files:string list) (args:string list option) : int =
     let flow = Engine.init prog in
     let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
     let res =
-      try Engine.exec stmt flow |> post_to_flow Engine.man
+      try Engine.analyze stmt flow
       with Toplevel.SysBreak flow ->
         (* let () = warn "Early termination, hooks will yield partial information only" in  *)
         let () = Hook.on_finish Engine.man flow in
@@ -120,8 +121,11 @@ let analyze_files (files:string list) (args:string list option) : int =
     let t = Timing.stop t in
     Hook.on_finish Engine.man res;
     Output.Factory.report Engine.man res ~time:t ~files
-  with e ->
-    let t = try Timing.stop t with Not_found -> 0. in
+  with
+  | Exit ->
+    exit 1
+  | e ->
+    let t = try Timing.stop t with _ -> 0. in
     Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files
 
 

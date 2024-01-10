@@ -31,10 +31,14 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
+  val subset: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> bool
+  val join: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
+  val meet: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
+  val widen: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
   val merge : t -> t * teffect -> t * teffect -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
-  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   val print_state : DomainSet.t option -> printer -> t -> unit
   val print_expr  : DomainSet.t option -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
@@ -47,6 +51,10 @@ struct
   let domains = DomainSet.singleton D.name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
+  let subset _ _ (a,_) (a',_) = D.subset a a'
+  let join _ _ (a,_) (a',_) = D.join a a'
+  let meet _ _ (a,_) (a',_) = D.meet a a'
+  let widen _ ctx (a,_) (a',_) = D.widen ctx a a'
   let merge pre (a1,te1) (a2,te2) =
     let e1 = get_root_effect te1 in
     let e2 = get_root_effect te2 in
@@ -61,40 +69,48 @@ struct
   let print_expr  targets = D.print_expr
 end
 
-module CombinerToDomain(T:DOMAIN_COMBINER) : DOMAIN with type t = T.t =
-struct
-  include T
-  let merge pre (a1,e1) (a2,e2) =
-    let te1 = mk_teffect e1 empty_teffect empty_teffect in
-    let te2 = mk_teffect e2 empty_teffect empty_teffect in
-    T.merge pre (a1,te1) (a2,te2)
-  let exec stmt man flow = T.exec None stmt man flow
-  let eval exp man flow  = T.eval None exp man flow
-  let ask query man flow = T.ask None query man flow
-  let print_state printer a = T.print_state None printer a
-  let print_expr man flow printer e = T.print_expr None man flow printer e
-end
-
 
 module StandardToStacked(D:DOMAIN_COMBINER) : Stacked.STACKED_COMBINER with type t = D.t =
 struct
 
   include D
 
-  let subset man sman ctx (a,s) (a',s') =
+  let subset man ctx ((a,s) as x) ((a',s') as x') =
     if a == a' then true, s, s' else
-    D.subset a a', s, s'
+    D.subset man ctx x x', s, s'
 
-  let join man sman ctx (a,s) (a',s') =
+  let join man ctx ((a,s) as x) ((a',s') as x') =
     if a == a' then a, s, s' else
-    D.join a a', s, s'
+    D.join man ctx x x', s, s'
 
-  let meet man sman ctx (a,s) (a',s') =
+  let meet man ctx ((a,s) as x) ((a',s') as x') =
     if a == a' then a, s, s' else
-    D.meet a a', s, s'
+    D.meet man ctx x x', s, s'
 
-  let widen man sman ctx (a,s) (a',s') =
+  let widen man ctx ((a,s) as x) ((a',s') as x') =
     if a == a' then a, s, s', true else
-    D.widen ctx a a', s, s', true
+    D.widen man ctx x x', s, s', true
+
+end
+
+module StackedToStandard(D:Stacked.STACKED_COMBINER) : DOMAIN_COMBINER with type t = D.t =
+struct
+  include D
+
+  let subset man ctx a a' =
+    let b, _, _ = D.subset man ctx a a' in
+    b
+
+  let join man ctx a a' =
+    let a, _, _ = D.join man ctx a a' in
+    a
+
+  let meet man ctx a a' =
+    let a, _, _ = D.meet man ctx a a' in
+    a
+
+  let widen man ctx a a' =
+    let a, _, _, _ = D.widen man ctx a a' in
+    a
 
 end

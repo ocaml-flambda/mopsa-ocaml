@@ -479,163 +479,51 @@ let from_clang_float_type : C_AST.float_type -> c_float_type = function
   | C_AST.LONG_DOUBLE -> C_long_double
   | C_AST.FLOAT128 -> C_float128
 
-    (* NOTE: this may cause issue with recutsive types
 
-let rec to_clang_type : typ -> C_AST.type_qual = function
-  | T_c_void -> C_AST.T_void, C_AST.no_qual
-  | T_c_integer(i) -> C_AST.T_integer (to_clang_int_type i), C_AST.no_qual
-  | T_c_float(f) -> C_AST.T_float (to_clang_float_type f), C_AST.no_qual
-  | T_c_pointer(t) -> C_AST.T_pointer (to_clang_type t), C_AST.no_qual
-  | T_c_array(t, array_length) -> C_AST.T_array (to_clang_type t, to_clang_array_length array_length), C_AST.no_qual
-  | T_c_bitfield(t, size) -> C_AST.T_bitfield (fst @@ to_clang_type t, size), C_AST.no_qual
-  | T_c_function(f) -> C_AST.T_function(to_clang_function_type_option f), C_AST.no_qual
-  | T_c_builtin_fn -> C_AST.T_builtin_fn, C_AST.no_qual
-  | T_c_typedef(typedef) -> C_AST.T_typedef (to_clang_typedef typedef), C_AST.no_qual
-  | T_c_record(record) -> C_AST.T_record (to_clang_record_type record), C_AST.no_qual
-  | T_c_enum(enum) -> C_AST.T_enum (to_clang_enum_type enum), C_AST.no_qual
-  | T_c_qualified(qual, t) ->
-    let (t, other_qual) = to_clang_type t in
-    let qual = to_clang_type_qualifier qual in
-    let q = C_AST.merge_qualifiers qual other_qual in
-    t,  q
-  | t ->
-    Exceptions.panic "to_clang_type: %a not a C type" pp_typ t
+(***********************)
+(** Target information *)
+(***********************)
 
-and to_clang_type_qualifier : c_qual -> C_AST.qualifier = fun qual ->
-  {
-    C_AST.qual_is_const = qual.c_qual_is_const;
-  }
+module TargetCtx = GenContextKey
+    (struct
+      type 'a t = Clang_AST.target_info
+      let print _ fmt _ =
+        Format.pp_print_string fmt "target information"
+    end)
 
+let get_c_target_info flow =
+  let ctx = Flow.get_ctx flow in
+  find_ctx TargetCtx.key ctx
 
-and to_clang_function_type : c_function_type -> C_AST.function_type =
-  fun f -> {
-      C_AST.ftype_return = to_clang_type f.c_ftype_return;
-      ftype_params = List.map to_clang_type f.c_ftype_params;
-      ftype_variadic = f.c_ftype_variadic;
-    }
+let set_c_target_info target flow =
+  let ctx = Flow.get_ctx flow in
+  let ctx' = add_ctx TargetCtx.key target ctx in
+  Flow.set_ctx ctx' flow
 
-and to_clang_function_type_option = function
-  | None -> None
-  | Some t -> Some (to_clang_function_type t)
-
-and to_clang_array_length : c_array_length -> C_AST.array_length = function
-  | C_array_no_length -> C_AST.No_length
-  | C_array_length_cst(n) -> C_AST.Length_cst n
-  | C_array_length_expr(e) -> assert false
-
-and to_clang_typedef : c_typedef -> C_AST.typedef = fun typedef ->
-  {
-    C_AST.typedef_org_name = typedef.c_typedef_org_name;
-    typedef_uid = -1;
-    typedef_unique_name = typedef.c_typedef_unique_name;
-    typedef_def = to_clang_type typedef.c_typedef_def;
-    typedef_range = to_clang_range typedef.c_typedef_range;
-    typedef_com = [];
-  }
-
-and to_clang_record_type : c_record_type -> C_AST.record_type = fun record ->
-  let c_record = {
-    C_AST.record_kind = to_clang_record_kind record.c_record_kind;
-    record_org_name = record.c_record_org_name;
-    record_uid = -1;
-    record_unique_name = record.c_record_unique_name;
-    record_defined = record.c_record_defined;
-    record_sizeof = record.c_record_sizeof;
-    record_alignof = record.c_record_alignof;
-    record_fields = [||];
-    record_range = to_clang_range record.c_record_range;
-    record_com = [];
-  } in
-  c_record.C_AST.record_fields <- Array.map (fun field ->
-      to_clang_record_field c_record field
-    ) (Array.of_list record.c_record_fields);
-  c_record
-
-and to_clang_record_kind : c_record_kind -> C_AST.record_kind = function
-  | C_struct -> C_AST.STRUCT
-  | C_union -> C_AST.UNION
-
-and to_clang_record_field : C_AST.record_type -> c_record_field -> C_AST.record_field = fun record field ->
-  {
-    C_AST.field_uid = -1;
-    field_org_name = field.c_field_org_name;
-    field_name = field.c_field_name;
-    field_offset = field.c_field_offset;
-    field_bit_offset = field.c_field_bit_offset;
-    field_type = to_clang_type field.c_field_type;
-    field_range = to_clang_range field.c_field_range;
-    field_record = record;
-    field_index = field.c_field_index;
-    field_com = [];
-  }
-
-and to_clang_enum_type : c_enum_type -> C_AST.enum_type = fun enum ->
-  let c_enum = {
-    C_AST.enum_org_name = enum.c_enum_org_name;
-    enum_uid = -1;
-    enum_unique_name = enum.c_enum_unique_name;
-    enum_defined = enum.c_enum_defined;
-    enum_values = [];
-    enum_integer_type = to_clang_int_type enum.c_enum_integer_type;
-    enum_range = to_clang_range enum.c_enum_range;
-    enum_com = [];
-  }
-  in
-  c_enum.C_AST.enum_values <- List.map (fun v ->
-      to_clang_enum_value v c_enum
-    ) enum.c_enum_values;
-  c_enum
-
-and to_clang_enum_value : c_enum_value -> C_AST.enum_type -> C_AST.enum_value = fun enum_val enum ->
-  {
-    C_AST.enum_val_uid = -1;
-    enum_val_org_name = enum_val.c_enum_val_org_name;
-    enum_val_unique_name = enum_val.c_enum_val_unique_name;
-    enum_val_value = enum_val.c_enum_val_value;
-    enum_val_enum = enum;
-    enum_val_range = to_clang_range enum_val.c_enum_val_range;
-    enum_val_com = [];
-  }
-
-
-and to_clang_range (range: Framework.Location.range) : Clang_AST.range =
-  let origin_range = Framework.Location.get_origin_range range in
-  {
-    Clang_AST.range_begin = {
-      Clang_AST.loc_file = origin_range.range_begin.loc_file;
-      loc_line = origin_range.range_begin.loc_line;
-      loc_column = origin_range.range_begin.loc_column;
-    };
-    Clang_AST.range_end = {
-      Clang_AST.loc_file = origin_range.range_end.loc_file;
-      loc_line = origin_range.range_end.loc_line;
-      loc_column = origin_range.range_end.loc_column;
-    };
-  }
-
-  *)
-
+let remove_c_target_info flow =
+  let ctx = Flow.get_ctx flow in
+  let ctx' = remove_ctx TargetCtx.key ctx in
+  Flow.set_ctx ctx' flow
 
 (*==========================================================================*)
-                  (** {2 Sizes and alignments} *)
+(** {2 Sizes and alignments} *)
 (*==========================================================================*)
 
-let target_info = ref (Clang_parser.get_target_info (Clang_parser.get_default_target_options ()))
 
 (** [sizeof t] computes the size (in bytes) of a C type [t] *)
-let rec sizeof_type (t : typ) : Z.t =
+let rec sizeof_type_in_target (t : typ) target : Z.t =
   match t with
-  | T_c_void -> C_utils.sizeof_type !target_info C_AST.T_void
+  | T_c_void -> C_utils.sizeof_type target C_AST.T_void
 
-  | T_c_bool -> C_utils.sizeof_type !target_info C_AST.T_bool
+  | T_c_bool -> C_utils.sizeof_type target C_AST.T_bool
 
-  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int !target_info |> Z.of_int
+  | T_c_integer i -> to_clang_int_type i |> C_utils.sizeof_int target |> Z.of_int
 
-  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float !target_info |> Z.of_int
+  | T_c_float f -> to_clang_float_type f |> C_utils.sizeof_float target |> Z.of_int
 
-  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type !target_info
+  | T_c_pointer _ -> fst C_AST.void_ptr_type |> C_utils.sizeof_type target
 
-  | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type t)
+  | T_c_array (t, C_array_length_cst x) -> Z.mul x (sizeof_type_in_target t target)
 
   | T_c_array (_, (C_array_no_length | C_array_length_expr _)) -> panic ~loc:__LOC__ "%a has no length information" pp_typ t
 
@@ -644,26 +532,35 @@ let rec sizeof_type (t : typ) : Z.t =
 
   | T_c_function _ | T_c_builtin_fn -> panic ~loc:__LOC__ "%a is a function" pp_typ t
 
-  | T_c_typedef td -> sizeof_type td.c_typedef_def
+  | T_c_typedef td -> sizeof_type_in_target td.c_typedef_def target
 
   | T_c_record r ->
     if not r.c_record_defined then Z.zero (*panic ~loc:__LOC__ " %a is undefined" pp_typ t; *)
     else r.c_record_sizeof
 
   | T_c_enum e ->
-     if not e.c_enum_defined then panic ~loc:__LOC__ "%a is undefined" pp_typ t;
-     sizeof_type (T_c_integer e.c_enum_integer_type)
+    if not e.c_enum_defined then panic ~loc:__LOC__ "%a is undefined" pp_typ t;
+    sizeof_type_in_target (T_c_integer e.c_enum_integer_type) target
 
-  | T_c_qualified (_,t) -> sizeof_type t
+  | T_c_qualified (_,t) -> sizeof_type_in_target t target
 
   | t -> panic ~loc:__LOC__ "%a not a C type" pp_typ t
 
 
-let sizeof_expr (t:typ) range : expr =
+let sizeof_type (t : typ) flow : Z.t =
+  let target = get_c_target_info flow in
+  sizeof_type_in_target t target
+
+let host_target_info = Clang_parser.get_target_info (Clang_parser.get_default_target_options ())
+
+let sizeof_type_in_host (t : typ) : Z.t =
+  sizeof_type_in_target t host_target_info
+
+let sizeof_expr (t:typ) flow range : expr =
   let rec doit t =
     match t with
     | T_c_void | T_c_bool | T_c_integer _ | T_c_float _ | T_c_pointer _ | T_c_record _ | T_c_enum _ ->
-       mk_z (sizeof_type t) range
+       mk_z (sizeof_type t flow) range
     | T_c_array (t,l) ->
        let len = match l with
          | C_array_length_cst len -> mk_z len range
@@ -716,8 +613,8 @@ let rec is_signed (t : typ) : bool=
   | _ -> panic ~loc:__LOC__ "%a is not an integer type" pp_typ t
 
 (** [range t] computes the interval range of type [t] *)
-let rangeof (t : typ) =
-  let part = 8*Z.to_int (sizeof_type t) in
+let rangeof (t : typ) flow =
+  let part = 8*Z.to_int (sizeof_type t flow) in
   if is_signed t then
     let part' = Z.pow (Z.of_int (2)) (part -1) in
     ( Z.neg part', Z.sub part' (Z.of_int 1))
@@ -726,8 +623,8 @@ let rangeof (t : typ) =
     ( Z.of_int 0 , Z.sub part' (Z.of_int 1))
 
 (** [range t] computes the interval range of type [t] as integers *)
-let int_rangeof t =
-  let a,b = rangeof t in
+let int_rangeof t flow =
+  let a,b = rangeof t flow in
   (Z.to_int a, Z.to_int b)
 
 (** [wrap_expr e (l,h)] expression needed to bring back [e] in range ([l],[h]) *)
@@ -935,12 +832,13 @@ let mk_c_character c range t =
   mk_constant (C_c_character (Z.of_int x, C_char_ascii)) range ~etyp:t
 
 (* extract a multi-byte integer of type t starting at offset off of s *)
-let extract_multibyte_integer (s:string) (off:int) t =
-  let n = Z.to_int (sizeof_type t) in
+let extract_multibyte_integer (s:string) (off:int) t flow =
+  let n = Z.to_int (sizeof_type t flow) in
+  let target = get_c_target_info flow in
   (* get bytes in right order according to endianess *)
   let rec doit acc i =
     if i >= n then acc else
-      let off' = if !target_info.target_big_endian then off+i else off+n-i-1 in
+      let off' = if target.target_big_endian then off+i else off+n-i-1 in
       doit (Z.add (Z.mul (Z.of_int 256) acc) (Z.of_int (int_of_char s.[off']))) (i+1)
   in
   let v = doit Z.zero 0 in
@@ -949,8 +847,8 @@ let extract_multibyte_integer (s:string) (off:int) t =
   then Z.sub v (Z.shift_left Z.one (n*8))
   else v
 
-let mk_c_multibyte_integer (s:string) (off:int) t range =
-  mk_z (extract_multibyte_integer s off t) ~typ:t range
+let mk_c_multibyte_integer (s:string) (off:int) t flow range =
+  mk_z (extract_multibyte_integer s off t flow) ~typ:t range
 
 
 let mk_c_invalid_pointer range =
@@ -971,8 +869,8 @@ let ull = T_c_integer(C_unsigned_long_long)
 let sll = T_c_integer(C_signed_long_long)
 let array_type typ size = T_c_array(typ,C_array_length_cst size)
 
-let size_type () =
-  let t = C_utils.size_type !target_info |>
+let size_type flow =
+  let t = C_utils.size_type (get_c_target_info flow) |>
           from_clang_int_type in
   T_c_integer t
 
@@ -1023,6 +921,7 @@ let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true
   | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
 
+
 let () =
   register_typ_compare (fun next t1 t2 ->
       match remove_typedef t1, remove_typedef t2 with
@@ -1063,8 +962,38 @@ let () =
         end
       | T_c_builtin_fn, T_c_builtin_fn -> 0
       | T_c_typedef td1, T_c_typedef td2 -> compare_typ td1.c_typedef_def td2.c_typedef_def
-      | T_c_record r1, T_c_record r2 -> compare r1.c_record_unique_name r2.c_record_unique_name
-      | T_c_enum e1, T_c_enum e2 -> compare e1.c_enum_unique_name e2.c_enum_unique_name
+      | T_c_record r1, T_c_record r2 ->
+        if r1 == r2 then 0
+        else
+          let compare_c_record_field f1 f2 =
+            if f1 == f2 then 0
+            else
+              Compare.compose [
+                (* also compare field names, as field swaps should be detected *)
+                (fun () -> Stdlib.compare f1.c_field_org_name f2.c_field_org_name);
+                (fun () -> Stdlib.compare f1.c_field_offset f2.c_field_offset);
+                (fun () -> Stdlib.compare f1.c_field_bit_offset f2.c_field_bit_offset);
+                (fun () -> compare_typ f1.c_field_type f2.c_field_type);
+                (fun () -> Stdlib.compare f1.c_field_index f2.c_field_index)
+              ]
+          in
+          Compare.compose [
+            (fun () -> String.compare r1.c_record_unique_name r2.c_record_unique_name);
+            (fun () -> Stdlib.compare r1.c_record_kind r2.c_record_kind);
+            (fun () -> Stdlib.compare r1.c_record_defined r2.c_record_defined);
+            (fun () -> Z.compare r1.c_record_sizeof r2.c_record_sizeof);
+            (fun () -> Z.compare r1.c_record_alignof r2.c_record_alignof);
+            (fun () -> Compare.list compare_c_record_field r1.c_record_fields r2.c_record_fields)
+          ]
+      | T_c_enum e1, T_c_enum e2 ->
+         let compare_c_enum_value v1 v2 =
+           Z.compare v1.c_enum_val_value v2.c_enum_val_value
+         in
+         Compare.compose [
+             (fun () -> Stdlib.compare e1.c_enum_defined e2.c_enum_defined);
+             (fun () -> Compare.list compare_c_enum_value e1.c_enum_values e2.c_enum_values);
+             (fun () -> Stdlib.compare e1.c_enum_integer_type e2.c_enum_integer_type)
+           ]
       | T_c_qualified (q1, t1), T_c_qualified (q2, t2) ->
         Compare.compose [
           (fun () -> compare q1.c_qual_is_const q2.c_qual_is_const);
@@ -1075,6 +1004,21 @@ let () =
       | T_c_block_object tt1, T_c_block_object tt2 -> compare_typ tt1 tt2
       | _ -> next t1 t2
     )
+
+
+let compare_c_fundec f1 f2 =
+  Compare.compose [
+      (fun () -> Stdlib.compare f1.c_func_org_name f2.c_func_org_name);
+      (fun () -> Stdlib.compare f1.c_func_is_static f2.c_func_is_static);
+      (fun () -> compare_typ f1.c_func_return f2.c_func_return);
+      (fun () -> Compare.list compare_var f1.c_func_parameters f2.c_func_parameters);
+      (fun () -> Compare.option compare_stmt f1.c_func_body f2.c_func_body);
+      (fun () -> Compare.list compare_var f1.c_func_static_vars f2.c_func_static_vars);
+      (fun () -> Compare.list compare_var f1.c_func_local_vars f2.c_func_local_vars);
+      (fun () -> Stdlib.compare f1.c_func_variadic f2.c_func_variadic)
+      (*XXX: ranges and stubs are ignored. *)
+    ]
+
 
 let () =
   register_expr_compare
@@ -1096,7 +1040,7 @@ let () =
            (s2,i2,f2)
 
        | E_c_function(f1), E_c_function(f2) ->
-         compare f1.c_func_unique_name f2.c_func_unique_name
+          compare_c_fundec f1 f2
 
        | E_c_builtin_function(f1), E_c_builtin_function(f2) ->
          compare f1 f2
@@ -1167,6 +1111,114 @@ let () =
     )
 
 
+(**************************)
+(** Statement comparison **)
+(**************************)
+
+let rec compare_c_var_init i1 i2 =
+  match i1, i2 with
+  | C_init_expr e1, C_init_expr e2 ->
+    compare_expr e1 e2
+
+  | C_init_list(l1,o1), C_init_list(l2,o2) ->
+    Compare.compose [
+      (fun () -> Compare.list compare_c_var_init l1 l2);
+      (fun () -> Compare.option compare_c_var_init o1 o2)
+    ]
+
+  | C_init_implicit t1, C_init_implicit t2 ->
+    compare_typ t1 t2
+
+  | _ ->
+    Stdlib.compare i1 i2
+
+let compare_c_fundec f1 f2 =
+  Compare.compose [
+    (fun () -> Stdlib.compare f1.c_func_uid f2.c_func_uid);
+    (fun () -> Stdlib.compare f1.c_func_unique_name f2.c_func_unique_name)
+  ]
+
+let compare_c_var_scope s1 s2 =
+  match s1, s2 with
+  | Variable_local f1, Variable_local f2
+  | Variable_parameter f1, Variable_parameter f2
+  | Variable_func_static f1,Variable_func_static f2 ->
+    compare_c_fundec f1 f2
+  | _ ->
+    Stdlib.compare s1 s2
+
+let compare_c_var_scope_update s1 s2 =
+  Compare.compose [
+    (fun () -> Compare.list compare_var s1.c_scope_var_added s2.c_scope_var_added);
+    (fun () -> Compare.list compare_var s1.c_scope_var_removed s2.c_scope_var_removed)
+  ]
+
+
+let () =
+  register_stmt_compare
+    (fun next s1 s2 ->
+       match skind s1, skind s2 with
+
+       | S_c_goto_stab(s1), S_c_goto_stab(s2) ->
+         compare_stmt s1 s2
+
+       | S_c_declaration(v1,i1,s1), S_c_declaration(v2,i2,s2) ->
+         Compare.compose [
+           (fun () -> compare_var v1 v2);
+           (fun () -> Compare.option compare_c_var_init i1 i2);
+           (fun () -> compare_c_var_scope s1 s2)
+         ]
+
+       | S_c_do_while(s1,e1), S_c_do_while(s2,e2) ->
+         Compare.compose [
+           (fun () -> compare_stmt s1 s2);
+           (fun () -> compare_expr e1 e2)
+         ]
+
+       | S_c_for(init1,cond1,incr1,body1), S_c_for(init2,cond2,incr2,body2) ->
+         Compare.compose [
+           (fun () -> compare_stmt init1 init2);
+           (fun () -> Compare.option compare_expr cond1 cond2);
+           (fun () -> Compare.option compare_expr incr1 incr2);
+           (fun () -> compare_stmt body1 body2)
+         ]
+
+       | S_c_return(e1,s1), S_c_return(e2,s2) ->
+         Compare.compose [
+           (fun () -> Compare.option compare_expr e1 e2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_break(s1), S_c_break(s2)
+       | S_c_continue(s1), S_c_continue(s2) ->
+         compare_c_var_scope_update s1 s2
+
+       | S_c_goto(l1,s1), S_c_goto(l2,s2) ->
+         Compare.compose [
+           (fun () -> compare l1 l2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_switch(e1,s1), S_c_switch(e2,s2) ->
+         Compare.compose [
+           (fun () -> compare_expr e1 e2);
+           (fun () -> compare_stmt s1 s2)
+         ]
+
+       | S_c_label(l1), S_c_label(l2) ->
+         Stdlib.compare l1 l2
+
+       | S_c_switch_case(e1,s1), S_c_switch_case(e2,s2) ->
+         Compare.compose [
+           (fun () ->  compare_expr e1 e2);
+           (fun () -> compare_c_var_scope_update s1 s2)
+         ]
+
+       | S_c_switch_default(s1), S_c_switch_default(s2) ->
+         compare_c_var_scope_update s1 s2
+
+       | _ -> next s1 s2
+    )
 
 let range_cond e_mint rmin rmax range =
   let condle = mk_binop e_mint O_le (mk_z rmax range) ~etyp:T_bool range in
@@ -1180,35 +1232,35 @@ let rec remove_casts e =
 
 
 (** Simplify C constant expressions to constants *)
-let rec c_expr_to_z (e:expr) : Z.t option =
+let rec c_expr_to_z (e:expr) flow : Z.t option =
   match ekind e with
   | E_constant (C_int n) -> Some n
 
   | E_constant (C_c_character (ch,_)) -> Some ch
 
   | E_unop (O_minus, e') ->
-    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
+    c_expr_to_z e' flow |> OptionExt.bind @@ fun n ->
     Some (Z.neg n)
 
   | E_unop (O_bit_invert, e') ->
-    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
+    c_expr_to_z e' flow |> OptionExt.bind @@ fun n ->
     Some (Z.lognot n)
 
   | E_unop (O_log_not, e') ->
-    c_expr_to_z e' |> OptionExt.bind @@ fun n ->
+    c_expr_to_z e' flow |> OptionExt.bind @@ fun n ->
     if Z.equal n Z.zero then Some Z.one else Some Z.zero
 
   | E_binop(O_c_and, e1, e2) ->
-    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
-    if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2
+    c_expr_to_z e1 flow |> OptionExt.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then Some Z.zero else c_expr_to_z e2 flow
 
   | E_binop(O_c_or, e1, e2) ->
-    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
-    if Z.equal n1 Z.zero then c_expr_to_z e2 else Some Z.one
+    c_expr_to_z e1 flow |> OptionExt.bind @@ fun n1 ->
+    if Z.equal n1 Z.zero then c_expr_to_z e2 flow else Some Z.one
 
   | E_binop(op, e1, e2) ->
-    c_expr_to_z e1 |> OptionExt.bind @@ fun n1 ->
-    c_expr_to_z e2 |> OptionExt.bind @@ fun n2 ->
+    c_expr_to_z e1 flow |> OptionExt.bind @@ fun n1 ->
+    c_expr_to_z e2 flow |> OptionExt.bind @@ fun n2 ->
     begin
       match op with
       | O_plus -> Some (Z.add n1 n2)
@@ -1229,27 +1281,27 @@ let rec c_expr_to_z (e:expr) : Z.t option =
     end
 
   | E_c_conditional(cond,e1,e2) ->
-    c_expr_to_z cond |> OptionExt.bind @@ fun c ->
+    c_expr_to_z cond flow |> OptionExt.bind @@ fun c ->
     if not (Z.equal c Z.zero)
-    then c_expr_to_z e1
-    else c_expr_to_z e2
+    then c_expr_to_z e1 flow
+    else c_expr_to_z e2 flow
 
   | E_c_cast(ee,_) when is_c_int_type e.etyp ->
-    c_expr_to_z ee |> OptionExt.bind @@ fun n ->
-    let a,b = rangeof e.etyp in
+    c_expr_to_z ee flow |> OptionExt.bind @@ fun n ->
+    let a,b = rangeof e.etyp flow in
     if Z.leq a n && Z.leq n b then Some n else None
 
   | _ -> None
 
 
-let is_c_expr_equals_z e z =
-  match c_expr_to_z e with
+let is_c_expr_equals_z e z flow =
+  match c_expr_to_z e flow with
   | None -> false
   | Some n -> Z.equal n z
 
 
-let is_c_constant e =
-  match c_expr_to_z e with
+let is_c_constant e flow =
+  match c_expr_to_z e flow with
   | None -> false
   | Some _ -> true
 
@@ -1378,7 +1430,14 @@ let asprintf_stub (dst:expr) range man flow =
   let exp = mk_c_call f [dst] range in
   man.eval exp flow
 
-
+let vasprintf_stub is_constant_string format (dst:expr) range man flow =
+  let f =
+    if is_constant_string then "_mopsa_constant_vasprintf"
+    else "_mopsa_general_vasprintf" in
+  let f = find_c_fundec_by_name f flow in
+  let exp = mk_c_call f (dst::format::[]) range in 
+  man.eval exp flow
+ 
 (********************)
 (** Stack variables *)
 (********************)
@@ -1417,4 +1476,3 @@ let rec var_scope v =
   | V_cvar { cvar_scope } -> cvar_scope
   | V_c_stack_var(_, vv)  -> var_scope vv
   | _ -> assert false
-

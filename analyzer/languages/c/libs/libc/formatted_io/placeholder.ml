@@ -22,6 +22,8 @@
 (** Types corresponding to placeholders of format strings *)
 
 open Ast
+open Format
+open Framework.Core.Ast.Typ
 
 (** C type of a placeholder *)
 type placeholder_type =
@@ -31,6 +33,13 @@ type placeholder_type =
   | String
   | WideString
 
+let pp_placeholder_type fmt = function
+  | Int ct -> fprintf fmt "Int %a" pp_typ (T_c_integer ct)
+  | Float ft -> fprintf fmt "Float %a" pp_typ (T_c_float ft)
+  | Pointer -> fprintf fmt "Ptr"
+  | String -> fprintf fmt "String"
+  | WideString -> fprintf fmt "WideString"
+
 (** Placeholder for output streams, e.g. printf *)
 type output_placeholder = {
   op_width: int option;
@@ -38,11 +47,20 @@ type output_placeholder = {
   op_typ: placeholder_type;
 }
 
+let pp_output_placeholder fmt op =
+  Format.fprintf fmt "{%a;_;_}" pp_placeholder_type op.op_typ 
+
+type output_format =
+   | String of string
+   | Placeholder of output_placeholder
+
 (** Placeholder for input streams, e.g. scanf *)
 type input_placeholder = {
   ip_width: int option;
   ip_typ: placeholder_type;
 }
   
+let pp_input_placeholder fmt ip =
+  Format.fprintf fmt "{%a;_;_}" pp_placeholder_type ip.ip_typ 
 
   

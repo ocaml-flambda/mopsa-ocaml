@@ -82,7 +82,7 @@ struct
   let parse_user_pack (s:string) : unit =
     (* Utility function to parse an identifier *)
     let ensure_is_id s =
-      if Str.string_match (Str.regexp "^[A-Za-z].*$") s 0 then
+      if Str.string_match (Str.regexp "^[A-Za-z_-].*$") s 0 then
         s
       else
         panic "incorrect argument '%s' for option -c-pack" s
@@ -114,6 +114,41 @@ struct
       spec     = ArgExt.String parse_user_pack;
       default  = "";
     }
+
+  let symargs_pack_string = "@argv,@arg,argc,%main,%getopt_long,optind,%execvp,@arg#0,@arg#+1"
+
+  let add_symargs_pack () =
+    parse_user_pack symargs_pack_string
+
+  let () = register_domain_option "c.memory.packing.static_scope"  {
+      key      = "-c-pack-symargs";
+      category = "Numeric";
+      doc      = " create a user pack for variables related to symbolic arguments. This is equivalent to -c-pack=" ^ symargs_pack_string;
+      spec    = ArgExt.Unit add_symargs_pack;
+      default = "";
+
+    }
+
+  let opt_pack_only_stubs = ref false
+
+  let () = register_domain_option "c.memory.packing.static_scope" {
+      key      = "-c-pack-only-stub-initialization";
+      category = "Numeric";
+      doc      = " pack only during Mopsa's stub initialization";
+      spec     = ArgExt.Set opt_pack_only_stubs;
+      default  = string_of_bool !opt_pack_only_stubs;
+    }
+
+  let opt_pack_resources = ref false
+
+  let () = register_domain_option "c.memory.packing.static_scope" {
+      key      = "-c-pack-resources";
+      category = "Numeric";
+      doc      = " pack variables based on resources (such as dynamically allocated blocks)";
+      spec     = ArgExt.Set opt_pack_resources;
+      default  = string_of_bool !opt_pack_resources;
+    }
+
 
 
   (** {2 Packs} *)
@@ -206,6 +241,16 @@ struct
     List.map (fun u -> User u)
 
 
+  let is_outside_stub_init cs =
+    let is_range_in_mopsa_stubs range =
+      let file = get_range_file range in
+      try let _ = Str.search_forward (Str.regexp_string "share/mopsa/stubs/c/") file 0 in true
+      with Not_found -> false in 
+    (
+      Callstack.callstack_length cs > 0 &&
+      not (is_range_in_mopsa_stubs @@ (ListExt.last cs).call_range)
+      (* not (is_range_in_mopsa_stubs range) *)
+    )
   (** Get the packs of a base *)
   let rec packs_of_base ?(user_only=false) ctx b =
     (* Invalid bases are not packed *)
@@ -214,7 +259,8 @@ struct
     (* Global variables *)
     | Var ({ vkind = V_cvar ({cvar_scope = Variable_global} as cvar); vtyp })
       ->
-      user_packs_of_cvar cvar
+      user_packs_of_cvar cvar @
+      (if !opt_pack_only_stubs then [Globals] else [])
 
     (* Local temporary variables are not packed *)
     | Var { vkind = V_cvar {cvar_scope = Variable_local f; cvar_orig_name}; vtyp }
@@ -293,10 +339,7 @@ struct
         let f1, f2 =
           let rec process cs = match cs with
             | f :: f' :: tl -> if f'.call_fun_uniq_name = fname then Some f, Some f' else process (f'::tl)
-            | [f] ->
-              if f.call_fun_orig_name = fname then
-                Some f, None
-              else None, None
+            | [f] -> Some f, None 
             | [] -> assert false 
           in
           process (List.rev cs) in
@@ -362,6 +405,30 @@ struct
     (*       [Locals f.c_func_unique_name] *)
     (*   in *)
     (*   packs @ user_packs_of_resource r  *)
+        
+    | Addr { addr_kind = Stubs.Ast.A_stub_resource r;
+             addr_partitioning = Universal.Heap.Policies.G_stack_range (cs, range) } when !opt_pack_resources ->
+      let prog = find_ctx Ast.c_program_ctx ctx in
+      let is_c_stub func =
+        not (List.exists (fun c -> c.c_func_unique_name = func && c.c_func_stub = None) prog.c_functions) in
+      let _path_contains p1 p2 =
+        let l1 = String.split_on_char '/' p1 in
+        let l2 = String.split_on_char '/' p2 in
+        List.for_all (fun el1 ->
+            List.mem el1 l2
+          ) l1
+      in
+      let packs = match List.find_opt (fun f -> subset_range range f.c_func_range) prog.c_functions with
+        | None ->
+          if List.length cs > 0 && not @@ List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then
+            List.map (fun c -> Locals c.call_fun_uniq_name) cs
+          else [Globals]
+        | Some f ->
+          if List.for_all (fun c -> is_c_stub c.call_fun_orig_name) cs then []
+          else
+          [Locals f.c_func_unique_name]
+      in
+      packs @ user_packs_of_resource r
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
       user_packs_of_resource r
@@ -371,6 +438,10 @@ struct
 
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
+    if !opt_pack_only_stubs && is_outside_stub_init (find_ctx callstack_ctx_key ctx) then
+      let () = debug "packs_of_var %a, globals due to pack_only_stubs" pp_var v in [Globals]
+    else
+    let () = debug "packs_of_var %a" pp_var v in
     match v.vkind with
     | Memory.Cells.Domain.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
       let user_only = not (is_c_scalar_type v.vtyp) in

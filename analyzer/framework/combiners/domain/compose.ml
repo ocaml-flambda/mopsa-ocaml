@@ -50,17 +50,10 @@ struct
   let semantics = SemanticSet.union D1.semantics D2.semantics
 
   let routing_table =
-    let t1 = DomainSet.fold
-        (fun d1 acc -> add_routes (Below d1) D2.domains acc)
-        D1.domains
-        (join_routing_table D1.routing_table D2.routing_table)
-    in
-    let t2 = SemanticSet.fold
-        (fun s1 acc -> add_routes (Semantic s1) D2.domains acc)
-        D1.semantics
-        t1
-    in
-    t2
+    let t = join_routing_table D1.routing_table D2.routing_table in
+    DomainSet.fold
+      (fun d1 acc -> add_routes (Below d1) D2.domains acc)
+      D1.domains t
 
   let checks = D1.checks @ D2.checks |> List.sort_uniq compare
 
@@ -77,29 +70,32 @@ struct
   (**                      {2 Lattice operators}                            *)
   (**************************************************************************)
 
-  let fst_pair_sman man sman = {
-    get_sub = (fun a -> get_pair_snd man a, sman.get_sub a);
-    set_sub = (fun (a2,s) a -> set_pair_snd man a2 a |> sman.set_sub s);
-  }
-
-  let subset man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, (a2,s), (a2',s') = D1.subset (fst_pair_man man) (fst_pair_sman man sman) ctx (a1,(a2,s)) (a1',(a2',s')) in
-    let b2, s, s' = D2.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, ss, ss' = D1.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let a2 = if s == ss then a2 else man.get ss |> snd in
+    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let b2, s, s' = D2.subset (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     b1 && b2, s, s'
 
-  let join man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, (a2,s), (a2',s') = D1.join (fst_pair_man man) (fst_pair_sman man sman) ctx (a1,(a2,s)) (a1',(a2',s')) in
-    let aa2, s, s' = D2.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, ss, ss' = D1.join (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let a2 = if s == ss then a2 else man.get ss |> snd in
+    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let aa2, s, s' = D2.join (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s'
 
-  let meet man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, (a2,s), (a2',s') = D1.meet (fst_pair_man man) (fst_pair_sman man sman) ctx (a1,(a2,s)) (a1',(a2',s')) in
-    let aa2, s, s' = D2.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, ss, ss' = D1.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let a2 = if s == ss then a2 else man.get ss |> snd in
+    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let aa2, s, s' = D2.meet (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s'
 
-  let widen man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, (a2,s), (a2',s'), stable1 = D1.widen (fst_pair_man man) (fst_pair_sman man sman) ctx (a1,(a2,s)) (a1',(a2',s')) in
-    let aa2, s, s', stable2 = D2.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, ss, ss', stable1 = D1.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let a2 = if s == ss then a2 else man.get ss |> snd in
+    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let aa2, s, s', stable2 = D2.widen (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
@@ -120,40 +116,11 @@ struct
   (** Execution of statements *)
   let exec targets = cascade_call targets D1.exec D1.domains D2.exec D2.domains
 
-
   (** Evaluation of expressions *)
   let eval targets = cascade_call targets D1.eval D1.domains D2.eval D2.domains
 
-
   (** Query handler *)
-  let ask targets =
-    match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D2.domains
-    with
-    | false, false -> raise Not_found
-
-    | true, false ->
-      let f = D1.ask targets in
-      (fun q man flow ->
-         f q (fst_pair_man man) flow
-      )
-
-    | false, true ->
-      let f = D2.ask targets in
-      (fun q man flow ->
-         f q (snd_pair_man man) flow
-      )
-
-    | true, true ->
-      let f1 = D1.ask targets in
-      let f2 = D2.ask targets in
-      (fun q man flow ->
-         OptionExt.neutral2
-           (join_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) q)
-           (f1 q (fst_pair_man man) flow)
-           (f2 q (snd_pair_man man) flow)
-      )
-
+  let ask targets = broadcast_call targets D1.ask D1.domains D2.ask D2.domains
 
   (** Pretty printer of states *)
   let print_state targets =

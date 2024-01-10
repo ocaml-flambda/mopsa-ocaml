@@ -47,6 +47,7 @@ type stmt_kind +=
   | S_expand of expr * expr list
   | S_fold of expr * expr list
   | S_block of stmt list * Var.var list
+  | S_breakpoint of string
 
 type block = stmt list
 
@@ -89,6 +90,8 @@ let stmt_compare_chain = TypeExt.mk_compare_chain (fun s1 s2 ->
         (fun () -> Compare.list compare_expr el el')
       ]
 
+    | S_breakpoint b1, S_breakpoint b2 -> String.compare b1 b2
+
     | _ -> Stdlib.compare s1 s2
   )
 
@@ -130,6 +133,9 @@ let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
         (pp_print_list
            ~pp_sep:(fun fmt () -> fprintf fmt ", ")
            pp_expr) el
+
+    | S_breakpoint b ->
+      fprintf fmt "breakpoint(%s)" b
 
     | _ -> failwith "Pp: Unknown statement"
   )
@@ -232,6 +238,9 @@ let mk_fold_var v vl range =
     (mk_var v range)
     (List.map (fun v' -> mk_var v' range) vl)
     range
+
+let mk_breakpoint b range =
+  mk_stmt (S_breakpoint b) range
 
 module StmtSet = SetExt.Make(struct
     type t = stmt

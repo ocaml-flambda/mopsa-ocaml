@@ -115,7 +115,7 @@ type context = {
 
 
 
-let create_context (project_name:string) (info:C.target_info) =
+let create_context ?(min_uid=0) (project_name:string) (info:C.target_info) =
   { ctx_name = project_name;
     ctx_tu = [];
     ctx_target = info;
@@ -126,7 +126,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_tu_funcs = Hashtbl.create 16;
     ctx_tu_static_vars = Hashtbl.create 16;
     ctx_tu_static_funcs = Hashtbl.create 16;
-    ctx_uid = 0;
+    ctx_uid = min_uid;
     ctx_enums = Hashtbl.create 16;
     ctx_enum_vals = Hashtbl.create 16;
     ctx_records = Hashtbl.create 16;
@@ -134,7 +134,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context info;
+    ctx_simplify = C_simplify.create_context ~min_uid info;
     ctx_files = SetExt.StringSet.empty;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;

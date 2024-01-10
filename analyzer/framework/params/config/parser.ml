@@ -28,9 +28,7 @@ open Yojson.Basic.Util
 open Syntax
 open Visitor
 open Sig.Abstraction.Stacked
-open Sig.Abstraction.Stacked_functor
 open Sig.Abstraction.Domain
-open Sig.Abstraction.Functor
 open Sig.Abstraction.Simplified
 open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Stateless
@@ -56,8 +54,6 @@ let all_domains () =
   simplified_domain_names () @
   stateless_domain_names () @
   value_abstraction_names () @
-  stacked_functor_names () @
-  domain_functor_names () @
   simplified_functor_names () @
   value_functor_names ()
 
@@ -108,11 +104,26 @@ and parse_domain_reduction (name:string) : domain_reduction =
   try DR_simplified(find_simplified_reduction name)
   with Not_found -> Exceptions.panic "Domain reduction '%s' not found@.Available reductions: %a" name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") Format.pp_print_string) (all_reductions ())
 
-and parse_domain_functor name : domain_functor =
-  try F_stacked(find_stacked_functor name) with Not_found ->
-  try F_domain(find_domain_functor name) with Not_found ->
-  try F_simplified(find_simplified_functor name)
-  with Not_found -> Exceptions.panic "Domain functor '%s' not found" name
+and parse_domain_functor (json:t) : domain_functor =
+  json |> visit {
+    leaf = (fun semantic name ->
+        try F_simplified(find_simplified_functor name) with Not_found ->
+        F_stacked(parse_domain json)
+      );
+    switch = (fun semantic jsons ->
+        F_stacked (mk_domain (D_switch (List.map parse_domain jsons)) ~semantic)
+      );
+    compose = (fun semantic jsons ->
+        F_stacked (mk_domain (D_compose (List.map parse_domain jsons)) ~semantic)
+      );
+    product = (fun semantic jsons reductions ->
+        F_stacked(mk_domain (D_product (List.map parse_domain jsons, List.map parse_domain_reduction reductions)) ~semantic)
+      );
+    nonrel = (fun semantic json -> assert false);
+    apply = (fun semantic funct arg -> assert false);
+    union = (fun semantic json -> assert false);
+  }
+
 
 and parse_value json : value =
   json |> visit {
@@ -130,7 +141,8 @@ and parse_value_reduction (name:string) : value_reduction =
   try find_value_reduction name
   with Not_found -> Exceptions.panic "Value reduction '%s' not found" name
 
-and parse_value_functor (name:string) : value_functor =
+and parse_value_functor json : value_functor =
+  let name = to_string json in
   try find_value_functor name
   with Not_found -> Exceptions.panic "Value functor '%s' not found" name
 
@@ -158,7 +170,6 @@ let parse file : abstraction =
   let language = get_language json in
   let domain_json = get_domain_json json in
   let domain = parse_domain domain_json in
-  debug "abstraction: %a" pp_domain domain;
   { domain; language }
 
 let language file : string =
@@ -175,7 +186,7 @@ let domains file : string list =
         leaf = (fun _ name -> [name]);
         switch = (fun _ l -> List.map get_names l |> List.flatten);
         nonrel = (fun _ v -> get_names v);
-        apply = (fun _ f d -> f :: get_names d);
+        apply = (fun _ f d -> get_names f @ get_names d);
         compose = (fun _ l -> List.map get_names l |> List.flatten);
         product = (fun _ l r -> List.map get_names l |> List.flatten);
         union = (fun _ l -> List.map get_names l |> List.flatten);

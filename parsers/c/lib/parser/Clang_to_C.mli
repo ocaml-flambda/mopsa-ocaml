@@ -26,7 +26,7 @@
 type context
 (** Abstract structure used internally during project parsing & linking. *)
     
-val create_context: string -> Clang_AST.target_info -> context
+val create_context: ?min_uid:int -> string -> Clang_AST.target_info -> context
 (** [create_context project_name target] creates a new project (i.e., a program
     made of several translation units accumulated) with the given name and  
     target.

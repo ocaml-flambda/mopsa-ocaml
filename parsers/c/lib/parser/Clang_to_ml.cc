@@ -29,7 +29,6 @@
 
 
 /* Clang includes */
-#include "llvm/Support/Host.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/Preprocessor.h"
@@ -50,6 +49,12 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
+
+#if CLANG_VERSION_MAJOR < 17
+#include "llvm/Support/Host.h"
+#else
+#include "llvm/TargetParser/Host.h"
+#endif
 
 #if CLANG_VERSION_MAJOR >= 10
 #include "clang/Basic/Builtins.h"
@@ -95,6 +100,9 @@ static const bool log_unknown = true;
 #define DEBUG_SOURCE_RANGE(node) ""
 #endif
 
+#if CLANG_VERSION_MAJOR >= 17
+#define Optional std::optional
+#endif
 
 /* OCaml helpers */
 /* ************* */
@@ -1030,7 +1038,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
 
       GENERATE_NODE_INDIRECT(StaticAssertDecl, ret, node, 3, {
           Store_field(ret, 0, TranslateExpr(x->getAssertExpr()));
-          Store_field(ret, 1, caml_copy_string(x->getMessage() ? x->getMessage()->getString().str().c_str() : ""));
+          Store_field_option(ret, 1, x->getMessage(), TranslateExpr(x->getMessage()));
           Store_field(ret, 2, Val_bool(x->isFailed()));
         });
 
@@ -3037,8 +3045,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDesignator(const DesignatedInitExp
 
   if (d->isFieldDesignator()) {
     ret = caml_alloc(1, MLTAG_Designator_Field);
+#if CLANG_VERSION_MAJOR >= 17
+    Store_field(ret, 0, TranslateFieldDecl(d->getFieldDecl()));
+#else
     Store_field(ret, 0, TranslateFieldDecl(d->getField()));
-  }
+#endif
+ }
   else if (d->isArrayDesignator()) {
     ret = caml_alloc(1, MLTAG_Designator_Array);
     Store_field(ret, 0, TranslateExpr(x->getArrayIndex(*d)));
@@ -3537,9 +3549,42 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
         });
 
       GENERATE_NODE_INDIRECT(CaseStmt, ret, node, 3, {
+          CAMLenterblock();
+          value tmp;
+          value tmp2;
+          value tmp3;
+          value tmp4;
+          CAMLxparam4(tmp,tmp2,tmp3,tmp4);
+          const Stmt* s;
+
           Store_field(ret, 0, TranslateExpr(x->getLHS()));
           Store_field_option(ret, 1, x->getRHS(), TranslateExpr(x->getRHS()));
-          Store_field(ret, 2, TranslateStmt(x->getSubStmt()));
+          tmp = ret;
+          // optimize long sequences of cases using a loop instead of
+          // recursive calls
+          s = x->getSubStmt();
+          while (isa<CaseStmt>(s)) {
+            x = cast<CaseStmt>(s);
+
+            tmp2 = caml_alloc_tuple(3);
+            Store_field(tmp2, 0, TranslateExpr(x->getLHS()));
+            Store_field_option(tmp2, 1, x->getRHS(), TranslateExpr(x->getRHS()));
+            // field 2 to be filled in the next iteration, or after the loop
+
+            tmp3 = caml_alloc(1, MLTAG_CaseStmt);
+            Store_field(tmp3, 0, tmp2);
+
+            tmp4 = caml_alloc_tuple(2);
+            Store_field(tmp4, 0, tmp3);
+            Store_field(tmp4, 1, loc.TranslateSourceRange(x->getSourceRange()));
+
+            Store_field(tmp, 2, tmp4);
+            tmp = tmp2;
+            s = x->getSubStmt();
+          }
+          Store_field(tmp, 2, TranslateStmt(s));
+
+          CAMLexitblock();
         });
 
       GENERATE_NODE(DefaultStmt, ret, node, 1, {

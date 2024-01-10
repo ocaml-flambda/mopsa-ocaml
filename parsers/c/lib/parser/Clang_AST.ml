@@ -1358,7 +1358,7 @@ and atomic_expr = {
 
  and static_assert = {
      assert_expr: expr;
-     assert_msg: string;
+     assert_msg: expr option;
      assert_is_failed: bool;
    }
  (** (C++) Represents a C++11 static_assert declaration. *)

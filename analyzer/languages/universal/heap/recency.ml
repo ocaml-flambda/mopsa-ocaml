@@ -27,8 +27,6 @@ open Mopsa
 open Sig.Abstraction.Domain
 open Ast
 
-(* open Policies *)
-
 module Pool =
   Framework.Lattices.Powerset.Make
     (struct
@@ -180,7 +178,7 @@ struct
     | S_perform_gc ->
        let startt = Sys.time () in
        let all = get_env T_cur man flow in
-       let alive = man.ask Q_alive_addresses_aspset flow in
+       let alive = ask_and_reduce man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) (format Pool.print) dead;
        let trange = tag_range range "agc" in
@@ -252,15 +250,16 @@ struct
   (** Queries *)
   (** ******* *)
 
-  let ask : type r. ('a,r) query -> ('a, t) man -> 'a flow -> r option =
+  let ask : type r. ('a,r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_allocated_addresses ->
       let pool = get_env T_cur man flow in
-      if Pool.is_top pool then Some [] else Some (Pool.elements pool)
+      if Pool.is_top pool then Some (Cases.singleton [] flow)
+      else Some (Cases.singleton (Pool.elements pool) flow)
 
     | Q_allocated_addresses_aspset ->
-      Some (get_env T_cur man flow)
+      Some (Cases.singleton (get_env T_cur man flow) flow)
 
     | _ -> None
 

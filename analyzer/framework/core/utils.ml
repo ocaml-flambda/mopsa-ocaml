@@ -184,6 +184,58 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   let flow' = f flow |> post_to_flow man in
   Flow.get T_cur man.lattice flow'
 
-let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
-  let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
-  man.get aa, sman.get_sub aa
+let ask_and_reduce_cases f q ?(bottom = fun () -> assert false) a =
+  let cases = f q a in
+  Cases.reduce_result
+    (fun r flow -> r)
+    ~join:(Query.join_query q)
+    ~meet:(Query.meet_query q)
+    ~bottom
+    cases
+
+let ask_and_reduce_list f q ?(bottom = fun () -> assert false) a =
+  let l = f q a in
+  match l with
+  | [] -> bottom ()
+  | (_,r)::tl ->
+    List.fold_left
+      (fun acc (_,r) -> Query.join_query q acc r)
+      r tl
+
+let ask_and_reduce = ask_and_reduce_cases
+
+let find_var_by_name name man flow =
+  let vars = ask_and_reduce man.ask Query.Q_defined_variables flow in
+  List.find
+    (fun v ->
+       name = Format.asprintf "%a" Ast.Var.pp_var v
+    ) vars
+
+let dummy_range = Location.mk_fresh_range ()
+
+let pp_vars_info man flow fmt vars =
+  let printer = Print.empty_printer () in
+  List.iter
+    (fun v ->
+       try man.print_expr flow printer (mk_var v dummy_range)
+       with Not_found -> ()
+    ) vars;
+  Format.fprintf fmt "%a" Print.pflush printer
+
+let pp_vars_info_by_name man flow fmt names =
+  pp_vars_info man flow fmt (ListExt.map_filter (fun name ->
+      try Some (find_var_by_name name man flow) 
+      with Not_found -> None
+    ) names)
+
+let pp_expr_vars_info man flow fmt e =
+  let vars = Ast.Visitor.expr_vars e in
+  pp_vars_info man flow fmt vars
+
+let pp_stmt_vars_info man flow fmt s =
+  let vars = Ast.Visitor.stmt_vars s in
+  pp_vars_info man flow fmt vars
+
+let breakpoint name man flow =
+  let _ = man.exec (mk_breakpoint name dummy_range) flow in
+  ()

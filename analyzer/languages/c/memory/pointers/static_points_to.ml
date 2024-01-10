@@ -48,9 +48,9 @@ let pp_static_points_to fmt spt =
   | Top -> Format.fprintf fmt "Top"
 
 (** Advance the offset of a symbolic pointer *)
-let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : static_points_to =
+let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range flow : static_points_to =
   (* Size of the pointed type *)
-  let size = under_type typ |> void_to_char |> sizeof_type in
+  let size = sizeof_type (under_type typ |> void_to_char) flow  in
 
   let advance oo =
     let bytes =
@@ -80,7 +80,7 @@ let advance_offset (op:operator) (ptr:static_points_to) (o:expr) typ range : sta
 
 
 (** Symbolic evaluation of a pointer expression *)
-let rec eval_opt exp : static_points_to option =
+let rec eval_opt exp flow : static_points_to option =
   match ekind exp with
   | E_constant(C_int n) when Z.equal n Z.zero ->
     Null |> OptionExt.return
@@ -98,7 +98,7 @@ let rec eval_opt exp : static_points_to option =
     Top |> OptionExt.return
 
   | E_c_deref { ekind = E_c_address_of e } ->
-    eval_opt e
+    eval_opt e flow
 
   | E_c_address_of e ->
     begin match remove_casts e |> ekind with
@@ -115,7 +115,7 @@ let rec eval_opt exp : static_points_to option =
         OptionExt.return
 
       | E_c_deref p ->
-        eval_opt p
+        eval_opt p flow
 
       | _ ->
         warn_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp;
@@ -123,7 +123,7 @@ let rec eval_opt exp : static_points_to option =
     end
 
   | E_c_cast (e, _) when is_c_pointer_type exp.etyp ->
-    eval_opt e
+    eval_opt e flow
 
   | E_c_function f ->
     Fun f |> OptionExt.return
@@ -136,7 +136,7 @@ let rec eval_opt exp : static_points_to option =
     AddrOf(mk_var_base a, mk_zero exp.erange, mode) |> OptionExt.return
 
   | E_c_deref a when is_c_array_type (under_type a.etyp) ->
-    eval_opt a
+    eval_opt a flow
 
   | E_binop(O_plus | O_minus as op, e1, e2) when is_c_pointer_type e1.etyp
                                               || is_c_pointer_type e2.etyp->
@@ -145,9 +145,9 @@ let rec eval_opt exp : static_points_to option =
       then e1, e2
       else e2, e1
     in
-    eval_opt p |>
+    eval_opt p flow |>
     OptionExt.lift @@ fun ptr ->
-    advance_offset op ptr i p.etyp exp.erange
+    advance_offset op ptr i p.etyp exp.erange flow
 
   | E_var (v, mode) when is_c_pointer_type v.vtyp ->
     Eval (v, mode, mk_zero exp.erange) |> OptionExt.return
@@ -158,7 +158,7 @@ let rec eval_opt exp : static_points_to option =
 
 
 (** Symbolic evaluation of a pointer expression *)
-let eval exp : static_points_to =
-  match eval_opt exp with
+let eval exp flow : static_points_to =
+  match eval_opt exp flow with
   | Some ptr -> ptr
   | None -> panic_at exp.erange "evaluation of pointer expression %a not supported" pp_expr exp

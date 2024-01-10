@@ -28,7 +28,7 @@
 
 open Mopsa_utils
 open Core.All
-open Sig.Combiner.Stacked
+open Sig.Combiner.Domain
 
 
 (** Signature of the toplevel abstraction *)
@@ -72,7 +72,7 @@ sig
 
   val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
 
-  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
+  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> (t, 'r) cases
 
 
   (** {2 Pretty printing} *)
@@ -94,7 +94,7 @@ let debug fmt = Debug.debug ~channel:"framework.abstraction.toplevel" fmt
 
 
 (** Encapsulate a domain into a top-level abstraction *)
-module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
+module Make(Domain:DOMAIN_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
 
@@ -115,26 +115,17 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let sman : (t,unit) stack_man = {
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
-  }
-
   let subset man ctx a a' =
-    let b, (), () = Domain.subset man sman ctx (a,()) (a',()) in
-    b
+    Domain.subset man ctx (a,a) (a',a') 
 
   let join man ctx a a' =
-    let a, (), () = Domain.join man sman ctx (a,()) (a',()) in
-    a
+    Domain.join man ctx (a,a) (a',a')
 
   let meet man ctx a a' =
-    let a, (), () = Domain.meet man sman ctx (a,()) (a',()) in
-    a
+    Domain.meet man ctx (a,a) (a',a')
 
   let widen man ctx a a' =
-    let a, (), (), _ = Domain.widen man sman ctx (a,()) (a',()) in
-    a
+    Domain.widen man ctx (a,a) (a',a')
 
   let merge = Domain.merge
 
@@ -223,33 +214,37 @@ struct
     in
     try
       let post =
-        match Cache.exec fexec route stmt man flow with
-        | None ->
-          if Flow.is_bottom man.lattice flow
-          then Post.return flow
-          else
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
+        match skind stmt with
+        | S_breakpoint _ ->
+          Post.return flow
+        | _ ->
+          match Cache.exec fexec route stmt man flow with
+          | None ->
+            if Flow.is_bottom man.lattice flow
+            then Post.return flow
+            else
+              Exceptions.panic_at stmt.srange
+                "unable to analyze statement %a in %a"
+                pp_stmt stmt
+                pp_route route
 
-        | Some post ->
-          (* Check that all cases were handled *)
-          let not_handled = Cases.exists (fun c flow ->
-              match c with
-              | NotHandled ->
-                (* Not handled cases with empty flows are OK *)
-                not (Flow.is_bottom man.lattice flow)
-              | _ -> false
-            ) post
-          in
-          if not_handled then
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
-          ;
-          post
+          | Some post ->
+            (* Check that all cases were handled *)
+            let not_handled = Cases.exists (fun c flow ->
+                match c with
+                | NotHandled ->
+                  (* Not handled cases with empty flows are OK *)
+                  not (Flow.is_bottom man.lattice flow)
+                | _ -> false
+              ) post
+            in
+            if not_handled then
+              Exceptions.panic_at stmt.srange
+                "unable to analyze statement %a in %a"
+                pp_stmt stmt
+                pp_route route
+            ;
+            post
       in
       let clean_post = exec_cleaners man post in
       let minimized_post = Post.remove_duplicates man.lattice clean_post in
@@ -272,13 +267,13 @@ struct
         (Printexc.get_raw_backtrace())
 
     | Sys.Break -> raise (SysBreak flow)
-    
+
     | Apron.Manager.Error exc ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
         (Printexc.get_raw_backtrace())
 
-    | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
+    | e when (match e with Exit | Exceptions.PanicAtFrame _ | SysBreak _ -> false | _ -> true) ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())
@@ -455,7 +450,7 @@ struct
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
+  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> (t, r) cases =
     fun ?(route=toplevel) query man flow ->
     (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
     let domains = if compare_route route toplevel = 0 then None else Some (resolve_route route Domain.routing_table) in

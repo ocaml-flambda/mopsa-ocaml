@@ -71,8 +71,8 @@ let render_callstack cs  =
   `List (List.map render_call cs)
 
 let aggregate_alarms report =
-  RangeMap.fold
-    (fun range checks acc ->
+  RangeCallStackMap.fold
+    (fun (range, cs) checks acc ->
        CheckMap.fold
          (fun check diag acc ->
             match diag.diag_kind with
@@ -92,8 +92,8 @@ let render_alarm_messages kinds =
   `String (Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_alarm_kind) kinds)
 
 let render_alarms report =
-  RangeMap.fold
-    (fun range checks acc ->
+  RangeCallStackMap.fold
+    (fun (range, cs) checks acc ->
       CheckMap.fold
         (fun check diag acc ->
           match diag.diag_kind with
@@ -131,7 +131,7 @@ let render_alarms report =
                     "title", render_check check;
                     "messages", render_alarm_messages kinds';
                     "range", render_range range;
-                    "callstacks", `List (List.map render_callstack (CallstackSet.elements diag.diag_callstacks))
+                    "callstack", render_callstack diag.diag_callstack
                   ]
               in
               json_diag :: acc

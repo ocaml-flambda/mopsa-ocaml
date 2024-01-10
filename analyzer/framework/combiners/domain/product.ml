@@ -57,10 +57,10 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let subset _ _ _ ((),s) ((),s') = true,s,s'
-  let join _ _ _ ((),s) ((),s') = (),s,s'
-  let meet _ _ _ ((),s) ((),s') = (),s,s'
-  let widen _ _ _ ((),s) ((),s') = (),s,s',true
+  let subset _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
   let merge _ _ _ = ()
   let init _ _ flow = flow
   let exec _ _ _ flow = []
@@ -88,24 +88,24 @@ struct
 
   let is_bottom (s,p) = S.is_bottom s || P.is_bottom p
 
-  let subset man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = S.subset (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let b2, s, s' = P.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, s, s' = S.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let b2, s, s' = P.subset (snd_pair_man man) ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
-  let join man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.join (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.join (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.join (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let meet man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.meet (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.meet (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let widen man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s', stable1 = S.widen (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s', stable2 = P.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s', stable1 = S.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s', stable2 = P.widen (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
   let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
@@ -156,7 +156,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) query)
+           Cases.meet
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 
@@ -489,13 +489,17 @@ struct
   let exec targets =
     let f = Pool.exec targets in
     (fun stmt man flow ->
-       apply_pointwise f stmt man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       simplify_pointwise_post |>
-       merge_intra_conflicts man flow |>
-       reduce_post stmt man flow)
+       with_effects
+         (fun () ->
+            apply_pointwise f stmt man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
+            merge_inter_conflicts man flow |>
+            simplify_pointwise_post |>
+            merge_intra_conflicts man flow |>
+            reduce_post stmt man flow
+         )
+    )
 
 
   (** {2 Abstract evaluations} *)
@@ -539,13 +543,17 @@ struct
   let eval targets =
     let f = Pool.eval targets in
     (fun exp man flow ->
-       apply_pointwise f exp man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       reduce_pointwise_eval exp man flow |>
-       Eval.remove_duplicates man.lattice |>
-       merge_intra_conflicts man flow)
+       with_effects
+         (fun () ->
+            apply_pointwise f exp man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
+            merge_inter_conflicts man flow |>
+            reduce_pointwise_eval exp man flow |>
+            Eval.remove_duplicates man.lattice |>
+            merge_intra_conflicts man flow
+         )
+    )
 
 end
 

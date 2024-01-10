@@ -33,7 +33,7 @@ sig
   val merge : t -> t * teffect -> t * teffect -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
-  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   val print_state : DomainSet.t option -> printer -> t -> unit
   val print_expr  : DomainSet.t option -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
@@ -52,10 +52,10 @@ struct
   let is_bottom _ = false
   let print_state _ _ _ = ()
   let print_expr _ _ _ _ _ = ()
-  let subset _ _ _ ((),s) ((),s') = true,s,s'
-  let join _ _ _ ((),s) ((),s') = (),s,s'
-  let meet _ _ _ ((),s) ((),s') = (),s,s'
-  let widen _ _ _ ((),s) ((),s') = (),s,s',true
+  let subset _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
   let merge _ _ _ = ()
   let init _ _ flow = flow
   let exec _ _ _ flow = None

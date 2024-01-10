@@ -383,26 +383,30 @@ struct
 
 
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_tuple _} as addr, _)} as e) ->
        let range = erange e in
-       OptionExt.return @@
+       let ret =
          List.fold_left (fun vset var ->
-             VarSet.union (VarSet.add var vset) (man.ask (Q_variables_linked_to (mk_var var range)) flow)
+             VarSet.union (VarSet.add var vset) (ask_and_reduce man.ask (Q_variables_linked_to (mk_var var range)) flow)
            ) VarSet.empty (var_of_addr addr)
+       in
+       Some (Cases.singleton ret flow)
 
     | Framework.Engines.Interactive.Query.Q_debug_addr_value ({addr_kind = A_py_tuple _} as addr) ->
        let open Framework.Engines.Interactive.Query in
        let vars_tuple = var_of_addr addr in
        let contents = List.map (fun var ->
                           match vkind var with
-                          | V_addr_attr (_, attr) -> (attr, man.ask (Q_debug_variable_value var) flow)
+                          | V_addr_attr (_, attr) -> (attr, ask_and_reduce man.ask (Q_debug_variable_value var) flow)
                           | _ -> assert false) vars_tuple in
-       Some {var_value = None;
-             var_value_type = (T_py None);
-             var_sub_value = Some (Named_sub_value contents)}
+       Some (Cases.singleton {
+           var_value = None;
+           var_value_type = (T_py None);
+           var_sub_value = Some (Named_sub_value contents)
+         } flow)
 
     | _ -> None
 
