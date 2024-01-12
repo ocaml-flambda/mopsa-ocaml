@@ -1,4 +1,4 @@
 module Intervals = Intervals
 module Congruences = Congruences
-module Powerset = Powerset
+module Powersets = Powersets
 module Zero = Zero

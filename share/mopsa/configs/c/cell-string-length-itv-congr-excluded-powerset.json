@@ -31,7 +31,16 @@
                     "universal.heap.recency",
                     {
                         "compose": [
-                            "c.memory.lowlevel.cells",
+                            {
+                                "product": [
+                                    "c.memory.lowlevel.cells",
+                                    "c.memory.lowlevel.string_length"
+                                ],
+                                "reductions": [
+                                    "universal.numeric.reductions.numeric_eval",
+                                    "c.memory.reductions.pointer_eval"
+                                ]
+                            },
                             {
                                 "semantic": "C/Scalar",
                                 "switch": [
@@ -60,12 +69,19 @@
                                 "universal.numeric.values.intervals.float",
                                 {
                                     "product": [
-                                        "universal.numeric.values.intervals.integer",
-                                        "universal.numeric.values.powersets.standard",
-                                        "universal.numeric.values.zero"
+                                        {
+                                            "product": [
+                                                "universal.numeric.values.intervals.integer",
+                                                "universal.numeric.values.powersets.excluded"
+                                            ],
+                                            "reductions": [
+                                                "universal.numeric.reductions.intervals_excluded_powerset"
+                                            ]
+                                        },
+                                        "universal.numeric.values.congruences"
                                     ],
                                     "reductions": [
-                                        "universal.numeric.reductions.intervals_powerset"
+                                        "universal.numeric.reductions.intervals_congruences"
                                     ]
                                 }
                             ]

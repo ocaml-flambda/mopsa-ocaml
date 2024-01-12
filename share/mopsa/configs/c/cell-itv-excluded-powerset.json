@@ -61,11 +61,10 @@
                                 {
                                     "product": [
                                         "universal.numeric.values.intervals.integer",
-                                        "universal.numeric.values.powersets.standard",
-                                        "universal.numeric.values.zero"
+                                        "universal.numeric.values.powersets.excluded"
                                     ],
                                     "reductions": [
-                                        "universal.numeric.reductions.intervals_powerset"
+                                        "universal.numeric.reductions.intervals_excluded_powerset"
                                     ]
                                 }
                             ]

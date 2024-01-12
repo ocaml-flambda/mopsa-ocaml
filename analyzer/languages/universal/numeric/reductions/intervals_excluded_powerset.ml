@@ -19,21 +19,20 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Reduction operator for intervals and powersets. *)
+(** Reduction operator for intervals and excluded powerset *)
 
 open Mopsa
 open Sig.Reduction.Value
 
 
-
 module Reduction =
 struct
 
-  let name = "universal.numeric.reductions.intervals_powerset"
+  let name = "universal.numeric.reductions.intervals_excluded_powerset"
   let debug fmt = Debug.debug ~channel:name fmt
 
   module I = Values.Intervals.Integer.Value
-  module P = Values.Powersets.Standard.Value
+  module P = Values.Powersets.Excluded.SimplifiedValue
   module B = ItvUtils.IntItv.B
 
 
@@ -45,37 +44,42 @@ struct
     | Nb (B.Finite l, B.Finite h) -> P.of_bounds l h
     | _ -> P.top
 
-  let to_interval (x:P.t) : I.t =
-    match x with
-    | TOP -> I.top
-    | Nt s ->
-      if P.Set.is_empty s then BOT
-      else Nb (B.Finite (P.Set.min_elt s), B.Finite (P.Set.max_elt s))
+  let reduce_excluded_set (notint_set:P.Set.t) (i:I.t) : P.t * I.t =
+    match i with
+    | BOT -> P.bottom, BOT
+    | _   -> NotIn notint_set, i
+
+  let reduce_finite_set (in_set:P.Set.t) (i:I.t) : P.t * I.t =
+    match i with
+    | BOT ->
+      P.bottom, BOT
+
+    | Nb (B.Finite l, B.Finite h) ->
+      let filtered_set = P.In (P.Set.filter (fun a -> Z.geq a l && Z.leq a h) in_set) in
+      filtered_set, P.to_itv filtered_set
+
+    | Nb (B.MINF, B.Finite h) ->
+      let filtered_set = P.In (P.Set.filter (fun a -> Z.leq a h) in_set) in
+      filtered_set, P.to_itv filtered_set
+
+    | Nb (B.Finite l, B.PINF) ->
+      let filtered_set = P.In (P.Set.filter (fun a -> Z.geq a l) in_set) in
+      filtered_set, P.to_itv filtered_set
+
+    | _ ->
+      In in_set, P.to_itv (In in_set)
+
 
   let reduce_pair (x:P.t) (i:I.t) : P.t * I.t =
-    if P.is_top x then of_interval i, i
-    else match i with
-      | BOT ->
-        P.bottom, BOT
-      | Nb (B.Finite l, B.Finite h) ->
-        let xx = P.Powerset.filter (fun a -> a >= l && a <= h) x in
-        xx, to_interval xx
-      | Nb (B.MINF, B.Finite h) ->
-        let xx = P.Powerset.filter (fun a -> a <= h) x in
-        xx, to_interval xx
-      | Nb (B.Finite l, B.PINF) ->
-        let xx = P.Powerset.filter (fun a -> a >= l) x in
-        xx, to_interval xx
-      | _ ->
-        x, to_interval x
-
+    if P.is_bottom x || I.is_bottom i then P.bottom, I.bottom else
+    match x, i with
+    | NotIn s, _ -> reduce_excluded_set s i
+    | In s, _    -> reduce_finite_set s i
 
   let reduce (man: 'a value_reduction_man) (v: 'a) : 'a =
-    let i = man.get I.id v
-    and p = man.get P.id v in
-
+    let i = man.get I.id v in
+    let p = man.get P.id v in
     let p',i' = reduce_pair p i in
-
     man.set I.id i' v |>
     man.set P.id p'
 end

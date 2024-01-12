@@ -13,7 +13,7 @@
                     "c.iterators.intraproc",
                     // Stubs
                     "stubs.iterators.body",
-                    // C Libraries
+                    // C libraries
                     "c.libs.compiler",
                     "c.libs.mopsalib",
                     "c.libs.clib.file_descriptor",
@@ -34,7 +34,8 @@
                             {
                                 "product": [
                                     "c.memory.lowlevel.cells",
-                                    "c.memory.lowlevel.string_length"
+                                    "c.memory.lowlevel.string_length",
+                                    "c.memory.lowlevel.pointer_sentinel"
                                 ],
                                 "reductions": [
                                     "universal.numeric.reductions.numeric_eval",
@@ -64,21 +65,39 @@
                     "universal.iterators.unittest",
                     // Numeric environment
                     {
-                        "nonrel": {
-                            "union": [
-                                "universal.numeric.values.intervals.float",
-                                {
-                                    "product": [
-                                        "universal.numeric.values.intervals.integer",
-                                        "universal.numeric.values.powersets.standard",
-                                        "universal.numeric.values.zero"
-                                    ],
-                                    "reductions": [
-                                        "universal.numeric.reductions.intervals_powerset"
+                        "product": [
+                            {
+                                "nonrel": {
+                                    "union": [
+                                        "universal.numeric.values.intervals.float",
+                                        {
+                                            "product": [
+                                                {
+                                                    "product": [
+                                                        "universal.numeric.values.intervals.integer",
+                                                        "universal.numeric.values.powersets.excluded"
+                                                    ],
+                                                    "reductions": [
+                                                        "universal.numeric.reductions.intervals_excluded_powerset"
+                                                    ]
+                                                },
+                                                "universal.numeric.values.congruences"
+                                            ],
+                                            "reductions": [
+                                                "universal.numeric.reductions.intervals_congruences"
+                                            ]
+                                        }
                                     ]
                                 }
-                            ]
-                        }
+                            },
+                            {
+                                "apply": "c.memory.packing.static_scope",
+                                "on": "universal.numeric.relational"
+                            }
+                        ],
+                        "reductions": [
+                            "reductions.c.memory.packing.static_scope"
+                        ]
                     }
                 ]
             }
