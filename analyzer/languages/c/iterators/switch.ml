@@ -83,10 +83,10 @@ struct
              (* Do not go inside nested switches *)
              Keep (cases,default)
 
-           | S_c_switch_case (e,_) ->
+           | S_c_switch_case (es,_) ->
              (* Note: cases are added in reverse order here. They need
                 to be reversed when returned.  *)
-             Keep ((e,s.srange) :: cases,default)
+             Keep ((List.map (fun e -> (e,s.srange)) es) @ cases,default)
 
            | S_c_switch_default _ ->
              Keep (cases,Some s.srange)
@@ -118,7 +118,14 @@ struct
       | [] -> man.exec guard_cleaner flow
       | (e',r) :: tl ->
         (* Filter the environments *)
-        let cond = mk_binop e O_eq e' ~etyp:u8 switch_range in
+        let cond = match ekind e' with
+          | E_constant (Universal.Ast.C_int_interval (ItvUtils.IntBound.Finite lo,
+                                                      ItvUtils.IntBound.Finite hi)) ->
+            Universal.Ast.mk_in e
+              (Universal.Ast.mk_z ~typ:(etyp e') lo switch_range)
+              (Universal.Ast.mk_z ~typ:(etyp e') hi switch_range)
+              switch_range
+          | _ -> mk_binop e O_eq e' ~etyp:u8 switch_range in
         assume cond
           ~fthen:(fun flow ->
               man.exec guard_cleaner flow >>% fun flow ->
@@ -183,7 +190,7 @@ struct
     Flow.remove (T_c_switch_default range) |>
     Common.Scope_update.update_scope upd range man
 
-  let exec stmt man flow =
+  let rec exec stmt man flow =
     match skind stmt with
     | S_c_switch(e, body) ->
        (
@@ -198,9 +205,15 @@ struct
        ) |>
       OptionExt.return
 
-    | S_c_switch_case(e,upd) ->
-      exec_case upd e stmt.srange man flow |>
-      OptionExt.return
+    | S_c_switch_case(es,upd) ->
+      List.fold_left (fun post e ->
+          post >>% exec_case upd e stmt.srange man)
+        (Post.return flow) es
+      |> OptionExt.return 
+
+    (* | S_c_switch_case([e],upd) -> *)
+    (*   exec_case upd e stmt.srange man flow |> *)
+    (*   OptionExt.return *)
 
     | S_c_switch_default upd ->
       exec_default upd stmt.srange man flow |>
