@@ -154,20 +154,21 @@ type operator +=
   | O_filter_float_class of float_class (** filter float by class *)
 
   (* Binary operators *)
-  | O_plus       (** + *)
-  | O_minus      (** - *)
-  | O_mult       (** * *)
-  | O_div        (** / *)
-  | O_mod        (** % where the remainder can be negative, following C *)
-  | O_ediv       (** euclidian division *)
-  | O_erem       (** remainder for euclidian division *)
-  | O_pow        (** power *)
-  | O_bit_and    (** & *)
-  | O_bit_or     (** | *)
-  | O_bit_xor    (** ^ *)
-  | O_bit_rshift (** >> *)
-  | O_bit_lshift (** << *)
-  | O_concat     (** concatenation of arrays and strings *)
+  | O_plus        (** + *)
+  | O_minus       (** - *)
+  | O_mult        (** * *)
+  | O_div         (** / *)
+  | O_mod         (** % where the remainder can be negative, following C *)
+  | O_ediv        (** euclidian division *)
+  | O_erem        (** remainder for euclidian division *)
+  | O_pow         (** power *)
+  | O_bit_and     (** & *)
+  | O_bit_or      (** | *)
+  | O_bit_xor     (** ^ *)
+  | O_bit_rshift  (** >> *)
+  | O_bit_lshift  (** << *)
+  | O_concat      (** concatenation of arrays and strings *)
+  | O_convex_join (** convex join of arithmetic expressions *)
 
   (* Float predicates *)
   | O_float_class of float_class
@@ -203,6 +204,7 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
+        | O_convex_join -> pp_print_string fmt "⋓"
         | O_float_class c -> Format.fprintf fmt "float_class[%a]" pp_float_class c
         | O_filter_float_class c -> Format.fprintf fmt "filter_float_class[%a]" pp_float_class c
         | op           -> default fmt op

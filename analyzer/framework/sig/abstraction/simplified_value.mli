@@ -106,7 +106,7 @@ sig
   (** Backward evaluation of binary operators *)
 
   val compare : operator -> bool -> typ -> t -> typ -> t -> (t * t)
-  (** Backward evalaution of comparisons *)
+  (** Backward evaluation of comparisons *)
 
   (** {2 Pretty printer} *)
   (** ****************** *)
