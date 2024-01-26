@@ -908,6 +908,9 @@ let bwd_bit_xor (a:t) (b:t) (r:t) : (t*t) with_bot =
   (* r = a xor b ⇒ a = r xor b ∧ b = r xor a *)
   bot_merge2 (meet a (bit_xor b r)) (meet b (bit_xor a r))
 
+let bwd_convex_join (a:t) (b:t) (r:t) : (t*t) with_bot =
+  bot_merge2 (meet a r) (meet b r)
+
 (* utility for bwd_log_xxx *)
 let bwd_log_gen if_one if_zero (a:t) (b:t) (r:t) : (t*t) with_bot =
   match contains_zero r, contains_one r with

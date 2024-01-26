@@ -57,7 +57,7 @@ struct
 
   let opt_signed_arithmetic_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-arithmetic-overflow";
       category = "C";
       doc = " check overflows in signed integer arithmetic";
@@ -67,7 +67,7 @@ struct
 
   let opt_unsigned_arithmetic_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
       doc = " check overflows in unsigned integer arithmetic";
@@ -77,7 +77,7 @@ struct
 
   let opt_signed_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to signed integer";
@@ -87,7 +87,7 @@ struct
 
   let opt_unsigned_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to unsigned integer";
@@ -98,7 +98,7 @@ struct
 
   let opt_explicit_cast_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-explicit-cast-overflow";
       category = "C";
       doc = " check overflows in explicit casts";

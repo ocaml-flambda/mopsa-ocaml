@@ -152,7 +152,7 @@ type typ =
   (** Function, with or without a prototype *)
 
   | T_builtin_fn
-  (** Bult-in functions *)
+  (** Built-in functions *)
 
   | T_typedef of typedef
   (** Typedefs *)
