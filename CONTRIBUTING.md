@@ -4,7 +4,7 @@ Contributing
 Contributions to MOPSA are welcome.
 
 This document describes the technical aspects of how to contribute: the branching model of MOPSA and how contributions are merged into the code base.
-It also describes the legal aspects (licensing and contributor agreement).
+It also describes the legal aspects (licensing).
 
 
 License
@@ -15,12 +15,8 @@ See the accompanying LICENSE file, or [http://www.gnu.org/licenses/](http://www.
 
 The documentation and example files of the MOPSA software are distributed under a Creative Commons Attribution-ShareAlike 4.0 International License. See [https://creativecommons.org/licenses/by-sa/4.0/](https://creativecommons.org/licenses/by-sa/4.0/).
 
-The authors of the contributions must obey the term of our non-exclusive Contributor License Agreement, generated from [ContributorAgreements.org](http://contributoragreements.org/) and locally available as [CLA-Individual](CLA-Individual.pdf) (for individual contributors) and [CLA-Entity](CLA-Entity.pdf) (for entities).
-For non-trivial contributions to be included in the main Mopsa repository, we require the authors to sign the relevant agreement. See the [instructions to sign the forms](http://mopsa.lip6.fr/contributing.html).
-
 In any contribution, the license notice at the head of each file must remain intact, and new files should include the license notice.
-Please keep the [AUTHORS](AUTHORS) file up to date.
-
+Please keep the [AUTHORS](AUTHORS.md) file up to date and in alphabetical order. For each contributor include all the affiliations from the times of contribution and an up-to-date email contact.
 
 
 Stable Branches
@@ -29,14 +25,16 @@ The repository of MOPSA has two protected and stable branches:
 - There is one stable branch `master` containing the latest public release of MOPSA.
 - The development branch `dev` contains the latest stable features of the analyzer that are planned for the next release.
 
+> :warning: We are not using `dev` at the moment. In the absence of `dev`, you should replace, in the following, `dev` with `master`.
+
 
 External Contributions
 ----------------------
-To contribute to MOPSA, it is adviced to fork https://gitlab.com/mopsa/mopsa in a separate repository and work on a separate branch `<project>/dev`.
+To contribute to MOPSA, it is advised to fork https://gitlab.com/mopsa/mopsa-analyzer in a separate repository and work on a separate branch `<project>/dev`.
 
 To remain synchronized with the upstream MOPSA repository, add a new remote to your local repository:
 ```shell
-$ git remote add upstream git@gitlab.com:mopsa/mopsa.git
+$ git remote add upstream git@gitlab.com:mopsa/mopsa-analyzer.git
 ```
 The branch `dev` should be read-only, fetched regularly from upstream and merged into local project branches:
 ```shell
@@ -46,7 +44,7 @@ $ git checkout my-project/dev
 $ git merge dev
 ```
 
-To integrate your contributions into the upstream project branch `<project>/dev`, create a merge request using GitLab web interface and select `mopsa/mopsa/<project>/dev` as the target branch.
+To integrate your contributions into the upstream project branch `<project>/dev`, create a merge request using GitLab web interface and select `mopsa/mopsa-analyzer/<project>/dev` as the target branch.
 
 
 Feature Branches
