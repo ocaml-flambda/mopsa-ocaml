@@ -483,7 +483,7 @@ struct
       default = "";
     }
 
-  let opt_smash_only_pointers = ref false
+  let opt_smash_only_pointers = ref true
   let () =
     register_domain_option name {
       key = "-cell-smash-only-pointers";
