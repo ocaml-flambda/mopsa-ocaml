@@ -44,7 +44,7 @@ let dump_decls = ref false
 let log_rename = ref false
 (* log when renaming (or assign a name to an anonymous) *)
 
-let log_merge = ref false
+let log_merge = ref true
 (* log when merging declarations *)
 
 let log_remove = ref false
@@ -423,7 +423,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
            )
            else merge rest
       in
-      let enum = merge (if org_name = "" then [] else Hashtbl.find_all ctx.ctx_enums org_name) in
+      let enum = merge (if org_name = "" then
+                          (Hashtbl.fold (fun _ r acc ->
+                               if Stdlib.compare r.enum_range enum.enum_range = 0 then r::acc else acc) ctx.ctx_enums [])
+                        else Hashtbl.find_all ctx.ctx_enums org_name) in
       if nice_name <> "" then Hashtbl.add ctx.ctx_enums nice_name enum;
       Hashtbl.add ctx.ctx_tu_enums e.C.enum_uid enum;
       enum
@@ -514,8 +517,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       in
       let record =
         if org_name = "" then (
-          Hashtbl.add ctx.ctx_records org_name record;
-          record
+          merge (Hashtbl.fold (fun _ r acc ->
+              if Stdlib.compare r.record_range record.record_range = 0 then r::acc else acc) ctx.ctx_records [])
         )
         else merge (Hashtbl.find_all ctx.ctx_records org_name)
       in
