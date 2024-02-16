@@ -283,8 +283,17 @@ let rec parse_program (files: string list) =
   let () =
     if !opt_save_preprocessed_file <> "" then
       let outch = open_out !opt_save_preprocessed_file in
-        let () = C_print.print_project ~verbose:false outch prj in
-        close_out outch;
+      let () = C_print.print_project ~verbose:false outch prj in
+      let () = warn "Preprocessed file generated. In order to keep libc stubs, we recommend running mopsa-c on:@.%s %a"
+          !opt_save_preprocessed_file
+          (Format.pp_print_list
+             ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
+             Format.pp_print_string)
+          (List.filter
+             (fun f ->
+                Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
+             ) prj.proj_files) in
+      close_out outch;
   in
   {
     prog_kind = from_project prj;
