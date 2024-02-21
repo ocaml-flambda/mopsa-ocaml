@@ -100,6 +100,7 @@ struct
       let name = ApronManager.name
     end)
 
+  let numeric_name = ApronManager.numeric_name
 
 
 
