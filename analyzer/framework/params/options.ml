@@ -345,6 +345,15 @@ let () =
     default = "false";
   }
 
+let () =
+  register_builtin_option {
+    key = "-tw";
+    category = "Output";
+    doc = " set the tab width";
+    spec = ArgExt.Set_int Output.Text.opt_tw;
+    default = "4";
+  }
+
 
 let () =
   register_builtin_option {

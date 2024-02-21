@@ -33,6 +33,11 @@ open Common
 let opt_show_callstacks = ref false
 
 
+(** Command-line option to specify the number of spaces to use for
+    printing tabs
+ *)
+let opt_tw = ref 4
+
 
 let print out fmt =
   let formatter =
@@ -45,6 +50,21 @@ let print out fmt =
   kasprintf (fun str ->
       fprintf formatter "%s%!" str
     ) fmt
+
+
+let compile_tab_columns tw s pos =
+  let rec doit i s =
+    try (match String.sub s 0 1, String.sub s 1 (String.length s - 1) with
+    | "\t", s -> (fun n -> (if n > i then (doit (i+1) s n) + tw - 1 else doit (i+1) s n))
+    | _, s -> doit (i+1) s
+    ) with
+    | Invalid_argument _ -> fun i -> i
+  in
+  get_pos_column pos |> doit 0 s
+
+let replace_tabs tw s =
+  let re = Str.regexp "\t" in
+  Str.global_replace re (String.make tw ' ') s
 
 
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
@@ -94,6 +114,8 @@ let highlight_range color fmt range =
 
     (* Highlight bug region in a line *)
     let highlight_bug fmt (i,l) =
+      let get_tabbed_column = compile_tab_columns !opt_tw l in
+      let l = replace_tabs !opt_tw l in
       let safe_sub l s e =
         try String.sub l s e
         with Invalid_argument _ ->
@@ -101,8 +123,8 @@ let highlight_range color fmt range =
           String.sub l (min 0 s) (max 0 (min e ((String.length l) - s))) in
       let n = String.length l in
       (* prints from c1 to c2 included *)
-      let c1 = get_pos_column start_pos in
-      let c2 = get_pos_column end_pos in
+      let c1 = get_tabbed_column start_pos in
+      let c2 = get_tabbed_column end_pos in
       let s1,s2,s3 =
         if i = get_pos_line start_pos && i = get_pos_line end_pos then
           safe_sub l 0 c1,
@@ -126,9 +148,11 @@ let highlight_range color fmt range =
 
     (* Underline bug region *)
     let underline_bug color fmt (i,l) =
+      let get_tabbed_column = compile_tab_columns !opt_tw l in
+      let l = replace_tabs !opt_tw l in
       let n = string_of_int i |> String.length in
-      let c1 = get_pos_column start_pos + n + 2 in
-      let c2 = get_pos_column end_pos + n + 2 in
+      let c1 = get_tabbed_column start_pos + n + 2 in
+      let c2 = get_tabbed_column end_pos + n + 2 in
       let c3 = String.length l + n + 2 in
       let s1 = String.make c1 ' ' in
       let s2 = String.make (c2 - c1) '^' in
@@ -150,9 +174,9 @@ let highlight_range color fmt range =
 let pp_diagnostic out n diag callstacks kinds =
   (* Print the alarm instance *)
   let file_name = get_range_relative_file diag.diag_range in
-  let fun_name = match CallstackSet.choose callstacks with 
+  let fun_name = match CallstackSet.choose callstacks with
     | c::_ -> Some c.call_fun_orig_name
-    | _ -> None in 
+    | _ -> None in
   print out "@.%a Check #%d:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (n+1)
@@ -223,7 +247,7 @@ let construct_checks_summary ?(print=false) rep out =
   let diag_groups = Alarm.group_diagnostics rep.report_diagnostics in
   RangeDiagnosticWoCsMap.fold (fun (range, diagWoCs) css acc ->
       let (i,safe,error,warning,checks_map) = acc in
-      let len = CallstackSet.cardinal css in 
+      let len = CallstackSet.cardinal css in
       let checks_map' = incr_check_diag len diagWoCs.diag_check diagWoCs.diag_kind checks_map in
       match diagWoCs.diag_kind with
       | Unreachable ->
