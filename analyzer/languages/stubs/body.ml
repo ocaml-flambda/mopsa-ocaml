@@ -296,13 +296,17 @@ struct
 
 
   (** Initialize the parameters of the stubbed function *)
-  let init_params args params range man flow =
-    List.combine args params |>
-    List.fold_left (fun flow (arg, param) ->
-        let post = man.exec (mk_add_var param range) flow >>%
-                   man.exec (mk_assign (mk_var param range) arg range) in
-        post_to_flow man post
-      ) flow
+  let rec init_params args params range man flow =
+    match params, args with
+    | [], _ -> flow
+    | param::tl_params, arg::tl_args ->
+      let post = man.exec (mk_add_var param range) flow >>%
+                 man.exec (mk_assign (mk_var param range) arg range)
+      in
+      post_to_flow man post |>
+      init_params tl_args tl_params range man
+    | _, [] ->
+      panic "stubs: insufficent number of arguments"
 
 
   (** Remove parameters from the returned flow *)

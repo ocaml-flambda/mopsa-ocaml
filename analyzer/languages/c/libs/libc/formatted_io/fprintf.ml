@@ -199,7 +199,7 @@ struct
       OptionExt.return
 
     (* 𝔼⟦ vasprintf(...) ⟧ *)
-    | E_c_builtin_call("vasprintf", dst :: format :: _) -> (*va_list) ->*)
+    | E_c_builtin_call("vasprintf", dst :: format :: ap :: []) -> (*va_list) ->*)
       (* variadic checking is not performed, we split the analysis in two cases
          1. No % placeholders, constant string: we can do something precise
          2. % placeholders: warn the analysis is unsound in this case *)
@@ -208,12 +208,12 @@ struct
           | None ->
             raise_c_invalid_format_arg_type_warning exp.erange man flow |>
             raise_c_insufficient_format_args_warning exp.erange man |>
-            Cases.empty
+            Cases.singleton (mk_top (T_c_integer C_signed_int) (erange exp))
 
           | Some output_format ->
             List.iter (function
                 | Placeholder p -> debug "placeholder %a" pp_output_placeholder p
-                | String s -> debug "string %s" s) output_format;
+                | String s -> debug "string '%s'" s) output_format;
             let placeholders, strings = List.partition_map (function
                 | Placeholder p -> Left p
                 | String s -> Right s) output_format in
@@ -222,7 +222,34 @@ struct
               vasprintf_stub true (mk_c_string (match strings with [] -> "" | hd :: _ -> hd) exp.erange) dst exp.erange man flow
             else
               (* case 2 *)
-              vasprintf_stub false format dst exp.erange man flow
+              vasprintf_stub false format dst exp.erange man flow >>$ fun ret flow ->
+              let range = erange exp in 
+              let exception UnsupportedFormat in
+              let rec process flow ret_value fmt =
+                match fmt with
+                | [] -> Cases.singleton ret_value flow 
+                | String s :: tl -> process flow (add ~typ:(T_c_integer (C_signed_int)) ret_value (mk_int (String.length s) range) range) tl
+                | Placeholder { op_typ = String } :: tl ->
+                  man.eval (mk_expr (E_c_var_args ap) ~etyp:(T_c_pointer (T_c_integer (C_signed_char))) range) flow >>$ fun arg flow ->
+                  assume (eq arg (mk_c_null range) range) man flow
+                    (* if one string is NULL, this counts as an internal error: -1 is returned *)
+                    ~fthen:(fun flow -> Cases.singleton (mk_int (-1) ~typ:(T_c_integer C_signed_int) range) flow)
+                    ~felse:(fun flow -> 
+                        man.eval
+                          (mk_c_call (find_c_fundec_by_name "strlen" flow)
+                             [arg]
+                             range) flow >>$ fun sl flow ->
+                        process flow (add ret_value sl range) tl)
+                | Placeholder { op_typ = Int t; op_width = None; op_precision=None; } :: tl ->
+                  let range_l, range_u = rangeof (T_c_integer t) flow in 
+                  process flow (add ret_value (mk_int_interval 1 (max (String.length @@ Z.to_string range_l) (String.length @@ Z.to_string range_u)) range) range) tl
+                | _ -> raise UnsupportedFormat
+              in
+              try
+                 process flow (mk_zero ~typ:(T_c_integer (C_signed_int)) range) output_format >>$ fun return flow ->
+                 man.exec (mk_assume (eq ret return range) range) flow >>% Eval.singleton ret
+              with UnsupportedFormat ->
+                Eval.singleton ret flow 
         )
       |> OptionExt.return
 
