@@ -149,7 +149,7 @@ struct
     | Eval _ -> false
     | Exec({skind = S_block _},_) -> false
     | Exec(stmt,_) ->
-      let range = stmt.srange in
+      let range = untag_range stmt.srange in
       is_orig_range range &&
       ( match old.loc with
         | None        -> true

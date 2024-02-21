@@ -10,6 +10,8 @@ open Toplevel
 module Make(Toplevel : TOPLEVEL) =
 struct
 
+  let opt_show_var_scope = ref true 
+
   (** Commands *)
   type terminal_command =
     | Break of string
@@ -17,6 +19,9 @@ struct
 
     | Continue
     (** Stop at next breakpoint *)
+
+    | MopsaBackTrace
+    (** Returns the current backtrace of Mopsa *)
 
     | Next
     (** Stop at next statement and skip function calls *)
@@ -33,8 +38,9 @@ struct
     | StepI
     (** Step into interpretation sub-tree  *)
 
-    | Print of string list * (string * int) option
+    | Print of (string * string option) list * (string * int) option
     (** Print the abstract state or the value of variables *)
+    (* string * string option: variable name, potential function name *)
 
     | Env of string list
     (** Print the current abstract environment, associated to token T_cur,
@@ -84,11 +90,13 @@ struct
   and set_command =
     | Debug
     | Script
+    | ShowVarScope
 
 
   (** Print a command *)
   let pp_terminal_command fmt = function
     | Break loc   -> Format.fprintf fmt "break %s" loc
+    | MopsaBackTrace -> Format.fprintf fmt "mopsa_bt"
     | Continue    -> Format.pp_print_string fmt "continue"
     | Next        -> Format.pp_print_string fmt "next"
     | Finish      -> Format.pp_print_string fmt "finish"
@@ -100,14 +108,20 @@ struct
       Format.fprintf fmt "print %a"
         (pp_print_list
            ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
-           pp_print_string
+           (fun fmt (v, o_f) ->
+              match o_f with
+              | None -> fprintf fmt "%s" v
+              | Some f -> fprintf fmt "%s:%s" v f)
         ) vars
     | Print(vars, Some(file, line))  ->
       Format.fprintf fmt "print@%s:%d %a"
         file line
         (pp_print_list
            ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
-           pp_print_string
+           (fun fmt (v, o_f) ->
+              match o_f with
+              | None -> fprintf fmt "%s" v
+              | Some f -> fprintf fmt "%s:%s" v f)
         ) vars
     | Env []           -> Format.pp_print_string fmt "env"
     | Env domains      -> Format.fprintf fmt "env %a"
@@ -126,9 +140,12 @@ struct
     | Disable (Hook h) -> Format.fprintf fmt "disable hook %s" h
     | Set (Debug, d)   -> Format.fprintf fmt "set debug %s" d
     | Set (Script, d)  -> Format.fprintf fmt "set script %s" d
+    | Set (ShowVarScope, d) -> Format.fprintf fmt "set showvarscope %s" d
     | LoadScript s     -> Format.fprintf fmt "load script %s" s
     | Unset Debug      -> Format.pp_print_string fmt "unset debug"
-    | Unset Script     -> Format.pp_print_string fmt "unset script"  | BackTrace        -> Format.pp_print_string fmt "backtrace"
+    | Unset Script     -> Format.pp_print_string fmt "unset script"
+    | Unset ShowVarScope -> Format.pp_print_string fmt "unset showvarscope"
+    | BackTrace        -> Format.pp_print_string fmt "backtrace"
     | Save file        -> Format.fprintf fmt "save %s" file
 
 
@@ -137,6 +154,7 @@ struct
     printf "Available commands:@.";
     printf "  b[reak] <[file:]line>     add a breakpoint at a line@.";
     printf "  b[reak] <function>        add a breakpoint at a function@.";
+    printf "  b[reak] @name             add a named breakpoint (will break when the analysis executes an S_break name)@.";
     printf "  c[ontinue]                run until next breakpoint@.";
     printf "  n[ext]                    stop at next statement and skip function calls.@.";
     printf "  n[ext]i                   stop at next statement and skip nodes in the interpretation sub-tree@.";
@@ -145,7 +163,8 @@ struct
     printf "  f[inish]                  finish current function@.";
     printf "  p[rint]                   print the abstract state@.";
     printf "  p[rint] <vars>            print the value of selected variables@.";
-    printf "  p[rint] <vars> #<f>:<l>  print the value of selected variables at the given program location@.";
+    printf "                            For example, `p x,y:f,z:*` prints x in the current scope, y in the scope of f, and z in all scopes@.";
+    printf "  p[rint] <vars> #<f>:<l>   print the value of selected variables at the given program location@.";
     printf "  e[nv]                     print the current abstract environment@.";
     printf "  e[nv] <domain>,...        print the current abstract environment of selected domains@.";
     printf "  b[ack]t[race]             print the current call stack@.";
@@ -222,7 +241,7 @@ struct
         read_terminal_command_string ()
 
   (** Read the next command *)
-  let rec read_terminal_command logger =
+  let rec read_terminal_command logger cs =
     let s = read_terminal_command_string () in
     logger s;
     (* Get command's parts *)
@@ -232,6 +251,7 @@ struct
     in
     match parts with
     | ["continue" | "c"]   -> Continue
+    | ["mopsa_bt"]         -> MopsaBackTrace
     | ["next"     | "n"]   -> Next
     | ["step"     | "s"]   -> Step
     | ["finish"   | "f"]   -> Finish
@@ -253,21 +273,9 @@ struct
       in
       Env (SetExt.StringSet.elements domains)
 
-    | ("print"    | "p") :: vars ->
-      let vars =
-        List.fold_left
-          (fun acc s ->
-             let parts = String.split_on_char ',' s |>
-                         List.filter (function "" -> false | _ -> true)
-             in
-             SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
-          ) SetExt.StringSet.empty vars
-      in
-      Print (SetExt.StringSet.elements vars, None)
-
     | ["help" | "h"]   ->
       print_usage ();
-      read_terminal_command logger
+      read_terminal_command logger cs
 
     | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
     | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
@@ -289,6 +297,28 @@ struct
 
     | ["save"; file] -> Save file
 
+    | ("print"    | "p") :: vars ->
+      let vars =
+        List.fold_left
+          (fun acc s ->
+             let parts = String.split_on_char ',' s |>
+                         List.filter (function "" -> false | _ -> true) in
+             let parts = List.map (fun s ->
+                 let l = String.split_on_char ':' s in
+                 if List.length l = 1 then
+                   if cs = [] then List.hd l, None
+                   else List.hd l, Some (List.hd cs).call_fun_orig_name
+                 else
+                   let f = List.hd @@ List.tl l in
+                   if String.compare f "*" = 0 then List.hd l, None
+                   else (List.hd l, Some f)
+               ) parts
+             in
+             parts @ acc
+          ) [] vars
+      in
+      Print (vars, None)
+
     | print::vars when Str.string_match (Str.regexp {|\(p\|print\)@\(.+\):\([0-9]+\)|}) print 0 ->
       let file = Str.matched_group 2 print in
       let line = Str.matched_group 3 print |> int_of_string in
@@ -298,15 +328,20 @@ struct
              let parts = String.split_on_char ',' s |>
                          List.filter (function "" -> false | _ -> true)
              in
-             SetExt.StringSet.union acc (SetExt.StringSet.of_list parts)
-          ) SetExt.StringSet.empty vars
+             let parts = List.map (fun s ->
+                 let l = String.split_on_char ':' s in
+                 if List.length l = 1 then List.hd l, None
+                 else (List.hd l, Some (List.hd @@ List.tl l))) parts
+             in
+             parts @ acc)
+          [] vars 
       in
-      Print(SetExt.StringSet.elements vars, Some(file, line))
+      Print(vars, Some(file, line))
 
     | _ ->
       printf "Unknown command %s@." s;
       print_usage ();
-      read_terminal_command logger
+      read_terminal_command logger cs
 
 
   (** {2 Pretty printers} *)
@@ -464,13 +499,24 @@ struct
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
       printf "⊥@."
     else
+      let () = Ast.Var.print_uniq_with_uid := false in 
       let names =
         match names with
         | [] ->
-          List.map (fun v -> asprintf "%a" pp_var v) (action_line_vars action)
+          List.map (fun v -> asprintf "%a" pp_var v, None) (action_line_vars action)
         | _ -> names in
-      let vars = ask_and_reduce man.ask Q_defined_variables flow in
-      let addrs = ask_and_reduce man.ask Q_allocated_addresses flow in
+      let names_global, names_by_func = 
+        List.fold_left (fun (global_acc, func_acc) (name, o_f) ->
+            match o_f with
+            | None -> (name :: global_acc, func_acc)
+            | Some f -> (global_acc,
+                         if MapExt.StringMap.mem f func_acc then
+                           MapExt.StringMap.add f (name :: MapExt.StringMap.find f func_acc) func_acc
+                         else
+                           MapExt.StringMap.add f [name] func_acc)
+          ) ([], MapExt.StringMap.empty) names in 
+      let vars = ask_and_reduce man.ask
+          (Q_defined_variables None) flow in
       let vmap =
         List.fold_left
           (fun acc v ->
@@ -480,6 +526,7 @@ struct
              MapExt.StringMap.add vname (VarSet.add v old) acc)
           MapExt.StringMap.empty vars
       in
+      let addrs = ask_and_reduce man.ask Q_allocated_addresses flow in
       let amap =
         List.fold_left
           (fun acc a ->
@@ -497,13 +544,39 @@ struct
                match MapExt.StringMap.find_opt name amap with
                | Some addrs -> vfound,(AddrSet.elements addrs)@afound,not_found
                | None      -> vfound,afound,name::not_found
-          ) ([],[],[]) names in
+          ) ([],[],[]) names_global in
+      let vfound, afound, not_found = MapExt.StringMap.fold
+          (fun func vs (vfound, afound, not_found) ->
+             let vars = ask_and_reduce man.ask (Q_defined_variables (Some func)) flow in
+             let vmap = List.fold_left
+               (fun acc v ->
+                  let vname = asprintf "%a" pp_var v in
+                  let old = OptionExt.default VarSet.empty
+                      (MapExt.StringMap.find_opt vname acc) in
+                  MapExt.StringMap.add vname (VarSet.add v old) acc)
+               MapExt.StringMap.empty vars in
+             List.fold_left (fun (vfound, afound, not_found) name -> 
+                 match MapExt.StringMap.find_opt name vmap with
+                 | Some vars -> (VarSet.elements vars)@vfound,afound,not_found
+                 | None     ->
+                   match MapExt.StringMap.find_opt name amap with
+                   | Some addrs -> vfound,(AddrSet.elements addrs)@afound,not_found
+                   | None      -> vfound,afound,name::not_found
+               ) (vfound, afound, not_found) vs 
+          )
+          names_by_func (vfound, afound, not_found) in
       let protect_print print_thunk =
-        let oldv = !Core.Ast.Var.print_uniq_with_uid in
-        Core.Ast.Var.print_uniq_with_uid := true;
-        print_thunk ();
-        Core.Ast.Var.print_uniq_with_uid := oldv;
+        if not @@ !opt_show_var_scope then 
+          let oldv = !Core.Ast.Var.print_uniq_with_uid in
+          (
+            Core.Ast.Var.print_uniq_with_uid := false;
+            print_thunk ();
+            Core.Ast.Var.print_uniq_with_uid := oldv;
+          )
+        else
+          print_thunk ()
       in
+      let () = Ast.Var.print_uniq_with_uid := true in 
       let not_found' =
         let printer = empty_printer () in
         let found,not_found =
@@ -553,7 +626,7 @@ struct
 
   let reach action man flow =
     let range = action_range action in
-    if is_orig_range range then (
+    if is_orig_range (untag_range range) then (
       (* Print the range of the next action *)
       printf "%a@." Debug.(color fushia pp_relative_range) (action_range action);
       (* Print location in the source code *)
@@ -576,12 +649,23 @@ struct
   (* todo: remove last @. ... *)
 
   let rec read_command action envdb man flow =
-    let cmd = try read_terminal_command logger
+    let cmd = try read_terminal_command logger (Flow.get_callstack flow)
       with Exit -> exit 0
     in
     match cmd with
+    | MopsaBackTrace ->
+      Printexc.print_raw_backtrace Stdlib.stdout (Printexc.get_callstack Int.max_int);
+      read_command action envdb man flow 
+
     | Break loc ->
-      breakpoints := BreakpointSet.add (parse_breakpoint loc) !breakpoints;
+      let () =
+        try
+          let default_file =
+            try get_range_file (action_range action)
+            with _ -> "" (* FIXME: use first file in list of analyzed files *) in
+          let bp = parse_breakpoint default_file loc in 
+          breakpoints := BreakpointSet.add bp !breakpoints;
+        with Invalid_breakpoint_syntax -> printf "Invalid breakpoint syntax@." in
       read_command action envdb man flow
 
     | Continue ->
@@ -704,7 +788,7 @@ struct
       read_command action envdb man flow
 
     | Info Variables ->
-      let vars = ask_and_reduce man.ask Q_defined_variables flow in
+      let vars = ask_and_reduce man.ask (Q_defined_variables None) flow in
       printf "@[<v>%a@]@."
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
            (fun fmt v -> Query.pp_var_with_type fmt (v,v.vtyp))
@@ -750,6 +834,14 @@ struct
       in
       List.iter (fun l -> Queue.add l commands_buffer) lines;
       close_in ch;
+      read_command action envdb man flow
+
+    | Set (ShowVarScope, _) ->
+      opt_show_var_scope := true;
+      read_command action envdb man flow
+
+    | Unset ShowVarScope ->
+      opt_show_var_scope := false;
       read_command action envdb man flow
 
     | Save file ->

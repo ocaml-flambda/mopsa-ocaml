@@ -1109,10 +1109,7 @@ struct
   let ask : type a r. (a,r) query -> (a,t) man -> a flow -> (a, r) cases option = fun query man flow ->
     match query with
     | Q_c_points_to e -> eval_points_to e man flow
-    | Q_defined_variables ->
-      let a = get_env T_cur man flow in
-      let vars = try Map.fold (fun v _ acc -> v :: acc) a [] with Top.Found_TOP -> [] in
-      Some (Cases.singleton vars flow)
+
     | Universal.Heap.Recency.Q_alive_addresses_aspset ->
       let a = get_env T_cur man flow in
       (* we start from the roots: non addr bases, and iterate until everything has been covered *)

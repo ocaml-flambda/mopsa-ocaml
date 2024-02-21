@@ -246,12 +246,14 @@ let compare_fun_expr x y = match x, y with
 (** {2 Universal program} *)
 (*  ********************* *)
 
+type u_program =  {
+  universal_gvars   : var list;
+  universal_fundecs : fundec list;
+  universal_main    : stmt;
+}
+
 type prog_kind +=
-  | P_universal of {
-      universal_gvars   : var list;
-      universal_fundecs : fundec list;
-      universal_main    : stmt;
-    }
+  | P_universal of u_program 
 
 let () =
   register_program {
@@ -283,6 +285,24 @@ let () =
         | _ -> default fmt prg
       );
   }
+
+module UProgramKey = GenContextKey(struct
+    type 'a t = u_program
+    let print pp fmt prog = Format.fprintf fmt "U program"
+  end)
+
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let u_program_ctx = UProgramKey.key
+
+(** Set the C program in the flow *)
+let set_u_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> add_ctx u_program_ctx prog) flow
+
+(** Get the C program from the flow *)
+let get_u_program flow =
+  Flow.get_ctx flow |> find_ctx u_program_ctx
+
 
 
 (** {2 Universal expressions} *)
