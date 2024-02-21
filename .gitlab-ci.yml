@@ -242,3 +242,18 @@ test-cpython 1/1:
     NB_CHECKS: '141'
     NB_SAFE: '140'
   extends: .test-cpython
+
+###########################
+# Interactive engine test #
+###########################
+
+test-interactive:
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PWD
+    - cd analyzer/tests/c/
+    - echo "load script interactive.script" | ../../../bin/mopsa-c -silent -engine=interactive interactive.c | tee out
+    - head -n 52 out | tail -n 48 > out.out
+    - diff out.out interactive.out

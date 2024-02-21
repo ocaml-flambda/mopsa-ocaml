@@ -57,10 +57,51 @@ let builtin_functions =
 
 let from_extent (e: U.extent) : Location.range = e
 
+type uvar = {
+  uvar_range: range;
+  uvar_uid: int;
+  uvar_orig_name: string;
+  uvar_uniq_name: string;
+}
+
+type var_kind +=
+  | V_uvar of uvar
+
+let () = register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_uvar var ->
+          if !Framework.Core.Ast.Var.print_uniq_with_uid then
+            Format.fprintf fmt "%s:%a" var.uvar_orig_name pp_relative_range var.uvar_range
+          else Format.fprintf fmt "%s" var.uvar_orig_name
+        | _ -> next fmt v
+      );
+
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_uvar var1, V_uvar var2 ->
+          Compare.compose [
+            (fun () -> Stdlib.compare var1.uvar_uid var2.uvar_uid);
+            (fun () -> Stdlib.compare var1.uvar_uniq_name var2.uvar_uniq_name)
+          ]
+
+        | _ -> next v1 v2
+      );
+  }
+       
+
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context) =
   try
     let (id, typ) = MS.find v var_ctx in
-    mk_uniq_var v id typ
+    let uniq_name =  (v ^ ":" ^ string_of_int id) in 
+    mkv uniq_name
+      (V_uvar {
+          uvar_range = ext;
+          uvar_uid = id;
+          uvar_orig_name = v;
+          uvar_uniq_name = uniq_name
+        })
+      typ
   with
   | Not_found ->
     Exceptions.panic_at ext

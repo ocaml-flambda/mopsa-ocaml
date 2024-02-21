@@ -204,8 +204,8 @@ let ask_and_reduce_list f q ?(bottom = fun () -> assert false) a =
 
 let ask_and_reduce = ask_and_reduce_cases
 
-let find_var_by_name name man flow =
-  let vars = ask_and_reduce man.ask Query.Q_defined_variables flow in
+let find_var_by_name ?(function_scope = None) name man flow =
+  let vars = ask_and_reduce man.ask (Query.Q_defined_variables function_scope) flow in
   List.find
     (fun v ->
        name = Format.asprintf "%a" Ast.Var.pp_var v

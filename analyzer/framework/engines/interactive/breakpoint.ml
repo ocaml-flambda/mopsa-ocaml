@@ -81,11 +81,17 @@ exception Invalid_breakpoint_syntax
 
 
 (** Parse a breakpoint string *)
-let parse_breakpoint (s:string) : breakpoint =
+let parse_breakpoint default_file (s:string) : breakpoint =
   if Str.string_match (Str.regexp "@\\(.+\\)$") s 0
   then
     let name = Str.matched_group 1 s in
     B_named name else
+
+  if Str.string_match (Str.regexp "\\([0-9]+\\)$") s 0
+  then
+    let file = default_file in
+    let line = int_of_string (Str.matched_group 1 s) in
+    B_line(file, line) else
 
   if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") s 0
   then

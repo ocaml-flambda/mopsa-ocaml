@@ -691,18 +691,19 @@ struct
   (** ================== *)
 
   let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
+    let get_locals prog call =
+      let f = find_function call prog.c_functions in
+      f.c_func_local_vars @ f.c_func_parameters in
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
-    | Q_defined_variables ->
+    | Q_defined_variables None ->
       let prog = get_c_program flow in
       let cs = Flow.get_callstack flow in
       (* Get global variables *)
       let globals = List.map fst prog.c_globals in
       (* Get local variables of all functions in the callstack, following the same order *)
-      let locals = List.fold_right (fun call acc ->
-          let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
-          f.c_func_local_vars @ f.c_func_parameters @ acc
+      let locals = List.fold_right (fun call acc -> (get_locals prog call.Callstack.call_fun_orig_name) @ acc
                      ) cs []
       in
       let all_vars = globals @ locals in
@@ -723,6 +724,10 @@ struct
         records;
       Some (Cases.singleton all_vars flow)
 
+    | Q_defined_variables (Some call) -> 
+      let prog = get_c_program flow in
+      Cases.singleton (get_locals prog call) flow 
+      |> OptionExt.return 
 
     (* Get the value of a variable *)
     | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->

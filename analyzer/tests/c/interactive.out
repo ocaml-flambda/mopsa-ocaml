@@ -1,0 +1,48 @@
+[1;38;5;6mmopsa[0m [1;38;5;40m>>[0m [1;38;5;177minteractive.c:3.0-7.1::init[0m
+   1  #include <string.h>
+   2  
+ [1;38;5;118m►[0m [1;38;5;118m3[0m  [1;38;5;118mint f(int x) {[0m
+   4    char *s = "";
+   5    size_t b = strlen(s);
+   6    return b;
+   7  }
+   8  
+[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m add(x) [1;38;5;45m⟧[0m
+[1;38;5;177minteractive.c:6.2-10[0m
+    1  #include <string.h>
+    2  
+    3  int f(int x) {
+    4    char *s = "";
+    5    size_t b = strlen(s);
+ [1;38;5;118m►[0m [1;38;5;118m 6[0m  [1;38;5;118m  return b;[0m
+    7  }
+    8  
+    9  int main() {
+   10    char *s = NULL;
+   11    int x = 42;
+[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m return b; [1;38;5;45m⟧[0m
+ float-itv ∪ int-itv : 
+    offset⦃s:interactive.c:4.2-14⦄ : [0,0],
+    x:interactive.c:3.6-11 : [3,3] ,
+ pointers : 
+    s:interactive.c:4.2-14 : {  ""  }  
+ float-itv ∪ int-itv : 
+    x:interactive.c:11.2-12 : [42,42]  
+ float-itv ∪ int-itv : 
+    x:interactive.c:3.6-11 : [3,3]  
+ float-itv ∪ int-itv : 
+    offset⦃s:interactive.c:4.2-14⦄ : [0,0],
+    x:interactive.c:3.6-11 : [3,3],
+    x:interactive.c:11.2-12 : [42,42] ,
+ pointers : 
+    s:interactive.c:4.2-14 : {  ""  },
+    s:interactive.c:10.2-16 : {  NULL  }  
+ pointers : 
+    s:interactive.c:10.2-16 : {  NULL  }  
+ float-itv ∪ int-itv : 
+    offset⦃s:interactive.c:4.2-14⦄ : [0,0] ,
+ pointers : 
+    s:interactive.c:4.2-14 : {  ""  }  
+Raised by primitive operation at Interactive__Terminal.Make.read_command in file "analyzer/framework/engines/interactive/terminal.ml", line 657, characters 49-85
+Called from Interactive__Engine.Make.interact in file "analyzer/framework/engines/interactive/engine.ml", line 260, characters 14-78
+Called from Interactive__Engine.Make.interact_or_apply_action in file "analyzer/framework/engines/interactive/engine.ml", line 315, characters 10-30

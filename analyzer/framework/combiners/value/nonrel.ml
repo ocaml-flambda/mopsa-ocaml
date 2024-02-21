@@ -494,12 +494,6 @@ struct
       eval e map |> OptionExt.bind @@ fun (v,ve) ->
       Value.avalue av v
 
-    | Q_defined_variables ->
-      VarMap.bindings map |>
-      List.map fst |>
-      OptionExt.return
-
-
     | _ ->
       Value.ask (value_man empty_vexpr map) query
 

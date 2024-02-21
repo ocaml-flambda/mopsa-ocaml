@@ -35,11 +35,45 @@ struct
 
   let checks = []
 
-  let init prog man flow = flow
+  let init prog man flow =
+    match prog.prog_kind with
+    | P_universal u ->
+      set_u_program u flow
+
+    | _ -> flow 
 
   let eval exp man flow = None
 
-  let ask query man flow = None
+  let find_function f functions =
+    List.find (function
+          {fun_orig_name} -> fun_orig_name = f
+      ) functions
+
+  let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
+    let get_locals prog call =
+      let f = find_function call prog.universal_fundecs in
+      f.fun_parameters @ f.fun_locvars @ [f.fun_return_var] in 
+    let open Framework.Engines.Interactive in
+    match query with
+    | Q_defined_variables (Some call) ->
+      let prog = get_u_program flow in
+      Cases.singleton (get_locals prog call) flow 
+      |> OptionExt.return 
+
+    | Q_defined_variables None ->
+      let prog = get_u_program flow in
+      let cs = Flow.get_callstack flow in
+      let globals = prog.universal_gvars in
+      let locals = List.rev @@
+        List.fold_left (fun acc call -> (get_locals prog call.Callstack.call_fun_orig_name) @ acc) [] cs in
+      Cases.singleton (globals @ locals) flow
+      |> OptionExt.return 
+
+    | Q_allocated_addresses ->
+      Cases.singleton [] flow
+      |> OptionExt.return 
+
+    | _ -> None
 
   (** Execute tests in a unit test program *)
   let exec_tests main fundecs range man flow =
