@@ -139,6 +139,7 @@ test-c:
     - $MOPSA_C -config=c/cell-string-length-itv.json analyzer/tests/c/libc/vasprintf_tests.c
     - $MOPSA_C -config=c/cell-string-length-pointer-sentinel-itv.json -c-symbolic-args=0 analyzer/tests/c/ptr_sentinel_tests.c
     - $MOPSA_C -c-check-overflows-with-relational -config=c/cell-rel-itv.json analyzer/tests/c/156_overflow_relational.c
+    - $MOPSA_C analyzer/tests/c/172_backward_mul_floatitv.c
 
 ###################
 # Universal tests #
