@@ -826,7 +826,7 @@ let bwd_sub (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
 (** Backward subtraction. *)
 
 let bwd_mul (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
-  bwd_generic2 prec round FI.bwd_add x y r 
+  bwd_generic2 prec round FI.bwd_mul x y r 
 (** Backward multiplication. *)
 
 let bwd_div (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
