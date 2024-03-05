@@ -26,6 +26,8 @@ open Sig.Abstraction.Stateless
 open Universal.Ast
 open Stubs.Ast
 open Ast
+open Common.Alarms
+open Numeric_common.Common
 
 
 module Domain =
@@ -39,8 +41,7 @@ struct
 
   let scalar = Semantic "C/Scalar"
 
-  let checks = []
-
+  let checks = [ CHK_C_NEGATIVE_ARRAY_SIZE ]
 
   (** {2 Initialization} *)
   (** ****************** *)
@@ -94,6 +95,13 @@ struct
     | T_c_array(_, C_array_length_expr e) -> e
     | _ -> assert false
 
+  (** Check whether the array size is non-negative *)
+  let check_array_size exp range man flow =
+    assume_num (mk_ge exp (mk_zero range) range)
+      ~fthen:(fun flow -> safe_c_negative_array_size_check range man flow |> Post.return)
+      ~felse:(fun flow -> raise_c_negative_array_size_alarm exp range man flow |> Cases.empty)
+      man flow
+
 
   (** 𝕊⟦ t arr[n]; ⟧ *)
   let exec_declare arr range man flow =
@@ -112,6 +120,7 @@ struct
         (under_array_type arr.vtyp |> void_to_char |> (fun t -> let z = sizeof_type t flow in mk_z z range))
         range
     in
+    check_array_size (get_array_length_expr arr) range man flow >>% fun flow ->
     man.exec (mk_assign (mk_var len range) ee range) ~route:scalar flow >>% fun flow ->
 
     (* Add arr as a base in the underlying memory abstraction *)
