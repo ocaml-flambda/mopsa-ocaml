@@ -1043,7 +1043,8 @@ and atomic_expr = {
    | Char_UTF8
    | Char_UTF16
    | Char_UTF32
- (** Kinds of character literals *)
+   | Char_Unevaluated (* for string literals *)
+ (** Kinds of character and string literals *)
 
  and choose_expr = {
      choose_cond: expr; (** condition *)

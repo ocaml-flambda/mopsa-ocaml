@@ -754,7 +754,11 @@ public:
   CAMLprim value TranslateBinaryOperatorKind(BinaryOperatorKind k, const Expr * node);
   CAMLprim value TranslateCompoundAssignOperatorKind(BinaryOperatorKind k, const Expr * node);
   CAMLprim value TranslateOverloadedOperatorKind(OverloadedOperatorKind k, const Expr * node);
+#if CLANG_VERSION_MAJOR < 18
   CAMLprim value TranslateConstructionKind(CXXConstructExpr::ConstructionKind k, const Expr * x);
+#else
+  CAMLprim value TranslateConstructionKind(CXXConstructionKind k, const Expr * x);
+#endif
   CAMLprim value TranslateTemplateParameterList(const TemplateParameterList *x);
   CAMLprim value TranslateNamespaceDecl(const NamespaceDecl *x);
   CAMLprim value TranslateNamespaceAliasDecl(const NamespaceAliasDecl *x);
@@ -989,10 +993,15 @@ CAMLprim value MLTreeBuilderVisitor::TranslateDecl(const Decl *node) {
       GENERATE_NODE(LinkageSpecDecl, ret, node, 2, {
           int r;
           switch (x->getLanguage()) {
+#if CLANG_VERSION_MAJOR < 18
           case LinkageSpecDecl::lang_c: r = MLTAG_LANG_C; break;
           case LinkageSpecDecl::lang_cxx: r = MLTAG_LANG_C; break;
+#else
+          case LinkageSpecLanguageIDs::C: r = MLTAG_LANG_C; break;
+          case LinkageSpecLanguageIDs::CXX: r = MLTAG_LANG_C; break;
+#endif
           default:
-            if (verbose_exn) { node->dump(); std::cout << "unknown language: " << x->getLanguage() << DEBUG_SOURCE_RANGE(node) << std::endl; }
+            if (verbose_exn) { node->dump(); std::cout << "unknown language: " << static_cast<int>(x->getLanguage()) << DEBUG_SOURCE_RANGE(node) << std::endl; }
             caml_failwith("mlClangAST: unknown language in linkage specifier");
           }
           Store_field(ret, 0, Val_int(r));
@@ -2190,6 +2199,7 @@ enum {
   MLTAG_Char_UTF8,
   MLTAG_Char_UTF16,
   MLTAG_Char_UTF32,
+  MLTAG_Char_Unevaluated, // for strings
 };
 
 /* ident_type */
@@ -2333,13 +2343,21 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           int r = 0;
           Store_field(ret, 0, caml_copy_int32(x->getValue()));
           switch (x->getKind()) {
+#if CLANG_VERSION_MAJOR < 18
             GENERATE_CASE_PREFIX(r, CharacterLiteral::, Char_, Ascii);
             GENERATE_CASE_PREFIX(r, CharacterLiteral::, Char_, Wide);
             GENERATE_CASE_PREFIX(r, CharacterLiteral::, Char_, UTF8);
             GENERATE_CASE_PREFIX(r, CharacterLiteral::, Char_, UTF16);
             GENERATE_CASE_PREFIX(r, CharacterLiteral::, Char_, UTF32);
+#else
+            GENERATE_CASE_PREFIX(r, CharacterLiteralKind::, Char_, Ascii);
+            GENERATE_CASE_PREFIX(r, CharacterLiteralKind::, Char_, Wide);
+            GENERATE_CASE_PREFIX(r, CharacterLiteralKind::, Char_, UTF8);
+            GENERATE_CASE_PREFIX(r, CharacterLiteralKind::, Char_, UTF16);
+            GENERATE_CASE_PREFIX(r, CharacterLiteralKind::, Char_, UTF32);
+#endif
           default:
-            if (verbose_exn) { node->dump(); std::cout << "unknown kind of character literal: " << x->getKind() << DEBUG_SOURCE_RANGE(node) << std::endl;}
+            if (verbose_exn) { node->dump(); std::cout << "unknown kind of character literal: " << static_cast<int>(x->getKind()) << DEBUG_SOURCE_RANGE(node) << std::endl;}
             caml_failwith("mlClangAST: unknown kind of character literal");
           }
           Store_field(ret, 1, Val_int(r));
@@ -2435,6 +2453,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
 #else
           switch (x->getIdentType()) {
 #endif
+#if CLANG_VERSION_MAJOR < 18
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Func);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, Function);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, LFunction);
@@ -2442,9 +2461,18 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, FuncSig);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunction);
             GENERATE_CASE_PREFIX(r, PredefinedExpr::, Ident_, PrettyFunctionNoVirtual);
+#else
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, Func);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, Function);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, LFunction);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, FuncDName);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, FuncSig);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, PrettyFunction);
+            GENERATE_CASE_PREFIX(r, PredefinedIdentKind::, Ident_, PrettyFunctionNoVirtual);
+#endif
           default:
 #if CLANG_VERSION_MAJOR >= 8
-            if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentKind() << DEBUG_SOURCE_RANGE(node) << std::endl; }
+            if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << static_cast<int>(x->getIdentKind()) << DEBUG_SOURCE_RANGE(node) << std::endl; }
 #else            
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentType() << DEBUG_SOURCE_RANGE(node) << std::endl; }
 #endif
@@ -2478,6 +2506,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           memcpy(const_cast<char*>String_val(tmp), x->getBytes().data(), x->getByteLength());
           Store_field(ret, 0, tmp);
           switch (x->getKind()) {
+#if CLANG_VERSION_MAJOR < 18
 #if CLANG_VERSION_MAJOR >= 15
             GENERATE_CASE_PREFIX_ALT(r, StringLiteral::, Char_, Ordinary, Ascii);
 #else
@@ -2487,8 +2516,16 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, UTF8);
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, UTF16);
             GENERATE_CASE_PREFIX(r, StringLiteral::, Char_, UTF32);
+#else
+            GENERATE_CASE_PREFIX_ALT(r, StringLiteralKind::, Char_, Ordinary, Ascii);
+            GENERATE_CASE_PREFIX(r, StringLiteralKind::, Char_, Wide);
+            GENERATE_CASE_PREFIX(r, StringLiteralKind::, Char_, UTF8);
+            GENERATE_CASE_PREFIX(r, StringLiteralKind::, Char_, UTF16);
+            GENERATE_CASE_PREFIX(r, StringLiteralKind::, Char_, UTF32);
+            GENERATE_CASE_PREFIX(r, StringLiteralKind::, Char_, Unevaluated);
+#endif
           default:
-            if (verbose_exn) { node->dump(); std::cout << "unknown kind of string literal: " << x->getKind() << DEBUG_SOURCE_RANGE(node) << std::endl;}
+            if (verbose_exn) { node->dump(); std::cout << "unknown kind of string literal: " << static_cast<int>(x->getKind()) << DEBUG_SOURCE_RANGE(node) << std::endl;}
             caml_failwith("mlClangAST: unknown kind of string literal");
           }
           Store_field(ret, 1, Val_int(r));
@@ -2602,11 +2639,17 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 4, Val_bool(x->isGlobalNew()));
           int r = 0;
           switch (x->getInitializationStyle()) {
+#if CLANG_VERSION_MAJOR < 18
             GENERATE_CASE_PREFIX(r, CXXNewExpr::, New_, NoInit);
             GENERATE_CASE_PREFIX(r, CXXNewExpr::, New_, CallInit);
             GENERATE_CASE_PREFIX(r, CXXNewExpr::, New_, ListInit);
+#else
+            GENERATE_CASE_PREFIX_ALT(r, CXXNewInitializationStyle::, New_, None, NoInit);
+            GENERATE_CASE_PREFIX_ALT(r, CXXNewInitializationStyle::, New_, Parens, CallInit);
+            GENERATE_CASE_PREFIX_ALT(r, CXXNewInitializationStyle::, New_, Braces, ListInit);
+#endif
           default:
-            if (verbose_exn) { node->dump(); std::cout << "unknown initialization style: " << x->getInitializationStyle() << DEBUG_SOURCE_RANGE(node) << std::endl;}
+            if (verbose_exn) { node->dump(); std::cout << "unknown initialization style: " << static_cast<int>(x->getInitializationStyle()) << DEBUG_SOURCE_RANGE(node) << std::endl;}
             caml_failwith("mlClangAST: unknown initialization style");
           }
           Store_field(ret, 5, Val_int(r));
@@ -3375,16 +3418,27 @@ enum {
 };
 
 /* CXXConstructExpr::ConstructionKind -> construction_kind */
+#if CLANG_VERSION_MAJOR < 18
 CAMLprim value MLTreeBuilderVisitor::TranslateConstructionKind(CXXConstructExpr::ConstructionKind k, const Expr * x) {
+#else
+CAMLprim value MLTreeBuilderVisitor::TranslateConstructionKind(CXXConstructionKind k, const Expr * x) {
+#endif
   CAMLparam0();
   int r = 0;
   switch(k) {
+#if CLANG_VERSION_MAJOR < 18
     GENERATE_CASE_PREFIX(r, CXXConstructExpr::, , CK_Complete);
     GENERATE_CASE_PREFIX(r, CXXConstructExpr::, , CK_NonVirtualBase);
     GENERATE_CASE_PREFIX(r, CXXConstructExpr::, , CK_VirtualBase);
     GENERATE_CASE_PREFIX(r, CXXConstructExpr::, , CK_Delegating);
+#else
+    GENERATE_CASE_PREFIX_ALT(r, CXXConstructionKind::, , Complete, CK_Complete);
+    GENERATE_CASE_PREFIX_ALT(r, CXXConstructionKind::, , NonVirtualBase, CK_NonVirtualBase);
+    GENERATE_CASE_PREFIX_ALT(r, CXXConstructionKind::, , VirtualBase, CK_VirtualBase);
+    GENERATE_CASE_PREFIX_ALT(r, CXXConstructionKind::, , Delegating, CK_Delegating);
+#endif
   default:
-    if (verbose_exn) { if (x) x->dump(); std::cout << "unknown construction kind: " << k << DEBUG_SOURCE_RANGE(x) << std::endl;}
+    if (verbose_exn) { if (x) x->dump(); std::cout << "unknown construction kind: " << static_cast<int>(k) << DEBUG_SOURCE_RANGE(x) << std::endl;}
     caml_failwith("mlClangAST: unknown construction kind");
   }
   CAMLreturn(Val_int(r));
@@ -3930,11 +3984,17 @@ CAMLprim value MLTreeBuilderVisitor::TranslateArrayType(const ArrayType * node) 
       Store_field(ret, 1, tmp);
 
       switch (node->getSizeModifier()) {
+#if CLANG_VERSION_MAJOR < 18
       case ArrayType::Normal: r = MLTAG_SIZE_NORMAL; break;
       case ArrayType::Static: r = MLTAG_SIZE_STATIC; break;
       case ArrayType::Star: r = MLTAG_SIZE_STAR; break;
+#else
+      case ArraySizeModifier::Normal: r = MLTAG_SIZE_NORMAL; break;
+      case ArraySizeModifier::Static: r = MLTAG_SIZE_STATIC; break;
+      case ArraySizeModifier::Star: r = MLTAG_SIZE_STAR; break;
+#endif
       default:
-        if (verbose_exn) { node->dump(); std::cout << "unknown array size modifier: " << node->getSizeModifier() << std::endl; }
+        if (verbose_exn) { node->dump(); std::cout << "unknown array size modifier: " << static_cast<int>(node->getSizeModifier()) << std::endl; }
         caml_failwith("mlClangAST: unknown array size modifier");
       }
       Store_field(ret, 2, Val_int(r));
@@ -4447,12 +4507,19 @@ CAMLprim value MLTreeBuilderVisitor::TranslateRecordDecl(const RecordDecl * org)
       Store_field(ret, 1, TranslateNamedDecl(x));
       int kind;
       switch (x->getTagKind()) {
+#if CLANG_VERSION_MAJOR < 18
         GENERATE_CASE(kind, TTK_Struct);
         GENERATE_CASE(kind, TTK_Union);
         GENERATE_CASE(kind, TTK_Class);
         GENERATE_CASE(kind, TTK_Interface);
+#else
+        GENERATE_CASE_PREFIX(kind, TagTypeKind::, TTK_, Struct);
+        GENERATE_CASE_PREFIX(kind, TagTypeKind::, TTK_, Union);
+        GENERATE_CASE_PREFIX(kind, TagTypeKind::, TTK_, Class);
+        GENERATE_CASE_PREFIX(kind, TagTypeKind::, TTK_, Interface);
+#endif
       default:
-        if (verbose_exn) { x->dump(); std::cout << "unknown record kind: " << x->getTagKind() << DEBUG_SOURCE_RANGE(org) << std::endl; }
+        if (verbose_exn) { x->dump(); std::cout << "unknown record kind: " << static_cast<int>(x->getTagKind()) << DEBUG_SOURCE_RANGE(org) << std::endl; }
         caml_failwith("mlClangAST: unknown record kind");
       }
       Store_field(ret, 2, Val_int(kind));
@@ -4876,9 +4943,13 @@ CAMLprim value getSources(SourceManager& src)
   CAMLlocal2(head,tmp);
   head = Val_unit;
   for (auto f = src.fileinfo_begin(); f != src.fileinfo_end(); f++) {
-    const FileEntry& e = *f->first;
     tmp = caml_alloc_tuple(2);
+#if CLANG_VERSION_MAJOR < 18
+    const FileEntry& e = *f->first;
     Store_field(tmp, 0, caml_copy_string(e.getName().str().c_str()));
+#else
+    Store_field(tmp, 0, caml_copy_string(f->first.getName().str().c_str()));
+#endif
     Store_field(tmp, 1, head);
     head = tmp;
   }
@@ -4947,10 +5018,14 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   ci.createSourceManager(ci.getFileManager());
 #if CLANG_VERSION_MAJOR < 10
   const FileEntry *pFile = ci.getFileManager().getFile(String_val(name));
-#else
+#elif CLANG_VERSION_MAJOR < 18
   auto x = ci.getFileManager().getFile(String_val(name));
   if (!x) caml_failwith("mlClangAST: cannot get FileEntry");
   const FileEntry *pFile = x.get();
+#else
+  auto x = ci.getFileManager().getFileRef(String_val(name));
+  if (!x) caml_failwith("mlClangAST: cannot get FileEntry");
+  const FileEntryRef pFile = x.get();
 #endif
   if (!pFile) caml_failwith("mlClangAST: cannot get FileEntry");
   SourceManager& src = ci.getSourceManager();
