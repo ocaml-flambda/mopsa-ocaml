@@ -182,7 +182,8 @@ let character_kind_name = function
   | Char_UTF8 -> "UTF8"
   | Char_UTF16 -> "UTF16"
   | Char_UTF32 -> "UTF32"
-                    
+  | Char_Unevaluated -> "Unevaluated"
+
 let ident_type_name = function
   | Ident_Func -> "func"
   | Ident_Function -> "function"

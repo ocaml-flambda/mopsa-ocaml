@@ -535,8 +535,15 @@ and record_unify gray target r1 r2 =
     then invalid_arg (Printf.sprintf "record_unify: incompatible record names %s and %s" r1.record_org_name r2.record_org_name);
     if r1.record_kind <> r2.record_kind;
     then invalid_arg "record_unify: incompatible record kinds";
-    (match r1.record_defined, r2.record_defined with
+    (match r1.record_defined && r1.record_sizeof <> Z.zero,
+           r2.record_defined && r2.record_sizeof <> Z.zero with
      | true, false ->
+        for i=0 to Array.length r2.record_fields-1 do
+          let f1, f2 = r1.record_fields.(i), r2.record_fields.(i) in
+          if f1.field_org_name <> f2.field_org_name ||
+               not (type_qual_unifiable target f1.field_type f2.field_type)
+          then invalid_arg "record_unify: incompatible record layout"
+        done;
         r2.record_uid <- r1.record_uid;
         r2.record_unique_name <- r1.record_unique_name;
         r2.record_defined <- true;
@@ -545,6 +552,12 @@ and record_unify gray target r1 r2 =
         r2.record_fields <- r1.record_fields;
         r2.record_range <- r1.record_range
      | false, true ->
+        for i=0 to Array.length r1.record_fields-1 do
+          let f1, f2 = r1.record_fields.(i), r2.record_fields.(i) in
+          if f1.field_org_name <> f2.field_org_name ||
+               not (type_qual_unifiable target f1.field_type f2.field_type)
+          then invalid_arg "record_unify: incompatible record layout"
+        done;
         r1.record_uid <- r2.record_uid;
         r1.record_unique_name <- r2.record_unique_name;
         r1.record_defined <- true;

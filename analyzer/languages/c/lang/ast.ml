@@ -273,6 +273,7 @@ type c_character_kind =
   | C_char_utf8
   | C_char_utf16
   | C_char_utf32
+  | C_char_unevaluated
 
 type constant +=
   | C_c_character of Z.t * c_character_kind

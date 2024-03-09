@@ -695,7 +695,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
   | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
   | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
   | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
-
+  | Clang_AST.Char_Unevaluated -> Ast.C_char_unevaluated
 
 (** {2 Variables} *)
 (** ============= *)

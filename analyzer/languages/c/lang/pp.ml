@@ -80,6 +80,7 @@ let pp_character_kind fmt = function
   | C_char_utf8 -> pp_print_string fmt "u8"
   | C_char_utf16 -> pp_print_string fmt "u"
   | C_char_utf32 -> pp_print_string fmt "U"
+  | C_char_unevaluated -> ()
 
 
 let () =
