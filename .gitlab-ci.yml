@@ -271,7 +271,7 @@ test-interactive:
 publish_docker:
   stage: publish
   rules:
-    - if: $UPDATE_DOCKER == "true"
+    - if: $UPDATE_DOCKER == "true" && "$CI_COMMIT_BRANCH" == "master"'
       when: manual
   before_script:
     - echo "$DOCKERIO_PASSWD" | docker login -u $DOCKERIO_USER --password-stdin docker.io
@@ -279,5 +279,3 @@ publish_docker:
     - cd docker/analyzer
     - docker build --pull -t mopsa/mopsa-analyzer:master .
     - docker push mopsa/mopsa-analyzer:master
-  only:
-    - master
