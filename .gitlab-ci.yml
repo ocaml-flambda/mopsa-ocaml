@@ -7,6 +7,7 @@ variables:
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
   RUN_BENCHMARKS: "false"
+  UPDATE_DOCKER: "false"
   DISABLE_MOPSA_DIFF : "false"
 
 image: mopsa/mopsa-build:latest
@@ -16,6 +17,7 @@ stages:
 - test
 - benchmarks
 - downstream_benchmarks
+- publish
 
 build_job:
   stage: build
@@ -260,3 +262,22 @@ test-interactive:
     - echo "load script interactive.script" | ../../../bin/mopsa-c -silent -engine=interactive interactive.c | tee out
     - head -n 52 out | tail -n 48 > out.out
     - diff out.out interactive.out
+
+
+#####################
+# Push to dockerhub #
+#####################
+
+publish_docker:
+  stage: publish
+  rules:
+    - if: $UPDATE_DOCKER == "true"
+      when: manual
+  before_script:
+    - echo "$DOCKERIO_PASSWD" | docker login -u $DOCKERIO_USER --password-stdin docker.io
+  script:
+    - cd docker/analyzer
+    - docker build --pull -t mopsa/mopsa-analyzer:master .
+    - docker push mopsa/mopsa-analyzer:master
+  only:
+    - master
