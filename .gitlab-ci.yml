@@ -271,7 +271,7 @@ test-interactive:
 publish_docker:
   stage: publish
   rules:
-    - if: $UPDATE_DOCKER == "true" && "$CI_COMMIT_BRANCH" == "master"
+    - if: $UPDATE_DOCKER == "true"
       when: manual
   before_script:
     - echo "$DOCKERIO_PASSWD" | docker login -u $DOCKERIO_USER --password-stdin docker.io
