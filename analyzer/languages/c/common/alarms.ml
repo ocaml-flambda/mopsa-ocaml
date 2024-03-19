@@ -881,7 +881,7 @@ let safe_c_float_overflow_check range man flow =
 (** **************** *)
 
 
-type check      += CHK_C_UNREACHABLE_MEMORY 
+type check      += CHK_C_UNREACHABLE_MEMORY
 type alarm_kind += A_c_unreachable_memory of addr
 
 let () =
@@ -912,7 +912,49 @@ let () =
 
 let raise_c_unreachable_memory addr range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_unreachable_memory addr) cs range in 
+  let alarm = mk_alarm (A_c_unreachable_memory addr) cs range in
   Flow.raise_alarm alarm ~bottom:false man.lattice flow
 
+(** {2 Invalid array size} *)
+(** ********************** *)
 
+type check      += CHK_C_NEGATIVE_ARRAY_SIZE
+type alarm_kind += A_c_negative_array_size of expr
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_C_NEGATIVE_ARRAY_SIZE -> fprintf fmt "Negative array size"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm {
+    check = (fun next -> function
+        | A_c_negative_array_size _ -> CHK_C_NEGATIVE_ARRAY_SIZE
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_negative_array_size e1, A_c_negative_array_size e2 ->
+          compare_expr e1 e2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_negative_array_size e ->
+          fprintf fmt "Array size '%a' may be negative" (Debug.bold pp_expr) e
+        | a -> next fmt a
+      );
+    join = (fun next -> next);
+  }
+
+let raise_c_negative_array_size_alarm ?(bottom=true) e range man flow =
+  let cs = Flow.get_callstack flow in
+  let e' = get_orig_expr e in
+  let alarm = mk_alarm (A_c_negative_array_size e') cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let safe_c_negative_array_size_check range man flow =
+  Flow.add_safe_check CHK_C_NEGATIVE_ARRAY_SIZE range flow
+
+let unreachable_c_negative_array_size_check range man flow =
+  Flow.add_unreachable_check CHK_C_NEGATIVE_ARRAY_SIZE range flow
