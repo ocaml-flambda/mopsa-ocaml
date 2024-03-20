@@ -23,49 +23,13 @@
 
 open Core.All
 open Mopsa_utils
+open Location
 open Callstack
 open Breakpoint
 open Toplevel
-
-type action =
-  | Exec of stmt * route
-  | Eval of expr * route * semantic
-
-let action_range = function
-  | Exec(stmt,_)   -> stmt.srange
-  | Eval(expr,_,_) -> expr.erange
-
-let action_vars = function
-  | Exec(stmt,_)   -> stmt_vars stmt
-  | Eval(expr,_,_) -> expr_vars expr
-
-let action_line_opt action =
-  let range = action_range action in
-  if not (Location.is_orig_range range) then
-    None
-  else
-    let file = Location.get_range_file range in
-    let line = Location.get_range_line range in
-    Some(file, line)
-
-(** Get the variables appearing in the line of an action *)
-let action_line_vars action =
-  match action_line_opt action with
-  | None -> []
-  | Some(_, line) ->
-    let visit_expr acc e =
-      if not (Location.is_orig_range e.erange) then VisitParts acc
-      else
-        let line' = Location.get_range_line e.erange in
-        if line = line' then Keep (acc@expr_vars e) else VisitParts acc
-    in
-    let visit_stmt acc s = VisitParts acc in
-    match action with
-    | Exec (stmt, _) ->
-      fold_stmt visit_expr visit_stmt [] stmt
-
-    | Eval (expr, _, _) ->
-      fold_expr visit_expr visit_stmt [] expr
+open Action
+open Envdb
+open Trace
 
 type command =
   | Continue
@@ -74,51 +38,85 @@ type command =
   | Finish
   | NextI
   | StepI
+  | Backward
 
-module FileMap = MapExt.StringMap
-module LineMap = MapExt.IntMap
-module CallstackMap = MapExt.Make
-    (struct
-      type t = callstack
-      let compare = compare_callstack
-    end)
+type state = {
+  mutable depth: int;
+  (** Current depth of the interpretation tree *)
 
-type 'a envdb = (action * 'a CallstackMap.t) LineMap.t FileMap.t
+  mutable command: command;
+  (** Last entered command *)
 
-let empty_envdb = FileMap.empty
+  mutable command_depth: int;
+  (** Depth of the interpretation tree when the command was issued *)
 
-let add_envdb action ctx (env:'a) man (db:'a envdb) =
-  let range = action_range action in
-  let file = Location.get_range_file range |> Params.Paths.absolute_path in
-  let line = Location.get_range_line range in
-  let cs = find_ctx callstack_ctx_key ctx in
-  match FileMap.find_opt file db with
-  | None ->
-    FileMap.add file (LineMap.singleton line (action, CallstackMap.singleton cs env)) db
-  | Some lmap ->
-    match LineMap.find_opt line lmap with
-    | None ->
-      FileMap.add file (LineMap.add line (action, CallstackMap.singleton cs env) lmap) db
-    | Some (action', cmap) ->
-      match CallstackMap.find_opt cs cmap with
-      | None ->
-        FileMap.add file (LineMap.add line (action, CallstackMap.add cs env cmap) lmap) db
-      | Some env' ->
-        let env'' = man.lattice.join ctx env env' in
-        FileMap.add file (LineMap.add line (action, CallstackMap.add cs env'' cmap) lmap) db
+  mutable command_callstack : callstack;
+  (** Callstack when the command was issued *)
 
-let find_envdb file line (db: 'a envdb) =
-  FileMap.find file db |>
-  LineMap.find line
+  mutable callstack : callstack;
+  (** Current call-stack *)
 
-let find_envdb_opt file line db =
-  try Some(find_envdb file line db)
-  with Not_found -> None
+  mutable loc : range option;
+  (** Last analyzed line of code *)
+
+  mutable locstack : range option list;
+  (** Stack of lines of codes *)
+
+  mutable trace: trace;
+  (** Analysis trace *)
+
+  mutable call_preamble : bool;
+  (** Flag set when calling a function and reset when reaching its first loc *)
+
+  mutable alarms : AlarmSet.t;
+  (** Set of discovered alarms *)
+}
+
+(* Initialize a state *)
+let init_state s =
+  s.command <- StepI;
+  s.depth <- 0;
+  s.command_depth <- 0;
+  s.command_callstack <- empty_callstack;
+  s.callstack <- empty_callstack;
+  s.loc <- None;
+  s.locstack <- [];
+  s.trace <- empty_trace;
+  s.call_preamble <- false;
+  s.alarms <- AlarmSet.empty
+
+(* Copy a state *)
+let copy_state s =
+  { command = s.command;
+    depth = s.depth;
+    command_depth = s.command_depth;
+    command_callstack = s.command_callstack;
+    callstack = s.callstack;
+    loc = s.loc;
+    locstack = s.locstack;
+    trace = s.trace;
+    call_preamble = s.call_preamble;
+    alarms = s.alarms; }
+
+(** Global state *)
+let state = {
+  command = StepI;
+  depth = 0;
+  command_depth = 0;
+  command_callstack = empty_callstack;
+  callstack = empty_callstack;
+  loc = None;
+  locstack = [];
+  trace = empty_trace;
+  call_preamble = false;
+  alarms = AlarmSet.empty;
+}
 
 module type INTERFACE = functor(Toplevel : TOPLEVEL) ->
 sig
   val init : unit -> unit
   val reach : action -> (Toplevel.t, Toplevel.t) man -> Toplevel.t flow -> unit
+  val alarm : alarm list -> action -> (Toplevel.t, Toplevel.t) man -> Toplevel.t flow -> unit
   val read_command : action -> Toplevel.t envdb -> (Toplevel.t, Toplevel.t) man -> Toplevel.t flow -> command
   val finish : (Toplevel.t, Toplevel.t) man -> Toplevel.t flow -> unit
   val error : exn -> unit

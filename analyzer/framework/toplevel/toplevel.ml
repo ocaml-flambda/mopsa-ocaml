@@ -66,8 +66,6 @@ sig
 
   val init : program -> (t, t) man -> t flow
 
-  exception SysBreak of t flow
-
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
   val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
@@ -81,6 +79,13 @@ sig
   val print_state : ?route:route -> printer -> t -> unit
 
   val print_expr  : ?route:route -> (t,t) man -> t flow -> printer -> expr -> unit
+
+  (***************)
+  (** Exceptions *)
+  (***************)
+
+  exception SysBreak of t flow
+  exception GoBackward 
 
 end
 
@@ -196,6 +201,7 @@ struct
   let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
 
   exception SysBreak of Domain.t flow
+  exception GoBackward
 
   let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     let flow =
@@ -273,7 +279,7 @@ struct
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
         (Printexc.get_raw_backtrace())
 
-    | e when (match e with Exit | Exceptions.PanicAtFrame _ | SysBreak _ -> false | _ -> true) ->
+    | e when (match e with Exit | Exceptions.PanicAtFrame _ | SysBreak _ | GoBackward -> false | _ -> true) ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())

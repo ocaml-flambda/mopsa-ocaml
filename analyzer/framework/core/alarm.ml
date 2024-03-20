@@ -563,6 +563,19 @@ let fold2zo_report f1 f2 f r1 r2 init =
     )
     r1.report_diagnostics r2.report_diagnostics init
 
+let exists2zo_report f1 f2 f r1 r2 =
+  RangeCallStackMap.exists2zo
+    (fun range checks1 -> CheckMap.exists (fun check -> f1) checks1)
+    (fun range checks2 -> CheckMap.exists (fun check -> f2) checks2)
+    (fun range checks1 checks2 ->
+       CheckMap.exists2zo
+         (fun check diag1 -> f1 diag1)
+         (fun check diag2 -> f2 diag2)
+         (fun check diag1 diag2 -> f diag1 diag2)
+         checks1 checks2
+    )
+    r1.report_diagnostics r2.report_diagnostics
+
 let fold_report f r init =
   RangeCallStackMap.fold
     (fun range checks acc -> CheckMap.fold (fun check -> f) checks acc)
@@ -657,6 +670,22 @@ let filter_report f report =
       report.report_diagnostics report.report_diagnostics
   in
   if diags = report.report_diagnostics then report else { report with report_diagnostics = diags }
+
+let alarms_to_report alarms =
+  List.fold_left (fun acc alarm ->
+      join_report acc (singleton_report alarm)
+    ) empty_report alarms
+
+let report_to_alarms report =
+  RangeCallStackMap.fold
+    (fun range checks acc ->
+       CheckMap.fold
+         (fun check diag acc ->
+            match diag.diag_kind with
+            | Error | Warning    -> AlarmSet.elements diag.diag_alarms @ acc
+            | Safe | Unreachable -> acc
+         ) checks acc
+    ) report.report_diagnostics []
 
 let add_assumption a report =
   let assumptions = AssumptionSet.add a report.report_assumptions in

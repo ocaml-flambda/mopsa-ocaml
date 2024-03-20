@@ -1,3 +1,24 @@
+(****************************************************************************)
+(*                                                                          *)
+(* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
+(*                                                                          *)
+(* Copyright (C) 2017-2023 The MOPSA Project.                               *)
+(*                                                                          *)
+(* This program is free software: you can redistribute it and/or modify     *)
+(* it under the terms of the GNU Lesser General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or     *)
+(* (at your option) any later version.                                      *)
+(*                                                                          *)
+(* This program is distributed in the hope that it will be useful,          *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
+(* GNU Lesser General Public License for more details.                      *)
+(*                                                                          *)
+(* You should have received a copy of the GNU Lesser General Public License *)
+(* along with this program.  If not, see <http://www.gnu.org/licenses/>.    *)
+(*                                                                          *)
+(****************************************************************************)
+
 open Core.All
 open Mopsa_utils
 open Location
@@ -6,6 +27,9 @@ open Interface
 open Format
 open Breakpoint
 open Toplevel
+open Action
+open Envdb
+open Trace
 
 module Make(Toplevel : TOPLEVEL) =
 struct
@@ -13,7 +37,7 @@ struct
   let opt_show_var_scope = ref true 
 
   (** Commands *)
-  type terminal_command =
+  type terminal_command_kind =
     | Break of string
     (** Add a breakpoint *)
 
@@ -46,6 +70,9 @@ struct
     (** Print the current abstract environment, associated to token T_cur,
         eventually projected on a list of domains *)
 
+    | State
+    (** Print the current abstract state *)
+
     | Where
     (** Show current program point *)
 
@@ -67,16 +94,16 @@ struct
     | BackTrace
     (** Print the callstack *)
 
-    | Save of string
-    (** Save the environment in a file *)
-
     | LoadScript of string
+
+    | Trace
+
+    | Backward
 
 
   (** Information sub-commands *)
   and info_command =
     | Alarms
-    | Checks
     | Breakpoints
     | Tokens
     | Variables
@@ -92,9 +119,20 @@ struct
     | Script
     | ShowVarScope
 
+  type terminal_command_redirection =
+    | Pipe of string
+    | File of string
+
+  (** Commands *)
+  type terminal_command = {
+    (** Kind of the command *)
+    kind: terminal_command_kind;
+    (** Optional flag *)
+    redirection: terminal_command_redirection option;
+  }
 
   (** Print a command *)
-  let pp_terminal_command fmt = function
+  let pp_terminal_command_kind fmt = function
     | Break loc   -> Format.fprintf fmt "break %s" loc
     | MopsaBackTrace -> Format.fprintf fmt "mopsa_bt"
     | Continue    -> Format.pp_print_string fmt "continue"
@@ -129,9 +167,9 @@ struct
                                ~pp_sep:(fun fmt () -> pp_print_string fmt ",")
                                pp_print_string
                             ) domains
+    | State            -> Format.pp_print_string fmt "state"
     | Where            -> Format.pp_print_string fmt "where"
     | Info Alarms      -> Format.pp_print_string fmt "info alarms"
-    | Info Checks      -> Format.pp_print_string fmt "info checks"
     | Info Breakpoints -> Format.pp_print_string fmt "info breakpoints"
     | Info Tokens      -> Format.pp_print_string fmt "info tokens"
     | Info Variables   -> Format.pp_print_string fmt "info variables"
@@ -146,8 +184,17 @@ struct
     | Unset Script     -> Format.pp_print_string fmt "unset script"
     | Unset ShowVarScope -> Format.pp_print_string fmt "unset showvarscope"
     | BackTrace        -> Format.pp_print_string fmt "backtrace"
-    | Save file        -> Format.fprintf fmt "save %s" file
+    | Trace            -> Format.pp_print_string fmt "trace"
+    | Backward         -> Format.pp_print_string fmt "backward"
 
+  let pp_terminal_command_redirection fmt = function
+    | Pipe shell -> Format.fprintf fmt " | %s" shell
+    | File file  -> Format.fprintf fmt " > %s" file
+
+  let pp_terminal_command fmt c =
+    Format.fprintf fmt "%a%a"
+      pp_terminal_command_kind c.kind
+      (Format.pp_print_option pp_terminal_command_redirection) c.redirection
 
   (** Print help message *)
   let print_usage () =
@@ -155,38 +202,41 @@ struct
     printf "  b[reak] <[file:]line>     add a breakpoint at a line@.";
     printf "  b[reak] <function>        add a breakpoint at a function@.";
     printf "  b[reak] @name             add a named breakpoint (will break when the analysis executes an S_break name)@.";
+    printf "  b[reak] #a[larm]          break at the next alarm (and go back at the statement generating the alarm@.";
     printf "  c[ontinue]                run until next breakpoint@.";
     printf "  n[ext]                    stop at next statement and skip function calls.@.";
     printf "  n[ext]i                   stop at next statement and skip nodes in the interpretation sub-tree@.";
     printf "  s[tep]                    step into function calls@.";
     printf "  s[tep]i                   step into interpretation sub-tree@.";
     printf "  f[inish]                  finish current function@.";
+    printf "  b[ack]w[ard]                go backward to the calling site@.";
+    printf "  e[nable] h[hook] <h>      enable a hook@.";
+    printf "  d[isable] h[hook] <h>     disable a hook@.";
+    printf "  s[et] d[ebug] <d>         set debug channels@.";
+    printf "  u[nset] d[ebug]           unset debug channels@.";
+    printf "  s[et] script <file>       store commands into a file@.";
+    printf "                            To be used in combination with load script <file>@.";
+    printf "  u[nset] script            do not store commands in file anymore@.";
+    printf "  load script <file>        reads script command from <file>@.";
+    printf "  help                      print this message@.";
+    printf "The commands below support shell commands (`env | grep foo`, `mopsa_bt | tac`, ...):@.";
     printf "  p[rint]                   print the abstract state@.";
     printf "  p[rint] <vars>            print the value of selected variables@.";
     printf "                            For example, `p x,y:f,z:*` prints x in the current scope, y in the scope of f, and z in all scopes@.";
     printf "  p[rint] <vars> #<f>:<l>   print the value of selected variables at the given program location@.";
     printf "  e[nv]                     print the current abstract environment@.";
     printf "  e[nv] <domain>,...        print the current abstract environment of selected domains@.";
+    printf "  state                   print the full abstract state (map from flow token to environment)@.";
     printf "  b[ack]t[race]             print the current call stack@.";
     printf "  t[race]                   print the analysis trace@.";
     printf "  w[here]                   show current program point@.";
-    printf "  w[here]i                  show current interpreter transfer function@.";
     printf "  i[info] a[larms]          print the list of detected alarms@.";
     printf "  i[info] c[hecks]          print the list of performed checks@.";
     printf "  i[info] b[reakpoints]     print the list of registered breakpoints@.";
     printf "  i[info] t[okens]          print the list of flow tokens@.";
     printf "  i[info] v[ariables]       print the list of variables@.";
     printf "  i[info] c[on]t[e]x[t]     print the flow-insensitive context@.";
-    printf "  e[nable] h[hook] <h>      enable a hook@.";
-    printf "  d[isable] h[hook] <h>     disable a hook@.";
-    printf "  s[et] d[ebug] <d>         set debug channels@.";
-    printf "  u[nset] d[ebug]           unset debug channels@.";
-    printf "  s[et] script <file>       store commands into a file@.To be used in combination with load script <file>@.";
-    printf "  u[nset] script            do not store commands in file anymore@.";
-    printf "  load script <file>        reads script command from <file>@.";
-    printf "  save <file>               save the abstract state in a file@.";
     printf "  mopsa_bt                  shows the current backtrace of the analyzer@.";
-    printf "  help                      print this message@.";
     ()
 
 
@@ -196,10 +246,8 @@ struct
       Debug.(color_str teal) "mopsa"
       Debug.(color_str green) ">>"
 
-
   (** Context of LineEdit library *)
   let linedit_ctx = LineEdit.create_ctx ()
-
 
   (** Reference to the last commands read from the prompt *)
   let last_prompt_commands = ref []
@@ -240,11 +288,9 @@ struct
         List.iter (fun c -> Queue.add c commands_buffer) parts;
         read_terminal_command_string ()
 
-  (** Read the next command *)
-  let rec read_terminal_command logger cs =
-    let s = read_terminal_command_string () in
-    logger s;
-    (* Get command's parts *)
+  exception ReadNewCommand
+
+  let parse_command_kind s flow =
     let parts = String.split_on_char ' ' s |>
                 List.map String.trim |>
                 List.filter (function "" -> false | _ -> true)
@@ -260,6 +306,7 @@ struct
     | ["where"    | "w"]   -> Where
     | ["backtrace"|"bt"]   -> BackTrace
     | ["break"    | "b"; l]-> Break l
+    | ["backward" | "back" | "bw"] -> Backward
 
     | ("env"      | "e") :: domains ->
       let domains =
@@ -273,14 +320,15 @@ struct
       in
       Env (SetExt.StringSet.elements domains)
 
+    | ["state" ] -> State 
+
     | ["help" | "h"]   ->
       print_usage ();
-      read_terminal_command logger cs
+      raise ReadNewCommand
 
     | ["info" |"i"; "tokens"      | "t"] | ["it"] -> Info Tokens
     | ["info" |"i"; "breakpoints" | "b"] | ["ib"] -> Info Breakpoints
     | ["info" |"i"; "alarms"      | "a"] | ["ia"] -> Info Alarms
-    | ["info" |"i"; "checks"      | "c"] | ["ic"] -> Info Checks
     | ["info" |"i"; "variables"   | "vars" | "var"  | "v"] | ["iv"] -> Info Variables
     | ["info" |"i"; "context"     | "ctx"] | ["ictx"] -> Info Context
 
@@ -295,9 +343,8 @@ struct
 
     | ["load"; "script"; s] | ["ls"; s] -> LoadScript s
 
-    | ["save"; file] -> Save file
-
     | ("print"    | "p") :: vars ->
+      let cs = Flow.get_callstack flow in
       let vars =
         List.fold_left
           (fun acc s ->
@@ -338,140 +385,40 @@ struct
       in
       Print(vars, Some(file, line))
 
+    | ["trace"|"t"]   -> Trace
+
     | _ ->
       printf "Unknown command %s@." s;
       print_usage ();
-      read_terminal_command logger cs
+      raise ReadNewCommand
+
+  let parse_command_redirection s =
+    if Str.(string_match (regexp {|\([^|]+\)|\(.*\)|}) s 0) then
+      let cmd = Str.matched_group 1 s |> String.trim in
+      let redirect = Pipe (Str.matched_group 2 s |> String.trim) in
+      cmd, Some redirect
+    else
+    if Str.(string_match (regexp {|\([^>]+\)>\([^>]+\)|}) s 0) then
+      let cmd = Str.matched_group 1 s |> String.trim in
+      let redirect = File (Str.matched_group 2 s |> String.trim) in
+      cmd, Some redirect
+    else
+      s, None
+
+  (** Read the next command *)
+  let rec read_terminal_command logger flow =
+    let s = read_terminal_command_string () in
+    logger s;
+    let s, redirection = parse_command_redirection s in
+    try
+      let kind = parse_command_kind s flow in
+      { kind; redirection }
+    with ReadNewCommand ->
+      read_terminal_command logger flow
 
 
   (** {2 Pretty printers} *)
   (** ******************* *)
-
-  (* Get the number of digits of an integer *)
-  let nb_digits n =
-    int_of_float (log10 (float_of_int n)) + 1
-
-  (* Right align an integer *)
-  let pp_right_align_int width fmt i =
-    let digits = nb_digits i in
-    fprintf fmt "%s%d"
-      (String.init (width - digits) (fun _ -> ' '))
-      i
-
-  let pp_right_align width pp fmt x =
-    let s = asprintf "%a" pp x in
-    let len = String.length s in
-    fprintf fmt "%s%s"
-      (String.init (width - len) (fun _ -> ' '))
-      s
-
-  (* Format has issues when identing in presence of unicode characters. So we
-       do it manually. *)
-  let fix_string_indentation indent s =
-    let lines = String.split_on_char '\n' s in
-    match lines with
-    | [] -> ""
-    | [_] -> s
-    | hd::tl ->
-      let lines' = hd :: List.map (fun l -> (String.make indent ' ') ^ "    " ^ l) tl in
-      String.concat "\n" lines'
-
-  let truncate_string s =
-    let lines = String.split_on_char '\n' s in
-    match lines with
-    | [] | [_] -> s
-    | hd::tl -> hd ^ " ..."
-
-  let pp_exec ~truncate ~indent fmt stmt =
-    let s = asprintf "@[<v>%a@]" pp_stmt stmt in
-    fprintf fmt "%a %a %s %a"
-      Debug.(color 45 pp_print_string) "𝕊"
-      Debug.(color 45 pp_print_string) "⟦"
-      (if truncate then truncate_string s else fix_string_indentation indent s)
-      Debug.(color 45 pp_print_string) "⟧"
-
-  let pp_eval ~truncate ~indent fmt exp =
-    let s = asprintf "@[<v>%a@]" pp_expr exp in
-    fprintf fmt "%a %a %s : %a %a"
-      Debug.(color 209 pp_print_string) "𝔼"
-      Debug.(color 209 pp_print_string) "⟦"
-      (if truncate then truncate_string s else fix_string_indentation indent s)
-      pp_typ exp.etyp
-      Debug.(color 209 pp_print_string) "⟧"
-
-  let pp_action ?(truncate=false) ?(indent=0) fmt action =
-    match action with
-    | Exec(stmt,_) -> pp_exec ~truncate ~indent fmt stmt
-    | Eval(exp,_,_) -> pp_eval ~truncate ~indent fmt exp
-
-  let pp_trace fmt trace =
-    let remove_new_lines s =
-      Bytes.of_string s |>
-      Bytes.map (function '\n' -> ' ' | x -> x) |>
-      Bytes.to_string
-    in
-    let trace',n = List.fold_left (fun (acc,i) a -> (i,a)::acc,(i+1)) ([],0) trace in
-    let max_digits = nb_digits n in
-    fprintf fmt "@[<v>%a@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-         (fun fmt (i,a) ->
-            let s = asprintf "@[<h>%a%a  @[%a@] at %a@]"
-                (fun fmt () -> if i = 0 then () else fprintf fmt "@,") ()
-                (pp_right_align (max_digits+1) pp_print_string) ("#" ^ (string_of_int (n-i-1)))
-                (pp_action ~truncate:true ~indent:0) a
-                pp_relative_range (action_range a) in
-            let s' = remove_new_lines s in
-            pp_print_string fmt s'
-         )
-      ) trace'
-
-  (** Print source code of an action *)
-  let pp_action_source_code fmt action =
-    (* Entry point *)
-    let rec doit () =
-      let range = action_range action in
-      if not (is_orig_range (untag_range range)) then () else
-        let start = get_range_start range in
-        let file = start.pos_file in
-        let line = start.pos_line in
-        if not (Sys.file_exists file) then ()
-        else
-          let ch = open_in file in
-          let before,at,after = read_lines_around ch line in
-          let max_line = line + List.length after in
-          let max_digits = nb_digits max_line in
-          List.iter (pp_surrounding_line max_digits std_formatter) before;
-          pp_target_line max_digits std_formatter at;
-          List.iter (pp_surrounding_line max_digits std_formatter) after;
-          close_in ch
-    (* Read lines before and after a target line *)
-    and read_lines_around ch line =
-      let rec iter before at after i =
-        try
-          let l = input_line ch in
-          if i < line - 5 then iter before at after (i+1) else
-          if i > line + 5 then (before,at,after)
-          else
-          if i < line then iter ((i,l)::before) at after (i+1) else
-          if i = line then iter before (i,l) after (i+1)
-          else iter before at ((i,l)::after) (i+1)
-        with End_of_file -> (before,at,after)
-      in
-      let before,at,after = iter [] (0,"") [] 1 in
-      List.rev before, at, List.rev after
-    (* Print a surrounding line *)
-    and pp_surrounding_line max_line fmt (i,l) =
-      fprintf fmt "   %a  %s@."
-        (pp_right_align_int max_line) i
-        l
-    (* Print the target line *)
-    and pp_target_line max_line fmt (i,l) =
-      fprintf fmt " %a %a  %a@."
-        Debug.(color 118 pp_print_string) "►"
-        Debug.(color 118 (pp_right_align_int max_line)) i
-        Debug.(color 118 pp_print_string) l
-    in
-    doit ()
 
   module Addr =
   struct
@@ -495,9 +442,9 @@ struct
   let dummy_range = mk_fresh_range ()
 
   (** Print value of variables *)
-  let pp_vars action names man flow =
+  let pp_vars fmt action names man flow =
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
-      printf "⊥@."
+      fprintf fmt "⊥@."
     else
       let () = Ast.Var.print_uniq_with_uid := false in 
       let names =
@@ -605,13 +552,13 @@ struct
                  found,aname::not_found
             ) (found,not_found) afound
         in
-        if found then printf "%a@." pflush printer;
+        if found then fprintf fmt "%a@." pflush printer;
         not_found
       in
       ( match not_found@not_found' with
         | [] -> ()
         | l  ->
-          printf "Variable%a %a not found@."
+          fprintf fmt "Variable%a %a not found@."
             Debug.plurial_list not_found
             (pp_print_list
                ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
@@ -625,16 +572,22 @@ struct
       (Debug.bold pp_print_string) "help"
 
   let reach action man flow =
-    let range = action_range action in
-    if is_orig_range (untag_range range) then (
-      (* Print the range of the next action *)
-      printf "%a@." Debug.(color fushia pp_relative_range) (action_range action);
-      (* Print location in the source code *)
-      pp_action_source_code std_formatter action;
-      (* Print interpreter action *)
-      printf "%a@." (pp_action ~truncate:true ~indent:0) action
-    )
+    (* Print the range of the next action *)
+    printf "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+    (* Print location in the source code *)
+    pp_action_source_code std_formatter action;
+    (* Print interpreter action *)
+    printf "%a@." (pp_action ~truncate:true ~indent:0) action
 
+  let pp_alarms fmt alarms =
+    fprintf fmt "%d new alarm%a detected: @[<v>@."
+      (List.length alarms)
+      Debug.plurial_list alarms;
+    ignore(Output.Text.construct_checks_summary ~print:true (Alarm.alarms_to_report alarms) None);
+    fprintf fmt "@]@."
+
+  let alarm alarms action man flow =
+    pp_alarms Format.std_formatter alarms
 
   let logger cmd_str =
     if List.mem cmd_str ["us"; "unset script"; "unset s"] then
@@ -648,15 +601,150 @@ struct
         Format.fprintf file_fmt "%s@." cmd_str
   (* todo: remove last @. ... *)
 
+  let pp_output_command action envdb man flow fmt = function
+    | BackTrace ->
+      let cs = Flow.get_callstack flow in
+      fprintf fmt "%a@." pp_callstack cs
+
+    | MopsaBackTrace ->
+      let (in_file_descr, out_file_descr) = Unix.pipe () in
+      let in_channel = Unix.in_channel_of_descr in_file_descr in
+      let out_channel = Unix.out_channel_of_descr out_file_descr in
+      Printexc.print_raw_backtrace out_channel (Printexc.get_callstack Int.max_int);
+      let buffer = Buffer.create 100 in
+      close_out out_channel;
+      let rec loop () =
+        match input_line in_channel with
+        | l -> Buffer.add_string buffer (l ^ "\n"); loop ()
+        | exception End_of_file -> Buffer.contents buffer
+      in
+      let r = loop () in
+      close_in in_channel;
+      fprintf fmt "%s@." r
+
+    | Print(names, loc) ->
+      let ctx = Flow.get_ctx flow in
+      let env =
+        match loc with
+        | None -> Some(action, flow)
+        | Some(file, line) ->
+          match find_envdb_opt file line envdb with
+          | None -> None
+          | Some(action', envs) ->
+            fprintf fmt "%a@." (pp_action ~truncate:false ~indent:0) action';
+            let env =
+              CallstackMap.fold
+                (fun _ -> man.lattice.join ctx)
+                envs man.lattice.bottom
+            in
+            Some(action', Flow.singleton ctx T_cur env)
+      in
+      ( match env with
+        | None -> ()
+        | Some(action', flow') -> pp_vars fmt action' names man flow'
+      )
+
+    | Env [] ->
+      let env = Flow.get T_cur man.lattice flow in
+      fprintf fmt "%a@." (Print.format man.lattice.print) env
+
+    | Env domains ->
+      let env = Flow.get T_cur man.lattice flow in
+      let re =
+        List.map
+          (fun d ->
+             (* Replace wildcard shortcut '_' *)
+             let d' = Str.global_replace (Str.regexp_string "_") ".*" d in
+             (* Accept any domain name containing the given string *)
+             ".*" ^ d' ^ ".*"
+          ) domains |>
+        (* Add alternative operator between domains names *)
+        String.concat "\\|" |>
+        Str.regexp
+      in
+      let pobj = pbox man.lattice.print env in
+      let pobj' = match_print_object_keys re pobj in
+      fprintf fmt "%a@." pp_print_object pobj'
+
+    | State ->
+      fprintf fmt "%a@." (Print.format (Flow.print man.lattice.print)) flow
+
+    | Where ->
+      pp_action_source_code std_formatter action;
+      fprintf fmt "%a@." Debug.(color fushia pp_relative_range) (action_range action);
+      fprintf fmt "%a@." (pp_action ~truncate:false ~indent:0) action
+
+    | Info Tokens ->
+      let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
+      fprintf fmt "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens
+
+    | Info Alarms ->
+      let report = Flow.get_report flow in
+      ( if is_safe_report report
+        then printf "%a No alarm@." Debug.(color_str green) "✔";
+        let _ = Output.Text.construct_checks_summary ~print:true report None in
+        ()
+      )
+
+    | Info Breakpoints ->
+      fprintf fmt "%a@." Breakpoint.pp_breakpoint_set !breakpoints
+
+    | Info Variables ->
+      let vars = ask_and_reduce man.ask (Q_defined_variables None) flow in
+      fprintf fmt "@[<v>%a@]@."
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+           (fun fmt v -> Query.pp_var_with_type fmt (v,v.vtyp))
+        ) vars
+
+    | Info Context ->
+      let ctx = Flow.get_ctx flow in
+      fprintf fmt "%a@." (pp_ctx man.lattice.print) ctx
+
+    | Trace ->
+      fprintf fmt "%a@." pp_trace state.trace
+
+   | _ -> assert false
+
+  let process_output_command cmd action envdb man flow =
+    match cmd.redirection with
+    | None ->
+      pp_output_command action envdb man flow Format.std_formatter cmd.kind 
+    
+    | Some(File file) ->
+      let old_print_color = !Debug.print_color in
+      Debug.print_color := false;
+      let output = asprintf "%a" (pp_output_command action envdb man flow) cmd.kind in
+      Debug.print_color := old_print_color;
+      let ch = open_out file in
+      output_string ch output;
+      flush ch;
+      close_out ch
+    
+    | Some(Pipe shell) ->
+      let old_print_color = !Debug.print_color in
+      let output = asprintf "%a" (pp_output_command action envdb man flow) cmd.kind in
+      Debug.print_color := old_print_color;
+      let in_ch, out_ch = Unix.open_process shell in
+      output_string out_ch output;
+      flush out_ch;
+      close_out out_ch;
+      let rec iter () =
+        try
+          printf "%s@." (input_line in_ch);
+          iter ()
+        with End_of_file -> ()
+      in
+      iter ();
+      close_in in_ch
+
+
+
   let rec read_command action envdb man flow =
-    let cmd = try read_terminal_command logger (Flow.get_callstack flow)
+    let cmd =
+      try read_terminal_command logger flow
       with Exit -> exit 0
     in
-    match cmd with
-    | MopsaBackTrace ->
-      Printexc.print_raw_backtrace Stdlib.stdout (Printexc.get_callstack Int.max_int);
-      read_command action envdb man flow 
-
+    match cmd.kind with
     | Break loc ->
       let () =
         try
@@ -686,63 +774,8 @@ struct
     | Finish ->
       Finish
 
-    | BackTrace ->
-      let cs = Flow.get_callstack flow in
-      printf "%a@." pp_callstack cs;
-      read_command action envdb man flow
-
-    | Print(names, loc) ->
-      let ctx = Flow.get_ctx flow in
-      let env =
-        match loc with
-        | None -> Some(action, flow)
-        | Some(file, line) ->
-          match find_envdb_opt file line envdb with
-          | None -> None
-          | Some(action', envs) ->
-            printf "%a@." (pp_action ~truncate:false ~indent:0) action';
-            let env =
-              CallstackMap.fold
-                (fun _ -> man.lattice.join ctx)
-                envs man.lattice.bottom
-            in
-            Some(action', Flow.singleton ctx T_cur env)
-      in
-      ( match env with
-        | None -> ()
-        | Some(action', flow') -> pp_vars action' names man flow'
-      );
-      read_command action envdb man flow
-
-    | Env [] ->
-      let env = Flow.get T_cur man.lattice flow in
-      printf "%a@." (Print.format man.lattice.print) env;
-      read_command action envdb man flow
-
-    | Env domains ->
-      let env = Flow.get T_cur man.lattice flow in
-      let re =
-        List.map
-          (fun d ->
-             (* Replace wildcard shortcut '_' *)
-             let d' = Str.global_replace (Str.regexp_string "_") ".*" d in
-             (* Accept any domain name containing the given string *)
-             ".*" ^ d' ^ ".*"
-          ) domains |>
-        (* Add alternative operator between domains names *)
-        String.concat "\\|" |>
-        Str.regexp
-      in
-      let pobj = pbox man.lattice.print env in
-      let pobj' = match_print_object_keys re pobj in
-      printf "%a@." pp_print_object pobj';
-      read_command action envdb man flow
-
-    | Where ->
-      pp_action_source_code std_formatter action;
-      printf "%a@." Debug.(color fushia pp_relative_range) (action_range action);
-      printf "%a@." (pp_action ~truncate:false ~indent:0) action;
-      read_command action envdb man flow
+    | Backward ->
+      Backward
 
     | Enable (Hook hook) ->
       if not (Hook.mem_hook hook) then (
@@ -761,44 +794,6 @@ struct
       ) else (
         Hook.deactivate_hook hook man flow
       );
-      read_command action envdb man flow
-
-    | Info Tokens ->
-      let tokens = Flow.fold (fun acc tk _ -> tk::acc) [] flow in
-      printf "%a@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") pp_token) tokens;
-      read_command action envdb man flow
-
-    | Info Alarms ->
-      let report = Flow.get_report flow in
-      ( if is_safe_report report
-        then printf "%a No alarm@." Debug.(color_str green) "✔";
-        let _ = Output.Text.construct_checks_summary ~print:true report None in
-        ()
-      );
-      read_command action envdb man flow
-
-    | Info Checks ->
-      let report = Flow.get_report flow in
-      let total, safe, error, warning, checks_map = Output.Text.construct_checks_summary report None in
-      Output.Text.print_checks_summary checks_map total safe error warning None;
-      read_command action envdb man flow
-
-    | Info Breakpoints ->
-      printf "%a@." Breakpoint.pp_breakpoint_set !breakpoints;
-      read_command action envdb man flow
-
-    | Info Variables ->
-      let vars = ask_and_reduce man.ask (Q_defined_variables None) flow in
-      printf "@[<v>%a@]@."
-        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
-           (fun fmt v -> Query.pp_var_with_type fmt (v,v.vtyp))
-        ) vars
-      ;
-      read_command action envdb man flow
-
-    | Info Context ->
-      let ctx = Flow.get_ctx flow in
-      printf "%a@." (pp_ctx man.lattice.print) ctx;
       read_command action envdb man flow
 
     | Set (Debug, channel) ->
@@ -844,18 +839,49 @@ struct
       opt_show_var_scope := false;
       read_command action envdb man flow
 
-    | Save file ->
-      let ch = open_out file in
-      let file_fmt = formatter_of_out_channel ch in
-      Format.kasprintf (fun str ->
-          Format.fprintf file_fmt "%s%!" str
-        )  "%a" (format (Flow.print man.lattice.print)) flow;
-      close_out ch;
+    | BackTrace
+    | MopsaBackTrace
+    | Print _
+    | Env _
+    | State
+    | Where
+    | Info _
+    | Trace ->
+      process_output_command cmd action envdb man flow;
       read_command action envdb man flow
+
 
   let finish man flow =
     ()
 
   let error ex =
-    ()
+    printf "%a@\n%a@."
+      (Debug.color_str Debug.red) "Analysis aborted"
+      (fun fmt -> function
+         | Exceptions.Panic (msg, "") -> fprintf fmt "panic: %s@." msg
+         | Exceptions.Panic (msg, loc) -> fprintf fmt "panic raised in %s: %s@." loc msg
+
+         | Exceptions.PanicAtLocation (range, msg, "") -> fprintf fmt "panic in %a: %s@." Location.pp_range range msg
+         | Exceptions.PanicAtLocation (range, msg, loc) -> fprintf fmt "%a: panic raised in %s: %s@." Location.pp_range range loc msg
+
+         | Exceptions.PanicAtFrame (range, cs, msg, "") -> fprintf fmt "panic in %a: %s@\nTrace:@\n%a@." Location.pp_range range msg pp_callstack cs
+         | Exceptions.PanicAtFrame (range, cs, msg, loc) -> fprintf fmt "%a: panic raised in %s: %s@\nTrace:@\n%a@." Location.pp_range range loc msg pp_callstack cs
+
+         | Exceptions.SyntaxError (range, msg) -> fprintf fmt "%a: syntax error: %s@." Location.pp_range range msg
+         | Exceptions.UnnamedSyntaxError range -> fprintf fmt "%a: syntax error@." Location.pp_range range
+
+         | Exceptions.SyntaxErrorList l ->
+           fprintf fmt "Syntax errors:@\n  @[%a@]@."
+             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                (fun fmt (range, msg) -> fprintf fmt "%a: %s" Location.pp_range range msg
+                )
+             ) l
+
+         | Exceptions.UnnamedSyntaxErrorList l ->
+           fprintf fmt "Syntax errors:@\n  @[%a@]@."
+             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") Location.pp_range)
+             l
+
+         | ex -> fprintf fmt "Uncaught exception: %s@." (Printexc.to_string ex)
+      ) ex
 end

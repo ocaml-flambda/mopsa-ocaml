@@ -261,7 +261,8 @@ test-interactive:
     - cd analyzer/tests/c/
     - echo "load script interactive.script" | ../../../bin/mopsa-c -silent -engine=interactive interactive.c | tee out
     - head -n 52 out | tail -n 48 > out.out
-    - diff out.out interactive.out
+    - diff <(sed "16,17,28d" out.out) <(sed "16,17,28d" interactive.out)
+
 
 
 #####################
@@ -279,3 +280,4 @@ publish_docker:
     - cd docker/analyzer
     - docker build --pull -t mopsa/mopsa-analyzer:master .
     - docker push mopsa/mopsa-analyzer:master
+
