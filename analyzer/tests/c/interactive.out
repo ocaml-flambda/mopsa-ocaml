@@ -1,3 +1,5 @@
+[1;38;5;177m{interactive.c}[0m
+[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m signed int f(x) { ... [1;38;5;45m⟧[0m
 [1;38;5;6mmopsa[0m [1;38;5;40m>>[0m [1;38;5;177minteractive.c:3.0-7.1::init[0m
    1  #include <string.h>
    2  
@@ -8,6 +10,34 @@
    7  }
    8  
 [1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m add(x) [1;38;5;45m⟧[0m
+1 new alarm detected: 
+
+[1;38;5;9m✗[0m Check #1:
+[1m/home/raphael/tmp/mopsa-analyzer/share/mopsa/stubs/c/libc/string.c[0m: In function '[1mstrlen[0m':
+[1m/home/raphael/tmp/mopsa-analyzer/share/mopsa/stubs/c/libc/string.c:186.13-38[0m: [1;38;5;9merror[0m: [1;38;5;9mStub condition[0m
+  
+  [1m186[0m:  * requires: [1;38;5;9mvalid_string_or_fail(__s)[0m;
+                    [1;38;5;9m^^^^^^^^^^^^^^^^^^^^^^^^^[0m 
+  Non-terminating string
+  Callstack:
+  	from interactive.c:5.13-22: strlen
+  	from interactive.c:12.2-6: f
+  	from interactive.c:9.4-8: main
+
+
+[1;38;5;177m/home/raphael/tmp/mopsa-analyzer/share/mopsa/stubs/c/libc/string.c:186.13-38[0m
+   181  void *memrchr (const void *__s, int __c, size_t __n);
+   182  
+   183  
+   184  
+   185  /*$
+ [1;38;5;118m►[0m [1;38;5;118m186[0m  [1;38;5;118m * requires: valid_string_or_fail(__s);[0m
+   187   * ensures:  return in [0, size(__s) - offset(__s));
+   188   * ensures:  __s[return] == 0;
+   189   * ensures:  forall size_t j in [0, return): __s[j] != 0;
+   190   */
+   191  size_t strlen (const char *__s);
+[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m requires ((((((__s != (void *) 0) otherwise raise("NULL pointer dereference")) and ((__s != INVALID) otherwise raise("Invalid pointer dereference"))) and (alive(__s) otherwise (resource(__s) ? raise("Use after free") : raise("Dangling pointer dereference")))) and (((offset(__s) >= 0) and (bytes(__s) >= (offset(__s) + 1))) otherwise raise("Out-of-bound access"))) and (∃_i ∈ [0 .. ((bytes(__s) - offset(__s)) - 1)] : (__s[_i] == 0) otherwise raise("Non-terminating string"))); [1;38;5;45m⟧[0m
 [1;38;5;177minteractive.c:6.2-10[0m
     1  #include <string.h>
     2  
@@ -16,33 +46,3 @@
     5    size_t b = strlen(s);
  [1;38;5;118m►[0m [1;38;5;118m 6[0m  [1;38;5;118m  return b;[0m
     7  }
-    8  
-    9  int main() {
-   10    char *s = NULL;
-   11    int x = 42;
-[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m return b; [1;38;5;45m⟧[0m
- float-itv ∪ int-itv : 
-    offset⦃s:interactive.c:4.2-14⦄ : [0,0],
-    x:interactive.c:3.6-11 : [3,3] ,
- pointers : 
-    s:interactive.c:4.2-14 : {  ""  }  
- float-itv ∪ int-itv : 
-    x:interactive.c:11.2-12 : [42,42]  
- float-itv ∪ int-itv : 
-    x:interactive.c:3.6-11 : [3,3]  
- float-itv ∪ int-itv : 
-    offset⦃s:interactive.c:4.2-14⦄ : [0,0],
-    x:interactive.c:3.6-11 : [3,3],
-    x:interactive.c:11.2-12 : [42,42] ,
- pointers : 
-    s:interactive.c:4.2-14 : {  ""  },
-    s:interactive.c:10.2-16 : {  NULL  }  
- pointers : 
-    s:interactive.c:10.2-16 : {  NULL  }  
- float-itv ∪ int-itv : 
-    offset⦃s:interactive.c:4.2-14⦄ : [0,0] ,
- pointers : 
-    s:interactive.c:4.2-14 : {  ""  }  
-Raised by primitive operation at Interactive__Terminal.Make.read_command in file "analyzer/framework/engines/interactive/terminal.ml", line 657, characters 49-85
-Called from Interactive__Engine.Make.interact in file "analyzer/framework/engines/interactive/engine.ml", line 260, characters 14-78
-Called from Interactive__Engine.Make.interact_or_apply_action in file "analyzer/framework/engines/interactive/engine.ml", line 315, characters 10-30

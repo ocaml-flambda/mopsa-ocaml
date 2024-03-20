@@ -34,8 +34,9 @@ open Interface
 open Query
 module IntMap = MapExt.IntMap
 module StringMap = MapExt.StringMap
-
 open Toplevel
+open Action
+open Envdb
 
 module Make(Toplevel : TOPLEVEL) =
 struct
@@ -421,32 +422,16 @@ struct
     | _ ->
       assert false
 
-  let alarms = ref AlarmSet.empty
-
-  let get_new_alarms flow =
-    let report = Flow.get_report flow in
-    fold_report
-      (fun diag acc ->
-         match diag.diag_kind with
-         | Error | Warning ->
-           AlarmSet.union acc (AlarmSet.diff diag.diag_alarms !alarms)
-         | _ ->
-           acc
-      ) report AlarmSet.empty
-
   let reach action man flow =
-    let range = Interface.action_range action in
+    let range = action_range action in
     if is_orig_range range then (
-      let new_alarms = get_new_alarms flow in
-      alarms := AlarmSet.union new_alarms !alarms;
-      if not (AlarmSet.is_empty new_alarms) then (
-        write_json_DAP (create_event "output" (create_body_alarms_output (AlarmSet.elements new_alarms)))
-      );
-
       vrefs := IntMap.empty;
       vref_counter := 0;
       write_json_DAP (create_event "stopped" (create_body_stopped "step"));
     )
+
+  let alarm alarms action man flow =
+    write_json_DAP (create_event "output" (create_body_alarms_output alarms))
 
   let dummy_range = mk_fresh_range ()
 
@@ -602,7 +587,7 @@ struct
           match find_envdb_opt file line envdb with
           | None -> CallstackMap.empty, []
           | Some(action, envs) ->
-            let vars = Interface.action_line_vars action in
+            let vars = action_line_vars action in
             envs, vars
         in
         let ctx = Flow.get_ctx flow in
@@ -639,11 +624,6 @@ struct
 
 
   let finish man flow =
-    let new_alarms = get_new_alarms flow in
-    alarms := AlarmSet.union new_alarms !alarms;
-    if not (AlarmSet.is_empty new_alarms) then (
-      write_json_DAP (create_event "output" (create_body_alarms_output (AlarmSet.elements new_alarms)))
-    );
     write_json_DAP (create_event "terminated" `Null);
     wait_disconnect ()
 
