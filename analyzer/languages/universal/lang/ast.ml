@@ -253,7 +253,7 @@ type u_program =  {
 }
 
 type prog_kind +=
-  | P_universal of u_program 
+  | P_universal of u_program
 
 let () =
   register_program {
@@ -832,9 +832,14 @@ let rec expr_to_const e : constant option =
       | Some (C_bool b1), Some (C_bool b2) ->
         Some (C_bool (b1 && b2))
 
-      | Some (C_top T_bool), x
-      | x, Some (C_top T_bool) ->
-        x
+      | Some (C_top T_bool), Some (C_bool false)
+      | Some (C_bool false), Some (C_top T_bool) ->
+        Some (C_bool false)
+
+      | Some (C_top T_bool), Some (C_bool true)
+      | Some (C_bool true), Some (C_top T_bool)
+      | Some (C_top T_bool), Some (C_top T_bool) ->
+        Some (C_top T_bool)
 
       | _ -> None
     end
@@ -845,8 +850,13 @@ let rec expr_to_const e : constant option =
       | Some (C_bool b1), Some (C_bool b2) ->
         Some (C_bool (b1 || b2))
 
-      | Some (C_top T_bool), x
-      | x, Some (C_top T_bool) ->
+      | Some (C_top T_bool), Some (C_bool true)
+      | Some (C_bool true), Some (C_top T_bool) ->
+        Some (C_bool true)
+
+      | Some (C_top T_bool), Some (C_bool false)
+      | Some (C_bool false), Some (C_top T_bool)
+      | Some (C_top T_bool), Some (C_top T_bool) ->
         Some (C_top T_bool)
 
       | _ -> None
