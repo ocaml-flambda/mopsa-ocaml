@@ -1,0 +1,42 @@
+void test_assume() {
+  int lt ; int eq ; int gt ;
+  int le ; int ne ; int ge ;
+  assume(lt < 0);
+  assume(eq == 0);
+  assume(gt > 0);
+  assume(le <= 0);
+  assume(ne != 0);
+  assume(ge >= 0);
+
+  assert(lt < 0);
+  assert(eq == 0);
+  assert(gt > 0);
+  assert(le <= 0);
+  assert(ne != 0);
+  assert(ge >= 0);
+
+}
+
+void test_binop() {
+  int lt ; int eq ; int gt ;
+  int le ; int ne ; int ge ;
+  assume(lt < 0);
+  assume(eq == 0);
+  assume(gt > 0);
+  assume(le <= 0);
+  assume(ne != 0);
+  assume(ge >= 0);
+
+  assert(lt + lt < 0);
+  assert(gt + gt > 0);
+  assert(ge + ge >= 0);
+  assert(le + le <= 0);
+  assert(eq + eq == 0);
+
+  assert(lt * lt > 0);
+  assert(gt * gt > 0);
+  assert(ge * ge >= 0);
+  assert(le * le >= 0);
+  assert(ge * le <= 0);
+  assert(eq * eq == 0);
+}

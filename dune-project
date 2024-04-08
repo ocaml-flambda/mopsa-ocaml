@@ -17,7 +17,7 @@
 
 (homepage "https://gitlab.com/mopsa/mopsa-analyzer")
 
-(documentation "https://mopsa.gitlab.io/mopsa-manual/user-manual/")
+(documentation "https://mopsa.gitlab.io/mopsa-analyzer/user-manual/")
 
 (bug_reports "https://gitlab.com/mopsa/mopsa-analyzer/issues")
 

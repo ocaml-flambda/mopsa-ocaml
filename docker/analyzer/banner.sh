@@ -10,5 +10,5 @@ mopsa -v
 echo -e "\e[0m"
 echo -e "Run MOPSA for instance with \e[1;33mmopsa-c <some-file.c>\e[0m"
 echo -e "Source code is available at \e[1;34mhttps://gitlab.com/mopsa/mopsa-analyzer/\e[0m"
-echo -e "Documentation is availble at \e[1;34mhttps://mopsa.gitlab.io/mopsa-manual/user-manual/\e[0m"
+echo -e "Documentation is availble at \e[1;34mhttps://mopsa.gitlab.io/mopsa-analyzer/user-manual/\e[0m"
 echo

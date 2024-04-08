@@ -1,0 +1,21 @@
+{
+    "language": "universal",
+    "domain": {
+	      "switch": [
+	          // Iterators
+	          "universal.iterators.program",
+	          "universal.iterators.intraproc",
+	          "universal.iterators.loops",
+            "universal.iterators.interproc.inlining",
+            "universal.iterators.unittest",
+
+	          // Numeric abstraction
+            {
+                "product": [
+                    "universal.simple_equalities",
+                    {"nonrel": "universal.numeric.values.sign"}
+                ]
+	          }
+	      ]
+    }
+}

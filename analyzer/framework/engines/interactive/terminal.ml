@@ -202,14 +202,14 @@ struct
     printf "  b[reak] <[file:]line>     add a breakpoint at a line@.";
     printf "  b[reak] <function>        add a breakpoint at a function@.";
     printf "  b[reak] @name             add a named breakpoint (will break when the analysis executes an S_break name)@.";
-    printf "  b[reak] #a[larm]          break at the next alarm (and go back at the statement generating the alarm@.";
+    printf "  b[reak] #a[larm]          break at the next alarm (and go back at the statement generating the alarm)@.";
     printf "  c[ontinue]                run until next breakpoint@.";
     printf "  n[ext]                    stop at next statement and skip function calls.@.";
     printf "  n[ext]i                   stop at next statement and skip nodes in the interpretation sub-tree@.";
     printf "  s[tep]                    step into function calls@.";
     printf "  s[tep]i                   step into interpretation sub-tree@.";
     printf "  f[inish]                  finish current function@.";
-    printf "  b[ack]w[ard]                go backward to the calling site@.";
+    printf "  b[ack]w[ard]              go backward to the calling site@.";
     printf "  e[nable] h[hook] <h>      enable a hook@.";
     printf "  d[isable] h[hook] <h>     disable a hook@.";
     printf "  s[et] d[ebug] <d>         set debug channels@.";
@@ -226,7 +226,7 @@ struct
     printf "  p[rint] <vars> #<f>:<l>   print the value of selected variables at the given program location@.";
     printf "  e[nv]                     print the current abstract environment@.";
     printf "  e[nv] <domain>,...        print the current abstract environment of selected domains@.";
-    printf "  state                   print the full abstract state (map from flow token to environment)@.";
+    printf "  state                     print the full abstract state (map from flow token to environment)@.";
     printf "  b[ack]t[race]             print the current call stack@.";
     printf "  t[race]                   print the analysis trace@.";
     printf "  w[here]                   show current program point@.";
