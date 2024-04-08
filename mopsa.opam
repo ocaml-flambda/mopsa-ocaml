@@ -11,7 +11,7 @@ maintainer: ["Antoine Miné <antoine.mine@lip6.fr>"]
 authors: ["The MOPSA team"]
 license: "LGPL-3.0-or-later"
 homepage: "https://gitlab.com/mopsa/mopsa-analyzer"
-doc: "https://mopsa.gitlab.io/mopsa-manual/user-manual/"
+doc: "https://mopsa.gitlab.io/mopsa-analyzer/user-manual/"
 bug-reports: "https://gitlab.com/mopsa/mopsa-analyzer/issues"
 depends: [
   "ocaml" {>= "4.12.0"}

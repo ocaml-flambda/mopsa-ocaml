@@ -1,0 +1,8 @@
+int x ;
+int y ;
+int z ;
+x = 1 ;
+y = -1;
+assume(z>=0);
+assert(x * y < 0);
+print();

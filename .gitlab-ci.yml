@@ -281,3 +281,29 @@ publish_docker:
     - docker build --pull -t mopsa/mopsa-analyzer:master .
     - docker push mopsa/mopsa-analyzer:master
 
+##################################
+# Documentation from the manuals #
+##################################
+
+pages:
+  stage: publish
+  image: sphinxdoc/sphinx:latest
+  script:
+    - pip install sphinx_rtd_theme
+    - cd doc/user-manual && make html && cd ../..
+    - cd doc/developer-manual && make html && cd ../..
+    - cd doc/reference-manual && make html && cd ../..
+    - mkdir public
+    - mkdir public/user-manual
+    - cp -r doc/user-manual/_build/html/* public/user-manual/
+    - mkdir public/developer-manual
+    - cp -r doc/developer-manual/_build/html/* public/developer-manual/
+    - mkdir public/reference-manual
+    - cp -r doc/reference-manual/_build/html/* public/reference-manual/
+  artifacts:
+    paths:
+      - public
+  only:
+    variables:
+    - $CI_PIPELINE_SOURCE == "web"
+    - $CI_COMMIT_REF_NAME == "master"
