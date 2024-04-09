@@ -93,7 +93,7 @@ def get_project_pipelines(projectid):
 
 def get_last_successful_pipeline(projectid,pipelines):
     for p in pipelines:
-        if p.get('status') == 'success' and p.get("ref") == 'master' and p.get("source") in ['schedule', 'web']:
+        if p.get('status') == 'success' and p.get("ref") == 'master' and p.get("source") in ['schedule', 'web', 'pipeline', 'api']:
             return p
     raise Exception('cannot find the last successful pipeline for project ' + projectid)
 
