@@ -536,7 +536,11 @@ let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
 let bwd_rem (a:t) ((b1,b2) as b:t) ((r1,r2):t) =
   if b1 = Z.zero && r1 = Z.zero then
     (* r = a % b => a = bℤ + r *)
-    bot_merge2 (meet a (b2,r2)) (Nb b)
+    (* however, r2 can be negative, but meet assumes it won't be *)
+    if Z.(r2 < zero) then
+      bot_merge2 (meet a (b2,Z.(b2 + r2))) (Nb b)
+    else
+      bot_merge2 (meet a (b2,r2)) (Nb b)
   else
     Nb (a,b)
 
