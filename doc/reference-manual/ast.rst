@@ -11,7 +11,7 @@ Each time the developer extends the AST with a new node, some utility functions 
 Types
 -----
 
-Types of expressions in Mopsa are represented by the extensible type ``typ``, defined in `framework/core/ast/type.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/typ.mli>`_.
+Types of expressions in Mopsa are represented by the extensible type ``typ``, defined in `framework/core/ast/type.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/typ.mli>`_.
 To define a new type, extend ``typ`` with a new constructor and register it using the function ``register_typ``.
 
 For example, to add a new type ``T_int`` for integers, first extend ``typ``:
@@ -53,7 +53,7 @@ To print or compare Mopsa types, the framework provides generic functions that w
 Constants
 ---------
 
-Constants are defined by extending the type ``constant`` (found in `framework/core/ast/constant.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/constant.mli>`_) and performing registration using ``register_constant``.
+Constants are defined by extending the type ``constant`` (found in `framework/core/ast/constant.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/constant.mli>`_) and performing registration using ``register_constant``.
 
 The following example shows how to register integer constants:
 
@@ -85,7 +85,7 @@ The framework provides the following generic functions for any registered consta
 Expressions
 -----------
 
-Expressions in Mopsa have type ``expr`` defined in `framework/core/ast/expr.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/expr.mli>`_ as:
+Expressions in Mopsa have type ``expr`` defined in `framework/core/ast/expr.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/expr.mli>`_ as:
 
 .. code-block:: ocaml
 
@@ -139,7 +139,7 @@ The utility function ``Mopsa_utils.Compare.pair`` allows comparing two pairs usi
 Variables
 ---------
 
-Variables are defined in `framework/core/ast/var.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/var.mli>`_ as:
+Variables are defined in `framework/core/ast/var.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/var.mli>`_ as:
 
 .. code-block:: ocaml
 
@@ -163,7 +163,7 @@ Kind of Variables
 The field ``vkind`` represents the kind of the variable, which is an extensible type used to annotate variables with additional information.
 Such information can be provided by the parser for example.
 Consider the case of the analysis of C.
-Variables are annotated with the kind ``V_cvar`` defined in `lang/c/ast.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/lang/c/ast.ml>`_, that gives information provided by the parser about the declaration range and the scope of the variable:
+Variables are annotated with the kind ``V_cvar`` defined in `lang/c/ast.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/lang/c/ast.ml>`_, that gives information provided by the parser about the declaration range and the scope of the variable:
 
 .. code-block:: ocaml
 
@@ -259,7 +259,7 @@ For example, to force a strong update on a ``V_array_smash`` variable, one can u
 Statements
 ----------
 
-Statements are defined in `framework/core/ast/stmt.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/stmt.mli>`_ as:
+Statements are defined in `framework/core/ast/stmt.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/stmt.mli>`_ as:
 
 .. code-block:: ocaml
 
@@ -297,7 +297,7 @@ For example, adding the assignment statement is done as follows:
 Visitors
 --------
 
-Mopsa provides generic functions for visiting expressions and statements, defined in `framework/core/ast/visitor.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/ast/visitor.mli>`_.
+Mopsa provides generic functions for visiting expressions and statements, defined in `framework/core/ast/visitor.mli <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/ast/visitor.mli>`_.
 Two kinds of visitors are defined: *predicates* and *iterators*.
 
 Predicate Visitors

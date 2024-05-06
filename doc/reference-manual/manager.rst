@@ -4,7 +4,7 @@ Manager
 The manager encapsulates the lattice definition and the transfer functions of the global abstraction during the analysis.
 It represents the solely means for domains to access the analysis framework.
 Each domain is provided with its own instance of the manager that allows it to communicate with other domains with a very low coupling.
-The type of the manager is defined in `framework/core/manager.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/manager.ml>`_ as follows:
+The type of the manager is defined in `framework/core/manager.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/manager.ml>`_ as follows:
 
 .. code-block:: ocaml
 
@@ -57,7 +57,7 @@ Before describing how to apply transfer functions (e.g. executing a statement), 
 By default, requests for transfer functions are broadcasted to all domains.
 Routes allows a domain to select which domains should execute a transfer function.
 However, to keep the coupling as low as possible, target domains are not designated by name explicitly.
-Instead, they are identified either by their concrete semantics or by their relative position w.r.t. the calling domain, as shown by the type ``route`` defined in `framework/core/route.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/route.ml>`_:
+Instead, they are identified either by their concrete semantics or by their relative position w.r.t. the calling domain, as shown by the type ``route`` defined in `framework/core/route.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/route.ml>`_:
 
 .. code-block:: ocaml
 
@@ -70,7 +70,7 @@ Instead, they are identified either by their concrete semantics or by their rela
 
 The route ``Below dom`` forwards the transfer function call to the sub-tree below domain ``dom`` in the current :ref:`configuration<Configuration>`.
 The route ``Semantic sem`` forwards the transfer function call to the sub-tree identified by the semantic ``sem`` in the current :ref:`configuration<Configuration>`.
-For example, consider the default configuration of C found in `share/mopsa/configs/c/default.json <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/share/mopsa/configs/c/default.json>`_.
+For example, consider the default configuration of C found in `share/mopsa/configs/c/default.json <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/share/mopsa/configs/c/default.json>`_.
 It contains a sub-tree identified by the semantic ``Universal``:
 
 .. code-block:: json
