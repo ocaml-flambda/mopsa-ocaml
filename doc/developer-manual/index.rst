@@ -2,7 +2,7 @@
 **Mopsa** Developer Manuel
 ==========================
 
-.. MOPSA developer manuel master file
+.. MOPSA developer manuel main file
 
 Goal of the tutorial
 ====================

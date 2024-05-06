@@ -62,61 +62,61 @@ build_job:
 downstream-benchs 1/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/coreutils-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 2/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/juliet-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 3/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/pathpicker-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 4/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/pyperformance-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 5/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/cdistance-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 6/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/pyahocorasick-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 7/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/noise-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 8/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/levenshtein-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 9/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/llist-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 10/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/bitarray-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 
@@ -279,8 +279,8 @@ publish_docker:
     - echo "$DOCKERIO_PASSWD" | docker login -u $DOCKERIO_USER --password-stdin docker.io
   script:
     - cd docker/analyzer
-    - docker build --pull -t mopsa/mopsa-analyzer:master .
-    - docker push mopsa/mopsa-analyzer:master
+    - docker build --pull -t mopsa/mopsa-analyzer:main .
+    - docker push mopsa/mopsa-analyzer:main
 
 ##################################
 # Documentation from the manuals #
@@ -307,4 +307,4 @@ pages:
   only:
     variables:
     - $CI_PIPELINE_SOURCE == "web"
-    - $CI_COMMIT_REF_NAME == "master"
+    - $CI_COMMIT_REF_NAME == "main"

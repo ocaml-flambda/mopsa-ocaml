@@ -1,4 +1,4 @@
-This document lists the authors of significant contributions to the MOPSA source code or documentation integrated within the `master` branch of the corresponding GitLab projects.
+This document lists the authors of significant contributions to the MOPSA source code or documentation integrated within the `main` branch of the corresponding GitLab projects.
 
 :warning: Please keep this file up to date and in alphabetical order.
  For each contributor include all the affiliations from the times of contribution and an up-to-date email contact.

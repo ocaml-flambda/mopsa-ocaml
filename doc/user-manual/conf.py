@@ -60,8 +60,8 @@ html_static_path = ['_static']
 todo_include_todos = False
 
 # :mopsa:`path` generates a link to the Mopsa source code on GitLab
-extlinks = {'mopsa': ('https://gitlab.com/mopsa/mopsa-analyzer/-/tree/master/%s', '%s'),
-            'config': ('https://gitlab.com/mopsa/mopsa-analyzer/-/tree/master/share/mopsa/configs/%s', '%s')}
+extlinks = {'mopsa': ('https://gitlab.com/mopsa/mopsa-analyzer/-/tree/main/%s', '%s'),
+            'config': ('https://gitlab.com/mopsa/mopsa-analyzer/-/tree/main/share/mopsa/configs/%s', '%s')}
 
 html_logo = 'resources/images/mopsa-mini.png'
 html_favicon = 'resources/images/mopsa.ico'

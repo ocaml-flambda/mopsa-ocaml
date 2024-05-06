@@ -11,7 +11,7 @@ Mopsa provides domains an API in order to manipulate values of type ``'a`` (*e.g
 Lattice
 -------
 
-The global abstraction has a lattice structure with usual operators, encapsulated in the type ``'a lattice``, defined in `framework/core/lattice.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/lattice.ml>`_:
+The global abstraction has a lattice structure with usual operators, encapsulated in the type ``'a lattice``, defined in `framework/core/lattice.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/lattice.ml>`_:
 
 .. code-block:: ocaml
 
@@ -73,10 +73,10 @@ Similarly to other analyzers, Mopsa represents such non-local control flows as *
 Tokens
 ^^^^^^
 
-Each continuation is identified by a *token* of type ``token``, defined in `framework/core/token.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/token.ml>`_.
+Each continuation is identified by a *token* of type ``token``, defined in `framework/core/token.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/token.ml>`_.
 The framework defines a builtin token ``T_cur`` representing environments that reach the current execution point.
 Domains can extend this type to add new kinds of tokens representing particular control flows.
-For example, the iterator for ``goto`` statements in C defines a new token ``T_goto of string`` to store environments suspended at a ``goto label;`` statement (see `lang/c/iterators/goto.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/lang/c/iterators/goto.ml>`_):
+For example, the iterator for ``goto`` statements in C defines a new token ``T_goto of string`` to store environments suspended at a ``goto label;`` statement (see `lang/c/iterators/goto.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/lang/c/iterators/goto.ml>`_):
 
 .. code-block:: ocaml
 
@@ -119,7 +119,7 @@ Flows
 ^^^^^
 
 All reachable program environments, including those suspended at other program locations, are represented by a map ``'a flow`` binding tokens to abstract environments.
-The type ``'a flow`` is defined in `framework/core/flow.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/flow.ml>`_.
+The type ``'a flow`` is defined in `framework/core/flow.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/flow.ml>`_.
 It has a lattice structure with the follwing API:
 
 .. describe:: Flow.bottom: 'a flow
@@ -225,7 +225,7 @@ The context is a heterogeneous data store given to every transfer function.
 In contrast to the abstract environment, the context is propagated in a flow-insensitive way.
 For example, when analyzing the code ``if (cond) { .. } else { .. }``, the context at the end of the *then* branch is propagated at the beginning of the *else* branch.
 
-The context is stored in values of type ``'a ctx``, defined in `framework/core/context.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/master/analyzer/src/mopsa_analyzer/framework/core/context.ml>`_.
+The context is stored in values of type ``'a ctx``, defined in `framework/core/context.ml <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/src/mopsa_analyzer/framework/core/context.ml>`_.
 It is saved in the flow and can be accessed using the following API :
 
 .. describe:: Flow.get_ctx : 'a flow -> 'a ctx

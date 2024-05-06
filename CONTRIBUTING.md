@@ -22,10 +22,10 @@ Please keep the [AUTHORS](AUTHORS.md) file up to date and in alphabetical order.
 Stable Branches
 ---------------
 The repository of MOPSA has two protected and stable branches: 
-- There is one stable branch `master` containing the latest public release of MOPSA.
+- There is one stable branch `main` containing the latest public release of MOPSA.
 - The development branch `dev` contains the latest stable features of the analyzer that are planned for the next release.
 
-> :warning: We are not using `dev` at the moment. In the absence of `dev`, you should replace, in the following, `dev` with `master`.
+> :warning: We are not using `dev` at the moment. In the absence of `dev`, you should replace, in the following, `dev` with `main`.
 
 
 External Contributions
@@ -90,14 +90,14 @@ $ git checkout dev
 $ git checkout -b release/1.2
 ```
 
-Work is done in `release/<release id>` to polish the release (late bug fixes, documentation). When code is ready for the public release, the branch is merged into `master`:
+Work is done in `release/<release id>` to polish the release (late bug fixes, documentation). When code is ready for the public release, the branch is merged into `main`:
 ```shell
-$ git checkout master
+$ git checkout main
 $ git merge --no-ff release/1.2
 $ git tag -a 1.2
-$ git push origin master
+$ git push origin main
 $ git checkout dev
-$ git merge master
+$ git merge main
 $ git push origin dev
 $ git branch -d release/1.2
 $ git push origin :release/1.2
