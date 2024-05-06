@@ -9,9 +9,22 @@
 (source
  (uri "https://gitlab.com/mopsa/mopsa-analyzer"))
 
-(authors "The MOPSA team")
+(authors
+  "Antoine Miné"
+  "Abdelraouf Ouadjaout"
+  "Matthieu Journault"
+  "Aymeric Fromherz"
+  "Raphaël Monat"
+  "Francesco Parolini"
+  "Marco Milanese"
+  "Jérôme Boillot"
+)
 
-(maintainers "Antoine Miné <antoine.mine@lip6.fr>")
+(maintainers
+  "Antoine Miné <antoine.mine@lip6.fr>"
+  "Abdelraouf Ouadjaout <ouadjaout@gmail.com>"
+  "Raphaël Monat <raphael.monat@inria.fr>"
+)
 
 (license "LGPL-3.0-or-later")
 

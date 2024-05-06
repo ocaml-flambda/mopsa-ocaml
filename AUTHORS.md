@@ -9,5 +9,5 @@ This document lists the authors of significant contributions to the MOPSA source
 - Marco Milanese <marco.milanese@lip6.fr> - Sorbonne Université, CNRS
 - Antoine Miné <antoine.mine@lip6.fr> - Sorbonne Université, CNRS
 - Raphaël Monat <raphael.monat@inria.fr> - Sorbonne Université & CNRS (09/18-08/22), Inria (since 09/22)
+- Abdelraouf Ouadjaout <ouadjaout@gmail.com> - Sorbonne Université, CNRS
 - Francesco Parolini <francesco.parolini@lip6.fr> - Sorbonne Université, CNRS
-- Abdelraouf Ouadjaout <abdelraouf.ouadjaout@lip6.fr> - Sorbonne Université, CNRS
