@@ -1,1 +1,3 @@
-#### 1.0~pre1
+# 1.0~pre2
+
+- Initial version of Mopsa.
