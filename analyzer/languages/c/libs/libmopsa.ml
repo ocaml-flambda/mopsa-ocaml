@@ -321,10 +321,13 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_reachable", []) ->
+      let open Universal_iterators.Iterators.Unittest in
       let b = not (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
-      let cond = mk_bool b exp.erange in
-      let stmt = mk_assert cond exp.erange in
-      man.exec stmt flow >>%? fun flow ->
+      let flow = if b then
+        safe_assert_check exp.erange man flow
+      else
+        raise_assert_fail ~force:true (mk_bool b exp.erange) man flow
+      in
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 
