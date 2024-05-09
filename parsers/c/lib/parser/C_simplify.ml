@@ -55,6 +55,8 @@ let make_temp ctx range ?(com:comment list=[]) (f:func) (t:type_qual) : variable
       var_init = None;
       var_range = range;
       var_com = com;
+      var_before_stmts = [];
+      var_after_stmts = [];
     }
   in
   f.func_local_vars <- v::f.func_local_vars;
@@ -562,5 +564,15 @@ let simplify_func ctx (f:func) =
 
   in
   match f.func_body with
-  | Some body -> f.func_body <- Some (simplify_block false body |> resolve_scope);
+  | Some body ->
+    f.func_body <- Some (simplify_block false body |> resolve_scope);
+    f.func_static_vars |> List.iter (fun v ->
+        match v.var_init with
+        | None -> ()
+        | Some i ->
+          let before, i, after = simplify_init false i in
+          v.var_init <- Some i;
+          v.var_before_stmts <- before;
+          v.var_after_stmts <- after
+      )
   | None -> ()

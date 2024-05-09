@@ -629,6 +629,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
             var_init = None;
             var_range = range;
             var_com = !c;
+            var_before_stmts = [];
+            var_after_stmts = [];
           }
       in
       if variable_is_global kind && prev = None then Hashtbl.add ctx.ctx_vars org_name var;
@@ -715,6 +717,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
                 var_init = None;
                 var_range = p.C.var_range;
                 var_com = p.C.var_com;
+                var_before_stmts = [];
+                var_after_stmts = [];
               }
             in
             Hashtbl.add ctx.ctx_tu_vars p.C.var_uid var;
