@@ -181,6 +181,10 @@ let set_singleton_env env ctx man abs =
   | None     -> man.lattice.bottom
   | Some abs -> abs
 
+let set_env_flow tk env man flow : 'a flow =
+  man.set tk env flow |>
+  post_to_flow man
+
 let get_env (tk:token) (man:('a,'t) man) (flow:'a flow) : ('a, 't) cases =
   man.get tk flow
 

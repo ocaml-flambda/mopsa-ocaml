@@ -396,7 +396,19 @@ struct
     else
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
-      set_env T_cur empty man flow >>% fun flow ->
+      (* if the environment is paritiotione, we need to collapse addresses from
+       * all paritions, since we can't keep a relation between the partitions
+       * before calling the function and the paritions after the return *)
+      let caller_alloca_addrs = Cases.reduce_result
+          (fun addrs _ -> addrs) caller_alloca_addrs 
+          ~join:AddrSet.join
+          ~meet:AddrSet.meet
+          ~bottom:(fun () -> AddrSet.bottom)
+      in
+      (* Empty alloca before the call. Note that we can't use the bind operator
+       * [>>%] here to avoid calling the body of the function in every
+       * partition *)
+      let flow = set_env_flow T_cur empty man flow in
       let ret =
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
@@ -493,14 +505,12 @@ struct
           (* we updated the program before analyzing the renamed function, we can now get rid of it *)
           let c_program = get_c_program flow in
           set_c_program {c_program with c_functions = List.tl c_program.c_functions} flow
-        else flow in 
-      let callee_alloca_addrs = get_env T_cur man flow in
-      caller_alloca_addrs >>$ fun addrs flow ->
-      set_env T_cur addrs man flow >>% fun flow ->
-      callee_alloca_addrs >>$ fun addrs flow ->
+        else flow in
+      get_env T_cur man flow >>$ fun callee_addrs flow ->
+      let flow = set_env_flow T_cur caller_alloca_addrs man flow in
       AddrSet.fold
         (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
-        addrs (Post.return flow)
+        callee_addrs (Post.return flow)
       >>% fun flow ->
       Eval.singleton e flow
 
