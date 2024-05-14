@@ -32,6 +32,17 @@ build_job:
     - ./_build/default/analyzer/mopsa.exe
     expire_in: 2h
 
+build_opam:
+  stage: build
+  script:
+    - eval `opam config env`
+    - sed -i "/conf-autoconf/d" mopsa.opam
+    - opam install -y -w -v .
+    - mopsa-c analyzer/tests/c/172_backward_mul_floatitv.c
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
 
 ###########################################################
 # Trigger downstream benchmarks in case of merge requests #
