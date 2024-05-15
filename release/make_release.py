@@ -33,7 +33,7 @@ import json
 import requests
 import csv
 import re
-
+import os
 
 # Configuration
 ###############
@@ -119,12 +119,12 @@ def check_changelog():
 
 def check_authors():
     authors_md = []
-    with open("AUTHORS.md") as a:
+    with open("../AUTHORS.md") as a:
         for l in a:
             if l.startswith("-"):
                 authors_md.append(l.split("-")[1].split("<")[0].strip())
     authors_opam = []
-    with open("mopsa.opam") as a:
+    with open("../mopsa.opam") as a:
         l = a.readline()
         while not l.startswith("authors: ["):
             l = a.readline()
@@ -268,6 +268,9 @@ def print_opam_instructions():
 
 
 if __name__ == "__main__":
+    if not os.getcwd().endswith("release"):
+        print("Please run the script from the release directory")
+        exit(1)
     print('You are in branch: ' + branch)
     print('at commit: ' + commit_sha_short + ' (' + commit_sha + ')')
     # print('last tag is: ' + last_tag)
