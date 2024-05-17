@@ -36,8 +36,8 @@ depends: [
   "conf-libclang"
   "menhir"
   "mlgmpidl"
-  "yojson"
-  "zarith"
+  "yojson" {>= "1.6.0"}
+  "zarith" {>= "1.4"}
   "zlib"
   "odoc" {with-doc}
 ]
