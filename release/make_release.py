@@ -253,10 +253,11 @@ def do_release():
 
 def print_docker_instructions():
    print('\nYou can create and publish a Docker to the project Container Registry with:')
-   print(f"docker login registry.gitlab.com -p {gl_token}")
+   print(f"docker login registry.gitlab.com -p {token}")
    # VERSIONS with ~ seem to not be accepted by Docker
-   print("cd ../docker/analyzer && docker build -t registry.gitlab.com/{group}/{project}:{version} .")
+   print("cd ../docker/analyzer && docker build -t registry.gitlab.com/{group}/{project}:{version.replace('~', '-')} .")
    print("docker push registry.gitlab.com/{group}/{project}:{version}")
+   print("docker image tag registry.gitlab.com/{group}/{project}:{version} registry.gitlab.com/{group}/{project}:stable")
    print("docker push registry.gitlab.com/{group}/{project}:stable")
 
 # OPAM
