@@ -25,7 +25,7 @@
  (action (with-stdout-to %{targets} (pipe-stdout
                                      (progn
                                       (echo "(\"-DCLANGRESOURCE=\\\"")
-                                      (run @CLANG@ -print-resource-dir)
+                                      @CLANGRESOURCEDIR@
                                       (echo "\\\"\")"))
                                      (run tr -d "\n")))))
 
