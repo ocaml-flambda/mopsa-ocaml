@@ -50,3 +50,4 @@ install: [
   [make "install"]
 ]
 dev-repo: "git+https://gitlab.com/mopsa/mopsa-analyzer.git"
+available: [ !(arch = "x86_32") ]
