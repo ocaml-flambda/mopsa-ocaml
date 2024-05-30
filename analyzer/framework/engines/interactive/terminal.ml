@@ -237,6 +237,7 @@ struct
     printf "  i[info] v[ariables]       print the list of variables@.";
     printf "  i[info] c[on]t[e]x[t]     print the flow-insensitive context@.";
     printf "  mopsa_bt                  shows the current backtrace of the analyzer@.";
+    printf "You can chain multiple commands with ';'@.";
     ()
 
 
@@ -265,28 +266,32 @@ struct
     else
       (* Buffer is empty, so ask the user *)
       let () = print_prompt () in
-      let input = LineEdit.read_line linedit_ctx |>
-                  String.trim in
-      (* Split the input into multiple commands with delimeter ';' *)
-      let parts = String.split_on_char ';' input |>
-                  List.map String.trim |>
-                  List.filter (function "" -> false | _ -> true) in
-      match parts, !last_prompt_commands with
-      | [], [] ->
-        (* No command entered and no command in history, so as user again *)
-        read_terminal_command_string ()
+      try 
+        let input = LineEdit.read_line linedit_ctx |>
+                    String.trim in
+        if String.length input > 0 && input.[0] = '#' then read_terminal_command_string ()
+        else 
+          (* Split the input into multiple commands with delimeter ';' *)
+          let parts = String.split_on_char ';' input |>
+                      List.map String.trim |>
+                      List.filter (function "" -> false | _ -> true) in
+          match parts, !last_prompt_commands with
+          | [], [] ->
+            (* No command entered and no command in history, so ask user again *)
+            read_terminal_command_string ()
 
-      | [], _ ->
-        (* No command entered, but we know the last command, so replay it *)
-        let () = List.iter (fun c -> Queue.add c commands_buffer) !last_prompt_commands in
-        read_terminal_command_string ()
+          | [], _ ->
+            (* No command entered, but we know the last command, so replay it *)
+            let () = List.iter (fun c -> Queue.add c commands_buffer) !last_prompt_commands in
+            read_terminal_command_string ()
 
-      | _ ->
-        (* Some commands entered. Save them in [last_prompt_commands],
-           initialize [commands_buffer] and iterate again *)
-        last_prompt_commands := parts;
-        List.iter (fun c -> Queue.add c commands_buffer) parts;
-        read_terminal_command_string ()
+          | _ ->
+            (* Some commands entered. Save them in [last_prompt_commands],
+               initialize [commands_buffer] and iterate again *)
+            last_prompt_commands := parts;
+            List.iter (fun c -> Queue.add c commands_buffer) parts;
+            read_terminal_command_string ()
+      with End_of_file -> raise Exit
 
   exception ReadNewCommand
 
@@ -296,6 +301,7 @@ struct
                 List.filter (function "" -> false | _ -> true)
     in
     match parts with
+    | ["exit"] -> raise Exit 
     | ["continue" | "c"]   -> Continue
     | ["mopsa_bt"]         -> MopsaBackTrace
     | ["next"     | "n"]   -> Next
