@@ -135,6 +135,7 @@ and make_stateless_domain (domain:domain) : (module STATELESS_COMBINER) =
 let rec is_standard_domain d =
   match d.domain_kind with
   | D_domain _ -> true
+  | D_functor(F_partitioning _, dd) -> is_standard_domain dd
   | D_functor(F_stacked _, dd) -> is_standard_domain dd
   | D_switch dl -> List.for_all is_standard_domain dl
   | _ -> is_stateless_domain d || is_simplified_domain d
@@ -147,6 +148,9 @@ let rec make_standard_domain_without_semantic (domain:domain) : (module DOMAIN_C
   if is_standard_domain domain then
     match domain.domain_kind with
     | D_domain d -> (module DomainToCombiner(val d))
+    | D_functor(F_partitioning f, dd) ->
+      let module F = (val f) in
+      (module Combiners.Domain.Partitioning.Make(F)(val make_standard_domain dd : DOMAIN_COMBINER))
     | D_functor(F_stacked s, dd) ->
       (module Combiners.Domain.Apply.Make(val make_stacked_domain s : STACKED_COMBINER)(val make_standard_domain dd : DOMAIN_COMBINER))
     | D_switch domains -> 
@@ -199,6 +203,10 @@ and make_stacked_domain_without_semantic (domain:domain) : (module STACKED_COMBI
   | D_simplified d  -> (module StandardToStacked(SimplifiedToStandard(SimplifiedToCombiner(val d))))
   | D_stateless d   -> (module StandardToStacked(StatelessToDomain(StatelessToCombiner(val d))))
   | D_nonrel(value) -> (module StandardToStacked(SimplifiedToStandard(val (make_nonrel_domain value))))
+
+ | D_functor(F_partitioning f, dd) ->
+    let module F = (val f) in
+    (module StandardToStacked(Combiners.Domain.Partitioning.Make(F)(val make_standard_domain dd : DOMAIN_COMBINER)))
 
   | D_functor(F_stacked s, dd) ->
     (module StandardToStacked(Combiners.Domain.Apply.Make(val make_stacked_domain s : STACKED_COMBINER)(val make_standard_domain dd : DOMAIN_COMBINER)))

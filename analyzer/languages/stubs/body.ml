@@ -29,6 +29,37 @@ open Universal.Ast
 open Ast
 open Alarms
 
+(******************)
+(** Trace markers *)
+(******************)
+
+type marker += M_stub_case of stub_func * case
+
+let () = register_marker {
+    marker_print = (fun next fmt -> function
+        | M_stub_case(stub, case) ->
+          Format.fprintf fmt "stub-case (%s.%s)" stub.stub_func_name case.case_label
+        | m ->
+          next fmt m
+      );
+    marker_compare = (fun next m1 m2 ->
+        match m1, m2 with
+        | M_stub_case(stub1, case1), M_stub_case(stub2, case2) ->
+          Compare.pair String.compare String.compare
+            (stub1.stub_func_name, case1.case_label)
+            (stub2.stub_func_name, case2.case_label)
+        | _ ->
+          next m1 m2
+      );
+    marker_name = (fun next -> function
+        | M_stub_case _ -> "stub-case"
+        | m -> next m
+      );
+  }
+
+(********************)
+(** Abstract domain *)
+(********************)
 
 module Domain =
 struct
@@ -43,7 +74,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (** {2 Command-line options} *)
@@ -428,7 +459,14 @@ struct
     | S_message msg -> exec_message msg man flow
 
   (** Execute the body of a case section *)
-  let exec_case case return man flow : 'a flow =
+  let exec_case ?(stub=None) case return man flow =
+    let flow =
+      match stub with
+      | None -> flow
+      | Some stub ->
+        man.exec (mk_add_marker (M_stub_case(stub, case)) case.case_range) flow |>
+        post_to_flow man
+    in
     List.fold_left (fun acc leaf ->
         acc >>% fun flow -> exec_leaf leaf return man flow
       ) (Post.return flow) case.case_body |>
@@ -452,7 +490,7 @@ struct
         match section with
         | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
-          let flow' = exec_case case return man flow in
+          let flow' = exec_case ~stub case return man flow in
           flow':: acc, Flow.get_ctx flow'
         | _ -> acc, ctx
       ) ([], Flow.get_ctx flow) body

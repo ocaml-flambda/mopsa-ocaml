@@ -72,7 +72,12 @@ let compare_points_to p1 p2 =
 
 type ('a,_) query += Q_c_points_to : expr -> ('a, points_to) query
 
-let resolve_pointer p man flow = man.ask (Q_c_points_to p) flow
+let resolve_pointer p man flow =
+  man.ask (Q_c_points_to p) flow |>
+  Cases.remove_duplicate_results man.lattice
+    ~equal:(fun p1 p2 ->
+        compare_points_to p1 p2 = 0
+      )
 
 
 (* Points-to containers *)

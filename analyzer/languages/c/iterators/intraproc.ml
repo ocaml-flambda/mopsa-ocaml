@@ -50,7 +50,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
 
   (** Post-condition computation *)

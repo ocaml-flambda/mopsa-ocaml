@@ -394,6 +394,15 @@ let () = register_builtin_option {
     default = "";
   }
 
+let () =
+  register_builtin_option {
+    key = "-marker";
+    category = "Partitioning";
+    doc = " enable a marker for trace partitioning";
+    spec = ArgExt.String Core.Marker.enable_marker;
+    default = "";
+  }
+
 (** Help message *)
 let help () =
   let options =

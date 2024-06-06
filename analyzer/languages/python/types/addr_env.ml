@@ -145,10 +145,11 @@ struct
     addr_true := Some {addr_partitioning = G_py_bool (Some true); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
     addr_false := Some {addr_partitioning = G_py_bool (Some false); addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = STRONG};
     addr_bool_top := Some {addr_partitioning = G_py_bool None; addr_kind = A_py_instance (fst @@ find_builtin "bool"); addr_mode = WEAK};
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
   let fold_intfloatstr man v flow fstmt =
-    let cur = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun cur flow ->
     let oaset = AMap.find_opt v cur in
     match oaset with
     | None ->
@@ -169,13 +170,13 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_add ({ekind = E_var (v, mode)} as e) when is_py_exp e ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        if mem v cur then
          flow |> Post.return |> OptionExt.return
        else
          let ncur = add v (ASet.singleton Undef_global) cur in
-         let flow =  set_env T_cur ncur man flow in
-         flow |> Post.return |> OptionExt.return
+         set_env T_cur ncur man flow |>
+         OptionExt.return
 
     | S_project vs when List.for_all (fun e -> match ekind e with E_var _ -> true | _ -> false) vs ->
        (* Some other domains may create variables depending on vs.
@@ -185,7 +186,7 @@ struct
                       let acc = VarSet.add (match ekind v with E_var (v, _) -> v | _ -> assert false) acc in
                       VarSet.union acc (ask_and_reduce man.ask (Q_variables_linked_to v) flow)
                     ) VarSet.empty vs in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let addrs = VarSet.fold (fun var acc ->
                        match find_opt var cur with
                        | None -> acc
@@ -221,11 +222,10 @@ struct
          (if VarSet.is_empty project_str then fun x -> Post.return x
           else man.exec ~route:(Below name) (mk_project_vars (VarSet.elements project_str) range)) |> post_to_flow man |>
          set_env T_cur ncur man |>
-         Post.return |>
          OptionExt.return
 
     | S_assign(({ekind = E_var (v, vmode)} as vl), ({ekind = E_var (w, wmode)} as wl)) when is_py_exp vl && var_mode v vmode = WEAK && var_mode w wmode = WEAK ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        begin match AMap.find_opt w cur with
        | None -> Post.return flow
        | Some aset ->
@@ -246,13 +246,10 @@ struct
                          | _ -> flow
                        ) aset (Post.return flow) in
           flow >>% fun flow ->
-                   Post.return
-                     begin
-                       if mem v cur then
-                         set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow
-                       else
-                         set_env T_cur (add v (find w cur) cur) man flow
-                     end
+          if mem v cur then
+            set_env T_cur (add v (ASet.join (find w cur) (find v cur)) cur) man flow
+          else
+            set_env T_cur (add v (find w cur) cur) man flow
        end
        |> OptionExt.return
 
@@ -263,16 +260,16 @@ struct
            (fun e flow ->
              match ekind e with
              | E_py_undefined true ->
-                assign_addr man v PyAddr.Undef_global mode flow |> Post.return
+                assign_addr man v PyAddr.Undef_global mode flow
 
              | E_py_undefined false ->
-                assign_addr man v PyAddr.Undef_local mode flow |> Post.return
+                assign_addr man v PyAddr.Undef_local mode flow
 
              | E_py_object (addr, None) ->
-                assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
+                assign_addr man v (PyAddr.Def addr) mode flow
 
              | E_py_object (addr, Some expr) ->
-                let flow = assign_addr man v (PyAddr.Def addr) mode flow in
+                assign_addr man v (PyAddr.Def addr) mode flow >>% fun flow ->
                 debug "calling values for %a" pp_addr addr;
                 begin match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)} ->
@@ -289,10 +286,9 @@ struct
                 end
 
              | E_constant (C_top (T_py None)) ->
-                let cur = get_env T_cur man flow in
+                get_env T_cur man flow >>$ fun cur flow ->
                 let aset = ASet.top in
                 set_env T_cur (add v aset cur) man flow
-                |> Post.return
 
 
              | _ -> Exceptions.panic_at range "%a@\n" pp_expr e
@@ -319,15 +315,15 @@ struct
                                      | _ ->
                                         Post.return flow
                                      end >>% fun flow ->
-                                       assign_addr man v (PyAddr.Def addr) mode flow |> Post.return
+                                       assign_addr man v (PyAddr.Def addr) mode flow
                                   | _ -> Exceptions.panic_at range "%a@\n" pp_expr e)
        |> OptionExt.return
 
     | S_remove ({ekind = E_var (v, _)} as var) when is_py_exp var ->
        (fold_intfloatstr man v flow (fun t -> mk_remove_var (Utils.change_var_type t v) range) >>% fun flow ->
        begin
-         let cur = get_env T_cur man flow in
-         let flow = set_env T_cur (AMap.remove v cur) man flow in
+         get_env T_cur man flow >>$ fun cur flow ->
+         set_env T_cur (AMap.remove v cur) man flow >>% fun flow ->
          begin match v.vkind with
          | V_uniq _ when not (Hashtbl.mem type_aliases v) ->
             (* FIXME: "remove var, assign to E_py_undefined?"; *)
@@ -371,10 +367,10 @@ struct
                       {stmt with skind = S_rename (Utils.change_evar_type t l,
                                                    Utils.change_evar_type t r)}) >>% fun flow ->
        begin
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$ fun cur flow ->
          begin match AMap.find_opt v cur with
          | Some aset ->
-            set_env T_cur (AMap.rename v v' cur) man flow |> Post.return
+            set_env T_cur (AMap.rename v v' cur) man flow
          | None ->
             begin match v.vkind with
             | V_addr_attr(a, _) when Objects.Data_container_utils.is_data_container a.addr_kind ->
@@ -386,7 +382,7 @@ struct
        end) |> OptionExt.return
 
     | S_fold (({ekind = E_var (v, mode)} as l), vars) when is_py_exp l ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let av = OptionExt.default ASet.empty (AMap.find_opt v cur) in
        let new_av, flow = List.fold_left (fun (av, flow) ev' ->
                               let flow = post_to_flow man flow in
@@ -399,16 +395,17 @@ struct
                               | Some av' ->
                                  ASet.join av av',
                                  fold_intfloatstr man v' flow (fun t -> mk_fold_var (Utils.change_var_type t v) [(Utils.change_var_type t v')] range) >>% fun flow ->
-                                 set_env T_cur (AMap.remove v' cur) man flow |> Post.return
+                                 set_env T_cur (AMap.remove v' cur) man flow
                             ) (av, Post.return flow) vars in
        let flow = post_to_flow man flow in
-       let flow =
-         if ASet.is_empty new_av then flow
+       let post =
+         if ASet.is_empty new_av then Post.return flow
          else map_env T_cur (AMap.add v new_av) man flow in
-       flow |> Post.return |> OptionExt.return
+       Some post
+       
 
     | S_expand (({ekind = E_var (v, mode)} as l), vars) when is_py_exp l ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        begin match AMap.find_opt v cur with
        | None -> warn_at range "weird expand on %a" pp_var v; Post.return flow
        | Some addrs_v ->
@@ -419,13 +416,13 @@ struct
           let ncur = AMap.mapi (fun var aset -> if VarSet.mem var varset then ASet.join aset addrs_v else aset) cur in
           let addrs_v = AMap.find v ncur in
           let ncur = VarSet.fold (fun vvarset ncur -> AMap.add vvarset addrs_v ncur) varset ncur in
-          let flow = set_env T_cur ncur man flow in
+          set_env T_cur ncur man flow >>% fun flow ->
           fold_intfloatstr man v flow (fun t -> mk_expand_var (Utils.change_var_type t v) (List.map (fun v -> Utils.change_var_type t v) (VarSet.elements varset)) range)
        end
        |> OptionExt.return
 
     | S_expand (({ekind = E_addr (a, _)} as e1), addrs) ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let addrs_aset = List.map (fun eaddr -> match ekind eaddr with
                                                | E_addr (addr, _) -> PyAddr.Def addr
                                                | _ -> assert false) addrs |> ASet.of_list in
@@ -435,7 +432,7 @@ struct
                         ASet.join addrs_aset aset
                       else aset
                     ) cur in
-       let flow = set_env T_cur ncur man flow in
+       set_env T_cur ncur man flow >>%? fun flow ->
        let flow = Flow.fold (fun acc tk d ->
               match tk with
               | T_py_exception ({ekind = E_py_object (oa, oe)} as e, s, m, k) when compare_addr a oa = 0 ->
@@ -461,10 +458,10 @@ struct
 
     | S_fold (({ekind = E_addr (a', om')} as e2), [{ekind = E_addr (a, om)} as e1])
       | S_rename (({ekind = E_addr (a, om)} as e1), ({ekind = E_addr (a', om')} as e2)) ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let rename addr = if PyAddr.compare addr (PyAddr.Def a) = 0 then PyAddr.Def a' else addr in
        let ncur = AMap.map (ASet.map rename) cur in
-       let flow = set_env T_cur ncur man flow in
+       set_env T_cur ncur man flow >>%? fun flow ->
        let to_rename = Flow.fold (fun acc tk d ->
                            match tk with
                            | T_py_exception ({ekind = E_py_object _}, _, _, _) -> true
@@ -525,9 +522,9 @@ struct
 
     | S_invalidate {ekind = E_addr (a, _)}
     | S_remove {ekind = E_addr (a, _)} ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let ncur = AMap.map (ASet.remove (Def a)) cur in
-       let flow = set_env T_cur ncur man flow in
+       set_env T_cur ncur man flow >>%? fun flow ->
        begin match akind a with
        | A_py_instance _ ->
           man.exec ~route:(Below name) stmt flow
@@ -539,7 +536,7 @@ struct
     | _ -> None
 
   and assign_addr man v av mode flow =
-    let cur = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun cur flow ->
     let aset = match var_mode v mode with
       | STRONG -> ASet.singleton av
       | WEAK ->
@@ -572,70 +569,72 @@ struct
     let range = erange exp in
     match ekind exp with
     | E_var (v, mode) when is_py_exp exp ->
-      let cur = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun cur flow ->
       if AMap.mem v cur then
         let aset = AMap.find v cur in
         if ASet.is_top aset then
           Eval.singleton (mk_top (T_py None) range) flow |> OptionExt.return
         else
         let evals, annot = ASet.fold (fun a (acc, annots) ->
-            let flow = if v.vmode = WEAK then flow else set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
-            let flow = Flow.set_ctx annots flow in
+            let post = if v.vmode = WEAK then Post.return flow else set_env T_cur (AMap.add v (ASet.singleton a) cur) man flow in
+            let post = Cases.set_ctx annots post in
             match a with
             | Undef_global when is_builtin_var v ->
-               (Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+               ( post >>% fun flow ->
+                 Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
                  Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range |>
                  Eval.singleton (mk_py_object (find_builtin (get_orig_vname v)) range)) :: acc, annots
 
             | Undef_local when is_builtin_var v ->
-               (Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
+               ( post >>% fun flow ->
+                 Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
                   Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range |>
                   Eval.singleton (mk_py_object (find_builtin @@ get_orig_vname v) range)) :: acc, annots
 
             | Undef_global ->
               let msg = Format.asprintf "name '%a' is not defined" pp_var v in
-              let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "NameError" msg range) flow) in
+              let flow = post_to_flow man (post >>% man.exec (Utils.mk_builtin_raise_msg "NameError" msg range)) in
               Eval.empty flow :: acc, Flow.get_ctx flow
 
             | Undef_local ->
               let msg = Format.asprintf "local variable '%a' referenced before assignment" pp_var v in
-              let flow = post_to_flow man (man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range) flow) in
+              let flow = post_to_flow man (post >>% man.exec (Utils.mk_builtin_raise_msg "UnboundLocalError" msg range)) in
               Eval.empty flow :: acc, Flow.get_ctx flow
 
             | Def addr ->
               (* first, let's clean numerical/string variables from other addrs *)
-              let flow = if v.vmode = WEAK then flow else ASet.fold (fun a' flow ->
+              let post = if v.vmode = WEAK then post else ASet.fold (fun a' post ->
                   match a' with
                   | Def addr' when compare_addr_kind (akind addr) (akind addr') <> 0 -> (* only the kind. If two str addrs, we can't remove anything *)
                     debug "removing other numerical vars";
-                    let f = begin match akind addr' with
+                    begin match akind addr' with
                       | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
-                        | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
-                         begin match akind addr with
-                         | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
-                           | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
-                            Post.return flow
+                      | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
+                        begin match akind addr with
+                          | A_py_instance {addr_kind = A_py_class (C_builtin "str", _)}
+                          | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
+                            post 
 
-                         | _ -> man.exec   (mk_remove_var (Utils.change_var_type T_string v) range) flow
-                         end
+                          | _ -> post >>% man.exec   (mk_remove_var (Utils.change_var_type T_string v) range)
+                        end
 
                       | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
                       | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                         begin match akind addr with
-                         | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
-                           | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
-                            Post.return flow
-                         | _ ->
-                            man.exec  (mk_remove_var (Utils.change_var_type T_int v) range) flow
-                         end
+                        begin match akind addr with
+                          | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)}
+                          | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)} ->
+                            post
+
+                          | _ ->
+                            post >>% man.exec  (mk_remove_var (Utils.change_var_type T_int v) range)
+                        end
                       | A_py_instance {addr_kind = A_py_class (C_builtin "float", _)} ->
-                        man.exec   (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range) flow
+                        post >>% man.exec   (mk_remove_var (Utils.change_var_type (T_float F_DOUBLE) v) range)
                       | _ ->
-                        Post.return flow
-                    end in
-                    debug "done"; post_to_flow man f
-                  | _ -> flow
-                ) aset flow in
+                        post
+                    end
+                  | _ -> post 
+                ) aset post in
               let exp = match akind addr with
                 | A_py_instance {addr_kind = A_py_class (C_builtin "bool", _)}
                 | A_py_instance {addr_kind = A_py_class (C_builtin "int", _)} ->
@@ -647,10 +646,12 @@ struct
                 | A_py_instance {addr_kind = A_py_class (C_builtin "bytes", _)} ->
                   Utils.change_evar_type T_string exp
                 | _ -> exp in
-              let flow =
+              let res =
+                post >>% fun flow ->
                 Flow.add_safe_check Alarms.CHK_PY_NAMEERROR range flow |>
-                  Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range in
-              let res = man.eval (mk_py_object (addr, Some exp) range) flow in
+                Flow.add_safe_check Alarms.CHK_PY_UNBOUNDLOCALERROR range |>
+                man.eval (mk_py_object (addr, Some exp) range)
+              in
               let annots = Cases.get_ctx res in
               res :: acc, annots
 
@@ -740,7 +741,7 @@ struct
     fun query man flow ->
       match query with
       | Universal.Heap.Recency.Q_alive_addresses ->
-           let cur = get_env T_cur man flow in
+           get_env T_cur man flow >>$? fun cur flow ->
            let aset = AMap.fold (fun var aset acc ->
                           ASet.join aset acc) cur ASet.empty in
            let ret =
@@ -752,7 +753,7 @@ struct
            Some (Cases.singleton ret flow)
 
       | Universal.Heap.Recency.Q_alive_addresses_aspset ->
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          let aset = AMap.fold (fun _ aset acc ->
                         ASet.join aset acc) cur ASet.empty in
          let ret =
@@ -764,7 +765,7 @@ struct
 
 
       | Q_variables_linked_to ({ekind = E_var(v, _)} as e) ->
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          let acc = VarSet.add v VarSet.empty in
          begin match AMap.find_opt v cur with
          | None ->
@@ -793,7 +794,7 @@ struct
 
       | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->
          let open Framework.Engines.Interactive.Query in
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          begin match AMap.find_opt var cur with
          | None ->
             None

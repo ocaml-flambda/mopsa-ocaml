@@ -91,7 +91,8 @@ struct
         let () = Hashtbl.add Common.Builtins.builtin_functions "error" () in
         Hashtbl.add Common.Builtins.builtin_functions "error_at" ()
     in
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
 
   (** {2 Computation of post-conditions} *)
@@ -310,7 +311,7 @@ struct
     match ekind e with
     | E_addr (addr, _) ->
       (* add the resource to local state *)
-      let flow = map_env T_cur (add addr) man flow in
+      map_env T_cur (add addr) man flow >>% fun flow ->
       (* add the address to memory state *)
       man.exec (mk_add e range) flow >>% fun flow ->
       (* set the size of the resource *)
@@ -395,7 +396,7 @@ struct
     else
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
-      let flow = set_env T_cur empty man flow in
+      set_env T_cur empty man flow >>% fun flow ->
       let ret =
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
@@ -494,10 +495,12 @@ struct
           set_c_program {c_program with c_functions = List.tl c_program.c_functions} flow
         else flow in 
       let callee_alloca_addrs = get_env T_cur man flow in
-      let flow = set_env T_cur caller_alloca_addrs man flow in
+      caller_alloca_addrs >>$ fun addrs flow ->
+      set_env T_cur addrs man flow >>% fun flow ->
+      callee_alloca_addrs >>$ fun addrs flow ->
       AddrSet.fold
         (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
-        callee_alloca_addrs (Post.return flow)
+        addrs (Post.return flow)
       >>% fun flow ->
       Eval.singleton e flow
 

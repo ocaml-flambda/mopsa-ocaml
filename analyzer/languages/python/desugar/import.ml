@@ -188,7 +188,7 @@ module Domain =
         let name = String.map (fun c -> if c = '.' then '/' else c) name in
         let (addr, expr), flow, is_stub =
           try
-            let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_env T_cur man flow) in
+            let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_singleton_env_from_flow T_cur man flow) in
             debug "module %s already imported, cache hit!" name;
             (a, e), flow, is_stub
           with Not_found ->
@@ -228,7 +228,7 @@ module Domain =
                   let () = debug "Searching for entry function %s" !C.Iterators.Program.Domain.opt_entry_function
                              (* (Format.pp_print_list (fun fmt fdec -> Format.pp_print_string fmt fdec.C.Ast.c_func_org_name)) (match prog.prog_kind with | C.Ast.C_program c -> c.c_functions | _ -> assert false) *)
                   in
-                  let flow = C.Iterators.Program.Domain.init prog man flow in
+                  let flow = C.Iterators.Program.Domain.init prog man flow |> Option.get |> post_to_flow man in
                   let () =
                     if Hook.is_hook_active "c.coverage" then
                       C.Hooks.Coverage.Hook.init (Flow.get_ctx flow) in
@@ -273,8 +273,12 @@ module Domain =
               let () = debug "pre body" in
               let flow' = post_to_flow man @@ man.exec body flow in
               let () = debug "post body" in
-              let cur = get_env T_cur man flow in
-              let flow' = set_env T_cur (ModulesMap.add name (Modules.singleton ((a, e), is_stub)) cur) man flow' in
+              let flow' =
+               ( get_env T_cur man flow >>$ fun cur flow ->
+                 set_env T_cur (ModulesMap.add name (Modules.singleton ((a, e), is_stub)) cur) man flow'
+               ) |>
+               post_to_flow man
+              in
               (a, e), flow', is_stub
             end
         in
@@ -519,7 +523,8 @@ module Domain =
     let init prog man flow =
       import_builtin_module (Some "mopsa") "mopsa";
       import_builtin_module None "stdlib";
-      set_env T_cur empty man flow
+      set_env T_cur empty man flow |>
+      Option.some
 
     let eval _ _ _ = None
 
@@ -527,7 +532,7 @@ module Domain =
       fun query man flow ->
       match query with
       | Q_python_addr_of_module s ->
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          let ret = OptionExt.lift (fun cs ->
              assert(Modules.cardinal cs = 1);
              let (a, _), _ = Modules.choose cs in

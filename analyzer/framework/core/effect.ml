@@ -19,13 +19,14 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Effect are logs of all statements executed during the computation of
+(** Effects are used to log the statements executed during the computation of
     a post-state *)
 
 open Ast.Var
 open Ast.Stmt
 open Ast.Expr
 open Mopsa_utils
+open Path
 
 type effect =
   | Effect_empty
@@ -106,7 +107,7 @@ let add_stmt_to_effect s = function
   | Effect_seq l -> Effect_seq (Effect_block [s]::l)
   | e -> Effect_seq [Effect_block [s];e]
 
-let rec concat_effect ~old ~recent =
+let rec concat_effect old recent =
   if is_empty_effect old then recent else
   if is_empty_effect recent then old
   else
@@ -118,131 +119,65 @@ let rec concat_effect ~old ~recent =
     | x, Effect_seq l -> Effect_seq(l@[x])
     | _ -> Effect_seq [recent;old]
 
-let rec fold_stmt_effect f acc = function
-  | Effect_empty -> acc
-  | Effect_block s -> List.fold_left f acc s
-  | Effect_seq l -> List.fold_left (fold_stmt_effect f) acc l
-  | Effect_join(e1,e2)
-  | Effect_meet(e1,e2) ->
-    let acc' = fold_stmt_effect f acc e1 in
-    fold_stmt_effect f acc' e2
+type effect_map = effect PathMap.t
 
-type teffect =
-  | Teffect_empty
-  | Teffect_node of effect * teffect * teffect
+let pp_effect_map fmt map =
+  if PathMap.is_empty map then
+    Format.pp_print_string fmt ""
+  else
+    Format.fprintf fmt "@[<v>%a@]"
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,")
+         (fun fmt (path, effect) -> Format.fprintf fmt "%a: %a" pp_path path pp_effect effect)
+      ) (PathMap.bindings map)
 
-let empty_teffect = Teffect_empty
+let compare_effect_map m1 m2 =
+  if m1 == m2 then 0
+  else PathMap.compare compare_effect m1 m2 
 
-let rec pp_teffect fmt = function
-  | Teffect_empty -> ()
-  | Teffect_node(e,l,r) ->
-    Format.fprintf fmt "@[<v2>%a@,%a@,%a@]"
-      pp_effect e
-      pp_teffect l
-      pp_teffect r
+let empty_effect_map = PathMap.empty
 
-let rec is_empty_teffect = function
-  | Teffect_empty -> true
-  | Teffect_node(e,l,r) ->
-    is_empty_effect e &&
-    is_empty_teffect l &&
-    is_empty_teffect r
+let singleton_effect_map path effect = PathMap.singleton path effect
 
-let rec compare_teffect te1 te2 =
-  if te1 == te2 then 0 else
-  match te1,te2 with
-    | Teffect_empty,Teffect_empty -> 0
-    | Teffect_node(e1,left1,right1),Teffect_node(e2,left2,right2) ->
-      Compare.triple compare_effect compare_teffect compare_teffect
-        (e1,left1,right1)
-        (e2,left2,right2)
-    | _ -> compare te1 te2
+let is_empty_effect_map m =
+  PathMap.for_all (fun _ e -> is_empty_effect e) m
 
-let empty_teffect = Teffect_empty
-
-let mk_teffect e left right =
-  Teffect_node (e,left,right)
-
-let get_root_effect  = function
-  | Teffect_empty       -> Effect_empty
-  | Teffect_node(e,_,_) -> e
-
-let get_left_teffect = function
-  | Teffect_empty          -> Teffect_empty
-  | Teffect_node(_,left,_) -> left
-
-let get_right_teffect = function
-  | Teffect_empty           -> Teffect_empty
-  | Teffect_node(_,_,right) -> right
-
-let set_left_teffect left = function
-  | Teffect_empty           -> Teffect_node(Effect_empty, left, Teffect_empty)
-  | Teffect_node(e,l,right) as te ->
-    if l == left then te else Teffect_node(e,left,right)
-
-let set_right_teffect right = function
-  | Teffect_empty          -> Teffect_node(Effect_empty, Teffect_empty, right)
-  | Teffect_node(e,left,r) as te ->
-    if right == r then te else Teffect_node(e,left,right)
-
-let map_left_teffect f = function
-  | Teffect_empty              -> Teffect_node(Effect_empty,f Teffect_empty,Teffect_empty)
-  | Teffect_node(e,left,right) -> Teffect_node(e,f left,right)
-
-let map_right_teffect f = function
-  | Teffect_empty              -> Teffect_node(Effect_empty,Teffect_empty,f Teffect_empty)
-  | Teffect_node(e,left,right) -> Teffect_node(e,left,f right)
-
-let add_stmt_to_teffect stmt = function
-  | Teffect_empty              -> Teffect_node(Effect_block [stmt],Teffect_empty,Teffect_empty)
-  | Teffect_node(e,left,right) -> Teffect_node(add_stmt_to_effect stmt e,left,right)
-
-let rec merge_teffect f1 f2 f teffect1 teffect2 =
-  if teffect1 == teffect2 then teffect1 else
-  match teffect1, teffect2 with
-  | Teffect_empty, Teffect_empty -> Teffect_empty
-  | Teffect_empty, Teffect_node(e,left,right) ->
-    let ee = f1 e in
-    if ee == e then teffect2 else Teffect_node (ee, left, right)
-  | Teffect_node(e,left,right), Teffect_empty ->
-    let ee = f2 e in
-    if ee == e then teffect1 else Teffect_node (ee, left, right)
-  | Teffect_node(e1,left1,right1), Teffect_node(e2,left2,right2) ->
-    let e = f e1 e2 in
-    let l = merge_teffect f1 f2 f left1 left2 in
-    let r = merge_teffect f1 f2 f right1 right2 in
-    if e == e1 && l == left1 && r == right1 then teffect1 else
-    if e == e2 && l == left2 && r == right2 then teffect2
-    else Teffect_node (e, l, r)
-
-let concat_teffect ~old ~recent =
-  merge_teffect
-    (fun old -> old)
-    (fun recent -> recent)
-    (fun old recent -> concat_effect ~old ~recent)
+let concat_effect_map old recent =
+  PathMap.map2zo
+    (fun p1 e1 -> e1)
+    (fun p2 e2 -> e2)
+    (fun p e1 e2 -> concat_effect e1 e2)
     old recent
 
-let meet_teffect teffect1 teffect2 =
-  merge_teffect
-    (fun e1 -> e1)
-    (fun e2 -> e2)
-    (fun e1 e2 -> meet_effect e1 e2)
-    teffect1 teffect2
+let join_effect_map map1 map2 =
+  PathMap.map2zo
+    (fun p1 e1 -> e1)
+    (fun p1 e2 -> e2)
+    (fun p e1 e2 -> join_effect e1 e2)
+    map1 map2
 
+let meet_effect_map map1 map2 =
+  PathMap.map2zo
+    (fun p1 e1 -> e1)
+    (fun p1 e2 -> e2)
+    (fun p e1 e2 -> meet_effect e1 e2)
+    map1 map2
 
-let join_teffect teffect1 teffect2 =
-  merge_teffect
-    (fun e1 -> e1)
-    (fun e2 -> e2)
-    (fun e1 e2 -> join_effect e1 e2)
-    teffect1 teffect2
+let get_effect path map =
+  match PathMap.find_opt path map with
+  | None   -> Effect_empty
+  | Some e -> e
 
-let rec fold_stmt_teffect f acc = function
-  | Teffect_empty -> acc
-  | Teffect_node(e,l,r) ->
-    let acc' = fold_stmt_effect f acc e in
-    let acc'' = fold_stmt_teffect f acc' l in
-    fold_stmt_teffect f acc'' r
+let add_stmt_to_effect_map stmt path map =
+  let effect =
+    match PathMap.find_opt path map with
+    | None ->
+      Effect_block [stmt]
+    | Some old ->
+      add_stmt_to_effect stmt old
+  in
+  PathMap.add path effect map
+
 
 (** {2 Generic merge} *)
 (** ***************** *)

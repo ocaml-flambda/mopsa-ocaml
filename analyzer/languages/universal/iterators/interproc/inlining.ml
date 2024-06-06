@@ -58,7 +58,9 @@ struct
     Flow.set_ctx (
       Flow.get_ctx flow |>
       add_ctx Context.callstack_ctx_key empty_callstack
-    ) flow
+    ) flow |>
+    Post.return |>
+    Option.some
 
   (** Computation of post-conditions *)
   (** ============================== *)
@@ -102,12 +104,8 @@ struct
         | None -> None
         | Some _ -> Some exp
       in
-      Some (
-          post >>% fun flow ->
-                   inline f params locals body call_oexp range man flow |>
-                     (* FIXME: we only keep intra-procedural effects for the moment *)
-                     Cases.set_effects empty_teffect
-      )
+      post >>% inline f params locals body call_oexp range man |>
+      Option.some
 
     | _ -> None
 

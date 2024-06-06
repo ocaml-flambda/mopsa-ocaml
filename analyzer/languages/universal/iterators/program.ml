@@ -38,9 +38,11 @@ struct
   let init prog man flow =
     match prog.prog_kind with
     | P_universal u ->
-      set_u_program u flow
+      set_u_program u flow |>
+      Post.return |>
+      Option.some
 
-    | _ -> flow 
+    | _ -> None
 
   let eval exp man flow = None
 

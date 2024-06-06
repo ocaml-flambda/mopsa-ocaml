@@ -96,8 +96,10 @@ struct
     add_ctx Fctx.key new_ctx old_ctx
 
 
-  let init prog flow =
-    Flow.map_ctx (add_ctx Fctx.key StringMap.empty)
+  let init prog man flow =
+    Flow.map_ctx (add_ctx Fctx.key StringMap.empty) flow |>
+    Post.return |>
+    Option.some
 
   let split_cur_from_others man flow =
     let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow) in

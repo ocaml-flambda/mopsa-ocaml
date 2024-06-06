@@ -26,7 +26,38 @@ open Sig.Abstraction.Stateless
 open Ast
 open Numeric.Common
 
+(******************)
+(** Trace markers *)
+(******************)
 
+type marker += M_if of bool * expr
+
+let () = register_marker {
+    marker_print = (fun next fmt -> function
+        | M_if(true, cond) ->
+          Format.fprintf fmt "if (%a)" pp_expr cond
+        | M_if(false, cond) ->
+          Format.fprintf fmt "if (!%a)" pp_expr cond
+        | m ->
+          next fmt m
+      );
+    marker_compare = (fun next m1 m2 ->
+        match m1, m2 with
+        | M_if(branch1, cond1), M_if(branch2, cond2) ->
+          Compare.pair Bool.compare compare_expr
+            (branch1, cond1) (branch2, cond2)
+        | _ ->
+          next m1 m2
+      );
+    marker_name = (fun next -> function
+        | M_if _ -> "if"
+        | m -> next m
+      );
+  }
+
+(**********************)
+(** Domain definition *)
+(**********************)
 
 module Domain =
 struct
@@ -39,7 +70,7 @@ struct
 
   let checks = []
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let rec negate_bool_expr e =
     match ekind e with
@@ -149,9 +180,13 @@ struct
        flow may have an empty [cur] environment. *)
     | S_if(cond, s1, s2) when Flow.is_singleton flow && Flow.mem T_cur flow ->
       assume cond man flow
-        ~fthen:(man.exec s1)
-        ~felse:(man.exec s2) |>
-      OptionExt.return
+        ~fthen:(fun flow ->
+            man.exec (mk_add_marker (M_if(true, cond)) stmt.srange) flow >>%
+            man.exec s1)
+        ~felse:(fun flow ->
+            man.exec (mk_add_marker (M_if(false, cond)) stmt.srange) flow >>%
+            man.exec s2)
+      |> OptionExt.return
 
     | S_if(cond, s1, s2) ->
       (* Use this function to execute a branch when the other one is not
@@ -159,8 +194,11 @@ struct
          this function executes the unreachable branch with an empty T_cur
          environment. This ensures that indirect flows in the branch are
          executed. *)
-      let exec_one_branch stmt other flow =
-        let post1 = man.exec stmt flow in
+      let exec_one_branch stmt other branch flow =
+        let post1 =
+          man.exec (mk_add_marker (M_if(branch, cond)) stmt.srange) flow >>%
+          man.exec stmt
+        in
         let ctx1 = Cases.get_ctx post1 in
         let flow2 = Flow.set_ctx ctx1 flow |>
                     Flow.remove T_cur
@@ -170,15 +208,21 @@ struct
       in
       (* Execute both branches and ensure proper propagation of the context *)
       let exec_both_branches flow1 flow2 =
-        let post1 = man.exec s1 flow1 in
+        let post1 =
+          man.exec (mk_add_marker (M_if(true, cond)) stmt.srange) flow1 >>%
+          man.exec s1
+        in
         let ctx1 = Cases.get_ctx post1 in
         let flow2 = Flow.set_ctx ctx1 flow2 in
-        let post2 = man.exec s2 flow2 in
+        let post2 =
+          man.exec (mk_add_marker (M_if(false, cond)) stmt.srange) flow2 >>%
+          man.exec s2
+        in
         Post.join post1 post2
       in
       assume cond man flow
-        ~fthen:(exec_one_branch s1 s2)
-        ~felse:(exec_one_branch s2 s1)
+        ~fthen:(exec_one_branch s1 s2 true)
+        ~felse:(exec_one_branch s2 s1 false)
         ~fboth:(exec_both_branches)
         (* When both environment are empty, we still need to execute both
            branches because of eventual indirect flows *)
