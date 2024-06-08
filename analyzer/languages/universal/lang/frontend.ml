@@ -526,7 +526,6 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.lift from_typ f.return_type in
-  let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
     fun_orig_name = f.funname;
     fun_uniq_name = f.funname;
@@ -535,7 +534,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
     fun_return_type = typ;
-    fun_return_var = ret_var;
+    fun_return_var = None;
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec U.ext list) (var_ctx: var_context) =

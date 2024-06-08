@@ -69,16 +69,17 @@ struct
     let range = stmt.srange in
     match skind stmt with
     | S_return (Some e) ->
-      let call = find_ctx return_key (Flow.get_ctx flow) in
-      let ret = mk_return call (Some range) in
+      let ret = find_ctx return_key (Flow.get_ctx flow) in
+      let flow = man.exec (mk_add_marker (M_return range) range) flow |> post_to_flow man in
       man.exec (mk_add_var ret range) flow >>%? fun flow ->
       man.exec (mk_assign (mk_var ret range) e range) flow >>%? fun flow ->
       let cur = Flow.get T_cur man.lattice flow in
-      Flow.add (T_return range) cur man.lattice flow |>
+      Flow.add (T_return (range)) cur man.lattice flow |>
       Flow.remove T_cur |>
       Post.return |> OptionExt.return
 
     | S_return None ->
+      let flow = man.exec (mk_add_marker (M_return range) range) flow |> post_to_flow man in
       let cur = Flow.get T_cur man.lattice flow in
       Flow.add (T_return range) cur man.lattice flow |>
       Flow.remove T_cur |>
@@ -100,11 +101,14 @@ struct
       else
 
       let params, locals, body, post = init_fun_params f args range man flow in
-      let call_oexp = match f.fun_return_type with
+      let ret = match f.fun_return_type with
         | None -> None
-        | Some _ -> Some exp
+        | Some _ ->
+          match f.fun_return_var with
+          | Some v -> Some v
+          | None   -> Some (mk_return exp)
       in
-      post >>% inline f params locals body call_oexp range man |>
+      post >>% inline f params locals body ret range man |>
       Option.some
 
     | _ -> None

@@ -54,7 +54,7 @@ struct
   let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
     let get_locals prog call =
       let f = find_function call prog.universal_fundecs in
-      f.fun_parameters @ f.fun_locvars @ [f.fun_return_var] in 
+      f.fun_parameters @ f.fun_locvars @ (match f.fun_return_var with None -> [] | Some v -> [v]) in 
     let open Framework.Engines.Interactive in
     match query with
     | Q_defined_variables (Some call) ->

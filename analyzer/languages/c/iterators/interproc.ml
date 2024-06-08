@@ -439,7 +439,6 @@ struct
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
            let open Universal.Ast in
-           let ret_var = mktmp ~typ:fundec.c_func_return () in
            let body' =
              if exists_stmt
                  (fun e -> false)
@@ -462,7 +461,7 @@ struct
                 removed twice. *)
              fun_body = body';
              fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
-             fun_return_var = ret_var;
+             fun_return_var = None;
              fun_range = fundec.c_func_range;
            }
            in

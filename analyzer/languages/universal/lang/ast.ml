@@ -220,7 +220,7 @@ type fundec = {
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
   fun_return_type: typ option; (** return type *)
-  fun_return_var: var; (** variable storing the return value *)
+  fun_return_var: var option; (** variable storing the return value *)
 }
 
 type fun_builtin =

@@ -122,12 +122,12 @@ struct
       let in_flow_cur = post_to_flow man in_flow_cur in
       begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
-           let call_oexp = match func.fun_return_type with
+           let ret = match func.fun_return_type with
              | None -> None
-             | Some _ -> Some exp
+             | Some _ -> Some (mk_return exp)
            in
                        (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
-           let res = inline func params locals body call_oexp range man in_flow_cur in
+           let res = inline func params locals body ret range man in_flow_cur in
            Cases.set_ctx (store_signature func.fun_uniq_name in_flow_cur res (Cases.get_ctx res)) res >>$ fun r flow ->
            Eval.singleton r (Flow.join man.lattice in_flow_other flow)
 
