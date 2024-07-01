@@ -297,11 +297,12 @@ let print_checks_summary checks_map total safe error warning out =
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v2>Checks summary: %a%a%a%a@,%a@]@.@."
+  print out "@[<v2>Checks summary: %a%a%a%a (selectivity: %.2f%%)@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
+    (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (check,(safe,error,warning)) ->
           fprintf fmt "%a: %d total%a%a%a"
