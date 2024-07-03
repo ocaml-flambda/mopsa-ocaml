@@ -45,6 +45,7 @@ depopts: ["elina"]
 build: [
   ["./configure"]
   [make]
+  [make tests] {with-test}
 ]
 install: [
   [make "install"]
