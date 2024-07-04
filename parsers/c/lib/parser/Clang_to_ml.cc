@@ -194,11 +194,11 @@ public:
 
   Cache(std::string name) : name(name), nb(0), nb_queries(0), nb_hit(0) {
     mlvalues = caml_alloc_tuple(100);
-    caml_register_global_root(&mlvalues);
+    caml_register_generational_global_root(&mlvalues);
   }
 
   ~Cache() {
-    caml_remove_global_root(&mlvalues);
+    caml_remove_generational_global_root(&mlvalues);
     if (cache_statistics) dump_statistics();
   }
 
@@ -239,7 +239,7 @@ public:
         for (size_t i = 0; i < Wosize_val(mlvalues); i++) {
           Store_field(tmp, i, Field(mlvalues, i));
         }
-        mlvalues = tmp;
+        caml_modify_generational_global_root(&mlvalues, tmp);
       }
       Store_field(mlvalues, nb, v);
       nb++;
@@ -3604,10 +3604,10 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
 
       GENERATE_NODE_INDIRECT(CaseStmt, ret, node, 3, {
           CAMLenterblock();
-          value tmp;
-          value tmp2;
-          value tmp3;
-          value tmp4;
+          value tmp = Val_unit;
+          value tmp2 = Val_unit;
+          value tmp3 = Val_unit;
+          value tmp4 = Val_unit;
           CAMLxparam4(tmp,tmp2,tmp3,tmp4);
           const Stmt* s;
 
@@ -4984,7 +4984,7 @@ public:
 
 
 CAML_EXPORT value mlclang_parse(value command, value target, value name, value args) {
-  CAMLparam3(target,name,args);
+  CAMLparam4(command,target,name,args);
   CAMLlocal2(ret,tmp);
 
   CompilerInstance ci;
