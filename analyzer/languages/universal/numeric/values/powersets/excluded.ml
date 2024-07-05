@@ -45,6 +45,19 @@ struct
     | In    of Set.t
     | NotIn of Set.t
 
+  let print printer a =
+    let print_set prefix s =
+      if Set.is_empty s then pp_string printer (prefix^"∅")
+      else
+        pp_set
+          (unformat Z.pp_print)
+          printer
+          (Set.to_poly_set s)
+          ~sopen:(prefix ^ "{") ~ssep:"," ~sclose:"}" in
+    match a with
+    | In s    -> print_set "∈ " s
+    | NotIn s -> print_set "∉ " s
+
   (** {2 Header of the abstraction} *)
   (** ***************************** *)
 
@@ -162,6 +175,16 @@ struct
            Set.fold (fun n2 -> Set.add (combiner n1 n2)) s2 acc
         ) s1 Set.empty
 
+  let combine_opt combiner (s1:Set.t) (s2:Set.t) =
+    Set.fold
+      (fun n1 acc ->
+         Set.fold (fun n2 acc ->
+             match combiner n1 n2 with
+             | None -> acc
+             | Some r -> Set.add r acc) s2 acc
+      ) s1 Set.empty
+
+
   (** {2 Lattice operators} *)
   (** ********************* *)
   let subset (a1:t) (a2:t) : bool =
@@ -232,7 +255,7 @@ struct
       therefore, it is a definite value), returns an excluded set where the
       constant is combined with the excluded powerset. Otherwise, returns [top].
     *)
-  let combine_with combiner a1 a2 =
+  let combine_with combine combiner a1 a2 =
     match a1,a2 with
     | In s1, In s2       -> In (combine combiner s1 s2) |> bound_size
     | NotIn s1, NotIn s2 -> top
@@ -254,62 +277,65 @@ struct
     if is_top a1    || is_top a2    then top    else
     let with_int f a b = f a (Z.to_int b) in
     try match op with
-    | O_plus       -> combine_with Z.add a1 a2
+    | O_plus       -> combine_with combine Z.add a1 a2
 
-    | O_minus      -> combine_with Z.sub a1 a2
+    | O_minus      -> combine_with combine Z.sub a1 a2
 
-    | O_mult       -> if is_zero a1 || is_zero a2 then zero else combine_with Z.mul a1 a2
+    | O_mult       -> if is_zero a1 || is_zero a2 then zero else combine_with combine Z.mul a1 a2
 
     | O_div        ->
+      let () = debug "%a O_div %a@." (format print) a1 (format print) a2 in
       if is_zero a1 then a1 else
       (* We remove 0 from both the in and the notin to prevent division by zero. *)
       let a2 = match a2 with
       | In s2    -> In    (Set.remove Z.zero s2)
       | NotIn s2 -> NotIn (Set.remove Z.zero s2)
       in
-      combine_with Z.div a1 a2
+      combine_with combine_opt (fun x y ->
+          if Z.(x mod y = zero) then Some (Z.div x y)
+          else None) a1 a2
 
     | O_pow        ->
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with (with_int Z.pow) a1 a2
+      | In s1, In s2 -> combine_with combine (with_int Z.pow) a1 a2
       | _            -> top
       end
 
     | O_bit_and    ->
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with Z.logand a1 a2
+      | In s1, In s2 -> combine_with combine Z.logand a1 a2
       | _            -> top
       end
 
     | O_bit_or     ->
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with Z.logor a1 a2
+      | In s1, In s2 -> combine_with combine Z.logor a1 a2
       | _            -> top
       end
 
     | O_bit_xor    ->
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with Z.logxor a1 a2
+      | In s1, In s2 -> combine_with combine Z.logxor a1 a2
       | _            -> top
       end
 
     | O_bit_lshift ->
       if is_zero a1 then a1 else
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with (with_int Z.shift_left) a1 a2
+      | In s1, In s2 -> combine_with combine (with_int Z.shift_left) a1 a2
       | _            -> top
       end
 
     | O_bit_rshift ->
       if is_zero a1 then a1 else
       begin match a1,a2 with
-      | In s1, In s2 -> combine_with (with_int Z.shift_right) a1 a2
+      | In s1, In s2 -> combine_with combine (with_int Z.shift_right) a1 a2
       | _            -> top
       end
 
     | O_mod        ->
       begin match a1,a2 with
-      | In s1, In s2 -> if is_zero a1 then a1 else combine_with Z.rem a1 (remove_zero a2)
+      | In s1, In s2 -> if is_zero a1 then a1 else combine_with combine Z.rem a1 (remove_zero a2)
       | _            -> top
       end
 
@@ -443,18 +469,6 @@ struct
 
     | _ -> default_compare op b t1 a1 t2 a2
 
-  let print printer a =
-    let print_set prefix s =
-      if Set.is_empty s then pp_string printer (prefix^"∅")
-      else
-        pp_set
-          (unformat Z.pp_print)
-          printer
-          (Set.to_poly_set s)
-          ~sopen:(prefix ^ "{") ~ssep:"," ~sclose:"}" in
-    match a with
-    | In s    -> print_set "∈ " s
-    | NotIn s -> print_set "∉ " s
 end
 
 let () =

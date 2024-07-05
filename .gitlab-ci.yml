@@ -8,7 +8,7 @@ variables:
   GIT_STRATEGY: fetch
   RUN_BENCHMARKS: "false"
   UPDATE_DOCKER: "false"
-  DISABLE_MOPSA_DIFF : "false"
+  FORCE_BASELINE_UPDATE : "false"
 
 image: mopsa/mopsa-build:latest
 
@@ -67,7 +67,7 @@ build_opam:
     - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
     - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
     - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
-    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" --form "variables[DISABLE_MOPSA_DIFF]=$DISABLE_MOPSA_DIFF" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
+    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" --form "variables[FORCE_BASELINE_UPDATE]=$FORCE_BASELINE_UPDATE" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
 
 
 downstream-benchs 1/10:
