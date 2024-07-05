@@ -32,12 +32,12 @@ depends: [
   "dune" {>= "3.7"}
   "conf-autoconf"
   "ocamlfind"
-  "apron"
+  "apron" {>= "0.9.15"}
   "conf-libclang"
   "menhir"
   "mlgmpidl"
-  "yojson"
-  "zarith"
+  "yojson" {>= "1.6.0"}
+  "zarith" {>= "1.4"}
   "zlib"
   "odoc" {with-doc}
 ]
@@ -45,8 +45,10 @@ depopts: ["elina"]
 build: [
   ["./configure"]
   [make]
+  [make tests] {with-test}
 ]
 install: [
   [make "install"]
 ]
 dev-repo: "git+https://gitlab.com/mopsa/mopsa-analyzer.git"
+available: [ !(arch = "x86_32") ]

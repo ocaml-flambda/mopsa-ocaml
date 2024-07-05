@@ -169,13 +169,12 @@ if test "x$LLVMCONFIG" != "x"; then
     AC_SUBST([LLVMCONFIG])
   else
     AC_CHECK_TOOL(CLANG,clang$LLVMCONFIG_EXTRA)
-
     if test "x$CLANG " = "x"; then
        CLANGDIR=$($LLVMCONFIG --prefix)/lib/clang/$(ls -1 $($LLVMCONFIG --prefix)/lib/clang/ | sort | tail -n 1)
        AC_MSG_WARN([Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR])
        AC_SUBST(CLANGRESOURCEDIR, "(echo \"$CLANGDIR\")")
     else
-       AC_SUBST(CLANGRESOURCEDIR,(run $CLANG -print-resource-dir))
+       AC_SUBST(CLANGRESOURCEDIR,"(run $CLANG -print-resource-dir)")
     fi 
 
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
