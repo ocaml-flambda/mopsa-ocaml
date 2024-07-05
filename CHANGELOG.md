@@ -1,5 +1,6 @@
-# Current
+# 1.0~pre5
 
+- !214 by @rmonat: update minimum requirements
 - !220 by @rmonat: fix excluded powerset case when division is not exact
 - !215 by @boillot: correct the semantics of shift-right to match what is done in other domains (division by 2^lhs but rounded towards -oo, rather than rounding to 0 provided by C integer division)
 

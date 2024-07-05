@@ -4901,12 +4901,16 @@ else
   CLANG="$ac_cv_prog_CLANG"
 fi
 
-
-    CLANGDIR=$($LLVMCONFIG --prefix)/lib/clang/$(ls -1 $($LLVMCONFIG --prefix)/lib/clang/ | sort | tail -n 1)
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR" >&5
+    if test "x$CLANG " = "x"; then
+       CLANGDIR=$($LLVMCONFIG --prefix)/lib/clang/$(ls -1 $($LLVMCONFIG --prefix)/lib/clang/ | sort | tail -n 1)
+       { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR" >&5
 printf "%s\n" "$as_me: WARNING: Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR" >&2;}
-    CLANGRESOURCEDIR="(echo \"$CLANGDIR\")"
+       CLANGRESOURCEDIR="(echo \"$CLANGDIR\")"
 
+    else
+       CLANGRESOURCEDIR="(run $CLANG -print-resource-dir)"
+
+    fi
 
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
 
