@@ -256,11 +256,11 @@ def print_docker_instructions():
    print(f"docker login registry.gitlab.com -p {token}")
    # VERSIONS with ~ seem to not be accepted by Docker
    print(f"cd ../docker/analyzer && docker build -t registry.gitlab.com/{group}/{project}:{version.replace('~', '-')} .")
-   print(f"docker push registry.gitlab.com/{group}/{project}:{version}")
-   print(f"docker image tag registry.gitlab.com/{group}/{project}:{version} registry.gitlab.com/{group}/{project}:stable")
+   print(f"docker push registry.gitlab.com/{group}/{project}:{version.replace('~', '-')}")
+   print(f"docker image tag registry.gitlab.com/{group}/{project}:{version.replace('~', '-')} registry.gitlab.com/{group}/{project}:stable")
    print(f"docker push registry.gitlab.com/{group}/{project}:stable")
 
-# OPAM
+# OPAM 
 ######
 
 def print_opam_instructions():
