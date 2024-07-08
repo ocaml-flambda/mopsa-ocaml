@@ -108,7 +108,7 @@ struct
       | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
     in
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -128,7 +128,7 @@ struct
 
   let ask targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -148,7 +148,7 @@ struct
 
   let print_state targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -168,7 +168,7 @@ struct
 
   let print_expr targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
