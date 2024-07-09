@@ -35,7 +35,6 @@ To build Mopsa, first make sure you have the following dependencies:
 - `opam <https://opam.ocaml.org/>`_ (version >= 2)
 - `Yojson <https://github.com/ocaml-community/yojson>`_
 - `Zarith <https://github.com/ocaml/Zarith>`_
-- `zlib <https://opam.ocaml.org/packages/zlib/>`_
 
 The OCaml dependencies can be installed with the following command using `opam`:
 
@@ -48,7 +47,7 @@ If you are using Ubuntu 20.04, you can use the following commands to install the
 
 .. code-block:: shell-session
 
-   $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config zlib1g-dev
+   $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config
    $ opam init --compiler 4.12.0
    $ eval $(opam env)
    $ opam install --deps-only --with-doc --with-test .
@@ -58,7 +57,7 @@ For Ubuntu 22.04, you can use:
 
 .. code-block:: shell-session
 
-   $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config zlib1g-dev
+   $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config
    $ opam init
    $ eval $(opam env)
    $ opam install --deps-only --with-doc --with-test .

@@ -45,6 +45,6 @@
 It features a modular architecture to support different kinds of languages, iterators, and abstract domains.
 For the moment, MOPSA can analyze programs written in a subset of C and Python.
 It reports run-time errors on C programs and uncaught exceptions on Python programs.")
- (depends (ocaml (>= 4.12.0)) dune conf-autoconf ocamlfind (apron (>= 0.9.15)) conf-libclang menhir mlgmpidl (yojson (>= 1.6.0)) (zarith (>= 1.4)) zlib)
+ (depends (ocaml (>= 4.12.0)) dune conf-autoconf ocamlfind (apron (>= 0.9.15)) conf-libclang menhir mlgmpidl (yojson (>= 1.6.0)) (zarith (>= 1.4)))
  (depopts elina)
 )
