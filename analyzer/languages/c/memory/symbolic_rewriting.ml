@@ -560,7 +560,7 @@ struct
       in
       check_int_overflow env exp (reduce env aexpr, m, flow)
 
-      (* 𝔼⟦ e / e' ⟧, type(exp) = int *)
+    (* 𝔼⟦ e / e' ⟧, type(exp) = int *)
     | E_binop(O_div, e, e') when exp |> etyp |> is_c_int_type ->
       let (aexpr1, m1, flow) = abstract env e flow in
       let (aexpr2, m2, flow) = abstract env e' flow in
@@ -569,8 +569,6 @@ struct
         let itv_denom = env.iota nexp2 in
         if IntItv.contains_zero itv_denom then
           raise No_representation (* first approximation *)
-        else if exp.erange == env.range then
-          flow (* if the expression is just a rewritten shift-right expression *)
         else
           safe_c_divide_by_zero_check exp.erange env.man flow
       in
@@ -608,11 +606,11 @@ struct
       abstract env e flow |>
       check_int_overflow env exp
 
-    (* 𝔼⟦ e ⋄ e' ⟧, ⋄ ∈ {>>, <<} *)
-    | E_binop(op, e, e') when op |> is_c_shift_op && exp |> etyp |> is_c_int_type ->
+    (* 𝔼⟦ e << e' ⟧ *)
+    | E_binop(O_bit_lshift, e, e') when exp |> etyp |> is_c_int_type ->
       let (aexpr2, m2, flow) = abstract env e' flow in
       let aexpr2' = rm_mod env (aexpr2, m2) in
-      (* when the shift is *by a constant* and is safe, transform it in a product or a quotient *)
+      (* when the shift is *by a constant* and is safe, transform it in a product *)
       begin match env.iota (to_expr env aexpr2') with
       | (Finite l, Finite u) when Z.equal l u ->
         (* Condition: l ∈ [0, bits(t) - 1] *)
@@ -620,13 +618,49 @@ struct
         if Z.leq Z.zero l && Z.lt l bits then
           let flow = safe_c_shift_check exp.erange env.man flow in
           let e' = mk_z ~typ:T_int (l |> Z.to_int |> Z.shift_left Z.one) env.range in
-          let op' = match op with
-            | O_bit_lshift -> O_mult
-            | O_bit_rshift -> O_div
-            | _ -> assert false
-          in
-          let exp' = mk_binop ~etyp:exp.etyp e op' e' env.range in
+          let exp' = mk_binop ~etyp:exp.etyp e O_mult e' env.range in
           abstract env exp' flow
+        else
+          raise No_representation
+      | _ -> raise No_representation
+      end
+
+    (* 𝔼⟦ e >> e' ⟧ *)
+    | E_binop(O_bit_rshift, e, e') when exp |> etyp |> is_c_int_type ->
+      let (aexpr1, m1, flow) = abstract env e flow in
+      let (aexpr2, m2, flow) = abstract env e' flow in
+      let aexpr2' = rm_mod env (aexpr2, m2) in
+      (* when the shift is *by a constant* and is safe, transform it in a quotient rounded towards 0 *)
+      begin match env.iota (to_expr env aexpr2') with
+      | (Finite l, Finite u) when Z.equal l u ->
+        (* Condition: l ∈ [0, bits(t) - 1] *)
+        let bits = sizeof_type exp.etyp flow |> Z.mul (Z.of_int 8) in
+        if Z.leq Z.zero l && Z.lt l bits then
+          let flow = safe_c_shift_check exp.erange env.man flow in
+          let denom = l |> Z.to_int |> Z.shift_left Z.one in
+          let (aexpr1, m) =
+            match m1 with
+            | Mod (l,u) when Z.divisible l denom && Z.divisible u denom ->
+              (* we do not require the numerator to be positive like in the division case,
+                 because this operation corresponds to an Euclidean division and not a truncated one *)
+              (aexpr1, Mod (Z.divexact l denom, Z.divexact u denom))
+            | _ ->
+              (rm_mod env (aexpr1, m1), NoMod)
+          in
+          (* when the bounds of [m1] are divisible by [denom], the sign of [aexpr1 mod m1] is not considered, only the one of [aexpr1] matters *)
+          let num_int = env.iota (to_expr env aexpr1) in
+          let aexpr1 =
+            if IntItv.is_positive num_int then
+              (* if a >= 0, a >> n = floor(a/2^n) = truncate(a/2^n) *)
+              aexpr1
+            else if IntItv.is_negative num_int then
+              (* if a <= 0, a >> n = ceil(a/2^n) = truncate((a-2^n+1)/2^n) *)
+              reduce env (BinExpr (Add, aexpr1, lf_const (denom |> Z.neg |> Z.succ)))
+            else
+              raise No_representation
+          in
+          let aexpr = reduce env (BinExpr (Div, aexpr1, lf_const denom)) in
+          check_int_overflow env exp (aexpr, m, flow)
         else
           raise No_representation
       | _ -> raise No_representation

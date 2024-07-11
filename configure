@@ -4900,6 +4900,7 @@ else
   CLANG="$ac_cv_prog_CLANG"
 fi
 
+
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
 
 

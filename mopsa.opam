@@ -31,11 +31,12 @@ depends: [
   "ocaml" {>= "4.12.0"}
   "dune" {>= "3.7"}
   "ocamlfind"
-  "apron"
+  "apron" {>= "0.9.15"}
   "menhir"
   "mlgmpidl"
-  "yojson"
-  "zarith"
+  "yojson" {>= "1.6.0"}
+  "zarith" {>= "1.4"}
+  "zlib"
   "odoc" {with-doc}
 ]
 depexts: [
@@ -64,8 +65,10 @@ depopts: ["elina"]
 build: [
   ["./configure"]
   [make]
+  [make tests] {with-test}
 ]
 install: [
   [make "install"]
 ]
 dev-repo: "git+https://gitlab.com/mopsa/mopsa-analyzer.git"
+
