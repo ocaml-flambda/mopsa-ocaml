@@ -620,9 +620,9 @@ meta_analyzer_requires
 enable_byte
 disable_python
 disable_c
+CLANGRESOURCEDIR
 LLVM_CCLIBS
 LLVM_MAJOR_VERSION
-CLANGRESOURCEDIR
 CLANG
 LLVMCONFIG
 MENHIR
@@ -1803,9 +1803,7 @@ struct stat;
 /* Most of the following tests are stolen from RCS 5.7 src/conf.sh.  */
 struct buf { int x; };
 struct buf * (*rcsopen) (struct buf *, struct stat *, int);
-static char *e (p, i)
-     char **p;
-     int i;
+static char *e (char **p, int i)
 {
   return p[i];
 }
@@ -1856,6 +1854,7 @@ extern int puts (const char *);
 extern int printf (const char *, ...);
 extern int dprintf (int, const char *, ...);
 extern void *malloc (size_t);
+extern void free (void *);
 
 // Check varargs macros.  These examples are taken from C99 6.10.3.5.
 // dprintf is used instead of fprintf to avoid needing to declare
@@ -3690,11 +3689,11 @@ if test x$ac_prog_cxx_stdcxx = xno
 then :
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $CXX option to enable C++11 features" >&5
 printf %s "checking for $CXX option to enable C++11 features... " >&6; }
-if test ${ac_cv_prog_cxx_11+y}
+if test ${ac_cv_prog_cxx_cxx11+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
-  ac_cv_prog_cxx_11=no
+  ac_cv_prog_cxx_cxx11=no
 ac_save_CXX=$CXX
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -3736,11 +3735,11 @@ if test x$ac_prog_cxx_stdcxx = xno
 then :
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $CXX option to enable C++98 features" >&5
 printf %s "checking for $CXX option to enable C++98 features... " >&6; }
-if test ${ac_cv_prog_cxx_98+y}
+if test ${ac_cv_prog_cxx_cxx98+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
-  ac_cv_prog_cxx_98=no
+  ac_cv_prog_cxx_cxx98=no
 ac_save_CXX=$CXX
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -4901,13 +4900,6 @@ else
   CLANG="$ac_cv_prog_CLANG"
 fi
 
-
-    CLANGDIR=$($LLVMCONFIG --prefix)/lib/clang/$(ls -1 $($LLVMCONFIG --prefix)/lib/clang/ | sort | tail -n 1)
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR" >&5
-printf "%s\n" "$as_me: WARNING: Clang not installed, heuristic choice of clang resource-dir chosen: $CLANGDIR" >&2;}
-    CLANGRESOURCEDIR="(echo \"$CLANGDIR\")"
-
-
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
 
 
@@ -4918,8 +4910,121 @@ printf "%s\n" "$as_me: WARNING: Clang not installed, heuristic choice of clang r
     fi
 
   fi
+fi
+
+if test "x$CLANG" = "x"; then
+  if test -n "$ac_tool_prefix"; then
+  # Extract the first word of "${ac_tool_prefix}clang", so it can be a program name with args.
+set dummy ${ac_tool_prefix}clang; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_CLANG+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if test -n "$CLANG"; then
+  ac_cv_prog_CLANG="$CLANG" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_CLANG="${ac_tool_prefix}clang"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
 
 fi
+fi
+CLANG=$ac_cv_prog_CLANG
+if test -n "$CLANG"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $CLANG" >&5
+printf "%s\n" "$CLANG" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+fi
+if test -z "$ac_cv_prog_CLANG"; then
+  ac_ct_CLANG=$CLANG
+  # Extract the first word of "clang", so it can be a program name with args.
+set dummy clang; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_ac_ct_CLANG+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if test -n "$ac_ct_CLANG"; then
+  ac_cv_prog_ac_ct_CLANG="$ac_ct_CLANG" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_ac_ct_CLANG="clang"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+ac_ct_CLANG=$ac_cv_prog_ac_ct_CLANG
+if test -n "$ac_ct_CLANG"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_ct_CLANG" >&5
+printf "%s\n" "$ac_ct_CLANG" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+  if test "x$ac_ct_CLANG" = x; then
+    CLANG=""
+  else
+    case $cross_compiling:$ac_tool_warned in
+yes:)
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
+printf "%s\n" "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
+ac_tool_warned=yes ;;
+esac
+    CLANG=$ac_ct_CLANG
+  fi
+else
+  CLANG="$ac_cv_prog_CLANG"
+fi
+
+fi
+
+if test "x$CLANG" = "x"; then
+  LLVMCONFIG=""
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: clang not found. C analyzer will not be compiled." >&5
+printf "%s\n" "$as_me: WARNING: clang not found. C analyzer will not be compiled." >&2;}
+else
+  CLANGDIR=$($CLANG -print-resource-dir)
+fi
+CLANGRESOURCEDIR="(echo \"$CLANGDIR\")"
 
 
 # Deactivation of C analysis
