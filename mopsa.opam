@@ -30,16 +30,35 @@ bug-reports: "https://gitlab.com/mopsa/mopsa-analyzer/issues"
 depends: [
   "ocaml" {>= "4.12.0"}
   "dune" {>= "3.7"}
-  "conf-autoconf"
   "ocamlfind"
   "apron"
-  "conf-libclang"
   "menhir"
   "mlgmpidl"
   "yojson"
   "zarith"
-  "zlib"
   "odoc" {with-doc}
+]
+depexts: [
+  ["clang" "libclang-18-dev" "libclang-cpp18-dev" "llvm-18-dev"] {(os-distribution = "ubuntu" & os-version >= "24.04")}
+  ["clang" "libclang-16-dev" "libclang-cpp16-dev" "llvm-16-dev"] {(os-distribution = "ubuntu" & os-version = "23.10")}
+  ["clang" "libclang-15-dev" "libclang-cpp15-dev" "llvm-15-dev"] {(os-distribution = "ubuntu" & os-version = "23.04")}
+  ["clang" "libclang-15-dev" "libclang-cpp15-dev" "llvm-15-dev"] {(os-distribution = "ubuntu" & os-version = "22.10")}
+  ["clang" "libclang-14-dev" "libclang-cpp14-dev" "llvm-14-dev"] {(os-distribution = "ubuntu" & os-version = "22.04")}
+  ["clang" "libclang-13-dev" "libclang-cpp13-dev" "llvm-13-dev"] {(os-distribution = "ubuntu" & os-version = "21.10")}
+  ["clang" "libclang-12-dev" "libclang-cpp12-dev" "llvm-12-dev"] {(os-distribution = "ubuntu" & os-version = "21.04")}
+  ["clang" "libclang-11-dev" "libclang-cpp11-dev" "llvm-11-dev"] {(os-distribution = "ubuntu" & os-version = "20.10")}
+  ["clang" "libclang-12-dev" "libclang-cpp12-dev" "llvm-12-dev"] {(os-distribution = "ubuntu" & os-version = "20.04")}
+  ["clang" "libclang-16-dev" "libclang-cpp16-dev" "llvm-16-dev"] {(os-distribution = "debian" & os-version >= "13")}
+  ["clang" "libclang-14-dev" "libclang-cpp14-dev" "llvm-14-dev"] {(os-distribution = "debian" & os-version = "12")}
+  ["clang-13" "libclang-13-dev" "libclang-cpp13-dev" "llvm-13-dev"] {(os-distribution = "debian" & os-version = "11")}
+  ["clang-13" "libclang-13-dev" "libclang-cpp13-dev" "llvm-13-dev"] {(os-distribution = "debian" & os-version = "10")}
+  ["clang-devel" "llvm-devel" "zlib-devel" "redhat-rpm-config"]  {(os-family = "fedora")}
+  ["clang" "llvm"] {(os-family = "arch")}
+  ["clang17-dev" "llvm17-dev"] {(os-distribution = "alpine" & os-version >= "3.19")}
+  ["clang16-dev" "llvm16-dev"] {(os-distribution = "alpine" & os-version >= "3.18" & os-version < "3.19")}
+  ["clang15-dev" "llvm15-dev"] {(os-distribution = "alpine" & os-version >= "3.17" & os-version < "3.18")}
+  ["clang" "clang-devel" "llvm" "llvm-devel" "mpfr-devel"] {(os-distribution = "opensuse-tumbleweed")}
+  ["sys-devel/clang"] {(os-distribution = "gentoo")}
 ]
 depopts: ["elina"]
 build: [
