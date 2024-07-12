@@ -40,7 +40,7 @@ The OCaml dependencies can be installed with the following command using `opam`:
 
 .. code-block:: shell-session
 
-   $ opam install --deps-only --with-doc --with-test .
+   $ LANG=C opam install --deps-only --with-doc --with-test .
 
 
 If you are using Ubuntu 20.04, you can use the following commands to install the dependencies:
@@ -50,7 +50,7 @@ If you are using Ubuntu 20.04, you can use the following commands to install the
    $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config
    $ opam init --compiler 4.12.0
    $ eval $(opam env)
-   $ opam install --deps-only --with-doc --with-test .
+   $ LANG=C opam install --deps-only --with-doc --with-test .
 
 
 For Ubuntu 22.04, you can use:
@@ -60,7 +60,7 @@ For Ubuntu 22.04, you can use:
    $ sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config
    $ opam init
    $ eval $(opam env)
-   $ opam install --deps-only --with-doc --with-test .
+   $ LANG=C opam install --deps-only --with-doc --with-test .
 
 
 Building
