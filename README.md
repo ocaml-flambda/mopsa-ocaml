@@ -1,11 +1,13 @@
 # MOPSA
 
-MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at making the development/use of static analyzers less painful.
+MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at easing the development and use of static analyzers.
 
 More specifically, MOPSA is a generic framework for building sound static analyzer based on the theory of abstract interpretation.
-It features a modular architecture for supporting different kinds of languages, iterators and abstractions.
+MOPSA is independent of language and abstraction choices. 
+Developers are free to add arbitrary abstractions (numeric, pointer, memory, etc.) and syntax iterators for new languages. 
+Mopsa encourages the development of independent abstractions which can cooperate or be combined to improve precision. 
 
-For the moment, MOPSA can analyze only programs written in C and Python.
+Mopsa currently support the analysis of Python, C and Python+C programs.
 
 A [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
 
@@ -126,6 +128,7 @@ dune build
 ## Additional resources
 
 * [source code](https://gitlab.com/mopsa/mopsa-analyzer) on GitLab
-* [research project page](https://mopsa.lip6.fr/)
 * [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/)
 * [benchmark analysis projects](https://gitlab.com/mopsa/benchmarks) on GitLab
+* [research project page](https://mopsa.lip6.fr/)
+* [academic overview of Mopsa in STTE paper](https://hal.sorbonne-universite.fr/hal-02890500v1/document), and [in a PhD thesis](https://rmonat.fr/data/pubs/2021/thesis_monat.pdf#page=61)
