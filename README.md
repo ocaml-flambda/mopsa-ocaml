@@ -38,7 +38,7 @@ Before compiling MOPSA, ensure that you have the following dependencies:
 The OCaml dependencies can be installed on any system with opam with:
 
 ```shell
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
@@ -47,7 +47,7 @@ For instance, on Ubuntu, you can use these commands to install the dependencies 
 sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config
 opam init --compiler 4.12.0
 eval $(opam env)
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For Ubuntu 22.04, you can use:
@@ -55,7 +55,7 @@ For Ubuntu 22.04, you can use:
 sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config
 opam init
 eval $(opam env)
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For SV-Comp, you also need:
