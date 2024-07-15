@@ -7,10 +7,12 @@ MOPSA is independent of language and abstraction choices.
 Developers are free to add arbitrary abstractions (numeric, pointer, memory, etc.) and syntax iterators for new languages. 
 Mopsa encourages the development of independent abstractions which can cooperate or be combined to improve precision. 
 
-Mopsa currently support the analysis of Python, C and Python+C programs.
+Mopsa currently support the analysis of Python, C and Python+C programs. Our [benchmarks](https://gitlab.com/mopsa/benchmarks/) provide an illustrative overview of what Mopsa can currently analyze. 
+All analyses currently provided are flow and context-sensitive (i.e, control-flow operators are taken into account by the analysis, and functions are analyzed by virtual inlining).
+The C analysis is actively developed and maintained. 
+The Python and Python+C analyses work on real-world examples, but are not actively developed.
 
-A [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
-
+A [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/) is available.
 
 ## License
 
