@@ -20,83 +20,23 @@ See the accompanying COPYING file, or [http://www.gnu.org/licenses/](http://www.
 The documentation and example files of the MOPSA software are distributed under a Creative Commons Attribution-ShareAlike 4.0 International License. See [https://creativecommons.org/licenses/by-sa/4.0/](https://creativecommons.org/licenses/by-sa/4.0/).
 
 
-## Dependencies
+## Installation 
 
-Before compiling MOPSA, ensure that you have the following dependencies:
-
-* Apron
-* autoconf
-* CamlIDL
-* GMP
-* LLVM + Clang (version >= 6.x)
-* make
-* Menhir
-* MPFR
-* OCaml (version >= 4.12.0)
-* opam (version >= 2)
-* Yojson
-* Zarith
-
-The OCaml dependencies can be installed on any system with opam with:
+You can use OCaml's package manager (opam), to resolve dependencies and install Mopsa. 
+See [here on how to install opam](https://opam.ocaml.org/doc/Install.html#Using-your-distribution-39-s-package-system).
 
 ```shell
-LANG=C opam install --deps-only --with-doc --with-test .
+LANG=C opam pin add mopsa --with-doc --with-test .
 ```
 
-For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
+You can check the [documentation](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/quick-start/installation.html) to build from source.
 
-```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config
-opam init --compiler 4.12.0
-eval $(opam env)
-LANG=C opam install --deps-only --with-doc --with-test .
-```
+### SV-Comp 
 
-For Ubuntu 22.04, you can use:
-```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config
-opam init
-eval $(opam env)
-LANG=C opam install --deps-only --with-doc --with-test .
-```
-
-For SV-Comp, you also need:
+For the Software-Verification Competition, you also need:
 ```shell
  sudo dpkg --add-architecture i386 && sudo apt install libc6-dev-i386
 ```
-
-## Compilation
-
-To compile MOPSA, just run:
-
-```shell
-./configure
-make
-```
-
-Note that the script `configure` accepts the usual configuration options (e.g. `--prefix`, `--bindir`, etc.), in addition to:
-
-* `--disable-c` to disable the compilation of the C analysis.
-* `--disable-python` to disable the compilation of the Python analysis.
-* `--enable-byte` to compile MOPSA as a bytecode executable.
-
-## Installation
-
-After compilation, the binaries are available in the `_build/install/default/bin` sub-directory.
-
-The standard command:
-```shell
-make install
-```
-will install MOPSA in your opam switch.
-
-## Opam-based compilation & installation
-
-Assuming that dependencies are installed, you can replace `./configure`, `make`, `make install` with simply:
-```shell
-opam pin add mopsa .
-```
-which compiles MOPSA and installs the binaries and libraries in your opam switch.
 
 
 ## Linking against the MOPSA library
