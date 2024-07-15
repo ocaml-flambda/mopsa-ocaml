@@ -337,6 +337,7 @@ let div ((a,b):t) ((a',b'):t) : t_with_bot =
 let rem ((a,b):t) ((a',b'):t) : t_with_bot =
   if a' = Z.zero then
     if b' = Z.zero then BOT (* aℤ+b mod 0 *)
+    else if a = Z.zero then Nb (cst (Z.rem b b')) (* b mod b' *)
     else Nb (of_z (gcd a b') (Z.rem b b')) (* aℤ+b mod b' *)
   else Nb (of_z (gcd3 a a' b') b) (* general case *)
 (** Remainder. Uses the C semantics for remainder (%). *)
@@ -533,16 +534,9 @@ let bwd_join (a:t) (b:t) (r:t) : (t*t) with_bot =
   bot_merge2 (meet a r) (meet b r)
 (** Backward join: both arguments and intersected with the result. *)
 
-let bwd_rem (a:t) ((b1,b2) as b:t) ((r1,r2):t) =
-  if b1 = Z.zero && r1 = Z.zero then
-    (* r = a % b => a = bℤ + r *)
-    (* however, r2 can be negative, but meet assumes it won't be *)
-    if Z.(r2 < zero) then
-      bot_merge2 (meet a (b2,Z.(b2 + r2))) (Nb b)
-    else
-      bot_merge2 (meet a (b2,r2)) (Nb b)
-  else
-    Nb (a,b)
+let bwd_rem (a:t) ((b1,b2) as b:t) (r:t) =
+  (* r = a % b => a = (a/b)*b + r => a in bℤ + r *)
+  bot_merge2 (meet a (add (of_z (gcd b1 b2) Z.zero) r)) (Nb b)
 
 let bwd_div (a:t) (b:t) (r:t) = Nb (a,b)
 let bwd_wrap (a:t) range (r:t) : t_with_bot = Nb a
@@ -576,4 +570,4 @@ let meet_inter ((a,b):t) ((l,h):I.t) : (t * I.t) with_bot =
     Useful to implement reductions.
  *)
 
-                                            
+
