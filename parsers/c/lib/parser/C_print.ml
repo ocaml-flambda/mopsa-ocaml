@@ -556,6 +556,31 @@ and c_buf_statement indent buf ((s,r):statement) =
 
   | S_target (S_default u) -> bp buf "%sdefault:;%a\n" indent c_buf_update u
 
+  | S_asm a ->
+     bp buf "%sasm%s%s(%a : %a : %a : %a : %a)"
+       indent
+       (if a.asm_is_volatile then " volatile" else "")
+       (if Array.length a.asm_labels > 0 then " goto" else "")
+       c_buf_string_literal a.asm_body
+       (bp_array (fun buf o ->
+            bp buf "%s\"%a\" (%a)"
+              (match o.asm_output_constraint with
+               | ASM_OUTPUT_INOUT -> "+"
+               | ASM_OUTPUT_OUT   -> "=")
+              c_buf_string_literal o.asm_output_string
+              (c_buf_expr indent2) o.asm_output_expr
+          ) ", "
+       ) a.asm_outputs
+       (bp_array (fun buf o ->
+            bp buf "\"%a\" (%a)"
+              c_buf_string_literal o.asm_input_string
+              (c_buf_expr indent2) o.asm_input_expr
+          ) ", "
+       ) a.asm_inputs
+       (bp_array (fun buf c -> bp buf "\"%a\"" c_buf_string_literal c) ", ")
+       a.asm_clobbers
+      (bp_array (fun buf c -> bp buf "%s" c) ", ") a.asm_labels
+
 and c_buf_com indent buf v =
   if print_comments
   then List.iter (fun c -> bp buf "%s%s\n" indent c.Clang_AST.com_text) v
@@ -664,6 +689,7 @@ let string_of_string_literal = string_from_buffer c_buf_string_literal
 let string_of_enum_decl = string_from_buffer (c_buf_enum_decl "")
 let string_of_record_decl = string_from_buffer (c_buf_record_decl "")
 let string_of_typedef = string_from_buffer (c_buf_typedef "")
+let string_of_statement = string_from_buffer (c_buf_statement "")
 
 
 

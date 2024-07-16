@@ -44,6 +44,9 @@ let bp_array f sep ch ee =
     Printf.bprintf ch "%s%a" (if i=0 then "" else sep) f ee.(i)
   done
 
+let bp_string ch s =
+  Printf.bprintf ch "%s" s
+
 let bp_list f sep ch ee =
   let first = ref true in
   List.iter
@@ -545,7 +548,7 @@ let expr_kind_name e =
 
 let stmt_kind_name s =
   match s with
-  | AsmStmt -> "AsmStmt"
+  | AsmStmt _ -> "AsmStmt"
   | AttributedStmt _ -> "AttributedStmt"
   | BreakStmt _ -> "BreakStmt"
   | CompoundStmt _ -> "CompoundStmt"
@@ -1390,9 +1393,25 @@ module P = struct
     match s.stmt_kind with
 
     (* C *)
-    | AsmStmt ->
-       p ch "%sAsmStmt\n" indent
-    | AttributedStmt s ->
+    | AsmStmt a ->
+       p ch "%sAsmStmt style=%s simple=%B volatile=%B \"%s\" out=[%a] in=[%a] clob=[%a]\n labels=[%a]" indent
+         (match a.asm_style with ASM_STYLE_GCC -> "gcc" | ASM_STYLE_MS -> "MS")
+         a.asm_is_simple a.asm_is_volatile a.asm_body
+         (bp_array
+            (fun ch o ->
+              p ch "(%s,%a,%s)"
+                o.asm_output_string expr o.asm_output_expr
+                (match o.asm_output_constraint with ASM_OUTPUT_INOUT -> "+" | ASM_OUTPUT_OUT -> "=")
+            )
+            ","
+         ) a.asm_outputs
+         (bp_array
+            (fun ch i -> p ch "(%s,%a)" i.asm_input_string expr i.asm_input_expr)
+            ","
+         ) a.asm_inputs
+         (bp_array bp_string ",") a.asm_clobbers
+         (bp_array bp_string ",") a.asm_labels
+   | AttributedStmt s ->
        p ch "%sAttributedStmt %a" indent (stmt indent) s
     | BreakStmt l ->
        p ch "%sBreakStmt\n" indent

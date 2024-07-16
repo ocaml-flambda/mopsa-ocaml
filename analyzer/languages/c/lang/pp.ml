@@ -211,6 +211,7 @@ let () =
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
+      | S_c_asm s -> fprintf fmt "%s;" s
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->

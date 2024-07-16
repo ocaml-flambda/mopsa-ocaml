@@ -814,6 +814,8 @@ let resolve_scope (b:block) : block =
        (* jump from switch point to current scope *)
        update upd swt cur
 
+    | S_asm _ -> ()
+
   and block (cur,brk,cnt,swt) b =
     List.fold_left
       (fun cur sr ->
