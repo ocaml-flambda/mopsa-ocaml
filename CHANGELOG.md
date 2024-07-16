@@ -3,6 +3,7 @@
 This is the initial version of Mopsa. See the README.md to know more about Mopsa. 
 
 Latest improvements:
+- !229 by @rmonat: last pre-release fixes to README, opam file, etc
 - !231 by @rmonat: fix header files of multilanguage stubs, required for newer versions of Clang
 - !216 by @jboillot: improve the precision of the backward wrap operator for integer intervals
 - !221 by @rmonat: display selectivity of all analyses, and count safe pointer checks in C

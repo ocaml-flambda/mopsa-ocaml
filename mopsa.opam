@@ -2,7 +2,7 @@
 opam-version: "2.0"
 synopsis:
   "MOPSA: A Modular and Open Platform for Static Analysis using Abstract Interpretation"
-description: """\
+description: """
 MOPSA is a generic framework for building sound static analyzers based on Abstract Interpretation.
 It features a modular architecture to support different kinds of languages, iterators, and abstract domains.
 For the moment, MOPSA can analyze programs written in a subset of C and Python.
@@ -26,6 +26,7 @@ license: "LGPL-3.0-or-later"
 homepage: "https://gitlab.com/mopsa/mopsa-analyzer"
 doc: "https://mopsa.gitlab.io/mopsa-analyzer/user-manual/"
 bug-reports: "https://gitlab.com/mopsa/mopsa-analyzer/issues"
+dev-repo: "https://gitlab.com/mopsa/mopsa-analyzer"
 depends: [
   "ocaml" {>= "4.12.0"}
   "dune" {>= "3.7"}
@@ -38,7 +39,9 @@ depends: [
   "odoc" {with-doc}
 ]
 depopts: ["elina"]
-available: [!(arch = "x86_32") & !(os = "cygwin") & opam-version >= "2.1.0"]
+available: [!(arch = "x86_32") & !(os-family = "windows") & opam-version >= "2.1.0"]
+#                                  ^^^^^^^^^^^^^^^^^^^^^
+#                                  Please note Mopsa is compatible with Windows through WSL
 build: [
   ["./configure"] {os != "macos"}
   ["./configure" "CLANG=/usr/local/opt/llvm/bin/clang" "LLVMCONFIG=/usr/local/opt/llvm/bin/llvm-config"] {os = "macos" & arch = "x86_64"}
@@ -78,4 +81,3 @@ depexts: [
   ["llvm"] {os = "macos"}
   ["devel/llvm"] {os = "freebsd"}
 ]
-dev-repo: "git+https://gitlab.com/mopsa/mopsa-analyzer.git"
