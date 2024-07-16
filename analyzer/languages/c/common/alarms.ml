@@ -485,8 +485,8 @@ let raise_c_invalid_pointer_compare ?(bottom=true) p1 p2 range man flow =
   let alarm = mk_alarm (A_c_invalid_pointer_compare(p1',p2')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
-
-
+let safe_c_pointer_compare range man flow =
+  Flow.add_safe_check CHK_C_INVALID_POINTER_COMPARE range flow
 
 (** {2 Invalid pointer subtraction} *)
 (** ******************************* *)
@@ -531,6 +531,8 @@ let raise_c_invalid_pointer_sub ?(bottom=true) p1 p2 range man flow =
   let alarm = mk_alarm (A_c_invalid_pointer_sub(p1',p2')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let safe_c_pointer_sub range man flow =
+  Flow.add_safe_check CHK_C_INVALID_POINTER_SUB range flow
 
 
 (** {2 Double free} *)
