@@ -929,7 +929,23 @@ let bwd_log_geq = bwd_log_gen filter_geq filter_lt
 let bwd_wrap (a:t) range (r:t) : t_with_bot =
   if included a (of_z (fst range) (snd range))
   then meet a r (* no overflow *)
-  else Nb a (* might be improved *)
+  else
+    match meet r (of_z (fst range) (snd range)) with
+    | BOT -> BOT
+    | Nb (Finite lr, Finite ur) ->
+      let range_size = Z.sub (snd range) (fst range) |> Z.succ in
+      (* bwd_wrap(., [l,u], [lr,ur]) ⊆ ⋃_{k ∈ ℤ} [lr+k*(u-l+1), ur+k*(u-l+1)] *)
+      let compute_bound div a (r1, r2) =
+        match a with
+        | B.Finite a ->
+          let k = div Z.(a - r2) range_size in
+          B.Finite Z.(r1 + k * range_size)
+        | MINF | PINF -> a
+      in
+      let lower_bound = compute_bound Z.cdiv (fst a) (lr, ur) in
+      let upper_bound = compute_bound Z.fdiv (snd a) (ur, lr) in
+      meet_bot (Nb a) (of_bound_bot lower_bound upper_bound)
+    | Nb _ -> assert false
 
 let pos_mod a b =
   let r = IntBound.rem a b in
