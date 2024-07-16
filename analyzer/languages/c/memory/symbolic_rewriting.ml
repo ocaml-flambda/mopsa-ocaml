@@ -63,6 +63,7 @@ struct
   (** Rewriting environment *)
   type ('a,'b) env = {
     iota: expr -> IntItv.t; (* returns an over-approximation of the values of expressions *)
+    is_var_constant: var -> Z.t option; (* if a variable is a constant integer, returns its value *)
     is_in: expr -> IntItv.t -> bool; (* check if an expression is within the bounds of a given interval *)
     man: ('a,'b) man;
     range: range; (* range to use for all rewritten expressions *)
@@ -369,6 +370,10 @@ struct
     | DelayedWrap (e1, s, itv) -> DelayedWrap (e1, not s, itv)
     | DelayedMod (e1, s, n) -> DelayedMod (e1, not s, n)
 
+  and opposite_mod_ring m = match m with
+    | Mod (l,u) -> Mod (Z.succ (Z.neg u), Z.succ (Z.neg l))
+    | NoMod | ToBeKSplit _ -> m
+
   and remove_delayed env e = match e with
     | LinearForm _ -> e
     | BinExpr (op, e1, e2) ->
@@ -470,17 +475,31 @@ struct
     (* 𝔼⟦ var ⟧ *)
     | E_var (v,_) when is_c_int_type v.vtyp ->
       let v = mk_num_var v in
-      (* impossible to do constant propagation because lhs of assignment are also translated *)
-      (lf_var v, NoMod, flow)
+      begin match env.is_var_constant v with
+      | Some n -> (lf_const n, NoMod, flow)
+      | None -> (lf_var v, NoMod, flow)
+      end
 
-    (* 𝔼⟦ ⋄ e ⟧, ⋄ ∈ {+, -} and type(t) = int *)
-    | E_unop((O_plus | O_minus) as unop, e) when exp |> etyp |> is_c_int_type ->
-      let (aexpr, m', flow) = abstract env e flow in
-      let (aexpr',m') = match unop, m' with
-        | O_plus, _ -> (aexpr, m')
-        | O_minus, NoMod -> (reduce env (opposite env aexpr), NoMod)
-        | O_minus, Mod (l,u) -> (reduce env (opposite env aexpr), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
-        | _ -> assert false
+    (* 𝔼⟦ + e ⟧, type(t) = int *)
+    | E_unop(O_plus, e) when exp |> etyp |> is_c_int_type ->
+      let (aexpr, m, flow) = abstract env e flow in
+      check_int_overflow env exp (aexpr, m, flow)
+
+    (* 𝔼⟦ - e ⟧, type(t) = int *)
+    | E_unop(O_minus, e) when exp |> etyp |> is_c_int_type ->
+      let (aexpr, m, flow) = abstract env e flow in
+      let aexpr' = reduce env (opposite env aexpr) in
+      let m' = opposite_mod_ring m in
+      check_int_overflow env exp (aexpr', m', flow)
+
+    (* 𝔼⟦ ~ e ⟧, type(t) = int *)
+    | E_unop(O_bit_invert, e) when exp |> etyp |> is_c_int_type ->
+      let (aexpr, m, flow) = abstract env e flow in
+      let aexpr' = reduce env (BinExpr (Add, reduce env (opposite env aexpr), lf_const Z.minus_one)) in
+      let m' = match m with
+        | NoMod -> NoMod
+        | Mod (l,u) -> Mod (Z.neg u, Z.neg l)
+        | ToBeKSplit _ as m -> m
       in
       check_int_overflow env exp (aexpr', m', flow)
 
@@ -488,10 +507,10 @@ struct
     | E_binop((O_plus|O_minus) as op, e, e') when exp |> etyp |> is_c_int_type ->
       let (aexpr1, m1, flow) = abstract env e flow in
       let (aexpr2_pos, m2, flow) = abstract env e' flow in
-      let (aexpr2, m2) = match op, m2 with
-        | O_minus, NoMod -> (reduce env (opposite env aexpr2_pos), m2)
-        | O_minus, Mod (l,u) -> (reduce env (opposite env aexpr2_pos), Mod (Z.succ (Z.neg u), Z.succ (Z.neg l)))
-        | _ -> (aexpr2_pos, m2)
+      let (aexpr2, m2) = match op with
+        | O_plus -> (aexpr2_pos, m2)
+        | O_minus -> (reduce env (opposite env aexpr2_pos), opposite_mod_ring m2)
+        | _ -> assert false
       in
       let (aexpr, m) =
         match (is_constant aexpr1, aexpr1, m1), (is_constant aexpr2, aexpr2, m2) with
@@ -768,6 +787,8 @@ struct
         else e
       | _ -> e
       end
+    | BinExpr (Add, e1, e2) when e1 = opposite env e2 && is_deterministic e1 ->
+      lf_const Z.zero
     (* multiplication of a linear form by a constant *)
     | BinExpr (Mult, LinearForm lf1, LinearForm lf2) when
         VarMap.for_all is_zero lf1.coeffs ->
@@ -948,7 +969,7 @@ struct
       true
     | E_var (v,_) ->
       is_c_int_type v.vtyp
-    | E_unop((O_plus | O_minus), e)
+    | E_unop((O_plus | O_minus | O_bit_invert), e)
     | E_c_cast(e, _) ->
       is_supported_expr e
     | E_binop((O_plus | O_minus | O_mult | O_div | O_convex_join | O_bit_lshift | O_bit_rshift | O_mod), e, e') ->
@@ -1010,6 +1031,14 @@ struct
           let () = if Debug.can_print debug_channel then Printexc.print_backtrace stdout in
           raise No_representation
       in
+      let is_var_constant (v: var): Z.t option =
+        let e = mk_var v dummy_range in
+        match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:true e) flow with
+        | BOT -> raise No_representation
+        | Nb (Finite l, Finite u) when Z.equal l u -> Some l
+        | exception Not_found
+        | _ -> None
+      in
       let is_in (e: expr) (target: IntItv.t): bool =
         try
           begin match ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:true e) flow with
@@ -1027,6 +1056,7 @@ struct
       in
       let env: ('a,'b) env = {
           iota;
+          is_var_constant;
           is_in;
           man;
           range = mk_tagged_range (String_tag "c.symbolic_rewriting") exp.erange;

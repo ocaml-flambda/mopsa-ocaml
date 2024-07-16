@@ -414,6 +414,11 @@ type stmt_kind +=
   | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
+  | S_c_asm of string
+  (** inline assembly
+      for now, we keep only a string representation to display warnings;
+      see C_AST.asm_kind for a more usable representation when support is added
+   *)
 
 type c_program = {
   c_globals : (var * c_var_init option) list; (** global variables of the program *)

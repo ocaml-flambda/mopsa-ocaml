@@ -100,6 +100,7 @@ type context = {
     ctx_typedefs: (string,typedef) Hashtbl.t;
     ctx_vars: (string,variable) Hashtbl.t; (* globals (extern & static) *)
     ctx_funcs: (string,func) Hashtbl.t;
+    mutable ctx_file_scope_asm: string RangeMap.t;
 
     ctx_simplify: C_simplify.context;
 
@@ -138,6 +139,7 @@ let create_context ?(min_uid=0) (project_name:string) (info:C.target_info) =
     ctx_files = SetExt.StringSet.empty;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
+    ctx_file_scope_asm = RangeMap.empty;
   }
 
 let new_uid ctx =
@@ -906,9 +908,32 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        in
        [S_for (i,c,p,b), range]
 
-    | C.AsmStmt ->
-       warning range "asm statement ignored" "";
-       []
+    | C.AsmStmt s ->
+       let a = {
+           asm_style = s.C.asm_style;
+           asm_is_simple = s.C.asm_is_simple;
+           asm_is_volatile = s.C.asm_is_volatile;
+           asm_body = s.C.asm_body;
+           asm_outputs =
+             Array.map
+               (fun o -> {
+                    asm_output_string = o.C.asm_output_string;
+                    asm_output_expr = expr func o.C.asm_output_expr;
+                    asm_output_constraint = o.C.asm_output_constraint;
+                  }
+               ) s.C.asm_outputs;
+           asm_inputs =
+             Array.map
+               (fun o -> {
+                    asm_input_string = o.C.asm_input_string;
+                    asm_input_expr = expr func o.C.asm_input_expr;
+                  }
+               ) s.C.asm_inputs;
+           asm_clobbers = s.C.asm_clobbers;
+           asm_labels = s.C.asm_labels;
+         }
+       in
+       [S_asm a, range]
 
     | s -> error range "unhandled statement" (C.stmt_kind_name s)
 
@@ -1184,6 +1209,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        if a.C.assert_is_failed then
          warning decl.C.decl_range "static assertion failed: %s" a.C.assert_msg
 
+    | C.FileScopeAsmDecl s ->
+       ctx.ctx_file_scope_asm <-
+         RangeMap.add decl.C.decl_range s ctx.ctx_file_scope_asm;
+       debug (fun x -> x) s
+
     | _ -> error decl.C.decl_range "unhandled toplevel declaration" (C.decl_kind_name decl.C.decl_kind)
 
   in
@@ -1279,6 +1309,7 @@ let link_project ctx =
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
     proj_files = ctx.ctx_files |> SetExt.StringSet.elements;
+    proj_file_scope_asm = ctx.ctx_file_scope_asm;
     proj_comments = ctx.ctx_comments;
     proj_macros = cvt ctx.ctx_macros (fun t -> t.macro_name);
   }

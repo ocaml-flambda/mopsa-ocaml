@@ -603,6 +603,7 @@ struct
       if PointerSet.is_bottom v
       then []
       else
+        let flow = safe_c_pointer_compare range man flow in
         [
           match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
           | None -> Post.return flow
@@ -882,7 +883,9 @@ struct
         in
         match ee with
         | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
-        | Some e -> [man.eval e flow ~translate:"Universal"]
+        | Some e ->
+          let flow = safe_c_pointer_sub range man flow in
+          [man.eval e flow ~translate:"Universal"]
     in
 
     (* Case 2: different base => undefined behavior *)
