@@ -3490,6 +3490,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateLambdaCapture(const LambdaCapture&
 
 /* stmt */
 enum {
+  MLTAG_AsmStmt,
   MLTAG_AttributedStmt,
   MLTAG_BreakStmt,
   MLTAG_CompoundStmt,
@@ -3518,9 +3519,21 @@ enum {
 
 /* stmt with no argument */
 enum {
-  MLTAG_AsmStmt,
   MLTAG_NullStmt,
 };
+
+/* asm_style */
+enum {
+  MLTAG_ASM_STYLE_GCC,
+  MLTAG_ASM_STYLE_MS
+};
+
+/* asm_output_constraint */
+enum {
+  MLTAG_ASM_OUTPUT_INOUT,
+  MLTAG_ASM_OUTPUT_OUT
+};
+
 
 /* Stmt -> stmt */
 CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
@@ -3536,7 +3549,40 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
 
       ret = Val_int(-1);
 
-      GENERATE_NODE_CONSTANT(AsmStmt, ret, node);
+      GENERATE_NODE_INDIRECT(AsmStmt, ret, node, 8, {
+          CAMLenterblock();
+          value tmp1 = Val_unit;
+          value tmp2 = Val_unit;
+          CAMLxparam2(tmp1,tmp2);
+          Store_field(ret, 0, Val_int(isa<GCCAsmStmt>(x) ? MLTAG_ASM_STYLE_GCC : MLTAG_ASM_STYLE_MS));
+          Store_field(ret, 1, Val_bool(x->isSimple()));
+          Store_field(ret, 2, Val_bool(x->isVolatile()));
+          Store_field(ret, 3, caml_copy_string(x->generateAsmString(*Context).c_str()));
+          tmp1 = caml_alloc_tuple(x->getNumOutputs());
+          for (size_t i = 0; i < x->getNumOutputs(); i++)  {
+            tmp2 = caml_alloc_tuple(3);
+            Store_field(tmp2, 0, caml_copy_string(x->getOutputConstraint(i).str().c_str()));
+            Store_field(tmp2, 1, TranslateExpr(x->getOutputExpr(i)));
+            Store_field(tmp2, 2, Val_int(x->isOutputPlusConstraint(i) ? MLTAG_ASM_OUTPUT_INOUT : MLTAG_ASM_OUTPUT_OUT));
+            Store_field(tmp1, i, tmp2);
+          }
+          Store_field(ret, 4, tmp1);
+          tmp1 = caml_alloc_tuple(x->getNumInputs());
+          for (size_t i = 0; i < x->getNumInputs(); i++)  {
+            tmp2 = caml_alloc_tuple(2);
+            Store_field(tmp2, 0, caml_copy_string(x->getInputConstraint(i).str().c_str()));
+            Store_field(tmp2, 1, TranslateExpr(x->getInputExpr(i)));
+            Store_field(tmp1, i, tmp2);
+          }
+          Store_field(ret, 5, tmp1);
+          Store_field_array(ret, 6, x->getNumClobbers(), caml_copy_string(x->getClobber(i).str().c_str()));
+          if (isa<GCCAsmStmt>(x)) {
+            const GCCAsmStmt* xx = cast<GCCAsmStmt>(x);
+            Store_field_array(ret, 7, xx->getNumLabels(), caml_copy_string(xx->getLabelName(i).str().c_str()));
+          }
+          else Store_field_array(ret, 7, 0, Val_unit);
+          CAMLexitblock();
+        });
 
       GENERATE_NODE(AttributedStmt, ret, node, 1, {
           Store_field(ret, 0, TranslateStmt(x->getSubStmt()));

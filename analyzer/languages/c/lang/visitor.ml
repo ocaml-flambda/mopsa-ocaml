@@ -249,6 +249,7 @@ let () =
           | _ -> assert false
         )
       | S_c_switch_default _ -> leaf stmt
+      | S_c_asm _ -> leaf stmt
 
       | _ -> default stmt
     );
