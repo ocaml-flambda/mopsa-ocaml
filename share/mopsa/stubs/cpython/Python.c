@@ -91,7 +91,7 @@ PyErr_ExceptionMatches(PyObject *lexc)
     return exc->exc_state == lexc;
 }
 
-
+PyObject* PyType_GenericAlloc_Helper(PyTypeObject *type, size_t size);
 
 PyObject*
 PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
@@ -188,21 +188,18 @@ PyMember_GetOne(const char *addr, PyMemberDef *l)
 }
 
 // FIXME: returns values with wrap_descr_set
-int
-PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
-{
-    PyObject *oldv;
-    addr += l->offset;
+int PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v) {
+        PyObject *oldv;
+        addr += l->offset;
 
-    if ((l->flags & READONLY))
-    {
-        PyErr_SetString(PyExc_AttributeError, "readonly attribute");
-        return -1;
-    }
-    if (v == NULL) {
-        if (l->type == T_OBJECT_EX) {
-            /* Check if the attribute is set. */
-            if (*(PyObject **)addr == NULL) {
+        if ((l->flags & READONLY)) {
+            PyErr_SetString(PyExc_AttributeError, "readonly attribute");
+            return -1;
+        }
+        if (v == NULL) {
+            if (l->type == T_OBJECT_EX) {
+              /* Check if the attribute is set. */
+              if (*(PyObject **)addr == NULL) {
                 PyErr_SetString(PyExc_AttributeError, l->name);
                 return -1;
             }

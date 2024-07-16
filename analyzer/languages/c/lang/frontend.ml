@@ -570,6 +570,7 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
       end 
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
+    | C_AST.S_asm a -> Ast.S_c_asm (C_print.string_of_statement (skind,range))
   in
   {skind; srange}
 

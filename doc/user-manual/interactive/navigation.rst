@@ -36,6 +36,9 @@ The following commands allow navigating throught the statements of a program:
 ``finish``
   Finish the current function.
 
+``exit``
+  Exit the analysis. 
+
 
 Interpreter
 -----------

@@ -111,6 +111,7 @@ Additional resources
    interactive/overview
    interactive/navigation
    interactive/inspection
+   interactive/demo
 
 .. toctree::
    :hidden:

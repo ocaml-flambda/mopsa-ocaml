@@ -525,7 +525,7 @@ let simplify_func ctx (f:func) =
        let before1, e1 = remove_after before1 e1 after1 in
        scope_temp r (before1@[S_jump (S_switch (e1, simplify_block call b1)), r])
 
-    | S_jump _ | S_target _ ->
+    | S_jump _ | S_target _ | S_asm _ ->
        [s,r]
 
   and simplify_block (call:bool) (b:block) : block =

@@ -301,7 +301,7 @@ struct
       ("output", `String (Format.asprintf "%d new alarm%a" (List.length alarms) Debug.plurial_list alarms));
       ("data", `Assoc [
           ("kind", `String "alarms");
-          ("alarms", `List (Output.Json.render_alarms (report_of_alarms alarms)));
+          ("alarms", `List (let _, _, r = Output.Json.render_alarms (report_of_alarms alarms) in r));
         ])
     ]
 
