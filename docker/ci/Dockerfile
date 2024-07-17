@@ -29,8 +29,16 @@ ENV TERM xterm-256color
 RUN \
     apt-get update && \
     apt-get install --no-install-recommends -y $APT_DEPS && \
-    adduser --disabled-password --gecos 'Mopsa' mopsa
+    adduser --disabled-password --gecos 'Mopsa' mopsa && \
+    adduser mopsa sudo
 
+# the multilanguage analysis currently requires python with version <= 3.11
+RUN \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa &&  \
+    apt update && \
+    apt install -y python3.11 python3.11-dev && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
 # log in as mopsa
 #
