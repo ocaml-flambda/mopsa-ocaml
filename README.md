@@ -42,7 +42,9 @@ For the Software-Verification Competition, you also need:
 ```shell
  sudo dpkg --add-architecture i386 && sudo apt install libc6-dev-i386
 ```
+### Multilanguage (Python+C) analysis
 
+The multilanguage analysis requires Python version 3.8, as well as development headers. You can use our [Docker images](https://gitlab.com/mopsa/mopsa-analyzer/container_registry/6390468) if needed.
 
 ## Linking against the MOPSA library
 
