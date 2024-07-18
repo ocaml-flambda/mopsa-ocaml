@@ -115,6 +115,12 @@ Additional resources
 
 .. toctree::
    :hidden:
+   :caption: Pinpointing a Crash 
+
+   reduction/general
+
+.. toctree::
+   :hidden:
    :caption: Built-ins and Stubs
 
    stubs/c
