@@ -36,7 +36,8 @@ build_opam:
   stage: build
   script:
     - eval `opam config env`
-    - opam install -y -v --with-test .
+    - git config --global --add safe.directory "*"
+    - LANG=C opam pin add mopsa -y --with-doc --with-test -vvv .
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
