@@ -358,6 +358,16 @@ val fold2zo_report :
   (diagnostic -> diagnostic -> 'b -> 'b) ->
   report -> report -> 'b -> 'b
 
+val exists2zo_report :
+  (diagnostic -> bool) ->
+  (diagnostic -> bool) ->
+  (diagnostic -> diagnostic -> bool) ->
+  report -> report -> bool
+
 val fold_report :
   (diagnostic -> 'b -> 'b) ->
   report -> 'b -> 'b
+
+val alarms_to_report : alarm list -> report
+
+val report_to_alarms : report -> alarm list

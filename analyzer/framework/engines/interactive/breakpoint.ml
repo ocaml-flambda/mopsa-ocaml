@@ -38,6 +38,9 @@ type breakpoint =
   | B_named of string
   (** Named breakpoint *) 
 
+  | B_alarm
+  (** Break on new alarms *)
+
 
 (** Compare two breakpoints *)
 let compare_breakpoint b1 b2 : int =
@@ -51,6 +54,8 @@ let compare_breakpoint b1 b2 : int =
   | B_named b1, B_named b2 ->
     String.compare b1 b2
 
+  | B_alarm, B_alarm -> 0
+
   | _ -> compare b1 b2
 
 
@@ -59,6 +64,7 @@ let pp_breakpoint fmt = function
   | B_function f -> Format.fprintf fmt "%s" f
   | B_line(file,line) -> Format.fprintf fmt "%s:%d" file line
   | B_named b -> Format.fprintf fmt "@%s" b
+  | B_alarm -> Format.pp_print_string fmt "#alarm"
 
 
 (** Set of breakpoints *)
@@ -81,11 +87,22 @@ exception Invalid_breakpoint_syntax
 
 
 (** Parse a breakpoint string *)
-let parse_breakpoint (s:string) : breakpoint =
+let parse_breakpoint default_file (s:string) : breakpoint =
   if Str.string_match (Str.regexp "@\\(.+\\)$") s 0
   then
     let name = Str.matched_group 1 s in
     B_named name else
+
+  if Str.string_match (Str.regexp "#alarm$") s 0 ||
+     Str.string_match (Str.regexp "#a$") s 0
+  then
+    B_alarm else
+
+  if Str.string_match (Str.regexp "\\([0-9]+\\)$") s 0
+  then
+    let file = default_file in
+    let line = int_of_string (Str.matched_group 1 s) in
+    B_line(file, line) else
 
   if Str.string_match (Str.regexp "\\(.+\\):\\([0-9]+\\)$") s 0
   then

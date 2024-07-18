@@ -1,6 +1,14 @@
 (library
  (name relational)
  (public_name mopsa.mopsa_analyzer.universal.numeric.relational)
- (libraries numeric_common numeric_values lang apron apron.boxMPQ apron.octMPQ apron.polkaMPQ )
+ (libraries
+  (select elinainst.ml from
+   (elina -> elinainst.real.ml)
+   (-> elinainst.dummy.ml))
+  (select ppliteinst.ml from
+   (apron.pplite -> ppliteinst.real.ml)
+   (-> ppliteinst.dummy.ml))
+   numeric_common numeric_values lang apron apron.boxMPQ apron.octMPQ apron.polkaMPQ
+ )
  (library_flags -linkall)
  (flags :standard -open Lang -open Numeric_common -open Numeric_values))

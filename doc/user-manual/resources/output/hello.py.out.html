@@ -1,0 +1,19 @@
+<div class="highlight">
+<pre><font color="#5555FF"><b>$</b></font> mopsa-python hello.py
+<font color="#00D700"><b>Analysis terminated successfully</b></font>
+
+<font color="#FF5555"><b>✗</b></font> Check #1:<b>hello.py</b>: In function &apos;<b>absolute</b>&apos;:
+<b>hello.py:2.8-13</b>: <font color="#FF5555"><b>error</b></font>: <font color="#FF5555"><b>Uncaught Python exception</b></font>
+
+  <b>2</b>:     if (<font color="#FF5555"><b>x &lt; 0</b></font>): return -x
+             <font color="#FF5555"><b>^^^^^</b></font>
+  Uncaught Python exception: TypeError: &apos;__lt__&apos; not supported between instances of &apos;cb{NoneType}&apos; and &apos;cb{int}&apos;
+  Callstack:
+        from hello.py:5.4-26: absolute
+
+Analysis summary:
+  Time: 0.015s
+  Checks: <b>1 total</b>, <font color="#FF5555"><b>✗ 1 error</b></font>
+    Uncaught Python exception: 1 total, <font color="#FF5555"><b>✗ 1 error</b></font>
+</pre>
+</div>

@@ -189,10 +189,10 @@ struct
              let upd' = visit_scope_update upd in
              let s' = { s with skind = S_c_goto(label, upd') } in
              Keep s'
-           | S_c_switch_case(e, upd) ->
-             let e' = visit_expr e in
+           | S_c_switch_case(es, upd) ->
+             let es' = List.map visit_expr es in
              let upd' = visit_scope_update upd in
-             let s' = { s with skind = S_c_switch_case(e', upd') } in
+             let s' = { s with skind = S_c_switch_case(es', upd') } in
              Keep s'
            | S_c_switch_default upd ->
              let upd' = visit_scope_update upd in
@@ -456,10 +456,6 @@ struct
            let exp' = mk_call fundec' args range in
            man.eval exp' flow ~route:(Below name)
 
-        | {c_func_variadic = true} ->
-          let exp' = mk_c_call fundec args range in
-          man.eval exp' flow ~route:(Below name)
-
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
           man.eval exp' flow >>$ fun exp' flow ->
@@ -468,6 +464,10 @@ struct
               man.exec (mk_assume (eq ~etyp:T_bool exp' (mk_unop O_sqrt ~etyp:fundec.c_func_return (List.hd args) range) range) range) flow
             else Post.return flow in
           Eval.singleton exp' (post_to_flow man flow)
+
+        | {c_func_variadic = true} ->
+          let exp' = mk_c_call fundec args range in
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           let flow =

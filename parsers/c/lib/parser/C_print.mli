@@ -50,6 +50,7 @@ val string_of_string_literal : string -> string
 val string_of_enum_decl : enum_type -> string
 val string_of_record_decl : record_type -> string
 val string_of_typedef : typedef -> string
+val string_of_statement : statement -> string
 (** Convert SAST types to string. *)
 
 val print_project : ?verbose:bool -> out_channel -> project -> unit

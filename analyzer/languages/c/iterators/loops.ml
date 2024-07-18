@@ -71,7 +71,21 @@ struct
       man.exec stmt flow |> OptionExt.return
 
     | S_c_do_while(body, {ekind = E_constant (C_int z)}) when Z.equal z Z.zero ->
-       man.exec body flow |> OptionExt.return
+      let open Universal_iterators__.Loops in
+      let continue_before, break_before = Flow.get T_continue man.lattice flow, Flow.get T_break man.lattice flow in
+      let flow = Flow.remove T_continue flow |> Flow.remove T_break in
+      man.exec body flow >>%? fun flow ->
+      (* fold break/continue flows into T_cur *)
+      Flow.fold (fun acc tk v ->
+        match tk with
+        | T_cur | T_continue | T_break -> Flow.add T_cur v man.lattice acc
+        | _ -> Flow.add tk v man.lattice acc)
+        (Flow.bottom_from flow) flow |>
+      (* restore old break/continue flows *)
+      Flow.set T_break break_before man.lattice |>
+      Flow.set T_continue continue_before man.lattice |>
+      Post.return |>
+      OptionExt.return
 
     | S_c_do_while(body, cond) ->
       (*

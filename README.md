@@ -1,13 +1,15 @@
 # MOPSA
 
-MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at making the development/use of static analyzers less painful.
+MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at easing the development and use of static analyzers.
 
 More specifically, MOPSA is a generic framework for building sound static analyzer based on the theory of abstract interpretation.
-It features a modular architecture for supporting different kinds of languages, iterators and abstractions.
+MOPSA is independent of language and abstraction choices. 
+Developers are free to add arbitrary abstractions (numeric, pointer, memory, etc.) and syntax iterators for new languages. 
+Mopsa encourages the development of independent abstractions which can cooperate or be combined to improve precision. 
 
-For the moment, MOPSA can analyze only programs written in C and Python.
+Mopsa currently support the analysis of Python, C and Python+C programs.
 
-A [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
+A [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
 
 
 ## License
@@ -34,29 +36,28 @@ Before compiling MOPSA, ensure that you have the following dependencies:
 * opam (version >= 2)
 * Yojson
 * Zarith
-* zlib
 
 The OCaml dependencies can be installed on any system with opam with:
 
 ```shell
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
 
 ```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config zlib1g-dev
+sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf pkg-config
 opam init --compiler 4.12.0
 eval $(opam env)
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For Ubuntu 22.04, you can use:
 ```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config zlib1g-dev
+sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp13-dev libgmp-dev libmpfr-dev pkg-config
 opam init
 eval $(opam env)
-opam install --deps-only --with-doc --with-test .
+LANG=C opam install --deps-only --with-doc --with-test .
 ```
 
 For SV-Comp, you also need:
@@ -127,6 +128,7 @@ dune build
 ## Additional resources
 
 * [source code](https://gitlab.com/mopsa/mopsa-analyzer) on GitLab
-* [research project page](https://mopsa.lip6.fr/)
-* [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/)
+* [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/)
 * [benchmark analysis projects](https://gitlab.com/mopsa/benchmarks) on GitLab
+* [research project page](https://mopsa.lip6.fr/)
+* [academic overview of Mopsa in STTE paper](https://hal.sorbonne-universite.fr/hal-02890500v1/document), and [in a PhD thesis](https://rmonat.fr/data/pubs/2021/thesis_monat.pdf#page=61)

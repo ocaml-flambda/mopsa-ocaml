@@ -26,7 +26,7 @@ open Mopsa_utils
 open Typ
 open Semantic
 
-let print_uniq_with_uid = ref false
+let print_uniq_with_uid = ref true
 
 type var_kind = ..
 

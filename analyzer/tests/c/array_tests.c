@@ -125,7 +125,6 @@ void test_weak_update() {
   _mopsa_assert_exists(a[1] == 3);
 }
 
-
 /************************/
 /* Variable-size arrays */
 /************************/
@@ -147,5 +146,11 @@ void test_variable_size_array() {
   a[0] = 1;
   _mopsa_assert_safe();
   a[10] = 0;
+  _mopsa_assert_unsafe();
+}
+
+void test_variable_size_array_negative_size() {
+  int n = -10;
+  int a[n];
   _mopsa_assert_unsafe();
 }

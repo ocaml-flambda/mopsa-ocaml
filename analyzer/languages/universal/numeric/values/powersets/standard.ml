@@ -25,6 +25,7 @@ open Mopsa
 open Sig.Abstraction.Simplified_value
 open Ast
 open Top
+open Common
 
 
 module Value =
@@ -46,12 +47,10 @@ struct
   include GenValueId(
     struct
         type nonrec t = t
-        let name = "universal.numeric.values.powerset"
+        let name = "universal.numeric.values.powersets.standard"
         let display = "powerset"
     end
     )
-
-
 
   (** {2 Options} *)
   (** *********** *)
@@ -67,7 +66,6 @@ struct
       spec = ArgExt.Set_int opt_max_intset;
       default = string_of_int !opt_max_intset;
     }
-
 
 
   (** {2 Utilities} *)
@@ -107,7 +105,11 @@ struct
   let contains_nonzero a =
     not (is_empty (remove Z.zero a))
 
-
+  let to_itv (a:t) : int_itv =
+    if is_bottom a then BOT else
+    match a with
+    | Nt s -> Nb (I.of_z (Set.min_elt s) (Set.max_elt s))
+    | TOP  -> Nb I.minf_inf
 
   (** {2 Forward operators} *)
   (** ********************* *)
@@ -208,6 +210,14 @@ struct
   let filter b t a =
     if b then remove Z.zero a
     else meet a (singleton Z.zero)
+
+  let avalue : type r. r avalue_kind -> t -> r option =
+    fun aval a ->
+    match aval with
+    | Common.V_int_interval       -> Some (to_itv a)
+    | Common.V_int_interval_fast  -> Some (to_itv a)
+    | Common.V_int_congr_interval -> Some (to_itv a, Bot.Nb Common.C.minf_inf)
+    | _ -> None
 
   let backward_unop op t a tr r =
     match op with

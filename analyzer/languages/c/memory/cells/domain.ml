@@ -158,14 +158,21 @@ struct
           (* Record case *)
           | T_c_record r ->
             (* new candiate: .field *)
-            let field = List.find (fun f ->
+            let field = List.find_opt (fun f ->
                 Z.leq (Z.of_int f.c_field_offset) offset &&
                 Z.lt offset Z.(of_int f.c_field_offset + sizeof_type_in_target f.c_field_type target)
               ) r.c_record_fields
             in
-            let candidate' = Format.asprintf ".%s" field.c_field_org_name in
-            let offset' = Z.(offset - of_int field.c_field_offset) in
-            get_access_path path' candidate' offset' field.c_field_type
+            begin match field with
+              | None ->
+                let () = debug "WARN: get_access_path failed for record %a, offset %s@." pp_typ typ (Z.to_string offset) in
+                pp_cell_lowlevel fmt c; []
+
+              | Some field -> 
+                let candidate' = Format.asprintf ".%s" field.c_field_org_name in
+                let offset' = Z.(offset - of_int field.c_field_offset) in
+                get_access_path path' candidate' offset' field.c_field_type
+            end
 
           |_ -> assert false
       in
@@ -476,15 +483,53 @@ struct
       default = "";
     }
 
+  let opt_smash_only_pointers = ref true
+  let () =
+    register_domain_option name {
+      key = "-cell-smash-only-pointers";
+      category = "C";
+      doc = " the on-demand smashing happens only on pointers";
+      spec = ArgExt.Set opt_smash;
+      default = "";
+    }
+
+
 
   (** {2 Unification of cells} *)
   (** ======================== *)
 
   (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
-  let phi (c:cell) (a:t) range flow : expr option =
-    if cell_set_mem c a.cells then None
+  let phi (c:cell) (a:t) range man flow = 
+    let () = debug "phi %a at %a" pp_cell c pp_range range in 
+    if cell_set_mem c a.cells then Cases.singleton None flow
 
-    else if not (is_c_int_type @@ cell_type c) then None
+    else if is_c_pointer_type @@ cell_type c then
+      (* synthesizes a NULL pointer if applicable *)
+      let cells = cell_set_find_overlapping_cell c a.cells flow in
+      let () = debug "overlapping cells: %a, %s"
+          (Format.pp_print_list
+             (fun fmt c ->
+                Format.fprintf fmt "%a:%s, "
+                  pp_cell c
+                  (Z.to_string (sizeof_cell c flow))))
+             cells
+             (Z.to_string (sizeof_cell c flow)) in
+      (* TODO: more general case? This should fit the memset usecase *)
+      if List.length cells = (Z.to_int @@ sizeof_cell c flow) &&
+         List.for_all (fun c -> Z.(sizeof_cell c flow = one)) cells then
+        let cell_is_not_zero_expr c = ne (mk_numeric_cell_var_expr c range) (mk_zero range) range in
+        let rec aux cells = match cells with
+          | [] -> Cases.singleton (Some (mk_zero ~typ:(cell_type c) range)) flow
+          | c::cells ->
+            let flow_ko = man.exec (mk_assume (cell_is_not_zero_expr c) range) flow |> post_to_flow man in
+            if man.lattice.is_bottom (Flow.get T_cur man.lattice flow_ko) then aux cells
+            else Cases.singleton None flow in
+        aux cells
+      else
+        Cases.singleton None flow 
+
+    else if not (is_c_int_type @@ cell_type c) then
+      Cases.singleton None flow
 
     else
       match
@@ -497,7 +542,7 @@ struct
       with
       | c'::_ ->
         let v = mk_numeric_cell_var_expr c' range in
-        Some (wrap_expr v (rangeof_int_cell c flow) range)
+        Cases.singleton (Some (wrap_expr v (rangeof_int_cell c flow) range)) flow
 
       | [] ->
         match
@@ -515,13 +560,13 @@ struct
           let b = Z.sub c.offset c'.offset in
           let base = (Z.pow (Z.of_int 2) (8 * Z.to_int b))  in
           let v = mk_numeric_cell_var_expr c' range in
-          Some (
+          Cases.singleton (Some (
             (_mod_
                (div v (mk_z base range) range)
                (mk_int 256 range)
                range
             )
-          )
+          )) flow
 
         | _ ->
           let exception NotPossible in
@@ -558,11 +603,11 @@ struct
                   time',res'
                 ) (Z.of_int 1,(mk_int 0 range)) ll
               in
-              Some e
+              Cases.singleton (Some e) flow
             else
               raise NotPossible
           with
-          | NotPossible -> None
+          | NotPossible -> Cases.singleton None flow
 
 
 
@@ -575,15 +620,13 @@ struct
       let flow = set_env T_cur { a with cells = cell_set_add c a.cells flow } man flow in
       let v = mk_cell_var c in
       man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
-      if is_pointer_cell c then
-        Post.return flow
-      else
-        match phi c a range flow with
-        | Some e ->
-          let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
-          man.exec stmt flow
+      phi c a range man flow >>$ fun phi_oe flow ->
+      match phi_oe with 
+      | Some e ->
+        let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
+        man.exec stmt flow
 
-        | None -> Post.return flow
+      | None -> Post.return flow
 
 
   (** Range used for tagging unification statements *)
@@ -770,7 +813,7 @@ struct
     let top = Eval.singleton (mk_top (void_to_char t) range) flow in
     if not !opt_smash
     || not (is_interesting_base base)
-    || not (is_c_pointer_type t) (* For performance reasons, we smash only pointer cells *)
+    || !opt_smash_only_pointers && not (is_c_pointer_type t)
     then
       let () = debug "%a: expansion %a not worth smashing, results in T" pp_range range pp_expansion (Region (base,lo,hi,step)) in
       top
@@ -778,16 +821,19 @@ struct
       (* In order to smash a region in something useful, we ensure
          that all covered cells do exist *)
       let a = get_env T_cur man flow in
+      let (=>) a b = not a || b in
       let cells = cell_set_filter_range
           (fun c ->
              (* Get only pointer cells that are correctly aligned with the step *)
-             c.typ = Pointer
-             && Z.(rem (c.offset - lo) step = zero)
+             (!opt_smash_only_pointers => (c.typ = Pointer))
+             &&
+             Z.(rem (c.offset - lo) step = zero)
           )
           base lo hi a.cells in
       (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
       let nb_cells = List.length cells in
       if nb_cells = 0 || Z.(of_int nb_cells < (div (hi - lo) step) + one) then
+        let () = debug "not covering nb_cells=%d, hi=%s, lo=%s, step=%s, results in T" nb_cells (Z.to_string hi) (Z.to_string lo) (Z.to_string step) in 
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
@@ -795,7 +841,9 @@ struct
         let weak_smash = mk_var smash range in
         let strong_smash = mk_var smash ~mode:(Some STRONG) range in
         man.exec (mk_add_var smash range) ~route:scalar flow >>% fun flow ->
-        let ecells = List.map (fun c -> mk_pointer_cell_var_expr c t range) cells in
+        let ecells = List.map (fun c ->
+            if is_pointer_cell c then mk_pointer_cell_var_expr c t range
+            else mk_numeric_cell_var_expr c range) cells in
         let hd = List.hd ecells in
         let tl = List.tl ecells in
         man.exec (mk_assign strong_smash hd range) ~route:scalar flow >>% fun flow ->
@@ -930,7 +978,37 @@ struct
     | Top ->
       man.eval (mk_top (void_to_char t) range) flow
 
+    (* dereferencing one character of a string *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) ->
+      man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow 
+
+    (* dereferencing characters of a string, abstracted as interval here *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.geq lo Z.zero && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) &&
+         String.length s < 20 ->
+      (* ^^would it make sense to check cell-deref-expand param? *)
+      let chars =
+        let hi = Z.to_int hi in 
+        let rec aux pos =
+          if pos <= hi then
+            let c_pos = String.get s pos in
+            let c_int = int_of_char c_pos in
+            let c_int = if is_signed t && c_int >= 128 then c_int - 256 else c_int in 
+            c_int :: (aux (pos+1))
+          else []
+        in aux (Z.to_int lo)
+      in
+      (* let chars = List.sort_uniq chars in  *)
+      (* FIXME: do rather a smashing like the other function does, so the underlying numerical domain chooses its representation *)
+      let min_c, max_c  = List.fold_left (fun (min_c, max_c) c ->
+          min min_c c, max max_c c) (List.hd chars, List.hd chars) (List.tl chars) in
+      man.eval (mk_int_interval min_c max_c ~typ:t range) ~route:scalar flow
+
+    (* dereferencing null delimiter of a string *)
+    | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.equal hi (Z.of_int @@ String.length s) ->
+      man.eval (mk_zero ~typ:t range) ~route:scalar flow 
+
     | Region (base,lo,hi,step) ->
+      let () = debug "%a" pp_expansion expansion in 
       smash_region base lo hi step t range man flow >>$ fun ret flow ->
       man.eval ret flow ~route:scalar
 

@@ -57,7 +57,7 @@ struct
 
   let opt_signed_arithmetic_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-arithmetic-overflow";
       category = "C";
       doc = " check overflows in signed integer arithmetic";
@@ -67,7 +67,7 @@ struct
 
   let opt_unsigned_arithmetic_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
       doc = " check overflows in unsigned integer arithmetic";
@@ -77,7 +77,7 @@ struct
 
   let opt_signed_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to signed integer";
@@ -87,7 +87,7 @@ struct
 
   let opt_unsigned_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to unsigned integer";
@@ -98,7 +98,7 @@ struct
 
   let opt_explicit_cast_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-explicit-cast-overflow";
       category = "C";
       doc = " check overflows in explicit casts";
@@ -137,6 +137,15 @@ struct
       default = "false";
     }
 
+  let opt_mnum_fast_query = ref true
+  let () =
+    register_domain_option name {
+      key = "-c-check-overflows-with-relational";
+      category = "C";
+      doc = " check for overflows using the relational abstract domains too (more expensive but can be more precise)";
+      spec = ArgExt.Clear opt_mnum_fast_query;
+      default = string_of_bool !opt_mnum_fast_query;
+    }
 
 
   (** Numeric variables *)
@@ -242,18 +251,27 @@ struct
         Eval.singleton cexp |>
         Eval.add_translation "Universal" nexp
       else
-        let nexp' = wrap_expr nexp (rmin, rmax) range in
-        let flow' =
-          if raise_alarm
-          then
-            if IntItv.meet itv ritv |> IntItv.is_bottom then
-              raise_c_integer_overflow_alarm ~warning:false exp nexp typ range man flow flow
-            else
-              raise_c_integer_overflow_alarm ~warning:true exp nexp typ range man flow flow
-          else flow
-        in
-        Eval.singleton cexp flow' |>
-        Eval.add_translation "Universal" nexp'
+        let itv =
+          if not !opt_mnum_fast_query then
+            ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false nexp) flow
+          else itv in 
+        if not !opt_mnum_fast_query && IntItv.subset itv ritv then
+          safe_c_integer_overflow_check range man flow |>
+          Eval.singleton cexp |>
+          Eval.add_translation "Universal" nexp
+        else
+          let nexp' = wrap_expr nexp (rmin, rmax) range in
+          let flow' =
+            if raise_alarm
+            then
+              if IntItv.meet itv ritv |> IntItv.is_bottom then
+                raise_c_integer_overflow_alarm ~warning:false exp nexp typ range man flow flow
+              else
+                raise_c_integer_overflow_alarm ~warning:true exp nexp typ range man flow flow
+            else flow
+          in
+          Eval.singleton cexp flow' |>
+          Eval.add_translation "Universal" nexp'
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)

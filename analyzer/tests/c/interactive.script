@@ -1,0 +1,12 @@
+b f
+c
+b 6
+c
+p x, s
+p x:main
+p x:f
+p x:*,s:*
+p s:main
+p s:f
+mopsa_bt
+f
