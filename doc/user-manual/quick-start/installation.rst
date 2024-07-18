@@ -17,9 +17,23 @@ Use Git to get access to the latest version:
    $ git clone https://gitlab.com/mopsa/mopsa-analyzer.git
    $ cd mopsa-analyzer
 
+Installing Mopsa (easy way)
+---------------------------
+
+You can use OCaml's package manager (opam), to resolve dependencies and install Mopsa. 
+Here are instructions to install opam `<https://opam.ocaml.org/doc/Install.html#Using-your-distribution-39-s-package-system>`_.
+
+
+.. code-block:: shell-session
+
+   $ LANG=C opam pin add mopsa --with-doc --with-test .
+
+
+Installing Mopsa from source
+----------------------------
 
 Dependencies
-------------
+++++++++++++
 
 To build Mopsa, first make sure you have the following dependencies:
 
@@ -64,7 +78,7 @@ For Ubuntu 22.04, you can use:
 
 
 Building
---------
+++++++++
 
 To compile Mopsa, issue the classic commands:
 
@@ -104,7 +118,7 @@ If this succeeds, you can jump to :ref:`using Mopsa <usage>`.
 
 
 Advanced Build Options
-----------------------
+++++++++++++++++++++++
 
 
 The ``configure`` script accepts some options:

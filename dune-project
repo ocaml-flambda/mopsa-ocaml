@@ -2,7 +2,7 @@
 
 (name mopsa)
 
-(generate_opam_files false)
+(generate_opam_files true)
 
 (subst disabled)
 
