@@ -35,10 +35,10 @@ MOPSA_ERR_STRING="man.get called on a non-singleton map"
 
 ## ACTUAL ORACLE
 # small.c is the initial file and the one that be will be reduced
-# we first check it's syntactically valid C with gcc
-gcc -c small.c >/dev/null 2>&1 &&
+# we first check it's syntactically valid C with clang
+clang -c small.c >/dev/null 2>&1 &&
 # not sure the timeout is really needed since we supposedly reduce the program's length, at least.
 # || true to not stop if mopsa finds alarms or crashes
 timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND small.c 2>&1 > stdout || true" &&
 # this is the behavior we want to reproduce
-grep $MOPSA_ERR_STRING stdout
+grep "$MOPSA_ERR_STRING" stdout
