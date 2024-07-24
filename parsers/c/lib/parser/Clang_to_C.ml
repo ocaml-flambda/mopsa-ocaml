@@ -44,7 +44,7 @@ let dump_decls = ref false
 let log_rename = ref false
 (* log when renaming (or assign a name to an anonymous) *)
 
-let log_merge = ref true
+let log_merge = ref false
 (* log when merging declarations *)
 
 let log_remove = ref false
