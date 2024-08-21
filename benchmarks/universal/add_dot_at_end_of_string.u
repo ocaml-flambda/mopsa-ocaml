@@ -1,0 +1,4 @@
+str s = rand();
+s = "a" @ s;
+s[|s|-1] = '.';
+print();

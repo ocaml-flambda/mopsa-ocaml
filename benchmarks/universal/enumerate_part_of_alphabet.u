@@ -1,0 +1,8 @@
+str c = "a";
+int i = c[0] + 1;
+while(i <= 122) {
+  c[0] = i;
+  i = i + 1;
+  if (rand(0, 1)) break;
+}
+print();

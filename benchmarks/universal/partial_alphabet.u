@@ -1,0 +1,14 @@
+str c = "a";
+str s = "a";
+int i = s[0] + 1;
+int j = rand(0, 25);
+while(i <= 122) {
+  c[0] = i;
+  s = s @ c;
+  i = i + 1;
+  if (rand(0, 1)) break;
+}
+// For all 0 <= j < |s|, s[j]-97 <= |s|+1
+// which means s in {(a+b)^2, (a+b+c)^3, ...}
+if(j < |s|)  assert(s[j]-97 <= |s|+1); 
+print();
