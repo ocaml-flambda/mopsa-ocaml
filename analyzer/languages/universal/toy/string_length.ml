@@ -78,20 +78,25 @@ struct
   let eval exp man flow =
     let range = erange exp in
     match ekind exp with
-    | E_len {ekind = E_binop(O_concat, {ekind = E_var (v1, _)}, {ekind = E_var (v2, _)})} ->
-       Eval.singleton (mk_binop ~etyp:T_int (mk_var (mk_len_string v1) range) O_plus (mk_var (mk_len_string v2) range) range) flow
+    | E_len {ekind = E_binop(O_concat, e1, e2)} ->
+       Eval.singleton (mk_binop ~etyp:T_int (mk_expr (E_len e1) range) O_plus (mk_expr (E_len e2) range) range) flow 
        |> OptionExt.return
 
     | E_len ({ekind = E_var (s, _)}) ->
        Eval.singleton (mk_var (mk_len_string s) range) flow |>
          OptionExt.return
 
+    | E_len ({ekind = E_constant (C_top T_string)}) ->
+      Eval.singleton (mk_int_general_interval (ItvUtils.IntBound.Finite Z.zero) ItvUtils.IntBound.PINF range) flow |>
+      OptionExt.return
+
     | E_len ({ekind = E_constant (C_string s)}) ->
        Eval.singleton (mk_int (String.length s) range) flow |>
          OptionExt.return
 
     | E_subscript({ekind = E_var (s, _)}, i) ->
-       (
+      (
+        man.eval i flow >>$ fun i flow ->
          assume (mk_log_and (mk_le (mk_zero range) i range) (mk_lt i (mk_var (mk_len_string s) range) range) range) man flow
            ~fthen:(fun flow ->
              let flow = safe_subscript_access_check exp flow in
@@ -105,19 +110,27 @@ struct
     let range = srange stmt in
     match skind stmt with
     | S_assign ({ekind = E_var (s, _); etyp=T_string}, e) ->
-       (eval (mk_expr ~etyp:T_int (E_len e) range) man flow |> OptionExt.none_to_exn >>$ fun le flow ->
-       man.exec (mk_assign (mk_var (mk_len_string s) range) le range) flow)
-       |> OptionExt.return
+      (
+        man.eval (mk_expr (E_len e) range) flow >>$ fun le flow ->
+        man.exec (mk_assign (mk_var (mk_len_string s) range) le range) flow
+      )
+      |> OptionExt.return
 
-    | S_assign ({ekind = E_subscript ({ekind = E_var (s, _)}, i); etyp=T_int}, e) ->
-       assume (mk_log_and
-                 (mk_log_and (mk_le (mk_zero range) e range) (mk_le e (mk_int 127 range) range) range)
-                 (mk_log_and (mk_le (mk_zero range) i range) (mk_le i (mk_var (mk_len_string s) range) range) range)
-                 range) man flow
-         ~fthen:(fun flow ->  Post.return flow)
-         ~felse:(Cases.empty)
-       |> OptionExt.return
-
+    | S_assign ({ekind = E_subscript ({ekind = E_var (s, _)}, i); etyp=T_int} as lhs, e) ->
+      (man.eval i flow >>$ fun i flow -> 
+       assume
+         (* (mk_log_and *)
+         (*        (mk_log_and (mk_le (mk_zero range) e range) (mk_le e (mk_int 127 range) range) range) *)
+                (mk_log_and (mk_le (mk_zero range) i range) (mk_le i (mk_var (mk_len_string s) range) range) range)
+                (* range) *)
+         man flow
+        ~fthen:(fun flow ->
+            let flow = safe_subscript_access_check lhs flow in 
+            Post.return flow)
+        ~felse:(fun flow ->
+            let () = debug "%a" (format @@ Flow.print man.lattice.print) flow in 
+            Cases.empty (invalid_subscript_access_alarm lhs flow man.lattice)))
+      |> OptionExt.return
 
 
     | _ -> None

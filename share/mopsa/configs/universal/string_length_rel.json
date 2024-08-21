@@ -8,15 +8,7 @@
             "universal.iterators.loops",
             "universal.iterators.interproc.inlining",
             "universal.iterators.unittest",
-            {
-                "product": [
-                    "universal.toy.string_length",
-                    "universal.toy.string_summarization"
-                ],
-                "reductions": [
-                    "universal.toy.string_reduction"
-                ]
-            },
+            "universal.toy.string_length",
             // Numeric abstraction
             {
                 "product": [

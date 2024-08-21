@@ -43,6 +43,15 @@ struct
        Eval.singleton (mk_var (mk_ord_string s) range) flow |>
          OptionExt.return
 
+    (* This rewrite rule is in both domains, otherwise the effect-based reduction will lose precision. I guess this should be moved out of both domains and put upwards in the configuration *)
+    | E_len {ekind = E_binop(O_concat, e1, e2)} ->
+      Eval.singleton (mk_binop ~etyp:T_int (mk_expr (E_len e1) range) O_plus (mk_expr (E_len e2) range) range) flow 
+      |> OptionExt.return
+
+    | E_len ({etyp = T_string}) ->
+      Eval.singleton (mk_int_general_interval (ItvUtils.IntBound.Finite Z.zero) ItvUtils.IntBound.PINF  range) flow |>
+      OptionExt.return
+
     | _ -> None
 
 
