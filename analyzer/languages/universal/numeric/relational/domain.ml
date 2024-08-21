@@ -198,9 +198,15 @@ struct
        improved by return intervals in [find] and use them in [add]. *)
     let x1,x2 =
       generic_merge
-        ~add:(fun v () x -> add_missing_vars x [v] |> forget_var v)
+        ~add:(fun v () x ->
+            if is_numerical_var v then 
+              add_missing_vars x [v] |> forget_var v
+            else
+              x
+          )
         ~find:(fun v x -> ())
-        ~remove:(fun v x -> remove_var v x)
+        ~remove:(fun v x ->
+            if is_numerical_var v then remove_var v x else x)
         ((a1,bnd),e1) ((a2,bnd),e2)
     in
     meet x1 x2
