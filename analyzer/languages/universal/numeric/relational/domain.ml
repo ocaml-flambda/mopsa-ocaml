@@ -168,6 +168,22 @@ struct
     let abs1', abs2' = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
+  let print_state printer a =
+    if !opt_show_relational_domain then
+      let dom = Binding.Equiv.fold (fun (a, _) acc -> a::acc) (snd a) [] in
+      pp_obj_map printer
+        [
+          (String "domain",
+           List
+             (List.map (fun v -> String (Format.asprintf "%a" pp_var v)) dom,
+              { sopen = "{"; ssep = ","; sclose = "}"; sbind = "" }));
+          (String "relations", pbox (Apron_pp.pp_env ApronManager.man) a);
+        ]
+        ~path:[Key "numeric-relations"]
+    else
+      pprint printer
+        (pbox (Apron_pp.pp_env ApronManager.man) a)
+        ~path:[Key "numeric-relations"]
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -334,9 +350,30 @@ struct
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK && is_var_numeric_type var ->
+      (* let's suppose we have
+         x:w >= constant in the interval domain but NOT here
+         and now we do x:w := e
+         the naive join will not fetch the previous bounds of x:w, which will just keep x:w to top... *)
+      let () = debug "weak assign!" in 
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |>
-      OptionExt.lift @@ fun (a',bnd') ->
+      let (a, bnd) =
+        if Binding.Equiv.mem_l var bnd then
+          let itv = man.ask (mk_int_interval_query ~fast:true lval) in
+          let range = erange lval in 
+          let e = match itv with
+            | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi) ->
+              mk_in lval' (mk_z lo range) (mk_z hi range) range
+            | Nb (ItvUtils.IntBound.MINF, ItvUtils.IntBound.Finite hi) -> mk_le lval' (mk_z hi range) range
+            | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.PINF) -> mk_ge lval' (mk_z lo range) range
+            | Nb _ -> mk_true range
+            | BOT -> assert false
+          in
+          let () = debug "precision improvement, assuming %a" pp_expr e in 
+          exec {stmt with skind = S_assume e} man ctx (a, bnd) |> OptionExt.none_to_exn
+        else (a, bnd)
+      in
+      let () = debug "%a" (format @@ print_state) (a, bnd) in 
+      exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |> OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
 
@@ -445,22 +482,6 @@ struct
       | _ -> None
 
 
-  let print_state printer a =
-    if !opt_show_relational_domain then
-      let dom = Binding.Equiv.fold (fun (a, _) acc -> a::acc) (snd a) [] in
-      pp_obj_map printer
-        [
-          (String "domain",
-           List
-             (List.map (fun v -> String (Format.asprintf "%a" pp_var v)) dom,
-              { sopen = "{"; ssep = ","; sclose = "}"; sbind = "" }));
-          (String "relations", pbox (Apron_pp.pp_env ApronManager.man) a);
-        ]
-        ~path:[Key "numeric-relations"]
-    else
-      pprint printer
-        (pbox (Apron_pp.pp_env ApronManager.man) a)
-        ~path:[Key "numeric-relations"]
 
 
 
