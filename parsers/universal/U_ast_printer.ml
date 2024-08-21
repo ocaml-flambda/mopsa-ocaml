@@ -156,6 +156,9 @@ and print_expr fmt e =
   | AST_randf ((i1,_),(i2,_)) ->
     Format.fprintf fmt "randf(%s,%s)" i1 i2
 
+  | AST_rand_string -> 
+    Format.fprintf fmt "rand_string()"
+
   | AST_identifier (v,_) -> print_var fmt v
 
   | AST_array_access ((e1, _), (e2, _)) ->

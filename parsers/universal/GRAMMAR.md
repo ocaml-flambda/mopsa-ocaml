@@ -37,6 +37,7 @@ A Universal program is a block of code preceded by a sequence of variable/functi
                  | <expr> <binop> <expr>    -- Binary expression
                  | "rand"(<int>, <int>)     -- Random integer
                  | "randf"(<real>, <real>)  -- Random real
+                 | "rand"                   -- Random string
                  | <id>(<expr>, ...)        -- Function call
                  | |<expr>|                 -- String length
                  | ()                       -- Void constructor

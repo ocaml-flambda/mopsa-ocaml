@@ -287,7 +287,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_string s range
 
   | AST_char_const(c, _) ->
-    Exceptions.panic "char not implemented yet"
+    mk_int ~typ:T_int (int_of_char c) range
 
   | AST_array_const(a, _) ->
      mk_expr (E_array (List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) (Array.to_list a))) range
@@ -297,6 +297,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
 
   | AST_randf((l, _), (u, _)) ->
     mk_float_interval (float_of_string l) (float_of_string u) range
+
+  | AST_rand_string ->
+    mk_top T_string range
 
   | AST_array_access((e1, ext1), (e2, ext2)) ->
     begin

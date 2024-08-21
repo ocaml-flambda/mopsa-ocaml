@@ -119,6 +119,9 @@ and expr =
   | AST_randf of (string ext) (* lower bound *) *
                 (string ext) (* upper bound *)
 
+  (* non-deterministic string *)
+  | AST_rand_string
+
   (* array accesses *)
   | AST_array_access of (expr ext * expr ext)
 
