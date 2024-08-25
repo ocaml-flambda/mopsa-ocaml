@@ -153,6 +153,7 @@ test-c:
     - $MOPSA_C -c-check-overflows-with-relational -config=c/cell-rel-itv.json analyzer/tests/c/156_overflow_relational.c
     - $MOPSA_C analyzer/tests/c/172_backward_mul_floatitv.c
     - $MOPSA_C analyzer/tests/c/176_do_while_constant_cond.c
+    - $MOPSA_C -config=c/cell-string-length-pack-rel-itv.json -c-pack-resources -stub-ignore-case=malloc.failure analyzer/tests/c/merge_relational.c
 
 ###################
 # Universal tests #
