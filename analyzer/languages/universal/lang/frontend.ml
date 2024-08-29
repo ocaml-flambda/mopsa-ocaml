@@ -257,9 +257,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     end
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
-      let e1 = from_expr e1 ext var_ctx fun_ctx in
+      let e1 = from_expr e1 ext1 var_ctx fun_ctx in
       let typ1 = etyp e1 in
-      let e2 = from_expr e2 ext var_ctx fun_ctx in
+      let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let typ2 = etyp e2 in
       let typ = unify_typ typ1 typ2 in
       let e1,e2 = to_typ typ e1, to_typ typ e2 in
