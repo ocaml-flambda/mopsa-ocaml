@@ -138,7 +138,12 @@ struct
   let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow -> None
 
-  let print_expr man flow printer exp = ()
+  let print_expr man flow printer exp =
+    match ekind exp, etyp exp with
+    | E_var (v, om), T_string ->
+      man.print_expr flow printer (mk_var (mk_len_string v) exp.erange)
+
+    | _ -> ()
 
 end
 
