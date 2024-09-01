@@ -122,5 +122,9 @@ let pp_env man pr (x,bnd) =
   if Abstract1.is_bottom man x then
     pp_string pr "⊥"
   else
-    let ea = Abstract1.to_lincons_array man x in
-    pp_lincons_earray bnd pr ea
+    try 
+      let ea = Abstract1.to_lincons_array man x in
+      pp_lincons_earray bnd pr ea
+    with (Failure s) when String.starts_with ~prefix:"Linexpr1.get_coeff" s ->
+      let () = warn "%s~>%s" s "defaulting to standard printing" in
+      pp_string pr (Format.asprintf "%a" Abstract1.print x)
