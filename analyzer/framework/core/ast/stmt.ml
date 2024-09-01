@@ -142,14 +142,10 @@ let stmt_pp_chain = TypeExt.mk_print_chain (fun fmt stmt ->
 
 
 let pp_stmt fmt stmt =
-  Var.print_uniq_with_uid := false;
-  TypeExt.print stmt_pp_chain fmt stmt;
-  Var.print_uniq_with_uid := true
+  Var.force_print_uniq_with_uid false (fun () -> TypeExt.print stmt_pp_chain fmt stmt)
 
 let pp_stmt_with_range fmt stmt =
-  Var.print_uniq_with_uid := false;
-  Format.fprintf fmt "%a@%a" (TypeExt.print stmt_pp_chain) stmt Location.pp_range stmt.srange;
-  Var.print_uniq_with_uid := true
+  Var.force_print_uniq_with_uid false (fun () -> Format.fprintf fmt "%a@%a" (TypeExt.print stmt_pp_chain) stmt Location.pp_range stmt.srange)
 
 let pp_block fmt (block:block) =
   fprintf fmt "@[<v>";
