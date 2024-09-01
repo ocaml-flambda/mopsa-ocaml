@@ -426,6 +426,10 @@ let list_domains (domains:string list) ~out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
 
+let list_reductions (reductions:string list) ~out =
+  print out "Reductions:@.";
+  List.iter (fun d -> print out "  %s@." d) reductions
+
 let list_checks checks ~out =
   print out "Checks:@.";
   List.iter (fun chk -> print out "  %a@." Core.Alarm.pp_check chk) checks

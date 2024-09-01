@@ -37,6 +37,7 @@ sig
   val help : ArgExt.arg list -> out:string option -> unit
   val print  : printer -> range:Location.range -> out:string option -> unit
   val list_domains : string list -> out:string option -> unit
+  val list_reductions : string list -> out:string option -> unit
   val list_hooks : string list -> out:string option -> unit
   val list_checks : check list -> out:string option -> unit
 end
