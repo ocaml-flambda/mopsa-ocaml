@@ -224,7 +224,7 @@ let () =
     category = "Help";
     doc = " list available domains/checks/hooks; if a configuration is specified, only used domains are listed";
     spec = ArgExt.Symbol_exit (
-        ["domains"; "checks"; "hooks"],
+        ["domains"; "checks"; "hooks"; "reductions"],
         (fun selection ->
            match selection with
            | "domains" ->
@@ -237,6 +237,11 @@ let () =
              in
              List.sort_uniq compare domains |>
              Output.Factory.list_domains
+
+           | "reductions" ->
+             let reductions = Config.Parser.all_reductions () in 
+             List.sort_uniq compare reductions |>
+             Output.Factory.list_reductions
 
            | "checks" ->
              let checks =
