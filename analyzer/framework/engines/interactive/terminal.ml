@@ -519,13 +519,8 @@ struct
           )
           names_by_func (vfound, afound, not_found) in
       let protect_print print_thunk =
-        if not @@ !opt_show_var_scope then 
-          let oldv = !Core.Ast.Var.print_uniq_with_uid in
-          (
-            Core.Ast.Var.print_uniq_with_uid := false;
-            print_thunk ();
-            Core.Ast.Var.print_uniq_with_uid := oldv;
-          )
+        if not @@ !opt_show_var_scope then
+          Core.Ast.Var.force_print_uniq_with_uid false (fun () -> print_thunk ())
         else
           print_thunk ()
       in

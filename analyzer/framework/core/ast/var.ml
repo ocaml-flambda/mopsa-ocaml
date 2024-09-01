@@ -28,6 +28,15 @@ open Semantic
 
 let print_uniq_with_uid = ref true
 
+(* force value of print_uniq_with_uid in the computation performed by f *)
+let force_print_uniq_with_uid (b: bool) (f : unit -> 'a) : 'a=
+  let old = !print_uniq_with_uid in
+  print_uniq_with_uid := b;
+  let r = f () in
+  print_uniq_with_uid := old;
+  r
+
+
 type var_kind = ..
 
 
