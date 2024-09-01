@@ -257,6 +257,12 @@ struct
 
 
   let merge (pre,bnd) ((a1,bnd1),e1) ((a2,bnd2),e2) =
+    let () = Debug.debug ~channel:(name ^ ".merge") "effects1 = %a@\neffects2 = %a@\na1 = %a@\na2 = %a"
+        pp_effect e1
+        pp_effect e2
+        (format print_state) (a1, bnd1)
+        (format print_state) (a2, bnd2)
+    in
     let bnd = Binding.concat bnd1 bnd2 in
     let x1,x2 =
       generic_merge
@@ -274,6 +280,10 @@ struct
         ~remove:(fun v x ->
             if is_numerical_var v then remove_var v x else x)
         ((a1,bnd),e1) ((a2,bnd),e2)
+    in
+    let () = Debug.debug ~channel:(name ^ ".merge") "after generic merge@\na1 = %a@\na2 = %a@\nnow meeting results"
+        (format print_state) x1
+        (format print_state) x2 
     in
     meet x1 x2
 
