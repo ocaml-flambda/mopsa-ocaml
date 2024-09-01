@@ -34,7 +34,7 @@ open Trace
 module Make(Toplevel : TOPLEVEL) =
 struct
 
-  let opt_show_var_scope = ref true 
+  let opt_show_var_scope = ref true
 
   (** Commands *)
   type terminal_command_kind =
@@ -347,6 +347,9 @@ struct
     | ["set"  |"s";  "script"| "s"; d] | ["sc"; d] -> Set (Script, d)
     | ["unset"|"u";  "script"| "s"] | ["uc"] -> Unset Script
 
+    | ["set"; "showvarscope" ] -> Set (ShowVarScope, "")
+    | ["unset"; "showvarscope"] -> Unset ShowVarScope
+
     | ["load"; "script"; s] | ["ls"; s] -> LoadScript s
 
     | ("print"    | "p") :: vars ->
@@ -452,7 +455,7 @@ struct
     if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then
       fprintf fmt "⊥@."
     else
-      let () = Ast.Var.print_uniq_with_uid := false in 
+      Ast.Var.force_print_uniq_with_uid false (fun () ->
       let names =
         match names with
         | [] ->
@@ -524,7 +527,7 @@ struct
         else
           print_thunk ()
       in
-      let () = Ast.Var.print_uniq_with_uid := true in 
+      (* let () = Ast.Var.print_uniq_with_uid := true in *)
       let not_found' =
         let printer = empty_printer () in
         let found,not_found =
@@ -565,7 +568,8 @@ struct
                ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
                (fun fmt vname -> fprintf fmt "'%s'" vname)
             ) l
-      )
+      ))
+        
 
   let init () =
     printf "@.%a@.Type '%a' to get the list of commands.@.@."
