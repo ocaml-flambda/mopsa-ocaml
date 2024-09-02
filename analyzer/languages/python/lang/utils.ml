@@ -43,6 +43,7 @@ let mk_builtin_raise_msg exn msg range =
   let open Universal.Ast in
   mk_builtin_raise_args exn [mk_constant ~etyp:(T_py (Some Str)) (C_string msg) range] range
 
+(** Creates an AST block, tagged by `range`, representing the call of a builtin defined as `f` (a string), to which a list of parameters is passed *)
 let mk_builtin_call f params range =
   mk_py_call (mk_py_object (Addr.find_builtin f) range) params range
 
@@ -55,11 +56,16 @@ let mk_object_hasattr obj attr range =
 let mk_addr_hasattr obj attr range =
   mk_hasattr (mk_addr obj range) attr range
 
+(** Creates a block
+    try: `body`
+    except StopIteration: `except`
+
+    This statement will be created with the provided `range` *)
 let mk_try_stopiteration body except range =
   mk_try
     body
     [mk_except
-       (Some (mk_py_object (Addr.find_builtin "StopIteration") range)) (* (mk_addr (fst @@ Addr.find_builtin "StopIteration") range)) *)
+       (Some (mk_py_object (Addr.find_builtin "StopIteration") range))
        None
        except
     ]
