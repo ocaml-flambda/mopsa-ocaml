@@ -115,11 +115,13 @@ struct
   (** {2 Environment utility functions} *)
   (** ********************************* *)
 
+  (* boolean of return triple is true iff unify had no effect *)
   let unify abs1 abs2 =
     let env1 = Apron.Abstract1.env abs1 and env2 = Apron.Abstract1.env abs2 in
-    let env = Apron.Environment.lce env1 env2 in
+    let env, o1, o2 = Apron.Environment.lce_change env1 env2 in
     (Apron.Abstract1.change_environment ApronManager.man abs1 env false),
-    (Apron.Abstract1.change_environment ApronManager.man abs2 env false)
+    (Apron.Abstract1.change_environment ApronManager.man abs2 env false),
+    o1 = None && o2 = None
 
   let add_missing_vars (a,bnd) lv =
     let env = Apron.Abstract1.env a in
@@ -171,19 +173,25 @@ struct
     Apron.Abstract1.is_bottom ApronManager.man abs
 
   let subset (abs1,_) (abs2,_) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.is_leq ApronManager.man abs1' abs2'
 
   let join (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', unchanged = unify abs1 abs2 in
+    if not unchanged then
+      Debug.debug ~channel:(name ^ ".join") "Heterogenous case detected@\na1 = %a@\n~> a1' (after unification) = %a@\na1 = %a@\n~> a1' (after unification) = %a@\n"
+        (format print_state) (abs1, bnd1)
+        (format print_state) (abs1', bnd1)
+        (format print_state) (abs2, bnd2)
+        (format print_state) (abs2, bnd2);
     Apron.Abstract1.join ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
   let meet (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.meet ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
   let widen bnd (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
   (** {2 Transfer functions} *)
