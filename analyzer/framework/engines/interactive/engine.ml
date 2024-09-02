@@ -363,9 +363,11 @@ struct
     try
       init_state state;
       let ret =
-        exec stmt flow |>
-        post_to_flow man
-      in
+        (
+          exec stmt flow >>% fun flow ->
+          exec (mk_stmt (S_block ([], [])) (tag_range stmt.srange "end")) flow
+        )
+        |> post_to_flow man in
       Interface.finish man ret;
       ret
     with
