@@ -131,10 +131,12 @@ let to_typ (t:typ) (e:expr) : expr =
   let orgt = etyp e in
   if compare_typ orgt t = 0 then e
   else
-    match orgt, t with
-    | (T_int | T_float _), (T_int | T_float _) ->
-       mk_unop O_cast e ~etyp:t range
-    | _ ->
+    match ekind e, orgt, t with
+    | _, (T_int | T_float _), (T_int | T_float _) ->
+      mk_unop O_cast e ~etyp:t range
+    | E_constant (C_top T_any), T_any, t ->
+      {e with ekind = E_constant (C_top t); etyp = t}
+    | _ -> 
       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: typ) (b: U.binary_op) : operator =
@@ -152,6 +154,7 @@ let from_binop (t: typ) (b: U.binary_op) : operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
+  | T_string, AST_PLUS        -> O_concat
   | T_string, AST_EQUAL         -> O_eq
   | T_float _, AST_PLUS          -> O_plus
   | T_float _, AST_MINUS         -> O_minus
@@ -299,7 +302,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_float_interval (float_of_string l) (float_of_string u) range
 
   | AST_rand_string ->
-    mk_top T_string range
+    mk_top T_any range
 
   | AST_array_access((e1, ext1), (e2, ext2)) ->
     begin
@@ -477,9 +480,15 @@ let var_ctx_init_of_declaration (dl : U_ast.declaration U.ext list) (var_ctx: va
   let var_ctx, init, gvars = List.fold_left (fun (var_ctx, init, gvars) ((((t, v), extv ), o), e) ->
       let new_var_ctx = add_var var_ctx v (from_typ t) in
       let vv = from_var v extv new_var_ctx in
+      let range = from_extent extv in 
+      let stmt_add = mk_add
+          (mk_var vv (tag_range range "initializer_var"))
+          (tag_range range "initializer") in
+      let init = stmt_add :: init in 
       match o with
       | Some (e, ext) ->
         let e = from_expr e ext var_ctx fun_ctx in
+        let e = to_typ (from_typ t) e in
         let range = from_extent ext in
         let stmt_init =
           mk_assign
