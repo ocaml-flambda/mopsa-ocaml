@@ -109,6 +109,11 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_add ({ekind = E_var (s, _); etyp = T_string}) ->
+      man.exec (mk_add (mk_var (mk_len_string s) range) range) flow
+      |> OptionExt.return
+
+
     | S_assign ({ekind = E_var (s, _); etyp=T_string}, e) ->
       (
         man.eval (mk_expr (E_len e) range) flow >>$ fun le flow ->

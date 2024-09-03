@@ -58,15 +58,19 @@ struct
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with
+    | S_add ({ekind = E_var (s, _); etyp = T_string}) ->
+      man.exec (mk_add (mk_var (mk_ord_string s) range) range) flow
+      |> OptionExt.return
+
     | S_assign ({ekind = E_var (s, _); etyp=T_string}, {ekind = E_constant (C_string str)}) ->
        let min, max = Seq.fold_left (fun (mini, maxi) c ->
            let ic = int_of_char c in
            min mini ic, max maxi ic) (256,0) (String.to_seq str) in
-       man.exec (mk_assign (mk_var (mk_ord_string s) range) (mk_int_interval min max range) range) flow
+       man.exec (mk_assign (mk_var ~mode:(Some STRONG) (mk_ord_string s) range) (mk_int_interval min max range) range) flow
        |> OptionExt.return
 
     | S_assign ({ekind = E_var (s, _); etyp=T_string}, {ekind = E_var (t, _)}) ->
-       man.exec (mk_assign (mk_var (mk_ord_string s) range) (mk_var (mk_ord_string t) range) range) flow
+      man.exec (mk_assign (mk_var ~mode:(Some STRONG) (mk_ord_string s) range) (mk_var (mk_ord_string t) range) range) flow
        |> OptionExt.return
 
     | S_assign ({ekind = E_var (s, _); etyp=T_string}, {ekind = E_binop (O_concat, {ekind = E_var (v1, _)}, {ekind = E_var (v2, _)})}) ->
