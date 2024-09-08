@@ -255,7 +255,7 @@ struct
                    (e2, if singleton2 then x2 else set_singleton_env (singleton p e2) ctx man x2)
                in
                if D.is_bottom e then
-                 acc
+                 M.remove p acc
                else
                  M.add p e acc
             ) map1 map2 map1
