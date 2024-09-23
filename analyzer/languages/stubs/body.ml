@@ -21,8 +21,6 @@
 
 (** Inter-procedural iterator of stubs by inlining. *)
 
-(** FIXME: remove calls to post_to_flow to preserve logs *)
-
 open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
@@ -297,12 +295,10 @@ struct
   (** Initialize the parameters of the stubbed function *)
   let rec init_params args params range man flow =
     match params, args with
-    | [], _ -> flow
+    | [], _ -> Post.return flow
     | param::tl_params, arg::tl_args ->
-      let post = man.exec (mk_add_var param range) flow >>%
-                 man.exec (mk_assign (mk_var param range) arg range)
-      in
-      post_to_flow man post |>
+      man.exec (mk_add_var param range) flow >>%
+      man.exec (mk_assign (mk_var param range) arg range) >>%
       init_params tl_args tl_params range man
     | _, [] ->
       panic "stubs: insufficent number of arguments"
@@ -310,10 +306,7 @@ struct
 
   (** Remove parameters from the returned flow *)
   let remove_params params range man flow =
-    params |> List.fold_left (fun flow param ->
-        man.exec (mk_remove_var param range) flow |> post_to_flow man
-      ) flow
-
+    man.exec (mk_block (List.map (fun param -> mk_remove_var param range) params) range) flow 
 
   (** Evaluate the formula of the `assumes` section *)
   let exec_assumes assumes man flow =
@@ -395,7 +388,7 @@ struct
           mk_remove_var l.content.lvar range :: block
         ) [] locals
     in
-    man.exec (mk_block block range) flow |> post_to_flow man
+    man.exec (mk_block block range) flow
 
 
   let exec_free free man flow =
@@ -428,11 +421,11 @@ struct
     | S_message msg -> exec_message msg man flow
 
   (** Execute the body of a case section *)
-  let exec_case case return man flow : 'a flow =
-    List.fold_left (fun acc leaf ->
+  let exec_case case return man flow : 'a post =
+    let post = List.fold_left (fun acc leaf ->
         acc >>% fun flow -> exec_leaf leaf return man flow
-      ) (Post.return flow) case.case_body |>
-    post_to_flow man |>
+      ) (Post.return flow) case.case_body in
+    post >>%
     (* Clean case post state *)
     clean_post case.case_locals case.case_range man
 
@@ -446,35 +439,35 @@ struct
         | _ -> post
       ) (Post.return flow) body
     in
-    let flow = post_to_flow man post in 
+    post >>% fun flow ->
     (* Execute case sections separately *)
     let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
         | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
           let flow' = exec_case case return man flow in
-          flow':: acc, Flow.get_ctx flow'
+          flow':: acc, Cases.get_ctx flow'
         | _ -> acc, ctx
       ) ([], Flow.get_ctx flow) body
     in
-    let flows = List.map (Flow.set_ctx ctx) flows in
+    let flows = List.map (Cases.set_ctx ctx) flows in
     (* Join flows *)
     (* FIXME: when the cases do not define a partitioning, we need
          to do something else *)
-    Flow.join_list man.lattice flows ~empty:(fun () -> flow)
+    Cases.join_list flows ~empty:(fun () -> Post.return flow)
 
 
   let prepare_all_assigns assigns range man flow =
     (* Check if there are assigned variables *)
     if assigns = []
-    then flow
-    else man.exec (mk_stub_prepare_all_assigns assigns range) flow |> post_to_flow man
+    then Post.return flow
+    else man.exec (mk_stub_prepare_all_assigns assigns range) flow
 
   let clean_all_assigns assigns range man flow =
     (* Check if there are assigned variables *)
     if assigns = []
-    then flow
-    else man.exec (mk_stub_clean_all_assigns assigns range) flow |> post_to_flow man
+    then Post.return flow
+    else man.exec (mk_stub_clean_all_assigns assigns range) flow
 
   (** Evaluate a call to a stub *)
   let eval_stub_call stub args return range man flow =
@@ -482,21 +475,19 @@ struct
       let cs = Flow.get_callstack flow in
       let flow = Flow.push_callstack stub.stub_func_name range flow in
       (* Initialize parameters *)
-      let flow = init_params args stub.stub_func_params range man flow in
+      init_params args stub.stub_func_params range man flow >>% fun flow ->
       (* Prepare assignments *)
-      let flow = prepare_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "prepare") man flow in
+      prepare_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "prepare") man flow >>% fun flow ->
       (* Create the return variable *)
-      let flow =
-        match return with
-        | None -> flow
-        | Some v -> man.exec (mk_add_var v range) flow |> post_to_flow man
-      in
+      (match return with
+        | None -> Post.return flow
+        | Some v -> man.exec (mk_add_var v range) flow) >>% fun flow ->
       (* Evaluate the body of the stb *)
-      let flow = exec_body ~stub:(Some stub) stub.stub_func_body return range man flow in
+      exec_body ~stub:(Some stub) stub.stub_func_body return range man flow >>% fun flow ->
       (* Clean locals *)
-      let flow = clean_post stub.stub_func_locals (tag_range stub.stub_func_range "clean") man flow in
+      clean_post stub.stub_func_locals (tag_range stub.stub_func_range "clean") man flow >>% fun flow ->
       (* Clean assignments *)
-      let flow = clean_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "clean") man flow in
+      clean_all_assigns stub.stub_func_assigns (tag_range stub.stub_func_range "clean") man flow >>% fun flow ->
       (* Restore the callstack *)
       let flow = Flow.set_callstack cs flow in
       let clean_range = tag_range range "clean" in
@@ -710,14 +701,13 @@ struct
   (** Execute a global stub directive *)
   let exec_directive stub range man flow =
       (* Prepare assignments *)
-      let flow = prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
+      prepare_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow >>% fun flow ->
       (* Evaluate the body of the stub *)
-      let flow = exec_body stub.stub_directive_body None range man flow in
+      exec_body stub.stub_directive_body None range man flow >>% fun flow ->
       (* Clean locals *)
-      let flow = clean_post stub.stub_directive_locals stub.stub_directive_range man flow in
+      clean_post stub.stub_directive_locals stub.stub_directive_range man flow >>% fun flow ->
       (* Clean assignments *)
-      let flow = clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow in
-      Post.return flow
+      clean_all_assigns stub.stub_directive_assigns stub.stub_directive_range man flow
 
 
   (** Normalize a requirement condition by adding missing otherwise decorations *)
