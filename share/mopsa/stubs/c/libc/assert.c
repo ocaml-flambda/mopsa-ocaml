@@ -46,11 +46,27 @@ void __assert_fail (const char *__assertion, const char *__file,
 void __assert_perror_fail (int __errnum, const char *__file,
                            unsigned int __line, const char *__function);
 
+#if defined(__APPLE__) && defined(__MACH__)
+// The MacOS SDK defines __assert as a macro and not a function, creating compilation issues without a specific case for it.
+
+/*$
+ * requires: valid_string(__assertion);
+ * requires: valid_string(__file);
+ * requires: valid_string(__function);
+ * ensures: raise("__assert called");
+ * ensures: 1 == 0;
+ */
+void __assert_rtn(const char *__assertion, const char *__file, int line, const char * __function);
+
+#else
+
 /*$
  * requires: valid_string(__assertion);
  * requires: valid_string(__file);
  * ensures: raise("__assert called");
  * ensures: 1 == 0;
  */
+
 void __assert (const char *__assertion, const char *__file, int __line);
 
+#endif
