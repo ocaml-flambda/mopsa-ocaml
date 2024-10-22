@@ -29,6 +29,9 @@
  *
  *  For the moment, we don't support modifying the partitioning keys during
  *  lattice operation (join, meet and widening)
+ * 
+ *  BEWARE: partitioning during evaluations and reduced product is *NOT SUPPORTED AND UNSOUND*:
+ *   https://gitlab.com/mopsa/mopsa-analyzer/-/merge_requests/130#note_1833582309
  *)
 
 open Core.All
