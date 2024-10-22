@@ -1,3 +1,11 @@
+# 1.1
+
+- !241 by @rmonat: pre-release fixes (CHANGELOG.md, ...)
+- !130 by @aouadjaout: introduces partitioning in Mopsa. 
+  /!\ Breaking changes, cf. https://gitlab.com/mopsa/mopsa-analyzer/-/merge_requests/130#breaking-changes
+- !236 by @Mm72: fix range of sub-expressions of binary operators in universal
+- !234 by @edwintorok: fixes in mopsa-build (handling of -Wl,-E)
+
 # 1.0
 
 This is the initial version of Mopsa. See the README.md to know more about Mopsa. 
