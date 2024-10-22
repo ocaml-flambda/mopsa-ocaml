@@ -26,6 +26,7 @@ open Sig.Abstraction.Domain
 open Sig.Abstraction.Simplified
 open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Stateless
+open Sig.Abstraction.Partitioning
 open Sig.Abstraction.Value
 open Sig.Abstraction.Value_functor
 open Sig.Reduction.Exec
@@ -60,6 +61,7 @@ and domain_kind =
 and domain_functor =
   | F_simplified of (module SIMPLIFIED_FUNCTOR)
   | F_stacked of domain
+  | F_partitioning of (module PARTITIONING)
 
 and value =
   | V_value   of (module VALUE)
@@ -135,6 +137,9 @@ let rec pp_domain_functor fmt = function
     let module F = (val f) in
     pp_print_string fmt F.name
 
+  | F_partitioning f ->
+    let module F = (val f) in
+    pp_print_string fmt F.name
 
 
 and pp_domain fmt d =

@@ -51,7 +51,7 @@ struct
   (** {2 Transfer functions} *)
   (** ====================== *)
 
-  let init prog man flow =  flow
+  let init prog man flow = None
 
 
   let exec stmt man flow = None

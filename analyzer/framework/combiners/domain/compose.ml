@@ -72,35 +72,35 @@ struct
 
   let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
     let b1, ss, ss' = D1.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let a2 = if s == ss then a2 else man.get ss |> snd in
-    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let a2 = if s == ss then a2 else get_singleton_env ctx man ss |> snd in
+    let a2' = if s' == ss' then a2' else get_singleton_env ctx man ss' |> snd in
     let b2, s, s' = D2.subset (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     b1 && b2, s, s'
 
   let join man ctx ((a1,a2),s) ((a1',a2'),s') =
     let aa1, ss, ss' = D1.join (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let a2 = if s == ss then a2 else man.get ss |> snd in
-    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let a2 = if s == ss then a2 else get_singleton_env ctx man ss |> snd in
+    let a2' = if s' == ss' then a2' else get_singleton_env ctx man ss' |> snd in
     let aa2, s, s' = D2.join (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s'
 
   let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
     let aa1, ss, ss' = D1.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let a2 = if s == ss then a2 else man.get ss |> snd in
-    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let a2 = if s == ss then a2 else get_singleton_env ctx man ss |> snd in
+    let a2' = if s' == ss' then a2' else get_singleton_env ctx man ss' |> snd in
     let aa2, s, s' = D2.meet (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s'
 
   let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
     let aa1, ss, ss', stable1 = D1.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
-    let a2 = if s == ss then a2 else man.get ss |> snd in
-    let a2' = if s' == ss' then a2' else man.get ss' |> snd in
+    let a2 = if s == ss then a2 else get_singleton_env ctx man ss |> snd in
+    let a2' = if s' == ss' then a2' else get_singleton_env ctx man ss' |> snd in
     let aa2, s, s', stable2 = D2.widen (snd_pair_man man) ctx (a2,ss) (a2',ss') in
     (aa1,aa2), s, s', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
-    D1.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
-    D2.merge pre2 (a2, get_right_teffect te) (a2', get_right_teffect te')
+  let merge path (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
+    D1.merge (Ax_pair_left::path) pre1 (a1, te) (a1', te'),
+    D2.merge (Ax_pair_right::path) pre2 (a2, te) (a2', te')
 
 
 
@@ -109,9 +109,7 @@ struct
   (**************************************************************************)
 
   (** Initialization procedure *)
-  let init prog man flow =
-    D1.init prog (fst_pair_man man) flow |>
-    D2.init prog (snd_pair_man man)
+  let init prog man flow = broadcast_init D1.init D2.init prog man flow
 
   (** Execution of statements *)
   let exec targets = cascade_call targets D1.exec D1.domains D2.exec D2.domains

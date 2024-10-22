@@ -26,6 +26,43 @@ open Sig.Abstraction.Stateless
 open Universal.Iterators.Loops
 open Ast
 
+(******************)
+(** Trace markers *)
+(******************)
+
+type marker +=
+  | M_c_switch_case of expr (** switch expression *) * expr (** case expression *)
+  | M_c_switch_default of expr (** switch expression *)
+
+let () = register_marker {
+    marker_print = (fun next fmt -> function
+        | M_c_switch_case(e1, e2) ->
+          Format.fprintf fmt "switch-case (%a == %a)" pp_expr e1 pp_expr e2
+        | M_c_switch_default(e) ->
+          Format.fprintf fmt "switch-default (%a)" pp_expr e
+        | m ->
+          next fmt m
+      );
+    marker_compare = (fun next m1 m2 ->
+        match m1, m2 with
+        | M_c_switch_case(e1, e2), M_c_switch_case(e1', e2') ->
+          Compare.pair compare_expr compare_expr
+            (e1, e2) (e1', e2')
+        | M_c_switch_default(e), M_c_switch_default(e') ->
+          compare_expr e e'
+        | _ ->
+          next m1 m2
+      );
+    marker_name = (fun next -> function
+        | M_c_switch_case _
+        | M_c_switch_default _ -> "switch"
+        | m -> next m
+      );
+  }
+
+(********************)
+(** Abstract domain *)
+(********************)
 
 module Domain =
 struct
@@ -44,7 +81,7 @@ struct
   (** {2 Initialization} *)
   (** ****************** *)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
 
   (** {2 Token for cases flows} *)
@@ -102,7 +139,7 @@ struct
   (** ============================== *)
 
   (** 𝕊⟦ switch (e) body ⟧ *)
-  let exec_switch e body guard_cleaner range man flow =
+  let exec_switch e evl_e body guard_cleaner range man flow =
     (* Save initial state before removing the break flows *)
     let flow0 = flow in
     let flow = Flow.remove T_break flow in
@@ -121,15 +158,17 @@ struct
         let cond = match ekind e' with
           | E_constant (Universal.Ast.C_int_interval (ItvUtils.IntBound.Finite lo,
                                                       ItvUtils.IntBound.Finite hi)) ->
-            Universal.Ast.mk_in e
+            Universal.Ast.mk_in evl_e
               (Universal.Ast.mk_z ~typ:(etyp e') lo switch_range)
               (Universal.Ast.mk_z ~typ:(etyp e') hi switch_range)
               switch_range
-          | _ -> mk_binop e O_eq e' ~etyp:u8 switch_range in
+          | _ -> mk_binop evl_e O_eq e' ~etyp:u8 switch_range
+        in
         assume cond
           ~fthen:(fun flow ->
               man.exec guard_cleaner flow >>% fun flow ->
               (* Case reachable, so save cur in the flow of the case before removing cur *)
+              man.exec (mk_add_marker (M_c_switch_case(e, e')) range) flow >>% fun flow ->
               let cur = Flow.get T_cur man.lattice flow in
               Flow.set (T_c_switch_case (e',r)) cur man.lattice flow |>
               Flow.remove T_cur |>
@@ -149,12 +188,17 @@ struct
     (* Put the remaining cur environments in the flow of the default case. If
        no default case is present, save cur in no_default. *)
     let flow, no_default =
-      let cur = Flow.get T_cur man.lattice flow in
       match default with
       | None ->
+        let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.remove T_cur flow in
         flow, cur
       | Some r ->
+        let flow =
+          man.exec (mk_add_marker (M_c_switch_default e) range) flow |>
+          post_to_flow man
+        in
+        let cur = Flow.get T_cur man.lattice flow in
         let flow = Flow.set (T_c_switch_default r) cur man.lattice flow |>
                    Flow.remove T_cur
         in
@@ -200,8 +244,8 @@ struct
              match case with
              | Empty -> Cases.empty flow
              | NotHandled -> Cases.not_handled flow
-             | Result(e, _, cleaners) ->
-               exec_switch e body (Universal.Ast.mk_block (StmtSet.elements cleaners) (erange e)) stmt.srange man flow)
+             | Result(e', _, cleaners) ->
+               exec_switch e e' body (Universal.Ast.mk_block (StmtSet.elements cleaners) (erange e)) stmt.srange man flow)
        ) |>
       OptionExt.return
 

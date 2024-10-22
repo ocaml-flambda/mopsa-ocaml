@@ -1079,7 +1079,8 @@ struct
   let init _ _ flow =
     debug "Enable the \"-enforce-sign-constraints\" option of the relational domain";
     Relational.Domain.opt_enforce_sign_constraints := true;
-    flow
+    Post.return flow |>
+    Option.some
 
   let ask _ _ _ = None
   let exec _ _ _ = None

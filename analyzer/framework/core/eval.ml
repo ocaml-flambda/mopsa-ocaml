@@ -37,7 +37,7 @@ type 'a eval  = ('a,expr) cases
 
 include Cases
 
-let singleton ?(effects=empty_teffect) ?(cleaners=[]) ?(translations=[]) e flow =
+let singleton ?(effects=empty_effect_map) ?(cleaners=[]) ?(translations=[]) e flow =
   let e' = List.fold_left (fun acc (s,ee) -> add_expr_translation s ee acc) e translations in
   Cases.singleton ~effects ~cleaners e' flow
 
@@ -49,9 +49,9 @@ let print fmt (evl: 'a eval) : unit =
 
 let remove_duplicates lattice evl =
   Cases.remove_duplicate_results
-    (fun e1 e2 ->
+    ~equal:(fun e1 e2 ->
        (* Compare the expressions and their translations *)
-       Compare.pair compare_expr (SemanticMap.compare compare_expr)
+       0 = Compare.pair compare_expr (SemanticMap.compare compare_expr)
          (e1,e1.etrans)
          (e2,e2.etrans)
     ) lattice evl

@@ -45,7 +45,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let exec _ _ _ = None
 

@@ -57,11 +57,8 @@ struct
       if are_effects_enabled () then
         I.exec stmt man flow |>
         OptionExt.lift @@ fun res ->
-        Cases.map_effects (fun effects ->
-            man.set_effects (
-              man.get_effects effects |>
-              add_stmt_to_teffect stmt
-            ) effects
+        Cases.map_effects (fun effects flow ->
+            man.add_effect stmt [] flow effects
           ) res
       else
         I.exec stmt man flow

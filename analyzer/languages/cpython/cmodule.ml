@@ -104,7 +104,7 @@ module EquivBaseAddrs =
     let empty = (AddrSet.empty, OtherMap.empty)
     let is_bottom (a, o) = AddrSet.is_bottom a && OtherMap.is_bottom o
     let find_opt_from_c pt man flow =
-      let curs, curm = get_env T_cur man flow in
+      let curs, curm = get_singleton_env_from_flow T_cur man flow in
       match pt with
       | P_block ({base_kind = Addr a}, _, _) ->
          if AddrSet.mem a curs then Some a
@@ -123,7 +123,7 @@ module EquivBaseAddrs =
       | _ -> assert false
 
     let find_opt_from_py addr range man flow =
-      let curs, curm = get_env T_cur man flow in
+      let curs, curm = get_singleton_env_from_flow T_cur man flow in
       if AddrSet.mem addr curs then
         Some (mk_c_points_to_bloc (C.Common.Base.mk_addr_base addr) (mk_zero range) None)
       else
@@ -138,12 +138,12 @@ module EquivBaseAddrs =
         else None
 
     let add_addr addr man flow =
-      let curs, curm = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun (curs, curm) flow ->
       let curs = AddrSet.add addr curs in
       set_env T_cur (curs, curm) man flow
 
     let add_c_py_equiv pt addr man flow =
-      let curs, curm = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun (curs, curm) flow ->
       let noab : NoAddrBase.t = match pt with
         | P_fun f -> Fun f
         | P_block ({base_kind = Var v}, offset, _) -> Varbase (v, eval_offset man flow offset)
@@ -152,11 +152,11 @@ module EquivBaseAddrs =
       set_env T_cur (curs, curm) man flow
 
     let rename_addr src dst man flow =
-      let curs, curm = get_env T_cur man flow in
+      let curs, curm = get_singleton_env_from_flow T_cur man flow in
       let curs, to_rename = if AddrSet.mem src curs then AddrSet.add dst (AddrSet.remove src curs), true
                             else curs, false in
       let curm = OtherMap.rename_inverse src dst curm in
-      set_env T_cur (curs, curm) man flow, to_rename
+      set_env T_cur (curs, curm) man flow |> post_to_flow man, to_rename
 
     let widen ctx = join
   end
@@ -176,8 +176,10 @@ module Domain =
 
     let init _ man flow =
       List.iter (fun a -> Hashtbl.add C.Common.Builtins.builtin_functions a ()) builtin_functions;
-      set_env T_cur EquivBaseAddrs.empty man flow |>
-      set_c_target_info !C.Frontend.target_info
+      set_env T_cur EquivBaseAddrs.empty man flow >>%? fun flow ->
+      set_c_target_info !C.Frontend.target_info flow |>
+      Post.return |>
+      Option.some
 
     let materialize_builtin_val_addr addr man range flow =
       (* since integer addresses are always weak in python, this
@@ -290,7 +292,7 @@ module Domain =
             alloc_py_addr man (Python.Addr.A_py_c_function (methd_fundec.c_func_org_name, methd_fundec.c_func_uid, methd_kind, oflags, (binder_addr, None))) range flow) >>$
               fun methd_eaddr flow ->
               let methd_addr = Addr.from_expr methd_eaddr in
-              let flow = EquivBaseAddrs.add_c_py_equiv methd_function methd_addr man flow in
+              EquivBaseAddrs.add_c_py_equiv methd_function methd_addr man flow >>% fun flow ->
               (* bind method to binder *)
               bind_in_python binder_addr methd_name methd_addr range man flow >>%
                 Cases.singleton true
@@ -348,7 +350,7 @@ module Domain =
                   alloc_py_addr man (Python.Addr.A_py_instance (fst @@ Python.Addr.find_builtin "member_descriptor")) range flow >>$
                     fun member_descr flow ->
                     let member_descr = Addr.from_expr member_descr in
-                    let flow = add_c_py_equiv member_points_to member_descr man flow in
+                    add_c_py_equiv member_points_to member_descr man flow >>% fun flow ->
                     man.exec (mk_assign (mk_py_attr (mk_py_object (member_descr, None) range) "__name__" range) {(mk_string member_name range) with etyp = T_py None} range) flow >>%
                       bind_in_python binder_addr member_name member_descr range man >>%
                       Cases.singleton true
@@ -384,7 +386,7 @@ module Domain =
            alloc_py_addr man (Python.Addr.A_py_c_module module_name) range flow >>$
              fun module_addr flow ->
              let m_addr = Addr.from_expr module_addr in
-             let flow = EquivBaseAddrs.add_addr m_addr man flow in
+             EquivBaseAddrs.add_addr m_addr man flow >>% fun flow ->
              add_pymethoddef "m_methods" m_addr Builtin_function_or_method expr man flow
              >>% Eval.singleton module_addr
         )
@@ -393,7 +395,6 @@ module Domain =
       resolve_pointer expr man flow >>$
         (fun points_to flow ->
           debug "[resolve_c_pointer %a:%a] searching for %a" pp_expr expr pp_typ (etyp expr) pp_points_to points_to;
-          debug "%a" (format EquivBaseAddrs.print) (get_env T_cur man flow);
           if points_to = P_null then let () = debug "that's NULL" in Cases.singleton None flow
           else if points_to = P_top then Cases.singleton (Some Top.TOP) flow
           else
@@ -462,7 +463,7 @@ module Domain =
               alloc_py_addr man (Python.Addr.A_py_c_function (fundec.c_func_org_name, fundec.c_func_uid, function_kind, None, (cls_addr, None))) range flow >>$
                 (fun fun_eaddr flow ->
                   let fun_addr = Addr.from_expr fun_eaddr in
-                  let flow = EquivBaseAddrs.add_c_py_equiv func fun_addr man flow in
+                  EquivBaseAddrs.add_c_py_equiv func fun_addr man flow >>% fun flow ->
                   bind_in_python cls_addr name fun_addr range man flow)
               |> post_to_flow man
 
@@ -569,8 +570,8 @@ module Domain =
             man flow
         in
         let add_class_equivs descr flow  =
-          List.fold_left (fun flow (c, py) ->
-              add_class_equiv c py flow) flow descr in
+          List.fold_left (fun post (c, py) ->
+              post >>% add_class_equiv c py) (Post.return flow) descr in
         let add_exc_equivs descr flow =
           (* let flow = add_class_equivs descr flow in *)
           List.fold_left (fun flow c ->
@@ -582,7 +583,7 @@ module Domain =
             (* EquivBaseAddrs.add_addr py_addr man flow *)
             ) flow descr
         in
-        let flow =
+        let post =
           let none_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_none in
           let true_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_true in
           let false_addr = OptionExt.none_to_exn !Python.Types.Addr_env.addr_false in
@@ -593,25 +594,28 @@ module Domain =
           let false_var = search_c_globals_for flow "_Py_FalseStruct" in
           let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr true_addr T_int range) (mk_one range) range) flow in
           let flow = post_to_flow man @@ man.exec (mk_assign (mk_avalue_from_pyaddr false_addr T_int range) (mk_zero range) range) flow in
-          let flow = EquivBaseAddrs.add_c_py_equiv
+          EquivBaseAddrs.add_c_py_equiv
                        (mk_c_points_to_bloc (C.Common.Base.mk_var_base none_var) (mk_zero (Location.mk_program_range [])) None)
                        none_addr
-                       man flow in
-          let flow = EquivBaseAddrs.add_c_py_equiv
+                       man flow
+          >>% fun flow ->
+          EquivBaseAddrs.add_c_py_equiv
                        (mk_c_points_to_bloc (C.Common.Base.mk_var_base ni_var) (mk_zero (Location.mk_program_range [])) None)
                        ni_addr
-                       man flow in
-          let flow = EquivBaseAddrs.add_c_py_equiv
+                       man flow
+          >>% fun flow ->
+          EquivBaseAddrs.add_c_py_equiv
                        (mk_c_points_to_bloc (C.Common.Base.mk_var_base true_var) (mk_zero (Location.mk_program_range [])) None)
                        true_addr
-                       man flow in
+                       man flow
+          >>% fun flow ->
           EquivBaseAddrs.add_c_py_equiv
             (mk_c_points_to_bloc (C.Common.Base.mk_var_base false_var) (mk_zero (Location.mk_program_range [])) None)
             false_addr
             man flow
         in
-        let flow =
-          add_class_equivs
+        let post =
+          post >>% add_class_equivs
             [
               ("PyType_Type", "type");
               ("PyBaseObject_Type", "object");
@@ -632,11 +636,9 @@ module Domain =
               ("_PyNone_Type", "NoneType");
               ("_PyNotImplemented_Type", "NotImplementedType");
               (* FIXME: add all matches to PyAPI_DATA(PyObject * ) in cpython/Include? *)
-            ]
-            flow in
-        let flow =
-          add_exc_equivs builtin_exceptions
-            flow in
+            ] in
+        post >>% fun flow ->
+        let flow = add_exc_equivs builtin_exceptions flow in
         let init_flags = C.Ast.find_c_fundec_by_name "init_flags" flow in
         (man.exec (mk_expr_stmt (mk_c_call init_flags [] range) range) flow >>% fun flow ->
                                                                                 let init_exc_state = C.Ast.find_c_fundec_by_name "PyErr_Clear" flow in
@@ -654,7 +656,7 @@ module Domain =
         | None -> T_c_pointer pyobject_typ
         | Some s -> s in
       if not @@ is_py_addr addr then mk_addr ~etyp:addr_ctyp addr range, flow else
-      if EquivBaseAddrs.is_bottom (get_env T_cur man flow) then let () = debug "python_to_c_boundary: bottom state, skipping" in mk_addr addr ~etyp:addr_ctyp range, flow else
+      if EquivBaseAddrs.is_bottom (get_singleton_env_from_flow T_cur man flow) then let () = debug "python_to_c_boundary: bottom state, skipping" in mk_addr addr ~etyp:addr_ctyp range, flow else
       (* when a python object enters the C scope for the first time, a few things must be done:
          - if it's an instance, set the ob_type pointer correctly so that Py_TYPE works
          - if it's a class,  set the tp_flag correctly (then Py..._Check will be precise)
@@ -709,7 +711,7 @@ module Domain =
                let size = sizeof_type (if is_cls then pytypeobject_typ else pyobject_typ) flow in
                mk_z ~typ:(T_c_integer C_unsigned_long) size range
             | Some s -> s in
-          let flow = EquivBaseAddrs.add_addr addr man flow in
+          let flow = EquivBaseAddrs.add_addr addr man flow |> post_to_flow man in
           final_obj,
           (
             man.exec ~route:(Semantic "C") (mk_add obj range) flow >>% fun flow ->
@@ -803,7 +805,7 @@ module Domain =
          | P_block ({base_kind = Var v}, _, _) ->
             alloc_py_addr man (Python.Addr.A_py_c_class (get_orig_vname v)) range flow >>$ fun cls_eaddr flow ->
             (* no boundary call needed since it's a statically declared PyTypeObject by the C itself *)
-            let flow = EquivBaseAddrs.add_c_py_equiv cls (Addr.from_expr cls_eaddr) man flow in
+            EquivBaseAddrs.add_c_py_equiv cls (Addr.from_expr cls_eaddr) man flow >>% fun flow ->
             Cases.singleton cls_eaddr flow
          | P_block ({base_kind = Addr a}, _, _) ->
             let cls_eaddr, flow = python_to_c_boundary a None None range man flow in
@@ -2715,7 +2717,6 @@ module Domain =
            | _ -> assert false in
          let c_cls_inst = py_addr_to_c_expr (fst @@ object_of_expr cls_inst) cls_typ range man flow in
          let addr_inst = addr_of_object ~etyp:inst_typ inst in
-         debug "state = %a" (format EquivBaseAddrs.print) (get_env T_cur man flow);
          let c_descriptor = py_addr_to_c_expr (fst @@ object_of_expr member_descr_instance) (under_type descr_typ) range man flow in
          let cfunc_args = [c_descriptor; addr_inst; c_cls_inst] in
          let call = mk_c_call cfunc cfunc_args range in

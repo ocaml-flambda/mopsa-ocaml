@@ -70,7 +70,7 @@ struct
   (** {2 Initialization procedure} *)
   (** ============================ *)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
 
   (** {2 Syntactic simplifications} *)

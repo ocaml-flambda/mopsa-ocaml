@@ -71,7 +71,7 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom () = false
-  let merge _ _ _ = ()
+  let merge _ _ _ _ = ()
   let print _ _ = ()
 
   let subset _ _ _ _ = true
