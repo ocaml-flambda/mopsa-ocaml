@@ -249,7 +249,7 @@ test-typpete:
     - echo $PWD
     - cd analyzer/tests/cpython
     - ../../../bin/mopsa-build python3 setup.py build --force
-    - ../../../bin/mopsa-cpython $CPY_FILE > log || true
+    - ../../../bin/mopsa-cpython  -config python/tail-multilanguage.json $CPY_FILE > log || true
     - grep "Assertion failure. $NB_CHECKS total, .*$NB_SAFE safe" log || (cat log && false)
 
 test-cpython 1/1:
