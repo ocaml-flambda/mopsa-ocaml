@@ -364,7 +364,7 @@ let inline f params locals body ret range man flow =
     )
 
   | Some v ->
-    Eval.singleton (mk_var v range) flow
+    man.eval (mk_var v range) flow
     |> Cases.add_cleaners (
       mk_remove_var v range ::
       List.map (fun v ->
