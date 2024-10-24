@@ -33,13 +33,17 @@ let () = register_query {
              join = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
                        fun next query a b ->
                        match query with
-                       | Q_python_addr_of_module _ -> assert false
+                       | Q_python_addr_of_module _ ->
+                         if Compare.option compare_addr a b = 0 then a
+                         else assert false
                        | _ -> next.pool_join query a b in
                      f);
              meet = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
                        fun next query a b ->
                        match query with
-                       | Q_python_addr_of_module _ -> assert false
+                       | Q_python_addr_of_module _ ->
+                         if Compare.option compare_addr a b = 0 then a
+                         else assert false
                        | _ -> next.pool_meet query a b in
                      f)
            }

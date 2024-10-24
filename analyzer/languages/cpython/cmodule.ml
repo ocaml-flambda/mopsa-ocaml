@@ -2446,7 +2446,8 @@ module Domain =
            man flow
            ~fthen:(fun flow ->
              let post =
-               match ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow with
+               man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow >>$ fun o_a flow ->
+               match o_a with 
                | Some _ -> Post.return flow
                | None ->
                   let open Filename in
@@ -2458,7 +2459,8 @@ module Domain =
                   man.exec ~route:(Semantic "Python") weakref_import flow
              in
              post >>% fun flow ->
-             let weakref = OptionExt.none_to_exn @@ ask_and_reduce man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow in
+             man.ask (Python.Desugar.Import.Q_python_addr_of_module "weakref") flow >>$ fun oweakref flow -> 
+             let weakref = OptionExt.none_to_exn oweakref in 
              c_to_python_boundary refto man flow range >>$ fun py_refto flow ->
              let () = Debug.debug ~channel:"bug" "%a" (format @@ Flow.print man.lattice.print) flow in
              man.eval ~route:(Semantic "Python") (mk_py_call (mk_py_attr (mk_py_object (weakref, None) range) "ref" range) [py_refto] range) flow >>$ fun py_weakref flow ->
