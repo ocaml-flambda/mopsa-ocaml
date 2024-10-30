@@ -5058,6 +5058,7 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   TargetOptionsFromML(target, *pto);
   TargetInfo *pti = TargetInfo::CreateTargetInfo(ci.getDiagnostics(), pto);
   ci.setTarget(pti);
+  ci.getDiagnostics().setDiagnosticGroupWarningAsError("incompatible-function-pointer-types", false);
 
   // source file
   ci.createFileManager();
