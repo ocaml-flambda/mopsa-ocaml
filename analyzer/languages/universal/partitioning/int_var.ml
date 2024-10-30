@@ -110,10 +110,10 @@ struct
   let is_target_var v =
     match vtyp v with
     | T_int | T_bool ->
-      Core.Ast.Var.force_print_uniq_with_uid !opt_target_name_is_with_uid (fun () ->
-          let vname = Format.asprintf "%a" pp_var v in
-          let () = Debug.debug ~channel:name "is_target_var %s %s = %b" vname !opt_target_name (vname = !opt_target_name) in 
-          vname = !opt_target_name)
+      Core.Ast.Var.force_print_uniq_with_uid false (fun () ->
+          let name = Format.asprintf "%a" pp_var v in
+          let () = debug "is_target_var %s %s = %b" name !opt_target_name (name = !opt_target_name) in 
+          name = !opt_target_name)
     | _ ->
       let () = debug "skipping var %a, of bad type %a" pp_var v pp_typ (vtyp v) in 
       false

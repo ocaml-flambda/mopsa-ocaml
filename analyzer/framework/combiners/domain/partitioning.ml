@@ -67,7 +67,7 @@ struct
 
   type expr_kind += E_partition_predicate of P.t
 
-  let () = register_expr {
+  let () = register_expr_with_visitor {
       print = (fun next fmt e ->
           match ekind e with
           | E_partition_predicate p ->
@@ -80,6 +80,10 @@ struct
             P.compare p1 p2
           | _ -> next e1 e2
         );
+      visit = (fun next e ->
+          match ekind e with
+          | E_partition_predicate _ -> leaf e
+          | _ -> next e);
     }
 
   let bottom = Map (M.empty ~compare:P.compare)
