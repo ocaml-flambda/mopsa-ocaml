@@ -526,8 +526,12 @@ struct
          man.eval (mk_top ctype range) flow
       else
         match base.base_kind with
-        | String (str,_,t) when equal_int_types t ctype flow ->
-          eval_string_literal_char str t offset range man flow
+        | String (str,_,t) ->
+          if equal_int_types t ctype flow then
+            (* FIXME: is this necessary? *)
+            eval_string_literal_char str t offset range man flow
+          else
+            man.eval (mk_top ctype range) flow
         | _ ->
           man.eval (mk_top ctype range) flow
 
