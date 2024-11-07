@@ -462,29 +462,44 @@ struct
              assert false
       )
 
+  let inside_partition_print_expr = ref false
+
   let print_expr targets =
     let df = D.print_expr targets in
-    (fun man flow printer exp ->
-       let dman = domain_man man in
-       man.get T_cur flow |>
-       Cases.iter_result
-         (fun a flow ->
-            match a with
-            | Top ->
-              df dman flow printer exp
+    if sat_targets ~targets ~domains:(DomainSet.singleton name) then
+      (fun man flow printer exp ->
+         let dman = domain_man man in
+         if !inside_partition_print_expr then
+           df dman flow printer exp
+         else
+           begin
+             inside_partition_print_expr := true;
+             man.get T_cur flow |>
+             Cases.iter_result
+               (fun a flow ->
+                  match a with
+                  | Top ->
+                    df dman flow printer exp
 
-            | Map map when M.is_empty map ->
-              pp_string printer "⊥"
+                  | Map map when M.is_empty map ->
+                    pp_string printer "⊥"
 
-            | Map map ->
-              pp_mapi
-                (unformat P.print)
-                (fun printer (p, e) ->
-                   let flow = set_env T_cur (singleton p e) man flow |> post_to_flow man in
-                   df dman flow printer exp
-                )
-                printer (M.bindings map)
-         )
-    )
+                  | Map map ->
+                    pp_mapi
+                      (unformat P.print)
+                      (fun printer (p, e) ->
+                         let flow = set_env T_cur (singleton p e) man flow |> post_to_flow man in
+                         df dman flow printer exp
+                      )
+                      printer (M.bindings map)
+               );
+             inside_partition_print_expr := false
+           end
+      )
+    else
+      (fun man flow printer exp ->
+         let dman = domain_man man in
+         df dman flow printer exp
+      )
 
 end
