@@ -948,6 +948,12 @@ struct
            is_c_int_type t1 &&
            compare_typ t1 t2 = 0
       ->
+      let elem_size_p = sizeof_type (under_type p.etyp |> void_to_char) flow in
+      let elem_size_q = sizeof_type (under_type q.etyp |> void_to_char) flow in
+      if not @@ Z.equal elem_size_p elem_size_q then
+        man.eval (mk_top exp.etyp exp.erange) flow |>
+        OptionExt.return
+      else 
       (* (t)p - (t) q is transformed into (t)(p - q) * |t0|,
          where |t0| is the size the type pointed by p
       *)
