@@ -42,8 +42,12 @@ struct
 
   let opt_target_values = ref []
 
+  let opt_target_name_is_with_uid = ref false
+
+  let opt_gc_state_partition = ref true
+
   let parse_option s =
-    match String.split_on_char ':' s with
+    match String.split_on_char '@' s with
     | [v] ->
       opt_target_name := v;
       opt_target_values := [Z.zero; Z.one]
@@ -55,11 +59,28 @@ struct
 
   let () = register_domain_option name {
       key = "-state-partition-int-var";
-      doc = "name of the variable used to partition the states";
+      doc = "name of the variable used to partition the states (syntax: var or var@value1,value2,...";
       spec = ArgExt.String parse_option;
       category = "PARTITIONING";
       default = "";
     }
+
+  let () = register_domain_option name {
+      key = "-state-partition-int-var-with-full-name";
+      doc = "is the target name provided with full name (there may be issues if locals in different scopes have the same name otherwise)";
+      spec = ArgExt.Set opt_target_name_is_with_uid;
+      category = "PARTITIONING";
+      default = "false";
+    }
+
+  let () = register_domain_option name {
+      key = "-keep-state-partition-forever";
+      doc = "keep state partition even when variable has been removed";
+      spec = ArgExt.Clear opt_gc_state_partition;
+      category = "PARTITIONING";
+      default = "false";
+    }
+
 
   let print fmt = function
     | None ->
@@ -89,9 +110,12 @@ struct
   let is_target_var v =
     match vtyp v with
     | T_int | T_bool ->
-      let name = Format.asprintf "%a" pp_var v in
-      name = !opt_target_name
+      Core.Ast.Var.force_print_uniq_with_uid !opt_target_name_is_with_uid (fun () ->
+          let vname = Format.asprintf "%a" pp_var v in
+          let () = Debug.debug ~channel:name "is_target_var %s %s = %b" vname !opt_target_name (vname = !opt_target_name) in 
+          vname = !opt_target_name)
     | _ ->
+      let () = debug "skipping var %a, of bad type %a" pp_var v pp_typ (vtyp v) in 
       false
 
   let sat man post =
@@ -138,11 +162,11 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
-    | S_add{ekind = E_var(v, None)} when is_target_var v ->
+    | S_add{ekind = E_var(v, _)} when is_target_var v ->
       exec_and_partition stmt v man flow |>
       Option.some
 
-    | S_remove{ekind = E_var(v, None)} when is_target_var v ->
+    | S_remove{ekind = E_var(v, None)} when !opt_gc_state_partition && is_target_var v ->
       exec_and_remove stmt v man flow |>
       Option.some
 
