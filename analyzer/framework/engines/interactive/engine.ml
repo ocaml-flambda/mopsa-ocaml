@@ -388,7 +388,7 @@ struct
 
   and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> (Toplevel.t, r) cases =
     fun ?(route=toplevel)query flow ->
-      Toplevel.ask query man flow
+      Toplevel.ask ~route query man flow
 
   and print_expr ?(route=toplevel) flow printer exp =
     Toplevel.print_expr ~route man flow printer exp
