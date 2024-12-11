@@ -2,8 +2,12 @@
 # This file is intended to be used as an oracle to reduce failing testcases.
 
 ## DEPENDENCIES
-# You need to have cvise, the parallel implementation of creduce, installed
-# On ubuntu, apt install cvise works
+# You need to have either cvise or creduce installed
+
+# On ubuntu, `apt install cvise creduce` works
+
+# Note that we have encountered cases where creduce works and not cvise, and
+# conversely, so it's best to test both
 
 ## USAGE
 # Let's say you have a failing mopsa analysis:
@@ -17,16 +21,17 @@
 # 2) change MOPSA_COMMAND below.
 #    It should *not* contain the C file to analyze, which will be small.c
 #    Cvise creates temporary directories for its testcases, make sure paths are fully described
-MOPSA_COMMAND="mopsa-c -config=c/markertail-cell-string-length-pack-rel-itv-congr.json -c-init-memset-threshold=5 -trace-partition-tail-length=1 -additional-stubs=c/sv-comp.c -use-stub=reach_error,fread_unlocked,fread,strndup,xstrndup -no-warning -ccopt=-fbracket-depth=2048 -stub-ignore-case=malloc.failure,malloc.empty -c-check-signed-implicit-cast-overflow=false -c-check-unsigned-implicit-cast-overflow=false"
+MOPSA_COMMAND=${MOPSA_COMMAND:-"mopsa-c -config=c/markertail-cell-string-length-pack-rel-itv-congr.json -c-init-memset-threshold=5 -trace-partition-tail-length=1 -additional-stubs=c/sv-comp.c -use-stub=reach_error,fread_unlocked,fread,strndup,xstrndup -no-warning -ccopt=-fbracket-depth=2048 -stub-ignore-case=malloc.failure,malloc.empty -c-check-signed-implicit-cast-overflow=false -c-check-unsigned-implicit-cast-overflow=false"}
 # 3) if your program takes more than 10s to analyze, update the TIMEOUT_DURATION below, it should be a bit above the actual analysis time of your initial file
-TIMEOUT_DURATION=10s
+TIMEOUT_DURATION=${TIMEOUT_DURATION:-10s}
 # 4) fill MOPSA_ERR_STRING below.
 #    It should contain the crashing behavior you want to reproduce (for example "man.get called on a non-singleton map")
 #    The result will be grepped against the whole output of MOPSA_COMMAND (on both stderr+stdout)
-MOPSA_ERR_STRING="man.get called on a non-singleton map"
+MOPSA_ERR_STRING=${MOPSA_ERR_STRING:-"man.get called on a non-singleton map"}
 # 5) save this file, and run (from the root of Mopsa):
 # $ cvise -n $(nproc) --sllooww ./tools/reducer-oracle.sh small.c
 # the sllooww option is not mandatory, it is supposed to perform better reductions
+FILE_TO_REDUCE=${FILE_TO_REDUCE:-small.c}
 
 ## CURRENT LIMITATIONS
 # Can only reduce a single C file.
@@ -36,9 +41,9 @@ MOPSA_ERR_STRING="man.get called on a non-singleton map"
 ## ACTUAL ORACLE
 # small.c is the initial file and the one that be will be reduced
 # we first check it's syntactically valid C with clang
-clang -c small.c >/dev/null 2>&1 &&
+clang -c $FILE_TO_REDUCE >/dev/null 2>&1 &&
 # not sure the timeout is really needed since we supposedly reduce the program's length, at least.
 # || true to not stop if mopsa finds alarms or crashes
-timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND small.c 2>&1 > stdout || true" &&
+timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND $FILE_TO_REDUCE 2>&1 > stdout || true" &&
 # this is the behavior we want to reproduce
 grep "$MOPSA_ERR_STRING" stdout

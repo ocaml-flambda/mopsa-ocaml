@@ -48,9 +48,9 @@ let report man flow ~time ~files =
   E.report man flow ~time ~files ~out:!opt_file;
   return_v
 
-let panic ~btrace exn ~time ~files =
+let panic ~btrace exn ~time ~files o_language =
   let module E = (val (get_output_engine ())) in
-  E.panic exn ~btrace ~time ~files ~out:!opt_file;
+  E.panic exn ~btrace ~time ~files ~out:!opt_file o_language;
   2
 
 let help (args:ArgExt.arg list) =

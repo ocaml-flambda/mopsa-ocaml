@@ -187,7 +187,7 @@ let report man flow ~time ~files ~out : unit =
   print out json
 
 
-let panic exn ~btrace ~time ~files ~out =
+let panic exn ~btrace ~time ~files ~out o_language =
   let open Exceptions in
   let error,range,cs =
     match exn with

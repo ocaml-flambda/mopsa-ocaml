@@ -151,9 +151,9 @@ let () =
     default = "";
   };
   register_language_option "c" {
-    key = "-c-save-preprocessed-file";
+    key = "-c-preprocess-and-exit";
     category = "C";
-    doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option";
+    doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option; then exit";
     spec = ArgExt.Set_string opt_save_preprocessed_file;
     default = "";
   };
@@ -284,16 +284,28 @@ let rec parse_program (files: string list) =
     if !opt_save_preprocessed_file <> "" then
       let outch = open_out !opt_save_preprocessed_file in
       let () = C_print.print_project ~verbose:false outch prj in
-      let () = warn "Preprocessed file generated. In order to keep libc stubs, we recommend running mopsa-c on:@.%s %a"
+      let stub_files =
+        List.filter
+          (fun f ->
+             Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
+          ) prj.proj_files in
+      let ppl = Format.pp_print_list
+          ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
+          Format.pp_print_string in
+      let () = warn "Preprocessed file generated to %s.@\nIf you want to run Mopsa on this file, do not forget to keep libc stubs (%a), e.g@\n%a"
           !opt_save_preprocessed_file
-          (Format.pp_print_list
-             ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
-             Format.pp_print_string)
-          (List.filter
-             (fun f ->
-                Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
-             ) prj.proj_files) in
-      close_out outch;
+          ppl stub_files
+          ppl (List.append
+                 (List.filter (fun a ->
+                      not @@ List.mem a files
+                      && not @@ String.starts_with ~prefix:"-make-target=" a
+                      && not @@ String.starts_with ~prefix:"-c-preprocess-and-exit=" a)
+                     (Array.to_list Sys.argv))
+                 (!opt_save_preprocessed_file::stub_files)
+              )
+      in
+      let () = close_out outch in
+      exit 0
   in
   {
     prog_kind = from_project prj;

@@ -109,24 +109,30 @@ let analyze_files (files:string list) (args:string list option) : int =
       )
     in
 
-    let flow = Engine.init prog in
-    let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
-    let res =
-      try Engine.analyze stmt flow
-      with Toplevel.SysBreak flow ->
-        (* let () = warn "Early termination, hooks will yield partial information only" in  *)
-        let () = Hook.on_finish Engine.man flow in
-        raise (Toplevel.SysBreak flow)
-    in
-    let t = Timing.stop t in
-    Hook.on_finish Engine.man res;
-    Output.Factory.report Engine.man res ~time:t ~files
+    begin try
+      let flow = Engine.init prog in
+      let stmt = mk_stmt (S_program (prog, args)) prog.prog_range in
+      let res =
+        try Engine.analyze stmt flow
+        with Toplevel.SysBreak flow ->
+          let () = Debug.warn "Early termination, hooks will yield partial information only" in
+          let () = Hook.on_finish Engine.man flow in
+          raise (Toplevel.SysBreak flow)
+      in
+      let t = Timing.stop t in
+      Hook.on_finish Engine.man res;
+      Output.Factory.report Engine.man res ~time:t ~files
+    with Exit -> exit 1
+       | e ->
+         let t = try Timing.stop t with _ -> 0. in
+         Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files (Some abstraction.language)
+  end
   with
   | Exit ->
     exit 1
   | e ->
     let t = try Timing.stop t with _ -> 0. in
-    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files
+    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files None
 
 
 let run () =
