@@ -55,7 +55,7 @@ struct
               let name = name
             end)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
   let allocate_builtin ?(mode=STRONG) man range flow bltin oe =
     (* allocate addr, and map this addr to inst bltin *)

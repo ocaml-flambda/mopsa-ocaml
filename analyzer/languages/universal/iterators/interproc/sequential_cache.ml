@@ -96,8 +96,10 @@ struct
     add_ctx Fctx.key new_ctx old_ctx
 
 
-  let init prog flow =
-    Flow.map_ctx (add_ctx Fctx.key StringMap.empty)
+  let init prog man flow =
+    Flow.map_ctx (add_ctx Fctx.key StringMap.empty) flow |>
+    Post.return |>
+    Option.some
 
   let split_cur_from_others man flow =
     let bot = Flow.bottom (Flow.get_ctx flow) (Flow.get_report flow) in
@@ -120,14 +122,17 @@ struct
       let in_flow_cur = post_to_flow man in_flow_cur in
       begin match find_signature man func.fun_uniq_name in_flow_cur with
         | None ->
-           let call_oexp = match func.fun_return_type with
-             | None -> None
-             | Some _ -> Some exp
-           in
-                       (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
-           let res = inline func params locals body call_oexp range man in_flow_cur in
-           Cases.set_ctx (store_signature func.fun_uniq_name in_flow_cur res (Cases.get_ctx res)) res >>$ fun r flow ->
-           Eval.singleton r (Flow.join man.lattice in_flow_other flow)
+          let ret = match func.fun_return_type with
+            | None -> None
+            | Some _ ->
+              match func.fun_return_var with
+              | Some v -> Some v
+              | None   -> Some (mk_return exp)
+          in
+          (* mk_range_attr_var range (Format.asprintf "ret_var_%s" func.fun_uniq_name) T_any in *)
+          let res = inline func params locals body ret range man in_flow_cur in
+          Cases.set_ctx (store_signature func.fun_uniq_name in_flow_cur res (Cases.get_ctx res)) res >>$ fun r flow ->
+          Eval.singleton r (Flow.join man.lattice in_flow_other flow)
 
         | Some (_, cases) ->
            debug "reusing %s at range %a" func.fun_orig_name pp_range func.fun_range;

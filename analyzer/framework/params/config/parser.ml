@@ -32,6 +32,7 @@ open Sig.Abstraction.Domain
 open Sig.Abstraction.Simplified
 open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Stateless
+open Sig.Abstraction.Partitioning
 open Sig.Abstraction.Value
 open Sig.Abstraction.Value_functor
 open Sig.Reduction.Exec
@@ -55,7 +56,8 @@ let all_domains () =
   stateless_domain_names () @
   value_abstraction_names () @
   simplified_functor_names () @
-  value_functor_names ()
+  value_functor_names () @
+  partitioning_names ()
 
 let all_reductions () =
   simplified_value_reductions () @
@@ -107,6 +109,7 @@ and parse_domain_reduction (name:string) : domain_reduction =
 and parse_domain_functor (json:t) : domain_functor =
   json |> visit {
     leaf = (fun semantic name ->
+        try F_partitioning(find_partitioning name) with Not_found ->
         try F_simplified(find_simplified_functor name) with Not_found ->
         F_stacked(parse_domain json)
       );

@@ -55,9 +55,7 @@ struct
   (**************************************************************************)
 
   (** Initialization procedure *)
-  let init prog man flow =
-    D1.init prog man flow |>
-    D2.init prog man
+  let init prog man flow = broadcast_stateless_init D1.init D2.init prog man flow
 
   (** Execution of statements *)
   let exec targets = cascade_stateless_call targets D1.exec D1.domains D2.exec D2.domains

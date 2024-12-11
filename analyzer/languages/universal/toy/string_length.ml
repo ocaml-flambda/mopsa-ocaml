@@ -73,7 +73,7 @@ struct
   let checks = []
 
 
-  let init (prog:program) man flow = flow
+  let init (prog:program) man flow = None
 
   let eval exp man flow =
     let range = erange exp in

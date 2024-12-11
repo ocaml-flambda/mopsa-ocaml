@@ -40,4 +40,6 @@ module Manager = Manager
 module Hook = Hook
 module Cache = Cache
 module Utils = Utils
+module Marker = Marker
+module Path = Path
 module All = All

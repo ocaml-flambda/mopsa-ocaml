@@ -740,7 +740,7 @@ struct
   let ask _ _ _ =
     None
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
 
   (** {2 Pretty printer} *)

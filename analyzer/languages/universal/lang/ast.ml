@@ -36,7 +36,6 @@ type float_prec =
   | F_REAL        (** no rounding, abstracted as double *)
 
 type typ +=
-  | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
@@ -69,7 +68,6 @@ let () =
     print = (fun default fmt typ ->
         match typ with
         | T_unit -> pp_print_string fmt "unit"
-        | T_bool -> pp_print_string fmt "bool"
         | T_int -> pp_print_string fmt "int"
         | T_float p -> pp_float_prec fmt p
         | T_string -> pp_print_string fmt "string"
@@ -86,7 +84,6 @@ let () =
 
 type constant +=
   | C_unit
-  | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)
@@ -116,7 +113,6 @@ let () =
 
     print = (fun default fmt -> function
         | C_unit -> fprintf fmt "()"
-        | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
         | C_string(s) -> fprintf fmt "\"%s\"" s
         | C_int(n) -> Z.pp_print fmt n
         | C_float(f) -> pp_print_float fmt f
@@ -224,7 +220,7 @@ type fundec = {
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
   fun_return_type: typ option; (** return type *)
-  fun_return_var: var; (** variable storing the return value *)
+  fun_return_var: var option; (** variable storing the return value *)
 }
 
 type fun_builtin =

@@ -36,7 +36,7 @@ module type EXEC_REDUCTION =
 sig
   val name   : string
   val reduce : stmt -> ('a,'b) man -> 'a exec_reduction_man ->
-    'a flow -> 'a flow  -> teffect ->
+    'a flow -> 'a flow  -> effect_map ->
     'a post option
 end
 

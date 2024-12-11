@@ -90,9 +90,9 @@ struct
     let aa2, s, s', stable2 = D2.widen (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
-    D1.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
-    D2.merge pre2 (a2, get_right_teffect te) (a2', get_right_teffect te')
+  let merge path (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
+    D1.merge (Ax_pair_left::path) pre1 (a1, te) (a1', te'),
+    D2.merge (Ax_pair_right::path) pre2 (a2, te) (a2', te')
 
 
 
@@ -101,11 +101,8 @@ struct
   (**************************************************************************)
 
   (** Initialization procedure *)
-  let init prog man flow =
-    D1.init prog (fst_pair_man man) flow |>
-    D2.init prog (snd_pair_man man)
+  let init prog man flow = broadcast_init D1.init D2.init prog man flow
 
-  
   (** Execution of statements *)
   let exec targets = cascade_call targets D1.exec D1.domains D2.exec D2.domains
 

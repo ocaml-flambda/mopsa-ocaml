@@ -27,11 +27,13 @@ type typ = ..
 
 type typ += T_any (** Generic unknown type. *)
          | T_addr (** Heap addresses *)
+         | T_bool (** Boolean type *)
 
 let typ_compare_chain = TypeExt.mk_compare_chain (fun t1 t2 ->
     match t1, t2 with
     | T_any, T_any -> 0
     | T_addr, T_addr -> 0
+    | T_bool, T_bool -> 0
     | _ -> compare t1 t2
   )
 
@@ -39,6 +41,7 @@ let typ_pp_chain = TypeExt.mk_print_chain (fun fmt typ ->
     match typ with
     | T_any -> Format.pp_print_string fmt "?"
     | T_addr -> Format.pp_print_string fmt "addr"
+    | T_bool -> Format.pp_print_string fmt "bool"
     | _ -> Exceptions.panic "typ_pp_chain: unknown type"
   )
 

@@ -35,6 +35,8 @@ open Cases
 open Route
 open Query
 open Print
+open Token
+open Path
 
 
 (*==========================================================================*)
@@ -56,10 +58,11 @@ type ('a, 't) man = {
       Each domain can get and set its abstract element in the transfer functions
       with [get] and [set].  *)
 
-  get : 'a -> 't;
-  (** Returns the domain's abstract element ['t]. *)
+  get : token -> 'a flow -> ('a, 't) cases;
+  (** Returns the domain's abstract element ['t]. A disjunction of cases is
+      returned when partitioning is used. *)
 
-  set : 't -> 'a -> 'a;
+  set : token -> 't -> 'a flow -> 'a post;
   (** Sets the domain's abstract element ['t]. *)
 
   (** {3 Toplevel Transfer Functions}
@@ -95,11 +98,8 @@ type ('a, 't) man = {
   print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
   (** [man.print_expr flow] is the expression printer for the type ['a]. *)
 
-  (** {3 Accessors to the Domain's Effects Tree} *)
+  (** {3 Effects Management} *)
 
-  get_effects : teffect -> teffect;
-  (** Gets the effects tree. *)
-
-  set_effects : teffect -> teffect -> teffect;
-  (** Sets the effect tree. *)
+  add_effect : stmt -> path -> 'a flow -> effect_map -> effect_map;
+  (** Add a statement to the effects map. *)
 }
