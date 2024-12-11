@@ -38,7 +38,7 @@ struct
   let checks = []
 
   let init (prog:program) man flow =
-    flow
+    None
 
   let eval exp man flow =
     let range = erange exp in

@@ -112,7 +112,7 @@ struct
   (** {2 Transfer functions} *)
   (** ====================== *)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
   let exec stmt man flow = None
 

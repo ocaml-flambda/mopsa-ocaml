@@ -108,7 +108,7 @@ struct
 
   let subset a1 a2 =
     List.for_all2 Slot.subset a1.first a2.first &&
-    Table.subset a2.others a1.others
+    Table.subset a1.others a2.others
 
   let join a1 a2 = {
     first = List.map2 Slot.join a1.first a2.first;
@@ -158,7 +158,8 @@ struct
       others = Table.empty;
     }
     in
-    set_env T_cur init_state man flow
+    set_env T_cur init_state man flow |>
+    Option.some
 
 
   (** {2 Insertion of new resources} *)
@@ -166,30 +167,33 @@ struct
 
   (* Insert an address in the first slots *)
   let rec insert_addr_first addr range man flow =
-    let a = get_env T_cur man flow in
-    let rec iter i not_inserted_before slots =
+    let rec iter i not_inserted_before slots a =
       match slots with
-      | [] -> [], []
+      | [] -> Cases.singleton ([], []) flow
       | hd :: tl ->
         let inserted_here, not_inserted_here = Slot.insert addr hd in
-        let cases, not_inserted_after =
+        (
           if Slot.is_bottom not_inserted_here then
-            [], tl
+            Cases.singleton ([], tl) flow
           else
-            iter (i + 1) (not_inserted_before @ [not_inserted_here]) tl
-        in
+            iter (i + 1) (not_inserted_before @ [not_inserted_here]) tl a
+        ) >>$ fun (cases, not_inserted_after) flow ->
         let cases' =
           if Slot.is_bottom inserted_here then cases
           else
             let exp = mk_int i range in
             let a' = { a with first = not_inserted_before @ [inserted_here] @ not_inserted_after } in
-            let flow' = set_env T_cur a' man flow in
-            Eval.singleton exp flow' :: cases
+            let case =
+              set_env T_cur a' man flow >>% fun flow' ->
+              Eval.singleton exp flow'
+            in
+            case :: cases
         in
-        cases', not_inserted_here :: not_inserted_after
+        Cases.singleton (cases', not_inserted_here :: not_inserted_after) flow
     in
-    let cases, not_inserted = iter 0 [] a.first in
-    cases, { a with first = not_inserted }
+    get_env T_cur man flow >>$ fun a flow ->
+    iter 0 [] a.first a >>$ fun (cases, not_inserted) flow ->
+    Cases.singleton (cases, { a with first = not_inserted }) flow
 
 
   let bounds itv flow =
@@ -202,26 +206,32 @@ struct
 
   (** Insert an address in the remaining part of the table *)
   let insert_addr_others addr range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$? fun a flow ->
     let others, itv = Table.insert addr window a.others flow in
     if Itv.is_bottom itv then
-      []
+      None
     else
       let l, u = bounds itv flow in
       let exp = mk_z_interval l u range in
-      let flow = set_env T_cur { a with others } man flow in
-      [Eval.singleton exp flow]
+      set_env T_cur { a with others } man flow >>%? fun flow ->
+      Eval.singleton exp flow |>
+      Option.some
 
 
   (** Insert an address in the table of file descriptors and return its interval *)
   let insert_addr addr range man flow =
-    let case1, not_inserted = insert_addr_first addr range man flow in
+    insert_addr_first addr range man flow >>$ fun (case1, not_inserted) flow ->
     let case2 =
       if is_bottom not_inserted then
-        []
+        None
       else
-        let flow' = set_env T_cur not_inserted man flow in
+        set_env T_cur not_inserted man flow >>%? fun flow' ->
         insert_addr_others addr range man flow'
+    in
+    let case2 =
+      match case2 with
+      | None -> []
+      | Some case2 -> [case2]
     in
     Eval.join_list ~empty:(fun () -> Eval.empty flow) (case1 @ case2)
 
@@ -238,7 +248,7 @@ struct
         List.map (fun i ->
             [eq slot (mk_int i range) range],
             (fun flow ->
-               let flow = map_env T_cur (fun a ->
+               map_env T_cur (fun a ->
                    { a with
                      first =
                        List.mapi (fun j s ->
@@ -246,7 +256,7 @@ struct
                          ) a.first
                    }
                  ) man flow
-               in
+               >>% fun flow ->
                Eval.singleton (mk_zero range) flow
             )
           )
@@ -256,10 +266,10 @@ struct
           [ge slot (mk_int window range) range],
           (fun flow ->
              let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query slot) flow in
-             let flow = map_env T_cur (fun a ->
+             map_env T_cur (fun a ->
                  { a with others = Table.insert_at addr itv a.others }
                ) man flow
-             in
+             >>% fun flow ->
              Eval.singleton (mk_zero range) flow
           )
         ]
@@ -271,8 +281,6 @@ struct
   (** ================================================= *)
 
   let find_addr i range man flow =
-    let a = get_env T_cur man flow in
-
     let rec find_addr_first j slots flow =
       match slots with
       | [] -> find_addr_others flow
@@ -291,7 +299,7 @@ struct
             man flow
 
     and find_addr_others flow =
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query i) flow in
       (* First case: return addresses having a descriptor interval
          intersecting with the target interval *)
@@ -321,49 +329,15 @@ struct
       in
       Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)
     in
+    get_env T_cur man flow >>$ fun a flow ->
     find_addr_first 0 a.first flow
-
-
-  (** {2 Find the interval of a description address} *)
-  (** ============================================== *)
-
-  let find_int addr range man flow =
-    let a = get_env T_cur man flow in
-
-    let rec find_int_first j slots itv =
-      match slots with
-      | [] -> find_int_others itv
-      | hd :: tl ->
-        let addrs = Slot.get hd in
-        if List.exists (fun addr' -> compare_addr addr addr' = 0) addrs
-        then
-          Itv.join (Itv.of_int j j) itv |>
-          find_int_first (j + 1) tl
-        else
-          find_int_first (j + 1) tl itv
-
-    and find_int_others itv =
-      let a = get_env T_cur man flow in
-
-      let entries =
-        Table.filter (fun addr' _ ->
-            compare_addr addr addr' = 0
-          ) a.others
-      in
-
-      Table.fold (fun _ itv' acc ->
-          Itv.join acc itv'
-        ) entries itv
-    in
-
-    find_int_first 0 a.first Itv.bottom
 
 
   (** {2 Removal of addresses} *)
   (** ======================== *)
 
   let remove addr man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let first = List.map (Slot.remove addr) a.first in
     let others = Table.remove addr a.others in
     let a' = { first; others } in
@@ -376,8 +350,8 @@ struct
   let exec stmt man flow  =
     match skind stmt with
     | S_remove({ekind = E_addr ({ addr_kind = A_stub_resource "FileRes"} as addr, _)}) ->
-      remove addr man flow |>
-      man.exec ~route:(Below name) stmt |>
+      remove addr man flow >>%? fun flow ->
+      man.exec ~route:(Below name) stmt flow |>
       OptionExt.return
 
     | _ -> None

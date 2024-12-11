@@ -46,7 +46,7 @@ struct
   (** {2 Initialization} *)
   (** ****************** *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (** Variable-length auxiliary variable *)

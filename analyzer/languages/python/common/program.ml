@@ -44,8 +44,10 @@ struct
     match prog.prog_kind with
     | Py_program (name, globals, body) ->
        debug "globals = %a" (Format.pp_print_list pp_var) globals;
-       set_py_program (name, globals, body) flow
-    | _ -> flow
+       set_py_program (name, globals, body) flow |>
+       Post.return |>
+       Option.some
+    | _ -> None
 
   let eval _ _ _ = None
 

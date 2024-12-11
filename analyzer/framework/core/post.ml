@@ -58,12 +58,12 @@ let (>>%) post f = bind f post
 let remove_duplicates lattice post =
   (* Collapse all handled partitions *)
   Cases.remove_duplicates
-    (fun case case' ->
+    ~equal:(fun case case' ->
        match case,case' with
-       | NotHandled,NotHandled -> 0
-       | _,NotHandled -> 1
-       | NotHandled,_ -> 2
-       | _ -> 0
+       | NotHandled,NotHandled -> true
+       | _,NotHandled -> false
+       | NotHandled,_ -> false
+       | _ -> true
     ) lattice post
   >>% fun flow ->
   (* This return has the effect of changing Empty to Result *)

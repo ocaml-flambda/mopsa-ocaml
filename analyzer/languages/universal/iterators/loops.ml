@@ -271,7 +271,9 @@ struct
 
 
   let init prog man flow =
-    Flow.map_ctx (add_ctx LastFixpointCtx.key LoopHeadMap.empty) flow
+    Flow.map_ctx (add_ctx LastFixpointCtx.key LoopHeadMap.empty) flow |>
+    Post.return |>
+    Option.some
 
   let decr_iteration cond body man flow_init flow =
     Flow.remove T_continue flow |>

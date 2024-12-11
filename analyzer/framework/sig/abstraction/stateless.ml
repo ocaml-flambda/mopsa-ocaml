@@ -45,7 +45,7 @@ sig
 
   (** {2 Transfer functions} *)
   (** ********************** *)
-  val init : program -> ('a, unit) man -> 'a flow -> 'a flow
+  val init : program -> ('a, unit) man -> 'a flow -> 'a post option
   (** Initialization routine *)
 
   val exec : stmt -> ('a, unit) man -> 'a flow -> 'a post option

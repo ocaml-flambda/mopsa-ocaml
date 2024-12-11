@@ -35,7 +35,7 @@ struct
 
   let checks = []
 
-  let init prog man flow = flow
+  let init prog man flow = None
   let ask query man flow = None
   let print_expr man flow printer exp = ()
 

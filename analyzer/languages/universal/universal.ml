@@ -29,3 +29,4 @@ module Numeric = Universal_numeric.Numeric
 module Packing = Universal_packing.Packing
 module Strings = Universal_strings.Strings
 module Toy = Universal_toy.Toy
+module Partitioning = Universal_partitioning

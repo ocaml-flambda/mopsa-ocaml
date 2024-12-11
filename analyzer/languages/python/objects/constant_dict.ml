@@ -110,7 +110,8 @@ struct
   let checks = []
 
   let init _ man flow =
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
   let eval exp man flow =
     (***** FIXME: expressions are evaluated, but then the resulting python object (esp the addr) may be modified without this domain taking it into account... *****)
@@ -123,13 +124,13 @@ struct
          (* evaluate all keys and values and add them to dict *)
          Cases.bind_list ks man.eval flow >>$ fun eks flow ->
          Cases.bind_list vs man.eval flow >>$ fun evs flow ->
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$ fun cur flow ->
          let oks = List.map object_of_expr eks in
          let ovs = List.map object_of_expr evs in
          let ncur = add addr_dict (Dicts.singleton (List.combine oks ovs)) cur in
          debug "dict ok, ncur %a" (format DictMap.print) ncur.dict;
-         set_env T_cur ncur man flow |>
-         Eval.singleton (mk_py_object (addr_dict, None) range)
+         set_env T_cur ncur man flow >>% fun flow ->
+         Eval.singleton (mk_py_object (addr_dict, None) range) flow
        )
        |> OptionExt.return
 
@@ -150,7 +151,7 @@ struct
            let dict, key = match args with [d; k] -> d, k | _ -> assert false in
            let dict_addr = addr_of_object @@ object_of_expr dict in
            let key_obj = object_of_expr key in
-           let cur = get_env T_cur man flow in
+           get_env T_cur man flow >>$ fun cur flow ->
            let ds = find dict_addr cur in
            (* ok as ds should have <= 1 element. Otherwise need to fold *)
            let dict = Dicts.choose ds in
@@ -200,7 +201,7 @@ struct
         (fun args flow ->
           let dict = List.hd args in
           let dict_addr = addr_of_object @@ object_of_expr dict in
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$ fun cur flow ->
           let ds = find dict_addr cur in
           let dict = Dicts.choose ds in
           man.eval (mk_int ~typ:(T_py None) (List.length dict) range) flow
@@ -229,7 +230,7 @@ struct
           man.eval   (mk_var (Py_list.Domain.itseq_of_eobj @@ List.hd args) range) flow >>$
             (fun dict_eobj flow ->
               let dict_addr = addr_of_object @@ object_of_expr dict_eobj in
-              let cur = get_env T_cur man flow in
+              get_env T_cur man flow >>$ fun cur flow ->
               let ds = find dict_addr cur in
               (* ok as ds should have <= 1 element. Otherwise need to fold *)
               let dict = Dicts.choose ds in
@@ -270,28 +271,28 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_add {ekind = E_addr ({addr_kind = Dict.A_py_dict} as addr_dict, _)} ->
-       let cur = get_env T_cur man flow in
-       set_env T_cur (add addr_dict Dicts.empty cur) man flow |> Post.return |> OptionExt.return
+       get_env T_cur man flow >>$? fun cur flow ->
+       set_env T_cur (add addr_dict Dicts.empty cur) man flow |> OptionExt.return
 
     | S_rename ({ekind = E_addr ({addr_kind = Dict.A_py_dict} as a, _)}, {ekind = E_addr (a', _)})
     | S_fold ({ekind = E_addr (a', _)}, [{ekind = E_addr ({addr_kind = Dict.A_py_dict} as a, _)}]) ->
-       let cur = get_env T_cur man flow in
-       set_env T_cur (rename a a' cur) man flow |> Post.return |> OptionExt.return
+       get_env T_cur man flow >>$? fun cur flow ->
+       set_env T_cur (rename a a' cur) man flow |> OptionExt.return
 
     | S_expand ({ekind = E_addr ({addr_kind = Dict.A_py_dict} as addr_dict, _)}, addrs) ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let d = find addr_dict cur in
        set_env T_cur
          (List.fold_left (fun cur ea ->
            let a = Addr.from_expr ea in
            add a d cur
             ) cur addrs) man flow
-       |> Post.return |> OptionExt.return
+       |> OptionExt.return
 
     | S_remove {ekind = E_addr ({addr_kind = Dict.A_py_dict} as a, _)}
     | S_invalidate {ekind = E_addr ({addr_kind = Dict.A_py_dict} as a, _)} ->
-       let cur = get_env T_cur man flow in
-       set_env T_cur (remove a cur) man flow |> Post.return |> OptionExt.return
+       get_env T_cur man flow >>$? fun cur flow ->
+       set_env T_cur (remove a cur) man flow |> OptionExt.return
 
     | _ -> None
 
@@ -307,7 +308,7 @@ struct
     | Q_py_dict_items dict ->
        let range = erange dict in
        let dict_addr = addr_of_object @@ object_of_expr dict in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let ds = find dict_addr cur in
        (* ok as ds should have <= 1 element. Otherwise need to fold *)
        let dict = Dicts.choose ds in

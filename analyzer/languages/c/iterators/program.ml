@@ -131,9 +131,11 @@ struct
     match prog.prog_kind with
     | C_program p -> 
       set_c_program p flow |>
-      set_c_target_info !Frontend.target_info
+      set_c_target_info !Frontend.target_info |>
+      Post.return |>
+      Option.some
 
-    | _ -> flow
+    | _ -> None
 
 
   (** Computation of post-conditions *)
