@@ -62,7 +62,7 @@ General
 
    Configuration files are searched in ``<directory>/configs/``.
    Stub files are searched in ``<directory>/stubs/c/`` for C and ``<directory>/stubs/python/`` for Python.
-   The ``mopsa`` script sets this path to ``../share/mopsa`` relative to the Mopsa binary (``mopsa.bin``).
+   The ``mopsa`` script sets this path to ``../share/mopsa`` relative to the Mopsa binary (``mopsa.exe``).
    This default choice is consistent with both using Mopsa after installation and using Mopsa within the source tree without installation.
    Using ``-share-dir`` is mandatory when using the ``mopsa.bin`` binary directly.
    When using wrappers (such as ``mopsa``, ``mopsa-c``, etc.), it can be used to override the default choice.

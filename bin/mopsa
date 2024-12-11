@@ -3,4 +3,4 @@
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
 SHAREDIR=$(realpath ${MOPSADIR}/share/mopsa)
 
-${MOPSADIR}/bin/mopsa.bin -share-dir=${SHAREDIR} $@
+${MOPSADIR}/bin/mopsa.exe -share-dir=${SHAREDIR} $@

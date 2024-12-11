@@ -64,7 +64,7 @@ python-tests.extension = py
 python-tests.analyzer = mopsa-python
 endif
 
-SV_COMP_FILES = bin/mopsa.bin bin/mopsa bin/mopsa-c bin/mopsa-sv-comp share/mopsa/configs/c/*.json share/mopsa/stubs/c/ LICENSE* README.md
+SV_COMP_FILES = bin/mopsa bin/mopsa-c bin/mopsa-sv-comp share/mopsa/configs/c/*.json share/mopsa/stubs/c/ LICENSE* README.md
 OPAM_BIN = $(shell which ocaml)
 OPAM_ROOT = $(realpath $(shell dirname $(OPAM_BIN))/..)
 
