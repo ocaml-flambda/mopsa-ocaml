@@ -90,4 +90,6 @@ val register_constant_pp : constant TypeExt.print -> unit
 (**                         {1 Common constants}                            *)
 (****************************************************************************)
 
-type constant += C_top of Typ.typ
+type constant +=
+  | C_top of Typ.typ
+  | C_bool of bool

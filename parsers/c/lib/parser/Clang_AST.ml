@@ -1133,7 +1133,6 @@ and atomic_expr = {
 
  and unresolved_lookup_expr = {
      unresolved_lookup_requires_ADL: bool; (** true if this declaration should be extended by argument-dependent lookup *)
-     unresolved_lookup_is_implicit: bool; (** true if this lookup is overloaded *)
      unresolved_lookup_naming_class: record_decl option;  (** the naming class of this lookup. *)
      unresolved_lookup_name: declaration_name; (** name looked up *)
      unresolved_lookup_decls: decl list;

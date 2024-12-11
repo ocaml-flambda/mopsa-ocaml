@@ -279,10 +279,13 @@ let compile ckind db args =
   let libs = ref StringSet.empty in
   let srcs = ref [] in
 
-  let rec doit = function
+  let rec doit ?(linker=false) = function
     | [] -> ()
 
     (* mode change *)
+    | "-E" :: rest when linker ->
+      (* ignore -Wl,-E, don't change mode *)
+      doit rest
     | ("-E" | "-fsyntax-only" | "-S")::rest ->
        mode := CC_NOTHING;
        doit rest
@@ -342,7 +345,7 @@ let compile ckind db args =
        if starts_with "-Wl," x then
          (* handle linker options *)
          let opts = List.tl (Str.split (Str.regexp ",") x) in
-         doit (opts@rest)
+         doit ~linker:true (opts@rest)
        else if x.[0] = '-' && String.length x > 1 then
          match x.[1] with
          | 'I' | 'D' | 'U' | 'l' | 'L' ->

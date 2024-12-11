@@ -613,11 +613,11 @@ struct
 
   (** Add a cell and its constraints *)
   let add_cell c range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     if cell_set_mem c a.cells
     then Post.return flow
     else
-      let flow = set_env T_cur { a with cells = cell_set_add c a.cells flow } man flow in
+      set_env T_cur { a with cells = cell_set_add c a.cells flow } man flow >>% fun flow ->
       let v = mk_cell_var c in
       man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
       phi c a range man flow >>$ fun phi_oe flow ->
@@ -820,7 +820,7 @@ struct
     else
       (* In order to smash a region in something useful, we ensure
          that all covered cells do exist *)
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let (=>) a b = not a || b in
       let cells = cell_set_filter_range
           (fun c ->
@@ -855,7 +855,7 @@ struct
 
 
   let add_base b man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let aa = { a with bases = BaseSet.add b a.bases } in
     set_env T_cur aa man flow
 
@@ -863,10 +863,10 @@ struct
 
   (* Remove a cell and its associated scalar variable *)
   let remove_cell c range man flow =
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         { a with cells = cell_set_remove c a.cells }
       ) man flow
-    in
+    >>% fun flow ->
     let v = mk_cell_var c in
     let stmt = mk_remove_var v range in
     man.exec ~route:scalar stmt flow
@@ -874,7 +874,7 @@ struct
 
   (** Remove cells overlapping with cell [c] *)
   let remove_cell_overlappings c range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let overlappings = cell_set_find_overlapping_cell c a.cells flow in
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
@@ -883,7 +883,7 @@ struct
 
   (** Remove cells overlapping with cell [c] *)
   let remove_region_overlappings base lo hi step range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let overlappings = cell_set_filter_overlapping_range (fun _ -> true) base lo hi a.cells flow in
     List.fold_left (fun acc c' ->
         Post.bind (remove_cell c' range man) acc
@@ -893,24 +893,25 @@ struct
   let rename_cell c1 c2 range man flow =
     let v1 = mk_cell_var c1 in
     let v2 = mk_cell_var c2 in
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         { a with 
           cells = cell_set_add c2 (cell_set_remove c1 a.cells) flow }
-      ) man flow in
+      ) man flow
+    >>% fun flow ->
     let stmt = mk_rename_var v1 v2 range in
     man.exec ~route:scalar stmt flow
 
 
   let assign_cell c e mode range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let a' = { a with cells = cell_set_add c a.cells flow } in
-    let flow = set_env T_cur a' man flow in
+    let post = set_env T_cur a' man flow in
     let v = mk_cell_var c in
     let vv = mk_var v ~mode range in
     begin if cell_set_mem c a.cells then
-        Post.return flow
+        post
       else
-        man.exec (mk_add_var v range) ~route:scalar flow
+        post >>% man.exec (mk_add_var v range) ~route:scalar
     end >>% fun flow ->
     man.exec (mk_assign vv e range) ~route:scalar flow >>% fun flow ->
     remove_cell_overlappings c range man flow
@@ -925,9 +926,10 @@ struct
 
   let expand_cell c cl range man flow =
     (* Add cells in cl to the state *)
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         { a with cells = List.fold_left (fun s c -> cell_set_add c s flow) a.cells cl; }
-      ) man flow in
+      ) man flow
+    >>% fun flow ->
     (* Expand cell variables *)
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
@@ -935,10 +937,11 @@ struct
     man.exec stmt ~route:scalar flow
 
   let fold_cells c cl range man flow =
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         let cells = List.fold_left (fun s c -> cell_set_remove c s) a.cells cl in
         { a with cells = cell_set_add c cells flow }
-      ) man flow in
+      ) man flow
+    >>% fun flow ->
     let v = mk_cell_var c in
     let vl = List.map mk_cell_var cl in
     let stmt = mk_fold_var v vl range in
@@ -963,7 +966,8 @@ struct
   (** ***************** *)
 
   let init prog man flow =
-    set_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow
+    set_env T_cur { cells = CellSet.empty; bases = BaseSet.empty } man flow |>
+    Option.some
 
 
   (** {2 Abstract evaluations} *)
@@ -1044,7 +1048,7 @@ struct
     | BOT, _ | _, BOT -> Post.return flow
     | Nb (_, itv_amax), Nb (itv_bmin, _) ->
        let safe_itv = ItvUtils.IntItv.of_bound itv_amax itv_bmin in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$ fun cur flow ->
        let cells1 = CellSet.find base1 cur.cells in
        let cells2 = cell_set_find_base base2 cur.cells in
        let () = debug "assume_forall_eq2 (%a, %a, %a) (%a, %a, %a), safe_itv = %a"
@@ -1132,17 +1136,17 @@ struct
   let exec_declare v scope range man flow =
     (* Add v to the bases *)
     let base = mk_var_base v in
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         { a with bases = BaseSet.add base a.bases }
       ) man flow
-    in
+    >>% fun flow ->
     (* If v is a scalar variable, add it to the scalar domain *)
     if is_c_scalar_type v.vtyp then
       let c = mk_cell base Z.zero v.vtyp in
       let vv = mk_cell_var c in
       map_env T_cur (fun a ->
         { a with cells = cell_set_add c a.cells flow }
-      ) man flow |>
+      ) man flow >>%
       man.exec ~route:scalar (mk_c_declaration vv None scope range)
     else
       Post.return flow
@@ -1174,19 +1178,18 @@ struct
     match b with
     | { base_kind = Var v; base_valid = true; } when is_c_scalar_type v.vtyp ->
       let c = mk_cell b Z.zero v.vtyp in
-      add_base b man flow |>
+      add_base b man flow >>%
       add_cell c range man
 
     | _ ->
-      add_base b man flow |>
-      Post.return
+      add_base b man flow
 
 
 
   (* 𝕊⟦ remove v ⟧ *)
   let exec_remove b range man flow =
-    let a = get_env T_cur man flow in
-    let flow = set_env T_cur { a with bases = BaseSet.remove b a.bases } man flow in
+    get_env T_cur man flow >>$ fun a flow ->
+    set_env T_cur { a with bases = BaseSet.remove b a.bases } man flow >>% fun flow ->
     let cells = cell_set_find_base b a.cells in
     List.fold_left (fun acc c ->
         Post.bind (remove_cell c range man) acc
@@ -1202,14 +1205,14 @@ struct
 
   (** Rename bases and their cells *)
   let exec_rename base1 base2 range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
 
     (* Remove base1 and add base2 *)
     let a = { a with
               bases = BaseSet.remove base1 a.bases |>
                       BaseSet.add base2; }
     in
-    let flow = set_env T_cur a man flow in
+    set_env T_cur a man flow >>% fun flow ->
 
     (* Cells of base1 *)
     let cells1 = cell_set_find_base base1 a.cells in
@@ -1231,10 +1234,10 @@ struct
 
   (** Expand a base into a set of bases *)
   let exec_expand b bl range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     (* Add the list of bases bl to abstract state a *)
     let aa = { a with bases = BaseSet.union a.bases (BaseSet.of_list bl) } in
-    let flow = set_env T_cur aa man flow in
+    set_env T_cur aa man flow >>% fun flow ->
     (* Get the cells of base b *)
     let cells = cell_set_find_base b a.cells in
     (* Expand each cell *)
@@ -1254,7 +1257,7 @@ struct
 
   (** Fold a set of bases into a single base *)
   let exec_fold b bl range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     (* Add the base b *)
     let a = { a with bases = BaseSet.add b a.bases } in
     (* Find common offsets and types of cells in bases bl *)
@@ -1308,7 +1311,7 @@ struct
       let size = sizeof_type (under_type ptr.etyp |> void_to_char) flow in
       let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (Z.pred size)) in
       (* Forget all affected cells *)
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let cells = cell_set_find_overlapping_itv base itv a.cells flow in
       List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
 
@@ -1327,7 +1330,7 @@ struct
       let size = sizeof_type (under_type ptr.etyp |> void_to_char) flow in
       let itv = Bot.bot_lift2 ItvUtils.IntItv.add itv (Itv.of_z Z.zero (Z.pred size)) in
       (* Forget all affected cells *)
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let cells = cell_set_find_overlapping_itv base itv a.cells flow in
       List.fold_left (fun acc c -> Post.bind (forget_cell c range man) acc) (Post.return flow) cells
 
@@ -1414,15 +1417,17 @@ struct
         (* Get the cells within [l, u+|typ|-1] *)
         let lo = l in
         let hi = Z.(u + (sizeof_type typ flow) - one) in
-        let a = get_env T_cur man flow in
-        OffCells.iter_slice
-          (fun o s -> Cells.iter
-              (fun c ->
-                 let v = mk_cell_var c in
-                 let ve = mk_var v exp.erange in
-                 man.print_expr ~route:scalar flow printer ve
-              ) s)
-          (CellSet.find base a.cells) lo hi
+        get_env T_cur man flow |>
+        Cases.iter_result (fun a flow ->
+            OffCells.iter_slice
+              (fun o s -> Cells.iter
+                  (fun c ->
+                     let v = mk_cell_var c in
+                     let ve = mk_var v exp.erange in
+                     man.print_expr ~route:scalar flow printer ve
+                  ) s)
+              (CellSet.find base a.cells) lo hi
+          )
       in
       if is_base_expr exp then
         (* Print all cells in the base *)

@@ -139,7 +139,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init prog man flow = set_env T_cur Pool.empty man flow
+  let init prog man flow = set_env T_cur Pool.empty man flow |> Option.some
 
 
   (** Post-conditions *)
@@ -155,13 +155,12 @@ struct
     (* 𝕊⟦ free(recent); ⟧ *)
     | S_free addr when is_recent addr ->
       let old = { addr with addr_mode = WEAK } in
-      let pool = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun pool flow ->
       (* Inform domains to remove addr *)
       man.exec (mk_remove_addr addr stmt.srange) flow >>%? fun flow' ->
       if not (Pool.mem old pool) then
         (* only recent is present : remove it from the pool and return *)
         map_env T_cur (Pool.remove addr) man flow' |>
-        Post.return |>
         OptionExt.return
       else
         (* old is present : expand it as the new recent *)
@@ -171,13 +170,13 @@ struct
     (* 𝕊⟦ free(old); ⟧ *)
     | S_free addr when is_old addr ->
        (* Inform domains to invalidate addr *)
-       map_env T_cur (Pool.remove addr) man flow |>
-       man.exec (mk_invalidate_addr addr stmt.srange)  |>
+       map_env T_cur (Pool.remove addr) man flow >>%? fun flow ->
+       man.exec (mk_invalidate_addr addr stmt.srange) flow |>
        OptionExt.return
 
     | S_perform_gc ->
        let startt = Sys.time () in
-       let all = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun all flow ->
        let alive = ask_and_reduce man.ask Q_alive_addresses_aspset flow in
        let dead = Pool.diff all alive in
        debug "at %a, |dead| = %d@.dead = %a" pp_range range (Pool.cardinal dead) (format Pool.print) dead;
@@ -208,21 +207,21 @@ struct
     let range = erange expr in
     match ekind expr with
     | E_alloc_addr(addr_kind, STRONG) ->
-      let pool = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun pool flow ->
 
       let recent_addr = Policies.mk_addr addr_kind STRONG range (Flow.get_callstack flow) in
 
       if not (Pool.mem recent_addr pool) then
         (* first allocation at this site: just add the address to the pool and return it *)
-        map_env T_cur (Pool.add recent_addr) man flow |>
-        Eval.singleton (mk_addr recent_addr range) |>
+        map_env T_cur (Pool.add recent_addr) man flow >>%? fun flow ->
+        Eval.singleton (mk_addr recent_addr range) flow |>
         OptionExt.return
       else
         let old_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_callstack flow) in
         if not (Pool.mem old_addr pool) then
           (* old address not present: rename the existing recent as old and return the new recent *)
-          map_env T_cur (Pool.add old_addr) man flow |>
-          man.exec (mk_rename_addr recent_addr old_addr range) >>%? fun flow ->
+          map_env T_cur (Pool.add old_addr) man flow >>%? fun flow ->
+          man.exec (mk_rename_addr recent_addr old_addr range) flow >>%? fun flow ->
           Eval.singleton (mk_addr recent_addr range) flow |>
           OptionExt.return
         else
@@ -232,16 +231,16 @@ struct
           OptionExt.return
 
     | E_alloc_addr(addr_kind, WEAK) ->
-      let pool = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun pool flow ->
       let weak_addr = Policies.mk_addr addr_kind WEAK range (Flow.get_callstack flow) in
 
-      let flow' =
+      let post =
         if Pool.mem weak_addr pool then
-          flow
+          Post.return flow
         else
           map_env T_cur (Pool.add weak_addr) man flow
       in
-      Eval.singleton (mk_addr weak_addr range) flow' |>
+      post >>% Eval.singleton (mk_addr weak_addr range) |>
       OptionExt.return
 
 
@@ -254,12 +253,12 @@ struct
     fun query man flow ->
     match query with
     | Q_allocated_addresses ->
-      let pool = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun pool flow ->
       if Pool.is_top pool then Some (Cases.singleton [] flow)
       else Some (Cases.singleton (Pool.elements pool) flow)
 
     | Q_allocated_addresses_aspset ->
-      Some (Cases.singleton (get_env T_cur man flow) flow)
+      Some (get_env T_cur man flow)
 
     | _ -> None
 

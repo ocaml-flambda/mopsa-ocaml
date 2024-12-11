@@ -16,3 +16,5 @@ We analyzed a few different libraries available on Github. Here are the correspo
 - `noise <https://gitlab.com/mopsa/benchmarks/cpython-benchmarks/noise-analysis>`_,
 
 - `llist <https://gitlab.com/mopsa/benchmarks/cpython-benchmarks/llist-analysis>`_.
+
+The multilanguage analysis requires Python **version 3.8**, as well as development headers. You can use our [Docker images](https://gitlab.com/mopsa/mopsa-analyzer/container_registry/6390468) if needed.

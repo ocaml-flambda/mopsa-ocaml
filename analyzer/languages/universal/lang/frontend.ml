@@ -257,9 +257,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     end
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
-      let e1 = from_expr e1 ext var_ctx fun_ctx in
+      let e1 = from_expr e1 ext1 var_ctx fun_ctx in
       let typ1 = etyp e1 in
-      let e2 = from_expr e2 ext var_ctx fun_ctx in
+      let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let typ2 = etyp e2 in
       let typ = unify_typ typ1 typ2 in
       let e1,e2 = to_typ typ e1, to_typ typ e2 in
@@ -526,7 +526,6 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.lift from_typ f.return_type in
-  let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
     fun_orig_name = f.funname;
     fun_uniq_name = f.funname;
@@ -535,7 +534,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
     fun_return_type = typ;
-    fun_return_var = ret_var;
+    fun_return_var = None;
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec U.ext list) (var_ctx: var_context) =

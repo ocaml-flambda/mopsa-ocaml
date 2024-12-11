@@ -1341,8 +1341,8 @@ module P = struct
          (match t.type_trait_value with Some true -> "true" | Some false -> "false" | None -> "none")
          (bp_array type_qual ",") t.type_trait_args
     | UnresolvedLookupExpr e ->
-       p ch "UnresolvedLookupExpr(%B,%B,%a,%a,{%a},{%a})"
-         e.unresolved_lookup_requires_ADL e.unresolved_lookup_is_implicit
+       p ch "UnresolvedLookupExpr(%B,%a,%a,{%a},{%a})"
+         e.unresolved_lookup_requires_ADL
          (bp_option "<none>" record_decl_name) e.unresolved_lookup_naming_class
          declaration_name e.unresolved_lookup_name
          (bp_list decl_name ",") e.unresolved_lookup_decls

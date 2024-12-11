@@ -1269,7 +1269,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateNonTypeTemplateParmDecl(const NonT
   WITH_CACHE_TUPLE(cacheMisc2, ret, x, 6, {
       Store_field(ret, 0, TranslateNamedDecl(x));
       Store_field(ret, 1, TranslateQualType(x->getType()));
+#if CLANG_VERSION_MAJOR < 19
       Store_field_option(ret, 2, x->hasDefaultArgument(), TranslateExpr(x->getDefaultArgument()));
+#else
+      Store_field_option(ret, 2, x->hasDefaultArgument(), TranslateExpr(x->getDefaultArgument().getArgument().getAsExpr()));
+#endif
       Store_field(ret, 3, Val_bool(x->isParameterPack()));
       Store_field(ret, 4, Val_bool(x->isPackExpansion()));
       if (x->isExpandedParameterPack()) {
@@ -2473,7 +2477,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           default:
 #if CLANG_VERSION_MAJOR >= 8
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << static_cast<int>(x->getIdentKind()) << DEBUG_SOURCE_RANGE(node) << std::endl; }
-#else            
+#else
             if (verbose_exn) { node->dump(); std::cout << "unknown ident type: " << x->getIdentType() << DEBUG_SOURCE_RANGE(node) << std::endl; }
 #endif
             caml_failwith("mlClangAST: unknown ident type");
@@ -2797,14 +2801,13 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field_array(ret, 2, x->getNumArgs(), TranslateQualType(a[i]->getType()));
         });
 
-      GENERATE_NODE_INDIRECT(UnresolvedLookupExpr, ret, node, 6, {
+      GENERATE_NODE_INDIRECT(UnresolvedLookupExpr, ret, node, 5, {
           const ArrayRef<TemplateArgumentLoc> a = x->template_arguments();
           Store_field(ret, 0, Val_bool(x->requiresADL()));
-          Store_field(ret, 1, Val_bool(x->isOverloaded()));
-          Store_field_option(ret, 2, x->getNamingClass(), TranslateRecordDecl(x->getNamingClass()));
-          Store_field(ret, 3, TranslateDeclarationName(x->getName()));
-          Store_field_list(ret, 4, x->decls(), TranslateDecl(child));
-          Store_field_array(ret, 5, a.size(), TranslateTemplateArgumentLoc(a[i]));
+          Store_field_option(ret, 1, x->getNamingClass(), TranslateRecordDecl(x->getNamingClass()));
+          Store_field(ret, 2, TranslateDeclarationName(x->getName()));
+          Store_field_list(ret, 3, x->decls(), TranslateDecl(child));
+          Store_field_array(ret, 4, a.size(), TranslateTemplateArgumentLoc(a[i]));
         });
 
       GENERATE_NODE_INDIRECT(UnresolvedMemberExpr, ret, node, 9, {
@@ -3860,7 +3863,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateBuiltinType(const BuiltinType * no
     GENERATE_CASE_PREFIX(r, BuiltinType::, Type_, UnknownAny);
     GENERATE_CASE_PREFIX(r, BuiltinType::, Type_, BuiltinFn);
     GENERATE_CASE_PREFIX(r, BuiltinType::, Type_, ARCUnbridgedCast);
+#if CLANG_VERSION_MAJOR < 19
     GENERATE_CASE_PREFIX(r, BuiltinType::, Type_, OMPArraySection);
+#endif
     // unknown
   default:
     if (verbose_exn) { node->dump(); std::cout << "unknown builtin type: " << node->getKind() << std::endl; }
@@ -4392,7 +4397,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTemplateTypeParmDecl(const Templat
   check_null(x, "TemplateTypeParmDecl");
   WITH_CACHE_TUPLE(cacheMisc, ret, x, 2, {
       Store_field(ret, 0, TranslateNamedDecl(x));
+#if CLANG_VERSION_MAJOR < 19
       Store_field_option(ret, 1, x->hasDefaultArgument(), TranslateQualType(x->getDefaultArgument()));
+#else
+      Store_field_option(ret, 1, x->hasDefaultArgument(), TranslateQualType(x->getDefaultArgument().getArgument().getAsType()));
+#endif
     });
   CAMLreturn(ret);
 }
@@ -4513,7 +4522,11 @@ CAMLprim value MLTreeBuilderVisitor::TranslateFieldDecl(const FieldDecl * org) {
       Store_field(ret, 2, Val_int(x->getFieldIndex()));
       Store_field(ret, 3, TranslateQualType(x->getType()));
       Store_field_option(ret, 4, x->isBitField(), Val_int(x->getBitWidthValue(*Context)));
+#if CLANG_VERSION_MAJOR < 19
       Store_field(ret, 5, Val_bool(x->isUnnamedBitfield()));
+#else
+      Store_field(ret, 5, Val_bool(x->isUnnamedBitField()));
+#endif
       if (d->isCompleteDefinition() && !d->isInvalidDecl() && !d->isDependentType()) {
         // valid layout
         const ASTRecordLayout & l = Context->getASTRecordLayout(d);
@@ -5058,6 +5071,7 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   TargetOptionsFromML(target, *pto);
   TargetInfo *pti = TargetInfo::CreateTargetInfo(ci.getDiagnostics(), pto);
   ci.setTarget(pti);
+  ci.getDiagnostics().setDiagnosticGroupWarningAsError("incompatible-function-pointer-types", false);
 
   // source file
   ci.createFileManager();
