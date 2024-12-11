@@ -695,7 +695,7 @@ struct
     (a, s, s', true)
 
   let merge pre (a,e) (a',e') =
-    { cells = CellSet.join a.cells a'.cells;
+    { cells = CellSet.meet a.cells a'.cells;
       bases = BaseSet.join a.bases a'.bases; }
 
   (** {2 Cell expansion} *)
