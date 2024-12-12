@@ -311,6 +311,7 @@ pages:
     - cp -r doc/developer-manual/_build/html/* public/developer-manual/
     - mkdir public/reference-manual
     - cp -r doc/reference-manual/_build/html/* public/reference-manual/
+    - cp index.html public/
   artifacts:
     paths:
       - public
