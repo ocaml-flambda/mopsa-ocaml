@@ -50,7 +50,6 @@ build_opam:
   stage: downstream_benchmarks
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
       variables:
        GIT_REPO: "gitlab.com/${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH}.git"
        BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
