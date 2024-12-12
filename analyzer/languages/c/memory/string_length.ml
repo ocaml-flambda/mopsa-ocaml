@@ -526,7 +526,8 @@ struct
          man.eval (mk_top ctype range) flow
       else
         match base.base_kind with
-        | String (str,_,t) when equal_int_types t ctype flow ->
+        | String (str,_,t) ->
+          (* I do not think this is necessary `when equal_int_types t ctype flow` *)
           eval_string_literal_char str t offset range man flow
         | _ ->
           if Z.equal (sizeof_type ctype flow) (Z.of_int elem_size) then
