@@ -115,12 +115,6 @@ Additional resources
 
 .. toctree::
    :hidden:
-   :caption: Pinpointing a Crash 
-
-   reduction/general
-
-.. toctree::
-   :hidden:
    :caption: Built-ins and Stubs
 
    stubs/c
@@ -135,6 +129,11 @@ Additional resources
    benchmarks/c
    benchmarks/python
    benchmarks/multilanguage
+
+.. toctree::
+   :caption: Debugging
+
+   debugging/automated-testcase-reduction
 
 .. toctree::
    :caption: Index

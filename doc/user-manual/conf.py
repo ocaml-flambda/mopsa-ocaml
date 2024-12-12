@@ -18,7 +18,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Mopsa User Manual'
-copyright = '2020, Matthieu Journault, Antoine Miné, Raphël Monat, Abdelraouf Ouadjaout'
+copyright = '2020-..., Matthieu Journault, Antoine Miné, Raphël Monat, Abdelraouf Ouadjaout'
 author = 'M. Journault, A. Miné, R. Monat, A. Ouadjaout'
 
 
