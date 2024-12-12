@@ -700,7 +700,7 @@ let string_of_statement = string_from_buffer (c_buf_statement "")
 (** {2 Full source printing} *)
 
 let builtin_typedef =
-  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"]
+  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"; "_Float32"; "_Float32x"; "_Float64"; "_Float64x"; "__u128"]
 (* some built-in typedef we should not print *)
 
 let builtin_funcs =
