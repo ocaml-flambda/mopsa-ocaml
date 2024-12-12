@@ -235,6 +235,11 @@ let rec get_stmt_var_effect ~custom stmt : var_effect =
       { modified = VarSet.singleton var;
         removed = VarSet.empty }
 
+    | S_invalidate { ekind = E_var (var, _) } ->
+      { modified = VarSet.singleton var;
+        removed = VarSet.empty }
+
+
     | _ -> Exceptions.panic "generic merge: unsupported statement %a" pp_stmt stmt
 
 let rec get_var_effect ~custom = function
