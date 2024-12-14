@@ -87,16 +87,30 @@ let sat_targets ~targets ~domains =
   | None   -> true
   | Some s -> not (DomainSet.is_empty (DomainSet.inter s domains))
 
+type accessor +=
+  | Ax_pair_left
+  | Ax_pair_right
+
+let () = register_accessor {
+    print = (fun next fmt -> function
+        | Ax_pair_right -> Format.pp_print_string fmt "right"
+        | Ax_pair_left  -> Format.pp_print_string fmt "left"
+        | t             -> next fmt t
+      );
+    compare = (fun next t1 t2 ->
+        match t1, t2 with
+        | Ax_pair_right, Ax_pair_right -> 0
+        | Ax_pair_left, Ax_pair_left   -> 0
+        | _ -> compare t1 t2
+      );
+  }
 
 (** Manager of the left argument in a pair of domains *)
 let fst_pair_man (man:('a, 'b * 'c) man) : ('a, 'b) man = {
   man with
-  get = get_pair_fst man;
-  set = set_pair_fst man;
-  get_effects = (fun geffects -> man.get_effects geffects |> get_left_teffect);
-  set_effects = (fun effects geffects -> man.set_effects (
-      mk_teffect empty_effect effects (man.get_effects geffects |> get_right_teffect)
-    ) geffects);
+  get  = get_pair_fst man;
+  set  = set_pair_fst man;
+  add_effect = (fun stmt path effect_map -> man.add_effect stmt (Ax_pair_left :: path) effect_map);
 }
 
 (** Manager of the right argument in a pair of domains *)
@@ -104,12 +118,8 @@ let snd_pair_man (man:('a, 'b * 'c) man) : ('a, 'c) man = {
   man with
   get = get_pair_snd man;
   set = set_pair_snd man;
-  get_effects = (fun geffects -> man.get_effects geffects |> get_right_teffect);
-  set_effects = (fun effects geffects -> man.set_effects (
-      mk_teffect empty_effect (man.get_effects geffects |> get_left_teffect) effects
-    ) geffects);
+  add_effect = (fun stmt path effect_map -> man.add_effect stmt (Ax_pair_right :: path) effect_map);
 }
-
 
 (** Find the manager of a domain given the manager of a combiner containing it *)
 let rec find_domain_man : type b c. target:b id -> tree:c id -> ('a,c) man -> ('a,b) man = fun ~target ~tree man ->
@@ -188,7 +198,7 @@ let cascade_call targets f1 domains1 f2 domains2 =
          | None, _ -> Some ret1
          | Some not_handled1, handled1 ->
            (* Fusion all not-handled cases to speedup the analysis *)
-           let not_handled1' = Cases.remove_duplicates compare man.lattice not_handled1 in
+           let not_handled1' = Cases.remove_duplicates man.lattice not_handled1 in
            (* Call [D2] on not-handled cases *)
            let ret2 = not_handled1' >>=? fun _ flow -> ff2 cmd (snd_pair_man man) flow in
            OptionExt.neutral2 Cases.join handled1 ret2)
@@ -231,7 +241,7 @@ let cascade_stateless_call targets f1 domains1 f2 domains2 =
          | None, _ -> Some ret1
          | Some not_handled1, handled1 ->
            (* Fusion all not-handled cases to speedup the analysis *)
-           let not_handled1' = Cases.remove_duplicates compare man.lattice not_handled1 in
+           let not_handled1' = Cases.remove_duplicates man.lattice not_handled1 in
            (* Call [D2] on not-handled cases *)
            let ret2 = not_handled1' >>=? fun _ flow -> ff2 cmd man flow in
            OptionExt.neutral2 Cases.join handled1 ret2)
@@ -295,3 +305,19 @@ let broadcast_stateless_call targets f1 domains1 f2 domains2 =
        OptionExt.neutral2 Cases.join 
          (ff1 cmd man flow)
          (ff2 cmd man flow))
+
+let broadcast_init f1 f2 prog man flow =
+  match f1 prog (fst_pair_man man) flow with
+  | None    -> f2 prog (snd_pair_man man) flow
+  | Some r1 ->
+    match r1 >>%? f2 prog (snd_pair_man man) with
+    | None    -> Some r1
+    | Some r2 -> Some r2
+
+let broadcast_stateless_init f1 f2 prog man flow =
+  match f1 prog man flow with
+  | None    -> f2 prog man flow
+  | Some r1 ->
+    match r1 >>%? f2 prog man with
+    | None    -> Some r1
+    | Some r2 -> Some r2

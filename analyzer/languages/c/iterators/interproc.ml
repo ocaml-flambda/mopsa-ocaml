@@ -91,7 +91,8 @@ struct
         let () = Hashtbl.add Common.Builtins.builtin_functions "error" () in
         Hashtbl.add Common.Builtins.builtin_functions "error_at" ()
     in
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
 
   (** {2 Computation of post-conditions} *)
@@ -189,10 +190,10 @@ struct
              let upd' = visit_scope_update upd in
              let s' = { s with skind = S_c_goto(label, upd') } in
              Keep s'
-           | S_c_switch_case(e, upd) ->
-             let e' = visit_expr e in
+           | S_c_switch_case(es, upd) ->
+             let es' = List.map visit_expr es in
              let upd' = visit_scope_update upd in
-             let s' = { s with skind = S_c_switch_case(e', upd') } in
+             let s' = { s with skind = S_c_switch_case(es', upd') } in
              Keep s'
            | S_c_switch_default upd ->
              let upd' = visit_scope_update upd in
@@ -310,7 +311,7 @@ struct
     match ekind e with
     | E_addr (addr, _) ->
       (* add the resource to local state *)
-      let flow = map_env T_cur (add addr) man flow in
+      map_env T_cur (add addr) man flow >>% fun flow ->
       (* add the address to memory state *)
       man.exec (mk_add e range) flow >>% fun flow ->
       (* set the size of the resource *)
@@ -395,7 +396,19 @@ struct
     else
       (* save the alloca resources of the caller before resetting it *)
       let caller_alloca_addrs = get_env T_cur man flow in
-      let flow = set_env T_cur empty man flow in
+      (* if the environment is paritiotione, we need to collapse addresses from
+       * all paritions, since we can't keep a relation between the partitions
+       * before calling the function and the paritions after the return *)
+      let caller_alloca_addrs = Cases.reduce_result
+          (fun addrs _ -> addrs) caller_alloca_addrs 
+          ~join:AddrSet.join
+          ~meet:AddrSet.meet
+          ~bottom:(fun () -> AddrSet.bottom)
+      in
+      (* Empty alloca before the call. Note that we can't use the bind operator
+       * [>>%] here to avoid calling the body of the function in every
+       * partition *)
+      let flow = set_env_flow T_cur empty man flow in
       let ret =
         (* Process arguments by evaluating function calls *)
         eval_calls_in_args args man flow >>$ fun args flow ->
@@ -426,7 +439,6 @@ struct
          match fundec with
          | {c_func_body = Some body; c_func_stub = None; c_func_variadic = false} ->
            let open Universal.Ast in
-           let ret_var = mktmp ~typ:fundec.c_func_return () in
            let body' =
              if exists_stmt
                  (fun e -> false)
@@ -449,16 +461,12 @@ struct
                 removed twice. *)
              fun_body = body';
              fun_return_type = if is_c_void_type fundec.c_func_return then None else Some fundec.c_func_return;
-             fun_return_var = ret_var;
+             fun_return_var = None;
              fun_range = fundec.c_func_range;
            }
            in
            let exp' = mk_call fundec' args range in
            man.eval exp' flow ~route:(Below name)
-
-        | {c_func_variadic = true} ->
-          let exp' = mk_c_call fundec args range in
-          man.eval exp' flow ~route:(Below name)
 
         | {c_func_stub = Some stub} ->
           let exp' = Stubs.Ast.mk_stub_call stub args range in
@@ -468,6 +476,10 @@ struct
               man.exec (mk_assume (eq ~etyp:T_bool exp' (mk_unop O_sqrt ~etyp:fundec.c_func_return (List.hd args) range) range) range) flow
             else Post.return flow in
           Eval.singleton exp' (post_to_flow man flow)
+
+        | {c_func_variadic = true} ->
+          let exp' = mk_c_call fundec args range in
+          man.eval exp' flow ~route:(Below name)
 
         | {c_func_body = None; c_func_org_name; c_func_return} ->
           let flow =
@@ -492,12 +504,12 @@ struct
           (* we updated the program before analyzing the renamed function, we can now get rid of it *)
           let c_program = get_c_program flow in
           set_c_program {c_program with c_functions = List.tl c_program.c_functions} flow
-        else flow in 
-      let callee_alloca_addrs = get_env T_cur man flow in
-      let flow = set_env T_cur caller_alloca_addrs man flow in
+        else flow in
+      get_env T_cur man flow >>$ fun callee_addrs flow ->
+      let flow = set_env_flow T_cur caller_alloca_addrs man flow in
       AddrSet.fold
         (fun addr acc -> acc >>% man.exec (mk_stub_free (mk_addr addr range) range))
-        callee_alloca_addrs (Post.return flow)
+        callee_addrs (Post.return flow)
       >>% fun flow ->
       Eval.singleton e flow
 

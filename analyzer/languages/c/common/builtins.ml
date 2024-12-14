@@ -135,6 +135,11 @@ let _ =
       "__builtin_umull_overflow";
       "__builtin_umulll_overflow";
 
+      "__builtin___memcpy_chk";
+      "__builtin___memmove_chk";
+      "__builtin___memset_chk";
+      "__builtin___strcpy_chk"
+
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

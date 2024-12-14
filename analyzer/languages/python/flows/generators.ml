@@ -240,7 +240,7 @@ module Domain = struct
            let locals' = List.map (fun v -> mk_framed_var v self) (func.py_func_locals @ func.py_func_parameters) in
 
            (* Execute the body statement *)
-           let flow2 = Flow.set_ctx (Context.add_ctx Universal.Iterators.Interproc.Common.return_key exp (Flow.get_ctx flow2)) flow2 in
+           let flow2 = Flow.set_ctx (Context.add_ctx Universal.Iterators.Interproc.Common.return_key (Universal.Iterators.Interproc.Common.mk_return exp) (Flow.get_ctx flow2)) flow2 in
            let flow2 = Flow.set_ctx (Context.add_ctx generator_key self (Flow.get_ctx flow2)) flow2 in
            let flow3 = man.exec body' flow2 |> post_to_flow man in
 
@@ -345,7 +345,7 @@ module Domain = struct
 
     | _ -> None
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
   let exec stmt man flow =
     let range = srange stmt in
     match skind stmt with

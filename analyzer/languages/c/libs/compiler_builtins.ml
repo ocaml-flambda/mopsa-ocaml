@@ -45,7 +45,7 @@ struct
   (** {2 Transfer functions} *)
   (** ====================== *)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
   let exec stmt man flow = None
 
@@ -311,6 +311,21 @@ struct
         ~fthen:(Eval.singleton (mk_zero range))
         ~felse:(Eval.singleton (mk_one range))
       |> OptionExt.return
+
+    | E_c_builtin_call("__builtin___memset_chk", [s;c;n;_]) ->
+      man.eval (mk_c_call (find_c_fundec_by_name "__builtin_memset" flow) [s;c;n] exp.erange) flow |> OptionExt.return
+
+    | E_c_builtin_call("__builtin___memmove_chk", [s;c;n;_]) ->
+      man.eval (mk_c_call (find_c_fundec_by_name "__builtin_memmove" flow) [s;c;n] exp.erange) flow |> OptionExt.return
+
+    | E_c_builtin_call("__builtin___memcpy_chk", [s;c;n;_]) ->
+      man.eval (mk_c_call (find_c_fundec_by_name "__builtin_memcpy" flow) [s;c;n] exp.erange) flow |> OptionExt.return
+
+    | E_c_builtin_call("__builtin___strcpy_chk", [s;c;n]) ->
+      man.eval (mk_c_call (find_c_fundec_by_name "__builtin_strcpy" flow) [s;c] exp.erange) flow |> OptionExt.return
+
+
+
 
     | _ -> None
 

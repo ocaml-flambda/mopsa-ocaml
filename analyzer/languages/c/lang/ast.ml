@@ -273,6 +273,7 @@ type c_character_kind =
   | C_char_utf8
   | C_char_utf16
   | C_char_utf32
+  | C_char_unevaluated
 
 type constant +=
   | C_c_character of Z.t * c_character_kind
@@ -398,12 +399,26 @@ type stmt_kind +=
   | S_c_label of string
   (** statement label. *)
 
-  | S_c_switch_case of expr * c_scope_update
-  (** case of a switch statement. *)
+  | S_c_switch_case of expr list * c_scope_update
+  (** case of a switch statement.
+
+      case a:
+      case b:
+        stmt;
+
+      is represented through S_c_switch_case [a; b] to factor in some cases
+
+      For integer cases, we use the interval [a, b] to simplify expressions, similar to the GCC C extension for ranges
+  *)
 
   | S_c_switch_default of c_scope_update
   (** default case of switch statements. *)
 
+  | S_c_asm of string
+  (** inline assembly
+      for now, we keep only a string representation to display warnings;
+      see C_AST.asm_kind for a more usable representation when support is added
+   *)
 
 type c_program = {
   c_globals : (var * c_var_init option) list; (** global variables of the program *)
@@ -1210,7 +1225,7 @@ let () =
 
        | S_c_switch_case(e1,s1), S_c_switch_case(e2,s2) ->
          Compare.compose [
-           (fun () ->  compare_expr e1 e2);
+           (fun () -> Compare.list compare_expr e1 e2);
            (fun () -> compare_c_var_scope_update s1 s2)
          ]
 

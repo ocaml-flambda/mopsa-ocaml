@@ -532,9 +532,45 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx end_range body)
-    | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
+    | C_AST.S_target(C_AST.S_case(es,upd)) ->
+      let es' = List.map (from_expr ctx) es in
+      let try_bundle_into_range es =
+        (* we can safely assume List.length es > 0 *)
+        let efirst, estl = List.hd es, List.tl es in
+        let tfirst = etyp efirst in 
+        match ekind efirst with
+        | E_constant (C_int first) ->
+          let rec process op acc l = match l with
+            | [] ->
+              if Z.equal acc first then None
+              else
+                if (Z.(first <= acc)) then
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite first) (ItvUtils.IntBound.Finite acc) efirst.erange)
+                else 
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite acc) (ItvUtils.IntBound.Finite first) efirst.erange)
+            | {ekind = E_constant (C_int h); etyp = th} ::tl when Z.(h = (op acc one)) && compare_typ th tfirst = 0 ->
+              process op h tl
+            | hd :: tl ->
+              let () = debug "first=%a, acc=%s, hd=%a, skipping" pp_expr efirst (Z.to_string acc) pp_expr hd in 
+              None
+          in
+          let oitv_increasing = process Z.add first estl in
+          if oitv_increasing = None then
+            process Z.sub first estl
+          else oitv_increasing
+        | _ -> None
+      in
+      begin match try_bundle_into_range es' with
+        | None ->
+          let () = debug "failed to bundle switch at range %a" pp_range srange in
+          S_c_switch_case(es', from_scope_update ctx upd)
+        | Some itv ->
+          let () = debug "bundled switch at range %a into %a" pp_range srange pp_expr itv in
+          S_c_switch_case([itv], from_scope_update ctx upd)
+      end 
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
+    | C_AST.S_asm a -> Ast.S_c_asm (C_print.string_of_statement (skind,range))
   in
   {skind; srange}
 
@@ -660,7 +696,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
   | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
   | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
   | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
-
+  | Clang_AST.Char_Unevaluated -> Ast.C_char_unevaluated
 
 (** {2 Variables} *)
 (** ============= *)

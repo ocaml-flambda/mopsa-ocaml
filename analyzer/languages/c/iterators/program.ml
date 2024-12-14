@@ -96,6 +96,30 @@ struct
       default = "";
     }
 
+  let opt_arg_max_size = ref None 
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args-max-size";
+      category = "C";
+      doc = " set the maximum allocated size of all symbolic arguments";
+      spec = ArgExt.Int (fun s -> opt_arg_max_size := Some s);
+      default = "18446744073709551615";
+    }
+
+
+  let opt_arg_min_size = ref None 
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args-min-size";
+      category = "C";
+      doc = " set the maximum allocated size of all symbolic arguments";
+      spec = ArgExt.Int (fun s -> opt_arg_min_size := Some s);
+      default = "1"
+    }
+
+
 
   let checks = []
 
@@ -107,9 +131,11 @@ struct
     match prog.prog_kind with
     | C_program p -> 
       set_c_program p flow |>
-      set_c_target_info !Frontend.target_info
+      set_c_target_info !Frontend.target_info |>
+      Post.return |>
+      Option.some
 
-    | _ -> flow
+    | _ -> None
 
 
   (** Computation of post-conditions *)
@@ -481,8 +507,14 @@ struct
     alloc_symbolic_args lo' hi' range man flow >>$ fun (args,smash_arg) flow ->
 
     (* Initialize the size of arguments *)
-    let min_size = mk_one range in
-    let max_size = mk_z (rangeof (size_type flow) flow |> snd) range in
+    let min_size =
+      match !opt_arg_min_size with
+      | None -> mk_one range
+      | Some s -> mk_int s range in
+    let max_size =
+      match !opt_arg_max_size with
+      | None -> mk_z (rangeof (size_type flow) flow |> snd) range
+      | Some s -> mk_int s range in
     let init_size arg flow =
       eval_bytes arg range man flow >>$ fun bytes flow ->
       man.exec (mk_assume (mk_in bytes min_size max_size range) range) flow
@@ -661,18 +693,19 @@ struct
   (** ================== *)
 
   let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
+    let get_locals prog call =
+      let f = find_function call prog.c_functions in
+      f.c_func_local_vars @ f.c_func_parameters in
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
-    | Q_defined_variables ->
+    | Q_defined_variables None ->
       let prog = get_c_program flow in
       let cs = Flow.get_callstack flow in
       (* Get global variables *)
       let globals = List.map fst prog.c_globals in
       (* Get local variables of all functions in the callstack, following the same order *)
-      let locals = List.fold_right (fun call acc ->
-          let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
-          f.c_func_local_vars @ f.c_func_parameters @ acc
+      let locals = List.fold_right (fun call acc -> (get_locals prog call.Callstack.call_fun_orig_name) @ acc
                      ) cs []
       in
       let all_vars = globals @ locals in
@@ -693,6 +726,10 @@ struct
         records;
       Some (Cases.singleton all_vars flow)
 
+    | Q_defined_variables (Some call) -> 
+      let prog = get_c_program flow in
+      Cases.singleton (get_locals prog call) flow 
+      |> OptionExt.return 
 
     (* Get the value of a variable *)
     | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->

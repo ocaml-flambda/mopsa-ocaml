@@ -242,13 +242,14 @@ let () =
           | _ -> assert false
         )
       | S_c_label _ -> leaf stmt
-      | S_c_switch_case(case,update) ->
-        {exprs = [case]; stmts = []},
+      | S_c_switch_case(cases,update) ->
+        {exprs = cases; stmts = []},
         (function
-          | {exprs = [case]; stmts = []} -> {stmt with skind = S_c_switch_case(case,update)}
+          | {exprs = cases; stmts = []} -> {stmt with skind = S_c_switch_case(cases,update)}
           | _ -> assert false
         )
       | S_c_switch_default _ -> leaf stmt
+      | S_c_asm _ -> leaf stmt
 
       | _ -> default stmt
     );

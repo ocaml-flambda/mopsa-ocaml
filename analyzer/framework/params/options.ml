@@ -345,6 +345,15 @@ let () =
     default = "false";
   }
 
+let () =
+  register_builtin_option {
+    key = "-tw";
+    category = "Output";
+    doc = " set the tab width";
+    spec = ArgExt.Set_int Output.Text.opt_tw;
+    default = "4";
+  }
+
 
 let () =
   register_builtin_option {
@@ -382,6 +391,15 @@ let () = register_builtin_option {
         then Sys.chdir s
         else Exceptions.panic "'%s' does not exist" s
       );
+    default = "";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-marker";
+    category = "Partitioning";
+    doc = " enable a marker for trace partitioning";
+    spec = ArgExt.String Core.Marker.enable_marker;
     default = "";
   }
 

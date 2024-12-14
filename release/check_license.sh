@@ -36,13 +36,13 @@ PYFILES=`find .. -name \*.py | grep -v tests | grep -v benchmarks`
 SHELLFILES=`find .. -name \*.sh`
 MAKEFILES="`find .. -name \*.mk` `find .. -name \*.in | grep -v META.in` `find .. -name \*.ac` `find .. -name Makefile` ../configure.ac"
 ALL="$MLFILES $CFILES $HFILES $CCFILES $PYFILES $MAKEFILES $SHELLFILES"
-FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/`
+FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/ | grep -v /doc/`
 echo "Looking for files missing the text '$KEY'."
 echo "Checking" `echo $FILES | wc -w` "file(s)."
 
 OUT=`grep -L "$KEY" $FILES`
 
-if test $? != 1
+if test $? != 1 && [ -n "$OUT" ]
 then
     echo "ERROR: some files are missing the License text."
     echo "$OUT"

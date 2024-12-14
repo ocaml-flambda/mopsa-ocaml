@@ -95,10 +95,10 @@ let render_alarms report =
   RangeCallStackMap.fold
     (fun (range, cs) checks acc ->
       CheckMap.fold
-        (fun check diag acc ->
+        (fun check diag (safe, total, acc) ->
           match diag.diag_kind with
           | Safe when not !opt_show_safe_checks ->
-             acc
+             safe + 1, total + 1, acc
 
           | Safe | Error | Warning ->
               (* Get the set of alarms kinds and callstacks *)
@@ -134,10 +134,12 @@ let render_alarms report =
                     "callstack", render_callstack diag.diag_callstack
                   ]
               in
+              (if diag.diag_kind = Safe then safe + 1 else safe),
+              total + 1,
               json_diag :: acc
-          | _ -> acc
+          | _ -> safe, total, acc
         ) checks acc
-    ) report.report_diagnostics []
+    ) report.report_diagnostics (0, 0, [])
 
 
 let render_soudness_assumtion h =
@@ -170,13 +172,15 @@ let render_env (var,value)  =
 
 let report man flow ~time ~files ~out : unit =
   let rep = Flow.get_report flow in
+  let safe, total, checks = render_alarms rep in 
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "checks", `List (render_alarms rep);
+      "selectivity", `String (Format.asprintf "%d/%d" safe total);
+      "checks", `List checks;
       "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in

@@ -85,7 +85,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a,t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a post option
   (** Initialization function *)
 
   val exec : stmt -> ('a,t) man -> 'a flow -> 'a post option
@@ -126,11 +126,8 @@ struct
     if are_effects_enabled () then
       D.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
-      Cases.map_effects (fun effects ->
-          man.set_effects (
-            man.get_effects effects |>
-            add_stmt_to_teffect stmt
-          ) effects
+      Cases.map_effects (fun effects flow ->
+          man.add_effect stmt [] flow effects
         ) res
     else
       D.exec stmt man flow

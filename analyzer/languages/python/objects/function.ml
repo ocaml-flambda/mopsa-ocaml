@@ -87,7 +87,7 @@ module Domain =
     let checks = []
 
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let eval exp man flow =
       let range = erange exp in
@@ -339,7 +339,7 @@ module Domain =
                   fun_locvars = List.filter (fun x -> not @@ List.mem x pyfundec.py_func_cellvars) pyfundec.py_func_locals;
                   fun_body = mk_block [mk_block pre_body range; fun_body] range;
                   fun_return_type = Some (T_py None);
-                  fun_return_var = pyfundec.py_func_ret_var;
+                  fun_return_var = None;
                   fun_range = pyfundec.py_func_range;
                 } in
                 man.eval (mk_call fundec args exp.erange) flow >>$

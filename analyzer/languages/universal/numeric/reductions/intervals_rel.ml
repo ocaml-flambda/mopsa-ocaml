@@ -59,7 +59,7 @@ struct
      - float reduction
   *)
   let reduce stmt man ctx (pre:'a) (post:'a) : 'a =
-    let (module CR : Relational.Instances.RELATIONAL) = !Relational.Instances.numeric_domain in
+    let (module CR : Relational.Instances.RELATIONAL) = !Relational.Instances_choices.numeric_domain in
 
     (* Get the modified variables *)
     let vars = get_modified_vars stmt man ctx pre |>

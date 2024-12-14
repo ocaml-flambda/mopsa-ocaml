@@ -80,13 +80,14 @@ struct
   let merge pre (a, e) (a', e') = assert false
 
   let init progr man flow =
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
   let exec stmt man flow =
     let range = stmt.srange in
     match skind stmt with
     | S_assign ({ekind = E_addr (la, om)}, {ekind = E_py_object (a, _)}) ->
-      let cur = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun cur flow ->
       if mem a cur then
         let tys = find a cur in
         let cur =
@@ -97,7 +98,6 @@ struct
             add la (AttrSet.union old_tys tys) cur
         in
         set_env T_cur cur man flow |>
-        Post.return |>
         OptionExt.return
       else
         let () = warn_at (srange stmt) "%a => addr %a not in cur.abs_heap, nothing done" pp_stmt stmt pp_addr a in
@@ -111,7 +111,7 @@ struct
 
     | S_project addrs when List.for_all (fun e -> match ekind e with E_addr _ -> true
                                                                    | _ -> false) addrs ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let ncur = List.fold_left (fun ncur eaddr ->
                       match ekind eaddr with
                       | E_addr (a, _) -> begin match find_opt a cur with
@@ -120,11 +120,11 @@ struct
                                     end
                       | _ -> assert false
                     ) empty addrs in
-       set_env T_cur ncur man flow |> Post.return |> OptionExt.return
+       set_env T_cur ncur man flow |> OptionExt.return
 
     | S_expand ({ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}, addrs) ->
        (* FIXME: and A_py_class too? *)
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let attrs = find a cur in
        let addrs = List.map Addr.from_expr addrs in
        let addrs_attrs =
@@ -137,12 +137,12 @@ struct
          AttrSet.fold_u (fun attr stmts ->
              mk_expand_var (mk_addr_attr a attr (T_py None)) (addrs_attrs attr) range :: stmts
            ) attrs [] in
-       set_env T_cur ncur man flow |>
+       set_env T_cur ncur man flow >>%
          man.exec (mk_block expand_stmts range) |> OptionExt.return
 
 
     | S_fold ({ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}, addrs) ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let old_a = OptionExt.default AttrSet.empty (find_opt a cur) in
        let newa, ncur, fold_stmts =
          List.fold_left (fun (newa, ncur, stmts) a' ->
@@ -159,12 +159,12 @@ struct
                 end
              | _ -> assert false
            ) (old_a, cur, []) addrs in
-       set_env T_cur (add a newa ncur) man flow |>
+       set_env T_cur (add a newa ncur) man flow >>%
          man.exec (mk_block fold_stmts range) |> OptionExt.return
 
 
     | S_rename ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, _)}, {ekind = E_addr (a', _)}) ->
-      let cur = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun cur flow ->
       let old_a = find a cur in
       let to_rename_stmt = mk_block (AttrSet.fold_u (fun attr renames ->
           mk_rename_var
@@ -181,20 +181,20 @@ struct
         remove a cur |>
           add a' new_va' in
       debug "ncur = %a" (format print) ncur;
-      let flow = set_env T_cur ncur man flow in
+      set_env T_cur ncur man flow >>%? fun flow ->
       man.exec to_rename_stmt flow |>
         OptionExt.return
 
     | S_invalidate {ekind = E_addr ({addr_kind = A_py_instance _} as a, _)}
       | S_remove {ekind = E_addr ({addr_kind = A_py_instance _} as a, _)} ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let old_a = find_opt a cur |> OptionExt.default AttrSet.empty  in
        let to_remove_stmt =
          mk_block
            (AttrSet.fold_u (fun attr removes ->
                 mk_remove_var (mk_addr_attr a attr (T_py None)) range :: removes) old_a []) range in
        let ncur = remove a cur in
-       let flow = set_env T_cur ncur man flow in
+       set_env T_cur ncur man flow >>%? fun flow ->
        man.exec   to_remove_stmt flow |> OptionExt.return
 
     | S_add ({ekind = E_addr ({addr_kind = A_py_c_function _ | A_py_c_module _ }, om)}) ->
@@ -203,13 +203,12 @@ struct
     | S_add ({ekind = E_addr ({addr_kind = A_py_c_class _ } as a, om)})
     | S_add ({ekind = E_addr ({addr_kind = A_py_instance _ } as a, om)}) ->
       debug "S_add";
-      let cur = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun cur flow ->
       if mem a cur && addr_mode a om = STRONG then panic_at range "%a but the address exists" pp_stmt stmt;
       (* FIXME: if addr is weak, we shouldn't add *)
       let ncur = add a AttrSet.empty cur in
       debug "S_add ok?";
       set_env T_cur (if addr_mode a om = STRONG then ncur else join cur ncur) man flow |>
-      Post.return |>
       OptionExt.return
 
 
@@ -251,7 +250,7 @@ struct
           if (List.exists (fun v -> get_orig_vname v = attr) c.py_cls_static_attributes) then
             man.eval   (mk_py_true range) flow
           else
-            let cur = get_env T_cur man flow in
+            get_env T_cur man flow >>$ fun cur flow ->
             let oaset = AMap.find_opt addr cur in
             begin match oaset with
               | None -> man.eval   (mk_py_false range) flow
@@ -261,8 +260,8 @@ struct
                 else if AttrSet.mem_o attr aset then
                   let cur_t = AMap.add addr (AttrSet.add_u attr aset) cur in
                   let cur_f = AMap.add addr (AttrSet.remove attr aset) cur in
-                  let flow_t = set_env T_cur cur_t man flow in
-                  let flow_f = set_env T_cur cur_f man flow in
+                  set_env T_cur cur_t man flow >>% fun flow_t ->
+                  set_env T_cur cur_f man flow >>% fun flow_f ->
                   Eval.join
                     (man.eval   (mk_py_true range) flow_t)
                     (man.eval   (mk_py_false range) flow_f)
@@ -273,7 +272,7 @@ struct
         (* FIXME: addr_kind_find_structural_type should have a flag for default behavior *)
         | A_py_c_module _ | A_py_c_class _
         | A_py_instance _ ->
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$ fun cur flow ->
           let oaset = AMap.find_opt addr cur in
           begin match oaset with
             | None -> man.eval   (mk_py_false range) flow
@@ -283,8 +282,8 @@ struct
               else if AttrSet.mem_o attr aset then
                 let cur_t = AMap.add addr (AttrSet.add_u attr aset) cur in
                 let cur_f = AMap.add addr (AttrSet.remove attr aset) cur in
-                let flow_t = set_env T_cur cur_t man flow in
-                let flow_f = set_env T_cur cur_f man flow in
+                set_env T_cur cur_t man flow >>% fun flow_t ->
+                set_env T_cur cur_f man flow >>% fun flow_f ->
                 Eval.join
                   (man.eval   (mk_py_true range) flow_t)
                   (man.eval   (mk_py_false range) flow_f)
@@ -400,7 +399,7 @@ struct
          OptionExt.return
       | E_py_object (alval, _), _ ->
          debug "in here!@\n";
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          let old_inst =
            try
              AMap.find alval cur
@@ -409,7 +408,7 @@ struct
              AttrSet.empty
          in
          let cur = AMap.add alval ((if alval.addr_mode = STRONG then AttrSet.add_u else AttrSet.add_o) attr old_inst) cur in
-         let flow = set_env T_cur cur man flow in
+         set_env T_cur cur man flow >>%? fun flow ->
          (* now we create an attribute var *)
          let attr_var = mk_addr_attr alval attr (T_py None) in
          man.exec   (mk_assign (mk_var attr_var range) rval range) flow >>%
@@ -433,13 +432,13 @@ struct
         | A_py_class _ ->
           panic_at range "attribute deletion currently unsupported for classes"
         | _ ->
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$? fun cur flow ->
           let old_attrset = AMap.find alval cur in
-          let flow =
+          let post =
             if AttrSet.mem_u attr old_attrset then
               set_env T_cur (AMap.add alval (AttrSet.remove attr old_attrset) cur) man flow
-            else flow in
-          man.eval   (mk_py_none range) flow |>
+            else Post.return flow in
+          post >>% man.eval   (mk_py_none range) |>
           OptionExt.return
       end
 
@@ -459,7 +458,7 @@ struct
          Some(Cases.singleton VarSet.empty flow)
        else
        let range = erange e in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let oas = find_opt a cur in
        OptionExt.lift
          (fun attrset ->
@@ -478,7 +477,7 @@ struct
 
     | Q_exn_string_query t ->
        let range = erange t in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let iaddr, addr = match ekind t with
          | E_py_object ({addr_kind = A_py_instance a} as ad, _) -> ad, a
          | _ -> assert false in
@@ -513,7 +512,7 @@ struct
 
     | Framework.Engines.Interactive.Query.Q_debug_addr_value addr when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
        let open Framework.Engines.Interactive.Query in
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let attrset = AMap.find addr cur in
        let attrs_descr = AttrSet.fold_o (fun attr acc ->
                              let attr =
@@ -540,15 +539,17 @@ struct
     if not (is_py_exp exp) then () else
       match ekind exp with
       | E_addr (addr, _) when not @@ Objects.Data_container_utils.is_data_container addr.addr_kind ->
-         let cur = get_env T_cur man flow in
-         let attrset = AMap.find_opt addr cur in
-         if attrset = None then () else
-         let attrset = OptionExt.none_to_exn attrset in
-         AttrSet.fold_u (fun attr () -> debug "%s" attr) attrset ();
-         pprint printer ~path:[Key "attributes"; fkey "%a" pp_addr addr] (pbox AttrSet.print attrset);
-         AttrSet.fold_u (fun attr () ->
-             man.print_expr flow printer (mk_var (mk_addr_attr addr attr (T_py None)) exp.erange)
-           ) attrset ();
+         get_env T_cur man flow |>
+         Cases.iter_result (fun cur flow ->
+             let attrset = AMap.find_opt addr cur in
+             if attrset = None then () else
+               let attrset = OptionExt.none_to_exn attrset in
+               AttrSet.fold_u (fun attr () -> debug "%s" attr) attrset ();
+               pprint printer ~path:[Key "attributes"; fkey "%a" pp_addr addr] (pbox AttrSet.print attrset);
+               AttrSet.fold_u (fun attr () ->
+                   man.print_expr flow printer (mk_var (mk_addr_attr addr attr (T_py None)) exp.erange)
+                 ) attrset ()
+           );
 
       | _ -> ()
 

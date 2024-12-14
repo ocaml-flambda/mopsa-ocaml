@@ -25,6 +25,7 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
+open Common
 
 
 
@@ -49,7 +50,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
 
   (** Post-condition computation *)
@@ -137,6 +138,11 @@ struct
 
     | S_expression { ekind = E_c_assign(lval, rval) } ->
       man.exec (mk_assign lval rval stmt.srange) flow |>
+      OptionExt.return
+
+    | S_c_asm s ->
+      Flow.add_local_assumption (Soundness.A_ignore_asm s) (srange stmt) flow |>
+      Post.return |>
       OptionExt.return
 
     | _ -> None

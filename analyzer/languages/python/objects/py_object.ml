@@ -36,7 +36,7 @@ struct
 
   let checks = []
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let exec _ _ _ = None
 

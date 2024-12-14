@@ -77,7 +77,7 @@ struct
 
   let checks = []
 
-  let init (prog:program) man flow = flow
+  let init (prog:program) man flow = None
 
   let var_of_addr a = match akind a with
     | A_py_set -> {(mk_addr_attr a "set" (T_py None)) with vmode = WEAK}

@@ -1,0 +1,19 @@
+<div class="highlight">
+<pre><font color="#00D700"><b>Analysis terminated successfully</b></font>
+Analysis time: 0.028s
+
+<font color="#FF8700"><b>⚠</b></font> Check #2:
+<b>resources/code/hello.c</b>: In function &apos;<b>main</b>&apos;:
+<b>resources/code/hello.c:5.4-8</b>: <font color="#FF8700"><b>warning</b></font>: <font color="#FF8700"><b>Invalid memory access</b></font>
+
+  <b>5</b>:     <font color="#FF8700"><b>a[i]</b></font> = 0;
+         <font color="#FF8700"><b>^^^^</b></font>
+  accessing 4 bytes at offsets [4,400] of variable &apos;<b>a</b>&apos; of size 400 bytes
+  Callstack:
+        from resources/code/hello.c:2.4-8: main
+
+Checks summary: <b>2 total</b>, <font color="#00D700"><b>✔ 1 safe</b></font>, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+  Invalid memory access: 1 total, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+  Integer overflow: 1 total, <font color="#00D700"><b>✔ 1 safe</b></font>
+</pre>
+</div>

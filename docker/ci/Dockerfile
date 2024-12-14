@@ -3,14 +3,14 @@
 #
 ###############################################
 
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 
 
 # configuration: required packages
 ##
 
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
-             llvm-10-dev libclang-10-dev libclang-cpp10-dev clang-10  \
+             llvm-dev libclang-dev libclang-cpp-dev clang \
              python3-dev python3-setuptools python3-pip python3-requests \
              rsync m4 curl wget adduser less emacs-nox
 
@@ -29,8 +29,16 @@ ENV TERM xterm-256color
 RUN \
     apt-get update && \
     apt-get install --no-install-recommends -y $APT_DEPS && \
-    adduser --disabled-password --gecos 'Mopsa' mopsa
+    adduser --disabled-password --gecos 'Mopsa' mopsa && \
+    adduser mopsa sudo
 
+# the multilanguage analysis currently requires python with version <= 3.8
+RUN \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa &&  \
+    apt update && \
+    apt install -y python3.8 python3.8-dev && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
 
 # log in as mopsa
 #

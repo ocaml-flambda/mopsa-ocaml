@@ -146,7 +146,7 @@ struct
   (* Initialization *)
   (* ============== *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (* Computation of post-conditions *)

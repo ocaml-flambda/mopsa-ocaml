@@ -45,7 +45,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let exec _ _ _ = None
 
@@ -228,10 +228,13 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
-         (* Instantiate ExceptionContext with the given exception exn *)
-         let unittest = OptionExt.none_to_exn @@ ask_and_reduce man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow in
-         let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
-         man.eval exp' flow |> OptionExt.return
+        (* Instantiate ExceptionContext with the given exception exn *)
+        man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow >>$ (fun ounittest flow ->
+            let unittest = OptionExt.none_to_exn ounittest in
+            let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
+            man.eval exp' flow
+          )
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          let r = man.eval exn flow >>$ (fun exn flow ->

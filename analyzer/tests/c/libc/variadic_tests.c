@@ -2,6 +2,7 @@
  * Tests for variadic functions
  */
 
+#include <string.h>
 #include <stddef.h>
 #include <stdarg.h>
 
@@ -128,4 +129,32 @@ int g1(int x, ...) {
 
 void test_va_copy() {
   _mopsa_assert(g1(1,2,3) == 6);
+}
+
+
+/********************/
+/* Test broken cast */
+/********************/
+
+struct bla {};
+
+size_t f(int d, ...) {
+  va_list l;
+  va_start(l, d);
+  char *x = va_arg(l, char *);
+  va_end(l);
+  return strlen(x);
+}
+
+void test_cast() {
+  _mopsa_assert(f(1, "abc") == 3);
+  _mopsa_assert_safe();
+  f(1, 1);
+  _mopsa_assert_unsafe();
+}
+
+void test_cast2() {
+  struct bla s;
+  f(1, s);
+  _mopsa_assert_unsafe();
 }

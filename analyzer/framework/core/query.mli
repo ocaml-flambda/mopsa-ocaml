@@ -25,7 +25,7 @@ open Lattice
 open Context
 open Ast.Var
 open Ast.Addr
-
+open Mopsa_utils
 
 (** Extensible type of queries *)
 type ('a,_) query = ..
@@ -81,8 +81,8 @@ val register_lattice_query : lattice_query_info -> unit
 (** ****************** *)
 
 type ('a, _) query +=
-  | Q_defined_variables : ('a,var list) query
-  (** Extract the list of defined variables *)
+  | Q_defined_variables : string option -> ('a,var list) query
+  (** Extract the list of defined variables, in a given function call site, or in all scopes *)
   | Q_allocated_addresses : ('a,addr list) query
   (** Query to extract the list of addresses allocated in the heap *)
   | Q_variables_linked_to : Ast.Expr.expr -> ('a, VarSet.t) query

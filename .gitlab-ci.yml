@@ -7,7 +7,8 @@ variables:
   DOCKER_DRIVER: overlay2
   GIT_STRATEGY: fetch
   RUN_BENCHMARKS: "false"
-  DISABLE_MOPSA_DIFF : "false"
+  UPDATE_DOCKER: "false"
+  FORCE_BASELINE_UPDATE : "false"
 
 image: mopsa/mopsa-build:latest
 
@@ -16,6 +17,7 @@ stages:
 - test
 - benchmarks
 - downstream_benchmarks
+- publish
 
 build_job:
   stage: build
@@ -30,6 +32,16 @@ build_job:
     - ./_build/default/analyzer/mopsa.exe
     expire_in: 2h
 
+build_opam:
+  stage: build
+  script:
+    - eval `opam config env`
+    - git config --global --add safe.directory "*"
+    - LANG=C opam pin add mopsa -y --with-doc --with-test -vvv .
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
 
 ###########################################################
 # Trigger downstream benchmarks in case of merge requests #
@@ -38,7 +50,6 @@ build_job:
   stage: downstream_benchmarks
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
       variables:
        GIT_REPO: "gitlab.com/${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH}.git"
        BRANCH: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
@@ -54,67 +65,67 @@ build_job:
     - PROJECT_NAME=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_NAME")
     - PROJECT_BRANCH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote_plus(sys.argv[1]))" "$PROJECT_BRANCH")
     - echo $PROJECT_NAME $PROJECT_BRANCH $GIT_REPO $BRANCH
-    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" --form "variables[DISABLE_MOPSA_DIFF]=$DISABLE_MOPSA_DIFF" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
+    - curl --form "token=$CI_JOB_TOKEN" --form "ref=$PROJECT_BRANCH" --form "variables[GIT_REPO]=$GIT_REPO" --form "variables[BRANCH]=$BRANCH" --form "variables[FORCE_BASELINE_UPDATE]=$FORCE_BASELINE_UPDATE" "https://gitlab.com/api/v4/projects/$PROJECT_NAME/trigger/pipeline"
 
 
 downstream-benchs 1/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/coreutils-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 2/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/juliet-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 3/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/pathpicker-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 4/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/pyperformance-benchmarks
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 5/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/cdistance-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 6/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/pyahocorasick-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 7/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/noise-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 8/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/levenshtein-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 9/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/llist-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 downstream-benchs 10/10:
   variables:
     PROJECT_NAME: ${GROUP}/benchmarks/cpython-benchmarks/bitarray-analysis
-    PROJECT_BRANCH: master
+    PROJECT_BRANCH: main
   extends: .downstream-benchs
 
 
@@ -137,6 +148,10 @@ test-c:
         done
     - $MOPSA_C -config=c/cell-rel-itv.json analyzer/tests/c/libc/builtin_overflow_tests.c
     - $MOPSA_C -config=c/cell-string-length-itv.json analyzer/tests/c/libc/vasprintf_tests.c
+    - $MOPSA_C -config=c/cell-string-length-pointer-sentinel-itv.json -c-symbolic-args=0 analyzer/tests/c/ptr_sentinel_tests.c
+    - $MOPSA_C -c-check-overflows-with-relational -config=c/cell-rel-itv.json analyzer/tests/c/156_overflow_relational.c
+    - $MOPSA_C analyzer/tests/c/172_backward_mul_floatitv.c
+    - $MOPSA_C analyzer/tests/c/176_do_while_constant_cond.c
 
 ###################
 # Universal tests #
@@ -242,3 +257,63 @@ test-cpython 1/1:
     NB_CHECKS: '141'
     NB_SAFE: '140'
   extends: .test-cpython
+
+###########################
+# Interactive engine test #
+###########################
+
+test-interactive:
+  stage: test
+  dependencies: [build_job]
+  script:
+    - eval `opam config env`
+    - echo $PWD
+    - cd analyzer/tests/c/
+    - echo "load script interactive.script" | ../../../bin/mopsa-c -silent -engine=interactive interactive.c | tee out
+    - head -n 52 out | tail -n 48 > out.out
+    - diff <(sed "16,17,28d" out.out) <(sed "16,17,28d" interactive.out)
+
+
+
+#####################
+# Push to dockerhub #
+#####################
+
+publish_docker:
+  stage: publish
+  rules:
+    - if: $UPDATE_DOCKER == "true"
+      when: manual
+  before_script:
+    - echo "$DOCKERIO_PASSWD" | docker login -u $DOCKERIO_USER --password-stdin docker.io
+  script:
+    - cd docker/analyzer
+    - docker build --pull -t mopsa/mopsa-analyzer:main .
+    - docker push mopsa/mopsa-analyzer:main
+
+##################################
+# Documentation from the manuals #
+##################################
+
+pages:
+  stage: publish
+  image: sphinxdoc/sphinx:latest
+  script:
+    - pip install sphinx_rtd_theme
+    - cd doc/user-manual && make html && cd ../..
+    - cd doc/developer-manual && make html && cd ../..
+    - cd doc/reference-manual && make html && cd ../..
+    - mkdir public
+    - mkdir public/user-manual
+    - cp -r doc/user-manual/_build/html/* public/user-manual/
+    - mkdir public/developer-manual
+    - cp -r doc/developer-manual/_build/html/* public/developer-manual/
+    - mkdir public/reference-manual
+    - cp -r doc/reference-manual/_build/html/* public/reference-manual/
+  artifacts:
+    paths:
+      - public
+  only:
+    variables:
+    - $CI_PIPELINE_SOURCE == "web"
+    - $CI_COMMIT_REF_NAME == "main"
