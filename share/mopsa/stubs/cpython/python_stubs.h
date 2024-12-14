@@ -25,6 +25,10 @@
 #include <Python.h>
 #include <structmember.h>
 
+#if PY_VERSION_HEX < 0x030b0000 // Python 3.11
+#define Py_SET_TYPE(a,b) (Py_TYPE((a)) = (b))
+#endif
+
 // transfer function in cmodule.c
 PyObject *PyUnicode_GetItem(PyObject *list, Py_ssize_t index);
 
