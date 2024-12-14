@@ -74,7 +74,7 @@
                                 }
                             },
                             {
-                                "apply":"c.memory.packing.static_scope",
+                                "apply": "c.memory.packing.static_scope",
                                 "on": "universal.numeric.relational"
                             }
                         ],

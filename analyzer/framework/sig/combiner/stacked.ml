@@ -30,10 +30,10 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
-  val merge : t -> t * teffect -> t * teffect -> t
+  val merge : path -> t -> t * effect_map -> t * effect_map -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
-  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   val print_state : DomainSet.t option -> printer -> t -> unit
   val print_expr  : DomainSet.t option -> ('a,t) man -> 'a flow -> printer -> expr -> unit
 end
@@ -52,12 +52,12 @@ struct
   let is_bottom _ = false
   let print_state _ _ _ = ()
   let print_expr _ _ _ _ _ = ()
-  let subset _ _ _ ((),s) ((),s') = true,s,s'
-  let join _ _ _ ((),s) ((),s') = (),s,s'
-  let meet _ _ _ ((),s) ((),s') = (),s,s'
-  let widen _ _ _ ((),s) ((),s') = (),s,s',true
-  let merge _ _ _ = ()
-  let init _ _ flow = flow
+  let subset _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
+  let merge _ _ _ _ = ()
+  let init _ _ flow = None
   let exec _ _ _ flow = None
   let eval _ _ _ flow = None
   let ask _ _ _ _ = None
@@ -70,9 +70,9 @@ struct
   let domains = DomainSet.singleton D.name
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
-  let merge pre (a1,te1) (a2,te2) =
-    let e1 = get_root_effect te1 in
-    let e2 = get_root_effect te2 in
+  let merge path pre (a1,m1) (a2,m2) =
+    let e1 = get_effect path m1 in
+    let e2 = get_effect path m2 in
     if compare_effect e1 e2 = 0 then a1 else
     if is_empty_effect e1 then a2 else
     if is_empty_effect e2 then a1
@@ -88,9 +88,9 @@ module CombinerToStacked(T:STACKED_COMBINER) : STACKED with type t = T.t =
 struct
   include T
   let merge pre (a1,e1) (a2,e2) =
-    let te1 = mk_teffect e1 empty_teffect empty_teffect in
-    let te2 = mk_teffect e2 empty_teffect empty_teffect in
-    T.merge pre (a1,te1) (a2,te2)
+    let te1 = singleton_effect_map empty_path e1 in
+    let te2 = singleton_effect_map empty_path e2 in
+    T.merge empty_path pre (a1,te1) (a2,te2)
   let exec stmt man flow = T.exec None stmt man flow
   let eval exp man flow  = T.eval None exp man flow
   let ask query man flow = T.ask None query man flow

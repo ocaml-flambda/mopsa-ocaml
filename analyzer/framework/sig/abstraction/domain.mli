@@ -97,7 +97,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a post option
   (** Initialization function *)
 
   val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
@@ -106,7 +106,7 @@ sig
   val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> ('a, 'r) cases option
   (** Handler of queries *)
 
 

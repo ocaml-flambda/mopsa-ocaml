@@ -83,7 +83,8 @@ module Domain =
 
     let init _ man flow =
       Hashtbl.add C.Common.Builtins.builtin_functions "_mopsa_pyerr_bind_cs_to" ();
-      set_env T_cur empty man flow
+      set_env T_cur empty man flow |>
+      Option.some
 
     let eval exp man flow =
       let range = erange exp in
@@ -92,11 +93,11 @@ module Domain =
          resolve_pointer exc man flow >>$ (fun pt flow ->
           match pt with
           | P_block({base_kind = Addr a}, _, _) ->
-             let cur = get_env T_cur man flow in
-             let flow = set_env T_cur
-                          (add a (Callstacks.singleton (Flow.get_callstack flow)) cur)
-                          man flow in
-             debug "%a" (format print) (get_env T_cur man flow);
+             get_env T_cur man flow >>$ fun cur flow ->
+             set_env T_cur
+               (add a (Callstacks.singleton (Flow.get_callstack flow)) cur)
+               man flow
+             >>% fun flow ->
              Eval.singleton (mk_one range) flow
           | _ -> assert false
         ) |> OptionExt.return
@@ -106,23 +107,23 @@ module Domain =
     let exec stmt man flow =
       match skind stmt with
       | S_free addr ->
-         let cur = get_env T_cur man flow in
-         let flow =
+        get_env T_cur man flow >>$? fun cur flow ->
+         let post =
            if mem addr cur then
              set_env T_cur (remove addr cur) man flow
-           else flow in
-         man.exec ~route:(Below name) stmt flow
+           else Post.return flow in
+         post >>% man.exec ~route:(Below name) stmt
          |> OptionExt.return
       | _ -> None
 
-    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> r option =
+    let ask : type r. ('a, r) query -> ('a, t) man -> 'a flow -> ('a, r) cases option =
       fun query man flow ->
       match query with
       | Q_cpython_attached_callstack a ->
-         let cur = get_env T_cur man flow in
+         get_env T_cur man flow >>$? fun cur flow ->
          OptionExt.lift (fun cs ->
              assert(Callstacks.cardinal cs = 1);
-             Callstacks.choose cs)
+             Cases.singleton (Callstacks.choose cs) flow)
            (find_opt a cur)
 
       | _ -> None

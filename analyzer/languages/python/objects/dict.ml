@@ -86,7 +86,7 @@ struct
 
   let checks = []
 
-  let init (prog:program) man flow = flow
+  let init (prog:program) man flow = None
 
   let kvar_of_addr a = match akind a with
     | A_py_dict -> {(mk_addr_attr a "dict_key" (T_py None)) with vmode = WEAK}
@@ -527,31 +527,34 @@ struct
 
     | _ -> None
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow ->
     match query with
     | Q_variables_linked_to ({ekind = E_addr ({addr_kind = A_py_dict} as addr, _)} as e) ->
        let range = erange e in
        let keys_var = kvar_of_addr addr in
        let values_var = vvar_of_addr addr in
-       VarSet.union
-           (man.ask (Q_variables_linked_to (mk_var keys_var range)) flow)
-           (man.ask (Q_variables_linked_to (mk_var values_var range)) flow) |>
+       let ret =
+         VarSet.union
+           (ask_and_reduce man.ask (Q_variables_linked_to (mk_var keys_var range)) flow)
+           (ask_and_reduce man.ask (Q_variables_linked_to (mk_var values_var range)) flow) |>
          VarSet.add keys_var |>
-         VarSet.add values_var |>
-         OptionExt.return
+         VarSet.add values_var
+       in
+       Some (Cases.singleton ret flow)
        (* Some (VarSet.add keys_var (VarSet.add values_var VarSet.empty)) *)
 
     | Framework.Engines.Interactive.Query.Q_debug_addr_value ({addr_kind = A_py_dict} as addr) ->
        let open Framework.Engines.Interactive.Query in
-       let keys_dict = man.ask (Q_debug_variable_value (kvar_of_addr addr)) flow in
-       let values_dict = man.ask (Q_debug_variable_value (vvar_of_addr addr)) flow in
-       Some {var_value = None;
-             var_value_type = T_any;
-             var_sub_value = Some (Named_sub_value
-                                     (("keys", keys_dict)::
-                                        ("values", values_dict)::[]))
-         }
+       let keys_dict = ask_and_reduce man.ask (Q_debug_variable_value (kvar_of_addr addr)) flow in
+       let values_dict = ask_and_reduce man.ask (Q_debug_variable_value (vvar_of_addr addr)) flow in
+       Some (Cases.singleton {
+           var_value = None;
+           var_value_type = T_any;
+           var_sub_value = Some (Named_sub_value
+                                   (("keys", keys_dict)::
+                                    ("values", values_dict)::[]))
+         } flow)
 
     | _ -> None
 

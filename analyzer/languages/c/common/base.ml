@@ -92,9 +92,9 @@ let base_uniq_name b =
   if b.base_valid then name else "✗" ^ name
 
 
-let base_size b =
+let base_size b flow =
   match b.base_kind with
-  | Var v -> sizeof_type v.vtyp
+  | Var v -> sizeof_type v.vtyp flow
   | String (s,_,_) -> Z.of_int @@ String.length s
   | Addr a -> panic ~loc:__LOC__ "base_size: addresses not supported"
 
@@ -162,11 +162,11 @@ let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =
     man.eval ~route bytes_expr flow ~translate:"Universal"
 
   | Var var ->
-    Cases.singleton (mk_z (sizeof_type var.vtyp) range) flow
+    Cases.singleton (mk_z (sizeof_type var.vtyp flow) range) flow
 
   | String (str,_,t) ->
     (* length of the terminal 0 character *)
-    let char_len = Z.to_int (sizeof_type t) in
+    let char_len = Z.to_int (sizeof_type t flow) in
     Cases.singleton (mk_int (String.length str + char_len) range) flow
 
   | Addr addr ->

@@ -30,10 +30,12 @@ void test_char_condition() {
 void test_default_case() {
   int i = 2, j;
   switch (i * 5) {
-  case 0: j = 10; break;
-  case 1: j = 20; break;
-  case 2: j = 30; break;
-  case 3: j = 40; break;
+  case 0: 
+  case 1: 
+  case 2: 
+  case 3: 
+    j = ((i * 5)+1) * 10;
+    break;
   default: j = 50;
   }
   _mopsa_assert(j == 50);
@@ -121,4 +123,40 @@ int test_sideeffect() {
   }
   _mopsa_assert(r == 1);
   _mopsa_assert(x == 1);
+}
+
+void test_gcc_range_in() {
+  int i = 1, j;
+  switch (i * 5) {
+  case 0:
+    j = 10;
+    break;
+  case 1 ... 9:
+    j = 20;
+    break;
+  case 10:
+    j = 40;
+    break;
+  default:
+    j = 50;
+  }
+  _mopsa_assert(j == 20);
+}
+
+void test_gcc_range_out() {
+  int i = 2, j;
+  switch (i * 5) {
+  case 0:
+    j = 10;
+    break;
+  case 1 ... 9:
+    j = 20;
+    break;
+  case 10:
+    j = 40;
+    break;
+  default:
+    j = 50;
+  }
+  _mopsa_assert(j == 40);
 }

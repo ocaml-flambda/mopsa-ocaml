@@ -142,9 +142,6 @@ val register_alarm : alarm_info -> unit
 module AlarmSet : SetExtSig.S with type elt = alarm
 (** Set of alarms *)
 
-module CallstackSet : SetExtSig.S with type elt = callstack
-(** Set of callstacks *)
-
 (** Kind of a diagnostic *)
 type diagnostic_kind =
   | Warning     (** Some executions may have issues *)
@@ -152,13 +149,16 @@ type diagnostic_kind =
   | Error       (** All executions do have issues *)
   | Unreachable (** No execution reaches the check point *)
 
-type diagnostic = {
+type 'a diagnostic_ = {
   diag_range : range;
   diag_check : check;
   diag_kind : diagnostic_kind;
   diag_alarms : AlarmSet.t;
-  diag_callstacks : CallstackSet.t;
+  diag_callstack : 'a;
 }
+
+type diagnostic = callstack diagnostic_
+type diagnosticWoCs = unit diagnostic_
 
 val mk_safe_diagnostic : check -> callstack -> range -> diagnostic
 (** Create a diagnostic that says that a check is safe *)
@@ -253,14 +253,14 @@ val mk_local_assumption : assumption_kind -> range -> assumption
 
 module RangeMap : MapExtSig.S with type key = range
 
+module RangeCallStackMap : MapExtSig.S with type key = range * callstack
+
 module CheckMap : MapExtSig.S with type key = check
 
 module AssumptionSet : SetExtSig.S with type elt = assumption
 
-module DiagnosticSet : SetExtSig.S with type elt = diagnostic
-
 type report = {
-  report_diagnostics : diagnostic CheckMap.t RangeMap.t;
+  report_diagnostics : diagnostic CheckMap.t RangeCallStackMap.t;
   report_assumptions : AssumptionSet.t;
 }
 
@@ -316,12 +316,9 @@ val add_diagnostic : diagnostic -> report -> report
 val remove_diagnostic : diagnostic -> report -> report
 (** Remove a diagnostic from a report *)
 
-val find_diagnostic : range -> check -> report -> diagnostic
+val find_diagnostic : range * callstack -> check -> report -> diagnostic
 (** [find_diagnostic range chk r] finds the diagnostic of check [chk] at
     location [range] in report [r] *)
-
-val diagnostics_of_report : report -> DiagnosticSet.t
-(** Return the set of diagnostics in a report *)
 
 val exists_report : (diagnostic -> bool) -> report -> bool
 (** Check whether any diagnostic verifies a predicate *)
@@ -332,11 +329,13 @@ val forall_report : (diagnostic -> bool) -> report -> bool
 val count_alarms : report -> int * int
 (** Count the number of alarms and warnings in a report *)
 
-val group_diagnostics_by_range : DiagnosticSet.t -> DiagnosticSet.t RangeMap.t
-(** Group diagnostics by their range *)
+module RangeDiagnosticWoCsMap : MapExtSig.S with type key = range * diagnosticWoCs
 
-val group_diagnostics_by_check : DiagnosticSet.t -> DiagnosticSet.t CheckMap.t
-(** Group diagnostics by their check *)
+module CallstackSet : SetExtSig.S with type elt = callstack
+(** Set of callstacks *)
+
+val group_diagnostics : diagnostic CheckMap.t RangeCallStackMap.t -> CallstackSet.t RangeDiagnosticWoCsMap.t
+(** Group diagnostics by their range and diagnostic kind *)
 
 val add_assumption : assumption -> report -> report
 (** Add an assumption to a report *)
@@ -358,3 +357,17 @@ val fold2zo_report :
   (diagnostic -> 'b -> 'b) ->
   (diagnostic -> diagnostic -> 'b -> 'b) ->
   report -> report -> 'b -> 'b
+
+val exists2zo_report :
+  (diagnostic -> bool) ->
+  (diagnostic -> bool) ->
+  (diagnostic -> diagnostic -> bool) ->
+  report -> report -> bool
+
+val fold_report :
+  (diagnostic -> 'b -> 'b) ->
+  report -> 'b -> 'b
+
+val alarms_to_report : alarm list -> report
+
+val report_to_alarms : report -> alarm list

@@ -33,6 +33,11 @@ open Common
 let opt_show_callstacks = ref false
 
 
+(** Command-line option to specify the number of spaces to use for
+    printing tabs
+ *)
+let opt_tw = ref 4
+
 
 let print out fmt =
   let formatter =
@@ -45,6 +50,21 @@ let print out fmt =
   kasprintf (fun str ->
       fprintf formatter "%s%!" str
     ) fmt
+
+
+let compile_tab_columns tw s pos =
+  let rec doit i s =
+    try (match String.sub s 0 1, String.sub s 1 (String.length s - 1) with
+    | "\t", s -> (fun n -> (if n > i then (doit (i+1) s n) + tw - 1 else doit (i+1) s n))
+    | _, s -> doit (i+1) s
+    ) with
+    | Invalid_argument _ -> fun i -> i
+  in
+  get_pos_column pos |> doit 0 s
+
+let replace_tabs tw s =
+  let re = Str.regexp "\t" in
+  Str.global_replace re (String.make tw ' ') s
 
 
 module AlarmKindSet = SetExt.Make(struct type t = alarm_kind let compare = compare_alarm_kind end)
@@ -94,6 +114,8 @@ let highlight_range color fmt range =
 
     (* Highlight bug region in a line *)
     let highlight_bug fmt (i,l) =
+      let get_tabbed_column = compile_tab_columns !opt_tw l in
+      let l = replace_tabs !opt_tw l in
       let safe_sub l s e =
         try String.sub l s e
         with Invalid_argument _ ->
@@ -101,8 +123,8 @@ let highlight_range color fmt range =
           String.sub l (min 0 s) (max 0 (min e ((String.length l) - s))) in
       let n = String.length l in
       (* prints from c1 to c2 included *)
-      let c1 = get_pos_column start_pos in
-      let c2 = get_pos_column end_pos in
+      let c1 = get_tabbed_column start_pos in
+      let c2 = get_tabbed_column end_pos in
       let s1,s2,s3 =
         if i = get_pos_line start_pos && i = get_pos_line end_pos then
           safe_sub l 0 c1,
@@ -126,9 +148,11 @@ let highlight_range color fmt range =
 
     (* Underline bug region *)
     let underline_bug color fmt (i,l) =
+      let get_tabbed_column = compile_tab_columns !opt_tw l in
+      let l = replace_tabs !opt_tw l in
       let n = string_of_int i |> String.length in
-      let c1 = get_pos_column start_pos + n + 2 in
-      let c2 = get_pos_column end_pos + n + 2 in
+      let c1 = get_tabbed_column start_pos + n + 2 in
+      let c2 = get_tabbed_column end_pos + n + 2 in
       let c3 = String.length l + n + 2 in
       let s1 = String.make c1 ' ' in
       let s2 = String.make (c2 - c1) '^' in
@@ -147,13 +171,12 @@ let highlight_range color fmt range =
     | _ -> ()
 
 
-let pp_diagnostic out n diag alarm_kinds callstacks =
+let pp_diagnostic out n diag callstacks kinds =
   (* Print the alarm instance *)
   let file_name = get_range_relative_file diag.diag_range in
-  let fun_name = match CallstackSet.elements callstacks with
-    | (c::_) :: _ -> Some c.call_fun_orig_name
-    | _ -> None
-  in
+  let fun_name = match CallstackSet.choose callstacks with
+    | c::_ -> Some c.call_fun_orig_name
+    | _ -> None in
   print out "@.%a Check #%d:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (n+1)
@@ -178,7 +201,7 @@ let pp_diagnostic out n diag alarm_kinds callstacks =
        | l ->
          fprintf fmt "@,%a"
            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,") pp_alarm_kind) l
-    ) alarm_kinds
+    ) kinds
     (fun fmt callstacks ->
        match CallstackSet.elements callstacks with
        | [] -> ()
@@ -205,7 +228,7 @@ let pp_diagnostic out n diag alarm_kinds callstacks =
 
 
 
-let incr_check_diag check diag checks_map =
+let incr_check_diag len check diag checks_map =
   let (safe,error,warning) =
     match CheckMap.find_opt check checks_map with
     | Some x -> x
@@ -213,57 +236,60 @@ let incr_check_diag check diag checks_map =
   in
   let total =
     match diag with
-    | Safe        -> safe+1,error,warning
+    | Safe        -> safe+len,error,warning
     | Unreachable -> safe,error,warning
-    | Error       -> safe,error+1,warning
-    | Warning     -> safe,error,warning+1
+    | Error       -> safe,error+len,warning
+    | Warning     -> safe,error,warning+len
   in
   CheckMap.add check total checks_map
 
 let construct_checks_summary ?(print=false) rep out =
-  RangeMap.fold
-    (fun range checks acc ->
-       CheckMap.fold
-         (fun check diag (i,safe,error,warning,checks_map) ->
-            let checks_map' = incr_check_diag check diag.diag_kind checks_map in
-            match diag.diag_kind with
-            | Unreachable ->
-              i, safe, error, warning, checks_map'
+  let diag_groups = Alarm.group_diagnostics rep.report_diagnostics in
+  RangeDiagnosticWoCsMap.fold (fun (range, diagWoCs) css acc ->
+      let (i,safe,error,warning,checks_map) = acc in
+      let len = CallstackSet.cardinal css in
+      let checks_map' = incr_check_diag len diagWoCs.diag_check diagWoCs.diag_kind checks_map in
+      match diagWoCs.diag_kind with
+      | Unreachable ->
+        i, safe, error, warning, checks_map'
 
-            | Safe ->
-              if print && !opt_show_safe_checks then pp_diagnostic out i diag [] diag.diag_callstacks;
-              i+1, safe+1, error, warning, checks_map'
+      | Safe ->
+        if print && !opt_show_safe_checks then pp_diagnostic out i diagWoCs css [];
+        i+len, safe+len, error, warning, checks_map'
 
-            | Error | Warning ->
-              (* Get the set of alarms kinds and callstacks *)
-              let kinds =
-                AlarmSet.fold
-                  (fun a kinds ->
-                     AlarmKindSet.add a.alarm_kind kinds
-                  ) diag.diag_alarms AlarmKindSet.empty in
-              (* Join alarm kinds *)
-              let rec iter = function
-                | [] -> []
-                | hd::tl ->
-                  let hd',tl' = iter_with hd tl in
-                  hd'::iter tl'
-              and iter_with a = function
-                | [] -> a,[]
-                | hd::tl ->
-                  match join_alarm_kind a hd with
-                  | None    ->
-                    let a',tl' = iter_with a tl in
-                    a',hd::tl'
-                  | Some aa ->
-                    let aa',tl' = iter_with aa tl in
-                    aa',tl'
-              in
-              let kinds' = iter (AlarmKindSet.elements kinds) in
-              if print then pp_diagnostic out i diag kinds' diag.diag_callstacks;
-              let error',warning' = if diag.diag_kind = Error then error+1,warning else error,warning+1 in
-              i+1, safe, error', warning', checks_map'
-         ) checks acc
-    ) rep.report_diagnostics (0,0,0,0,CheckMap.empty)
+      | Error | Warning ->
+        (* Get the set of alarms kinds and callstacks *)
+        let kinds =
+          AlarmSet.fold
+            (fun a kinds ->
+               AlarmKindSet.add a.alarm_kind kinds
+            ) diagWoCs.diag_alarms AlarmKindSet.empty in
+        (* Join alarm kinds *)
+        let rec iter = function
+          | [] -> []
+          | hd::tl ->
+            let hd',tl' = iter_with hd tl in
+            hd'::iter tl'
+        and iter_with a = function
+          | [] -> a,[]
+          | hd::tl ->
+            match join_alarm_kind a hd with
+            | None    ->
+              let a',tl' = iter_with a tl in
+              a',hd::tl'
+            | Some aa ->
+              let aa',tl' = iter_with aa tl in
+              aa',tl'
+        in
+        let kinds' = iter (AlarmKindSet.elements kinds) in
+        if print then pp_diagnostic out i diagWoCs css kinds';
+        let error',warning' =
+          if diagWoCs.diag_kind = Error then
+            error+len, warning
+          else
+            error, warning+len in
+        i+len, safe, error', warning', checks_map'
+    ) diag_groups (0,0,0,0,CheckMap.empty)
 
 let print_checks_summary checks_map total safe error warning out =
   let pp diag singluar plural fmt n =
@@ -271,11 +297,12 @@ let print_checks_summary checks_map total safe error warning out =
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v2>Checks summary: %a%a%a%a@,%a@]@.@."
+  print out "@[<v2>Checks summary: %a%a%a%a (selectivity: %.2f%%)@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
+    (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (check,(safe,error,warning)) ->
           fprintf fmt "%a: %d total%a%a%a"

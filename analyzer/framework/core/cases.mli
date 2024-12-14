@@ -41,7 +41,7 @@ type cleaners = StmtSet.t
 
 (** A single case of a computation *)
 type 'r case =
-  | Result of 'r * teffect * cleaners
+  | Result of 'r * effect_map * cleaners
   (** Actual result of the computation, with effects and cleaners *)
 
   | Empty
@@ -57,8 +57,8 @@ type ('a,'r) cases
 val case : 'r case -> 'a flow -> ('a,'r) cases
 (** Create a case. *)
 
-val return : ?effects:teffect -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
-val singleton : ?effects:teffect -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
+val return : ?effects:effect_map -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
+val singleton : ?effects:effect_map -> ?cleaners:stmt list -> 'r -> 'a flow -> ('a,'r) cases
 (** Create a case with a single non-empty result. *)
 
 val empty : 'a flow -> ('a,'r) cases
@@ -67,12 +67,18 @@ val empty : 'a flow -> ('a,'r) cases
 val not_handled : 'a flow -> ('a,'r) cases
 (** Create a non-handled case to be forwarded to other domains  *)
 
-val remove_duplicates : ('r case -> 'r case  -> int) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
-val remove_duplicate_results : ('r -> 'r  -> int) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
+val remove_duplicates : ?equal:('r case -> 'r case  -> bool) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
+val remove_duplicate_results : ?equal:('r -> 'r  -> bool) -> 'a Lattice.lattice -> ('a,'r) cases -> ('a,'r) cases
 (** Remove duplicate results *)
 
 val cardinal : ('a,'r) cases -> int
 (** Return the number of results *)
+
+val is_singleton : ('a, 'r) cases -> bool
+
+val choose : ('a, 'r) cases -> 'r case * 'a flow
+
+val choose_result : ('a, 'r) cases -> 'r * 'a flow
 
 
 (** {1 Cleaners} *)
@@ -115,16 +121,16 @@ val set_callstack: callstack-> ('a,'r) cases -> ('a,'r) cases
 (** {1 Effects} *)
 (** *********** *)
 
-val get_case_effects : 'r case -> teffect
+val get_case_effects : 'r case -> effect_map
 (** Get the effects attached to a case *)
 
-val set_case_effects : teffect -> 'r case -> 'r case
+val set_case_effects : effect_map -> 'r case -> 'r case
 (** Set the effects attached to a case *)
 
-val map_effects : (teffect -> teffect) -> ('a,'r) cases -> ('a,'r) cases
+val map_effects : (effect_map -> 'a flow -> effect_map) -> ('a,'r) cases -> ('a,'r) cases
 (** [map_effects f c] replaces each effects [l] in [c] with [f l]. *)
 
-val set_effects : teffect -> ('a,'r) cases -> ('a,'r) cases
+val set_effects : effect_map -> ('a,'r) cases -> ('a,'r) cases
 (** Set the same effects for all cases *)
 
 
@@ -177,7 +183,7 @@ val reduce_result :
   ('r -> 'a flow -> 'b) ->
   join:('b -> 'b -> 'b) ->
   meet:('b -> 'b -> 'b) ->
-  bottom:'b ->
+  bottom:(unit -> 'b) ->
   ('a,'r) cases -> 'b
 (** [reduce_result f ~join ~meet bottom c] is similar to [reduce f
     join meet c], except that empty and not-handled cases are replaced

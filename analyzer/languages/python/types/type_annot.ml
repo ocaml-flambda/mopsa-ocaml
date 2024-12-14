@@ -65,7 +65,8 @@ struct
   let checks = []
 
   let init prog man flow =
-    set_env T_cur empty man flow
+    set_env T_cur empty man flow |>
+    Option.some
 
   let collect_typevars ?(base=TVMap.empty) self signature =
     List.fold_left (fun acc oty ->
@@ -141,7 +142,7 @@ struct
                 let addr_eobj = match ekind eobj with
                   | E_py_object (a, _) -> a
                   | _ -> assert false in
-                let cur = get_env T_cur man flow in
+                get_env T_cur man flow >>$ fun cur flow ->
                 let ncur = List.fold_left (fun cur (tyname, types) ->
                     let etypes = ESet.of_list types in
                     let tyvar = mk_addr_attr addr_eobj tyname (T_py None) in
@@ -162,7 +163,7 @@ struct
                        else
                          Exceptions.panic_at range "conflict for typevar %a, sets %a and %a differ" pp_var tyvar (format ESet.print) set (format ESet.print) etypes
                   ) cur typevars in
-                let flow = set_env T_cur ncur man flow in
+                set_env T_cur ncur man flow >>% fun flow ->
                 Eval.singleton eobj flow
               )
           | _ -> assert false
@@ -209,7 +210,7 @@ struct
               )  (flow, Flow.bottom_from flow) in_args in_types in
           let apply_sig flow signature =
             debug "[%a] apply_sig %a" pp_var pyannot.py_funca_var pp_py_func_sig signature;
-            let cur = get_env T_cur man flow in
+            let cur = get_singleton_env_from_flow T_cur man flow in
             let new_typevars = collect_typevars (if is_method then Some (List.hd args) else None) signature in
             debug "new_typevars: %a" (format TVMap.print) new_typevars;
             debug "cur: %a" (format TVMap.print) cur;
@@ -221,7 +222,7 @@ struct
                    if ESet.equal tycur tynew then TVMap.add s tycur acc else
                      Exceptions.panic_at range "s = %a, tycur = %a, tynew = %a, acc = %a" (format Keys.print) s (format ESet.print) tycur (format ESet.print) tynew (format TVMap.print) acc)
                 cur new_typevars TVMap.empty in
-            let flow = set_env T_cur ncur man flow in
+            let flow = set_env T_cur ncur man flow |> post_to_flow man in
             let in_types, in_args =
               (* remove types having a default parameter and no argument *)
               (* FIXME: kwargs actually depend on the chosen py_func_sig...  *)
@@ -298,9 +299,9 @@ struct
                       let nflow = post_to_flow man nflow in
                       debug "nflow after apply_sig = %a@\n" (format (Flow.print man.lattice.print)) nflow;
                       debug "flow_notok after apply_sig = %a@\n" (format (Flow.print man.lattice.print)) flow_notok;
-                      let cur = get_env T_cur man nflow in
+                      let cur = get_singleton_env_from_flow T_cur man nflow in
                       let ncur = TVMap.filter (fun tyvar _ -> not (TVMap.mem tyvar ntypevars && match tyvar with | Global _ -> true | Class _ -> false)) cur in
-                      let nflow = set_env T_cur ncur man nflow in
+                      let nflow = set_env T_cur ncur man nflow |> post_to_flow man in
                       debug "nflow = %a@\n" (format (Flow.print man.lattice.print)) nflow;
                       if Flow.is_bottom man.lattice nflow then (acc, flow_notok)
                       else
@@ -445,26 +446,25 @@ struct
                                             {ekind = E_var _}) -> []
                     | _ ->
                       Exceptions.panic_at range "tname %a, abase %a" pp_expr (List.hd c.py_cls_a_abases) pp_expr abase in
-                  debug "here, tnames=%a, cur = %a" (Format.pp_print_list Format.pp_print_string) tnames (format TVMap.print) (get_env T_cur man flow);
                   let substi =
                     Visitor.map_expr
                       (fun expr -> match ekind expr with
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_constant (C_string s)}::_, []) ->
-                           Keep (try ESet.choose @@ (TVMap.find (Global s) (get_env T_cur man flow)) with Not_found -> expr)
+                           Keep (try ESet.choose @@ (TVMap.find (Global s) (get_singleton_env_from_flow T_cur man flow)) with Not_found -> expr)
                          | E_py_call (
                              {ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)},
                              {ekind = E_var (vname, _)}::_, []) ->
                            Keep (
-                             try ESet.choose @@ match TVMap.find_opt (Class vname) (get_env T_cur man flow) with
+                             try ESet.choose @@ match TVMap.find_opt (Class vname) (get_singleton_env_from_flow T_cur man flow) with
                                | Some s -> s
                                | None ->
                                  debug "vname = %a@\n" pp_var vname;
                                  match vkind vname with
                                  (* FIXME: ugly fix to handle:             (* issue: if object.__new__(e) renames addresses used in i, this is not caught... *) *)
                                  | V_addr_attr ({addr_kind = A_py_instance {addr_kind = A_py_class (C_annot c', _)}} as addr, attr) when compare_var c.py_cls_a_var c'.py_cls_a_var = 0 ->
-                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr (T_py None))) (get_env T_cur man flow))
+                                   OptionExt.default (ESet.singleton expr) (TVMap.find_opt (Class (mk_addr_attr {addr with addr_mode = WEAK} attr (T_py None))) (get_singleton_env_from_flow T_cur man flow))
                                  | _ -> ESet.singleton expr
                              with Not_found -> expr)
                          | _ -> VisitParts expr
@@ -481,17 +481,17 @@ struct
                   let flow =
                     List.fold_left2 (fun flow tname ctype  ->
                         set_env T_cur (TVMap.add (Class (mk_addr_attr addr tname (T_py None)))
-                                         (match TVMap.find_opt (Global tname) (get_env T_cur man flow) with
+                                         (match TVMap.find_opt (Global tname) (get_singleton_env_from_flow T_cur man flow) with
                                           | None ->
                                             debug "tname(%s) not found in cur" tname;
-                                            debug "cur = %a" (format TVMap.print) (get_env T_cur man flow);
+                                            debug "cur = %a" (format TVMap.print) (get_singleton_env_from_flow T_cur man flow);
                                             ESet.singleton ctype
 
                                           | Some st ->
                                             debug "tname(%s) found in cur" tname;
                                             st)
-                                         (get_env T_cur man flow)) man flow) flow tnames types in
-                  debug "after %a, cur = %a" pp_expr exp (format TVMap.print) (get_env T_cur man flow);
+                                         (get_singleton_env_from_flow T_cur man flow)) man flow |> post_to_flow man) flow tnames types in
+                  debug "after %a, cur = %a" pp_expr exp (format TVMap.print) (get_singleton_env_from_flow T_cur man flow);
                   Eval.singleton eobj flow
                 )
           end
@@ -510,7 +510,7 @@ struct
 
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::[], []) ->
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$? fun cur flow ->
           let tycur = TVMap.find (Global s) cur in
           if ESet.cardinal tycur = 0 then
             Flow.bottom_from flow
@@ -523,7 +523,7 @@ struct
             |> OptionExt.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_constant (C_string s)}::types, []) ->
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$? fun cur flow ->
           begin match TVMap.find_opt (Global s) cur with
           | Some tycur ->
             debug "tycur = %a@\n" (format ESet.print) tycur;
@@ -542,7 +542,7 @@ struct
           end |> OptionExt.return
 
         | E_py_call ({ekind = E_var ({vkind = V_uniq ("TypeVar", _)}, _)}, {ekind = E_var (v, _)}::types, []) ->
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$? fun cur flow ->
           let tycur = try TVMap.find (Class v) cur with Not_found ->
             (* FIXME: add assumption for:
                let () = Soundness.warn_at range "cheating in type annots" in
@@ -557,7 +557,7 @@ struct
               ~empty:(fun () -> assert false)
               (List.map
                  (fun t ->
-                    let flow = set_env T_cur (TVMap.add (Class v) (ESet.singleton t) cur) man flow in
+                    set_env T_cur (TVMap.add (Class v) (ESet.singleton t) cur) man flow >>% fun flow ->
                     man.eval   {exp with ekind = E_py_annot t} flow)
                  (ESet.elements tycur))
           end |> OptionExt.return
@@ -670,11 +670,11 @@ struct
             | E_var (v, _) -> Keys.Class v
             | _ -> assert false in
           debug "check_annot typevar string not type";
-          let cur = get_env T_cur man flow in
+          get_env T_cur man flow >>$? fun cur flow ->
           begin match TVMap.find_opt key cur with
             | Some types ->
               let flows_ok = ESet.fold (fun typ flows_caught ->
-                  let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow in
+                  let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow |> post_to_flow man in
                   man.exec (mk_assume {exp with ekind = E_py_check_annot(e, typ)} range) flow :: flows_caught
                 ) types [] in
               Eval.join_list ~empty:(fun () -> man.eval (mk_py_false range) flow)
@@ -692,11 +692,11 @@ struct
           let flows_ok =
             if Flow.is_bottom man.lattice flow then [] else
             List.fold_left (fun flows_caught typ ->
-              let cur = get_env T_cur man flow in
+              let cur = get_singleton_env_from_flow T_cur man flow in
               if not @@ TVMap.mem key cur then
                 flows_caught
               else
-                let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow in
+                let flow = set_env T_cur (TVMap.add key (ESet.singleton typ) cur) man flow |> post_to_flow man in
                 let flow = man.exec (mk_assume {exp with ekind = E_py_check_annot (e, typ)} range) flow |> post_to_flow man in
                 if Flow.is_bottom man.lattice flow then flows_caught
                 else flow :: flows_caught)
@@ -729,7 +729,7 @@ struct
 
     | S_fold ({ekind = E_py_annot {ekind = E_addr (a', _)}}, [{ekind = (E_addr (a, _))}])
     | S_rename ({ekind = E_py_annot {ekind = (E_addr (a, _))}}, {ekind = E_addr (a', _)}) ->
-      let cur = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun cur flow ->
       debug "rename %a %a, at %a@\ncur=%a" pp_addr a pp_addr a' pp_range stmt.srange (format TVMap.print) cur;
       let ncur =
         let abasedaddr, other = TVMap.fold (fun k v (acc_a, acc_nota) ->
@@ -742,10 +742,10 @@ struct
         TVMap.join abasedaddr other in
       debug "ncur = %a" (format TVMap.print) ncur;
       set_env T_cur ncur man flow
-      |> Post.return |> OptionExt.return
+      |> OptionExt.return
 
     | S_expand ({ekind = E_py_annot {ekind = E_addr (a, _)}}, addrs) ->
-       let cur = get_env T_cur man flow in
+       get_env T_cur man flow >>$? fun cur flow ->
        let cur = TVMap.fold (fun k v cur ->
            match k with
            | Class ({vkind = V_addr_attr (av, s)} as vk) when compare_addr av a = 0 ->
@@ -757,7 +757,7 @@ struct
                   | _ -> assert false
                 ) cur addrs
            | _ -> cur ) cur cur in
-       set_env T_cur cur man flow |> Post.return |> OptionExt.return
+       set_env T_cur cur man flow |> OptionExt.return
 
     | _ -> None
 

@@ -86,6 +86,6 @@ type 'a lattice = {
   join:      'a ctx -> 'a -> 'a -> 'a;
   meet:      'a ctx -> 'a -> 'a -> 'a;
   widen:     'a ctx -> 'a -> 'a -> 'a;
-  merge:     'a -> 'a * teffect -> 'a * teffect -> 'a;
+  merge:     'a -> 'a * effect_map -> 'a * effect_map -> 'a;
   print:     printer -> 'a -> unit;
 }

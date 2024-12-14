@@ -22,67 +22,52 @@
 open Mopsa
 open Sig.Abstraction.Simplified
 
-module Octagon = Domain.Make(struct
-  type t = Oct.t
-  let name = "universal.numeric.relational"
-  let man = Oct.manager_alloc ()
-end
-)
-
-module Polyhedra = Domain.Make(struct
-  type t = Polka.loose Polka.t
-  let name = "universal.numeric.relational"
-  let man = Polka.manager_alloc_loose ()
-end)
-
-module LinEqualities =
-  Domain.Make(struct
-      type t = Polka.equalities Polka.t
-      let name = "universal.numeric.relational"
-      let man = Polka.manager_alloc_equalities ()
-    end)
-
 let opt_numeric = ref "polyhedra"
 
 module type RELATIONAL =
 sig
   include Sig.Abstraction.Simplified.SIMPLIFIED
+  val numeric_name : string
   val bound_var : var -> t -> Intervals.Integer.Value.t
   val assume : stmt -> (('a, bool) Core.Query.query -> bool) -> t -> t option
   val related_vars : var -> t -> var list
   val vars : t -> var list
 end
 
-let numeric_domain : (module RELATIONAL) ref = ref (module Polyhedra : RELATIONAL)
+let numeric_domains : (module RELATIONAL) list ref = ref []
 
-let () =
-  register_domain_option "universal.numeric.relational" {
-    key = "-numeric";
-    category = "Numeric";
-    doc = " select the relational numeric domain.";
-    spec = ArgExt.Symbol (
-        ["octagon"; "polyhedra"; "lineq"],
-        (function
-          | "octagon"   ->
-            opt_numeric := "octagon";
-            numeric_domain := (module Octagon : RELATIONAL);
-            register_simplified_domain (module Octagon)
+let register_instance (module M : RELATIONAL) =
+  numeric_domains := (module M) :: !numeric_domains
 
-          | "polyhedra" ->
-            opt_numeric := "polyhedra";
-            numeric_domain := (module Polyhedra : RELATIONAL);
-            register_simplified_domain (module Polyhedra)
+let get_instances_names () =
+  List.map (fun (module M : RELATIONAL) -> M.numeric_name) !numeric_domains
 
-          | "lineq" ->
-            opt_numeric := "lineq";
-            numeric_domain := (module LinEqualities : RELATIONAL);
-            register_simplified_domain (module LinEqualities)
 
-          | _ -> assert false
-        )
-      );
-    default = "polyhedra"
-  }
+module Octagon = Domain.Make(struct
+  type t = Oct.t
+  let name = "universal.numeric.relational"
+  let numeric_name = "octagon"
+  let man = Oct.manager_alloc ()
+end
+  )
 
-let () =
-  register_simplified_domain (module Polyhedra)
+let () = register_instance (module Octagon : RELATIONAL)
+
+module Polyhedra = Domain.Make(struct
+  type t = Polka.loose Polka.t
+  let name = "universal.numeric.relational"
+  let numeric_name = "polyhedra"
+  let man = Polka.manager_alloc_loose ()
+end)
+
+let () = register_instance (module Polyhedra : RELATIONAL)
+
+module LinEqualities = Domain.Make(struct
+    type t = Polka.equalities Polka.t
+    let name = "universal.numeric.relational"
+    let numeric_name = "lineq"
+    let man = Polka.manager_alloc_equalities ()
+  end)
+
+let () = register_instance (module LinEqualities : RELATIONAL)
+

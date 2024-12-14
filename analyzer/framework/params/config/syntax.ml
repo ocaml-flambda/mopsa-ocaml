@@ -22,15 +22,13 @@
 (** Syntax tree of configuration files *)
 
 open Sig.Abstraction.Stacked
-open Sig.Abstraction.Stacked_functor
 open Sig.Abstraction.Domain
-open Sig.Abstraction.Functor
 open Sig.Abstraction.Simplified
 open Sig.Abstraction.Simplified_functor
 open Sig.Abstraction.Stateless
+open Sig.Abstraction.Partitioning
 open Sig.Abstraction.Value
 open Sig.Abstraction.Value_functor
-
 open Sig.Reduction.Exec
 open Sig.Reduction.Eval
 open Sig.Reduction.Value
@@ -61,9 +59,9 @@ and domain_kind =
   | D_product    of domain list * domain_reduction list
 
 and domain_functor =
-  | F_stacked    of (module STACKED_FUNCTOR)
-  | F_domain     of (module DOMAIN_FUNCTOR)
   | F_simplified of (module SIMPLIFIED_FUNCTOR)
+  | F_stacked of domain
+  | F_partitioning of (module PARTITIONING)
 
 and value =
   | V_value   of (module VALUE)
@@ -131,22 +129,20 @@ let rec pp_value fmt = function
 
 
 
-let pp_domain_functor fmt = function
+let rec pp_domain_functor fmt = function
   | F_stacked f ->
-    let module F = (val f) in
-    pp_print_string fmt F.name
-
-  | F_domain f ->
-    let module F = (val f) in
-    pp_print_string fmt F.name
+    pp_domain fmt f
 
   | F_simplified f ->
     let module F = (val f) in
     pp_print_string fmt F.name
 
+  | F_partitioning f ->
+    let module F = (val f) in
+    pp_print_string fmt F.name
 
 
-let rec pp_domain fmt d =
+and pp_domain fmt d =
   match d.domain_semantic with
   | None -> pp_domain_kind fmt d.domain_kind
   | Some semantic -> fprintf fmt "[%s] %a" semantic pp_domain_kind d.domain_kind
@@ -154,19 +150,19 @@ let rec pp_domain fmt d =
 and pp_domain_kind fmt = function
   | D_stacked d ->
     let module D = (val d) in
-    pp_print_string fmt D.name
+    pp_print_string fmt ("[S]" ^ D.name)
 
   | D_domain d ->
     let module D = (val d) in
-    pp_print_string fmt D.name
+    pp_print_string fmt ("[D]" ^ D.name)
 
   | D_simplified d ->
     let module D = (val d) in
-    pp_print_string fmt D.name
+    pp_print_string fmt ("[L]" ^ D.name)
 
   | D_stateless d ->
     let module D = (val d) in
-    pp_print_string fmt D.name
+    pp_print_string fmt ("[U]" ^ D.name)
 
   | D_functor(f,d) ->
     fprintf fmt "%a(%a)" pp_domain_functor f pp_domain d
@@ -200,4 +196,3 @@ and pp_domain_kind fmt = function
       (pp_print_list
          ~pp_sep:(fun fmt () -> pp_print_string fmt " | ")
          pp_domain_reduction) rl
-

@@ -45,7 +45,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let exec _ _ _ = None
 
@@ -70,7 +70,7 @@ module Domain =
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.main", _))}, _)}, [], []) ->
        (* FIXME: tearDown *)
        debug "Search for all classes that inherit from TestCase";
-       let test_cases = man.ask Q_allocated_addresses flow |>
+       let test_cases = ask_and_reduce man.ask Q_allocated_addresses flow |>
                           List.filter (fun addr ->
                             match addr.addr_kind with
                             | A_py_class(cls, _ :: mro) ->
@@ -228,10 +228,13 @@ module Domain =
          |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.TestCase.assertRaises", _))}, _)}, [test; exn], []) ->
-         (* Instantiate ExceptionContext with the given exception exn *)
-         let unittest = OptionExt.none_to_exn @@ man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow in
-         let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
-         man.eval exp' flow |> OptionExt.return
+        (* Instantiate ExceptionContext with the given exception exn *)
+        man.ask (Desugar.Import.Q_python_addr_of_module "unittest") flow >>$ (fun ounittest flow ->
+            let unittest = OptionExt.none_to_exn ounittest in
+            let exp' = mk_py_call (mk_py_attr (mk_py_object (unittest, None) range) "ExceptionContext" range) [exn] range in
+            man.eval exp' flow
+          )
+        |> OptionExt.return
 
       | E_py_call({ekind = E_py_object ({addr_kind = A_py_function (F_builtin ("unittest.ExceptionContext.__exit__", _))}, _)},[self; typ; exn; trace], []) ->
          let r = man.eval exn flow >>$ (fun exn flow ->
@@ -261,10 +264,10 @@ module Domain =
                      ~felse:(fun flow ->
                        (* FIXME: handle all cases, don't choose *)
                        let regex = Universal.Strings.Powerset.StringPower.choose @@
-                                     man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
+                                   ask_and_reduce man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject reg)) flow in
                        man.eval (mk_py_index_subscript (mk_py_attr exn "args" range) (mk_zero ~typ:(T_py None) range) range) flow >>$
                          fun exc_msg flow ->
-                         let exc_powerset = man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
+                         let exc_powerset = ask_and_reduce man.ask (Universal.Strings.Powerset.mk_strings_powerset_query (Utils.extract_oobject exc_msg)) flow in
                          if Universal.Strings.Powerset.StringPower.is_top exc_powerset then
                              Utils.check man (mk_py_top T_bool range) range flow >>$
                                fun _ flow ->

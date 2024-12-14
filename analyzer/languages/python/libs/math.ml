@@ -86,7 +86,7 @@ module Domain =
       Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
     let init prog man flow =
-      flow
+      None
 
     let exec _ _ _ = None
 

@@ -37,7 +37,7 @@ module Domain =
     let checks = []
 
     let init prog man flow =
-      flow
+      None
 
     let exec _ _ _ = None
 

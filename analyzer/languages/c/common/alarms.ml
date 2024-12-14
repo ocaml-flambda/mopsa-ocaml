@@ -215,16 +215,16 @@ let raise_c_invalid_deref_alarm ?(bottom=true) pointer ?(range=pointer.erange) m
 
 let raise_c_out_bound_alarm ?(bottom=true) base size offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let size_itv = man.ask (mk_int_interval_query size) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
+  let offset_itv = ask_and_reduce man.ask (mk_int_interval_query offset) input_flow in
+  let size_itv = ask_and_reduce man.ask (mk_int_interval_query size) input_flow in
+  let elm_itv = Bot.Nb (sizeof_type (void_to_char typ) input_flow |> I.cst) in
   let alarm = mk_alarm (A_c_out_of_bound(base, size_itv, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
 let raise_c_opaque_access ?(bottom=true) base opaquefrom offset typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
-  let offset_itv = man.ask (mk_int_interval_query offset) input_flow in
-  let elm_itv = Bot.Nb (void_to_char typ |> sizeof_type |> I.cst) in
+  let offset_itv = ask_and_reduce man.ask (mk_int_interval_query offset) input_flow in
+  let elm_itv = Bot.Nb (sizeof_type (void_to_char typ) input_flow |> I.cst) in
   let alarm = mk_alarm (A_c_opaque_access(base, opaquefrom, offset_itv, elm_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
@@ -340,13 +340,10 @@ let () =
       );
     print = (fun next fmt -> function
         | A_c_integer_overflow(e,v,t) ->
-          let l,u = rangeof t in
-          let type_range = I.of_z l u in
-          fprintf fmt "'%a' has value %a that is larger than the range of '%a' = %a"
+          fprintf fmt "'%a' has value %a that is larger than the range of '%a'"
             (Debug.bold pp_expr) e
             pp_const_or_interval v
             (Debug.bold pp_typ) t
-            I.fprint type_range
         | A_c_pointer_to_integer_overflow(e,t) ->
           fprintf fmt "casting pointer '%a' to '%a' may result in an overflow"
             (Debug.bold pp_expr) e
@@ -368,7 +365,7 @@ let () =
 let raise_c_integer_overflow_alarm ?(warning=false) cexp nexp typ range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let cexp' = get_orig_expr cexp in
-  let itv = man.ask (mk_int_interval_query nexp) input_flow in
+  let itv = ask_and_reduce man.ask (mk_int_interval_query nexp) input_flow in
   let alarm = mk_alarm (A_c_integer_overflow(cexp',itv,typ)) cs range in
   Flow.raise_alarm alarm ~bottom:false ~warning man.lattice error_flow
 
@@ -413,13 +410,10 @@ let () =
       );
     print = (fun next fmt -> function
         | A_c_invalid_shift(e,shift,v) ->
-          let bits = Ast.sizeof_type e.etyp |> Z.mul (Z.of_int 8) in
-          let valid_shifts = I.of_z Z.zero (Z.pred bits) in
-          fprintf fmt "shift position '%a' = %a %a %a"
+          fprintf fmt "shift position '%a' = %a %a"
             (Debug.bold pp_expr) e
             pp_const_or_interval v
             pp_const_or_interval_not_eq v
-            I.fprint valid_shifts
         | a -> next fmt a
       );
     join = (fun next a1 a2 ->
@@ -437,7 +431,7 @@ let () =
 let raise_c_invalid_shift_alarm ?(bottom=true) e shift range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let shift' = get_orig_expr shift in
-  let shift_itv = man.ask (mk_int_interval_query shift) input_flow in
+  let shift_itv = ask_and_reduce man.ask (mk_int_interval_query shift) input_flow in
   let alarm = mk_alarm (A_c_invalid_shift(e,shift',shift_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
@@ -491,8 +485,8 @@ let raise_c_invalid_pointer_compare ?(bottom=true) p1 p2 range man flow =
   let alarm = mk_alarm (A_c_invalid_pointer_compare(p1',p2')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
-
-
+let safe_c_pointer_compare range man flow =
+  Flow.add_safe_check CHK_C_INVALID_POINTER_COMPARE range flow
 
 (** {2 Invalid pointer subtraction} *)
 (** ******************************* *)
@@ -537,6 +531,8 @@ let raise_c_invalid_pointer_sub ?(bottom=true) p1 p2 range man flow =
   let alarm = mk_alarm (A_c_invalid_pointer_sub(p1',p2')) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice flow
 
+let safe_c_pointer_sub range man flow =
+  Flow.add_safe_check CHK_C_INVALID_POINTER_SUB range flow
 
 
 (** {2 Double free} *)
@@ -638,7 +634,7 @@ let () =
 let raise_c_insufficient_variadic_args ?(bottom=true) va_list counter args range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
   let nargs = List.length args in
-  let counter_itv = man.ask (mk_int_interval_query counter) input_flow in
+  let counter_itv = ask_and_reduce man.ask (mk_int_interval_query counter) input_flow in
   let nargs_itv = Bot.Nb (I.cst_int nargs) in
   let alarm = mk_alarm (A_c_insufficient_variadic_args(va_list,counter_itv,nargs_itv)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
@@ -783,7 +779,7 @@ let () =
 
 let raise_c_invalid_float_class_alarm ?(bottom=true) float msg range man input_flow error_flow =
   let cs = Flow.get_callstack error_flow in
-  let float_itv = man.ask (mk_float_interval_query float) input_flow in
+  let float_itv = ask_and_reduce man.ask (mk_float_interval_query float) input_flow in
   let alarm = mk_alarm (A_c_invalid_float_class (float_itv,msg)) cs range in
   Flow.raise_alarm alarm ~bottom man.lattice error_flow
 
@@ -887,7 +883,7 @@ let safe_c_float_overflow_check range man flow =
 (** **************** *)
 
 
-type check      += CHK_C_UNREACHABLE_MEMORY 
+type check      += CHK_C_UNREACHABLE_MEMORY
 type alarm_kind += A_c_unreachable_memory of addr
 
 let () =
@@ -918,7 +914,49 @@ let () =
 
 let raise_c_unreachable_memory addr range man flow =
   let cs = Flow.get_callstack flow in
-  let alarm = mk_alarm (A_c_unreachable_memory addr) cs range in 
+  let alarm = mk_alarm (A_c_unreachable_memory addr) cs range in
   Flow.raise_alarm alarm ~bottom:false man.lattice flow
 
+(** {2 Invalid array size} *)
+(** ********************** *)
 
+type check      += CHK_C_NEGATIVE_ARRAY_SIZE
+type alarm_kind += A_c_negative_array_size of expr
+
+let () =
+  register_check (fun next fmt -> function
+      | CHK_C_NEGATIVE_ARRAY_SIZE -> fprintf fmt "Negative array size"
+      | a -> next fmt a
+    )
+
+let () =
+  register_alarm {
+    check = (fun next -> function
+        | A_c_negative_array_size _ -> CHK_C_NEGATIVE_ARRAY_SIZE
+        | a -> next a
+      );
+    compare = (fun next a1 a2 ->
+        match a1, a2 with
+        | A_c_negative_array_size e1, A_c_negative_array_size e2 ->
+          compare_expr e1 e2
+        | _ -> next a1 a2
+      );
+    print = (fun next fmt -> function
+        | A_c_negative_array_size e ->
+          fprintf fmt "Array size '%a' may be negative" (Debug.bold pp_expr) e
+        | a -> next fmt a
+      );
+    join = (fun next -> next);
+  }
+
+let raise_c_negative_array_size_alarm ?(bottom=true) e range man flow =
+  let cs = Flow.get_callstack flow in
+  let e' = get_orig_expr e in
+  let alarm = mk_alarm (A_c_negative_array_size e') cs range in
+  Flow.raise_alarm alarm ~bottom man.lattice flow
+
+let safe_c_negative_array_size_check range man flow =
+  Flow.add_safe_check CHK_C_NEGATIVE_ARRAY_SIZE range flow
+
+let unreachable_c_negative_array_size_check range man flow =
+  Flow.add_unreachable_check CHK_C_NEGATIVE_ARRAY_SIZE range flow

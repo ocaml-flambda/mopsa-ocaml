@@ -36,12 +36,12 @@ open Common.Base
 (** Converts a wide string format into a regular string with the same
     format, by replacing characters outside [0,255] with spaces.
 *)
-let format_of_wide_format str t =
-  let char_size = Z.to_int (sizeof_type t) in
+let format_of_wide_format str t flow =
+  let char_size = Z.to_int (sizeof_type t flow) in
   let len = String.length str / char_size in
   let r = Bytes.create len in
   for i=0 to len-1 do
-    let c = extract_multibyte_integer str (i*char_size) t in
+    let c = extract_multibyte_integer str (i*char_size) t flow in
     let c =
       if c >= Z.zero && c <= Z.of_int 255 then Z.to_int c
       else 32 (* default to space *)
@@ -68,7 +68,7 @@ let eval_format_string wide format range man flow =
     Cases.empty
 
   | P_block ({ base_kind = String (fmt,C_char_ascii,_) }, offset, _) when not wide ->
-    if is_c_expr_equals_z offset Z.zero then
+    if is_c_expr_equals_z offset Z.zero flow then
       let flow = safe_c_memory_access_check range man flow in
       Cases.singleton (Some fmt) flow
     else
@@ -84,9 +84,9 @@ let eval_format_string wide format range man flow =
         man flow
 
   | P_block ({ base_kind = String (fmt,C_char_wide,t) }, offset, _) when wide ->
-    if is_c_expr_equals_z offset Z.zero then
+    if is_c_expr_equals_z offset Z.zero flow then
       let flow = safe_c_memory_access_check range man flow in
-      Cases.singleton (Some (format_of_wide_format fmt t)) flow
+      Cases.singleton (Some (format_of_wide_format fmt t flow)) flow
     else
       assume (mk_binop offset O_eq (mk_zero (erange offset)) (erange offset))
         ~fthen:(fun flow ->

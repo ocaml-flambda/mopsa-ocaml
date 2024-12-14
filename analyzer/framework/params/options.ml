@@ -345,6 +345,15 @@ let () =
     default = "false";
   }
 
+let () =
+  register_builtin_option {
+    key = "-tw";
+    category = "Output";
+    doc = " set the tab width";
+    spec = ArgExt.Set_int Output.Text.opt_tw;
+    default = "4";
+  }
+
 
 let () =
   register_builtin_option {
@@ -371,6 +380,27 @@ let () = register_builtin_option {
     doc = "  format heap addresses with their hash";
     spec = ArgExt.Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
     default = "false";
+  }
+
+let () = register_builtin_option {
+    key = "-working-dir";
+    category = "Configuration";
+    doc = " set the working directory, used when resolving relative paths";
+    spec = ArgExt.String (fun s ->
+        if Sys.file_exists s
+        then Sys.chdir s
+        else Exceptions.panic "'%s' does not exist" s
+      );
+    default = "";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-marker";
+    category = "Partitioning";
+    doc = " enable a marker for trace partitioning";
+    spec = ArgExt.String Core.Marker.enable_marker;
+    default = "";
   }
 
 (** Help message *)

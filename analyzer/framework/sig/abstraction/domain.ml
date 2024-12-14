@@ -87,7 +87,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a, t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a post option
   (** Initialization function *)
 
   val exec : stmt -> ('a, t) man -> 'a flow -> 'a post option
@@ -96,7 +96,7 @@ sig
   val eval : expr -> ('a, t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a, t) man -> 'a flow -> ('a, 'r) cases option
   (** Handler of queries *)
 
 
@@ -124,14 +124,14 @@ struct
 
   (* Add stmt to the effects of the domain *)
   let exec stmt man flow =
-    D.exec stmt man flow |>
-    OptionExt.lift @@ fun res ->
-    Cases.map_effects (fun effects ->
-        man.set_effects (
-          man.get_effects effects |>
-          add_stmt_to_teffect stmt
-        ) effects
-      ) res
+    if are_effects_enabled () then
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_effects (fun effects flow ->
+          man.add_effect stmt [] flow effects
+        ) res
+    else
+      D.exec stmt man flow
 
   (* Remove duplicate evaluations *)
   let eval exp man flow =

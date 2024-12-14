@@ -152,7 +152,7 @@ type typ =
   (** Function, with or without a prototype *)
 
   | T_builtin_fn
-  (** Bult-in functions *)
+  (** Built-in functions *)
 
   | T_typedef of typedef
   (** Typedefs *)
@@ -325,6 +325,9 @@ and type_qual = typ * qualifier
    | S_target of target_kind
    (** target of a jump *)
 
+   | S_asm of asm_kind
+   (** asm statement *)
+
  and jump_kind =
    | S_goto of string * scope_update
    | S_break of scope_update
@@ -335,7 +338,7 @@ and type_qual = typ * qualifier
 
  and target_kind =
    | S_label of string
-   | S_case of expr * scope_update
+   | S_case of expr list * scope_update
    | S_default of scope_update
  (** various targets of jumps *)
 
@@ -350,6 +353,31 @@ and type_qual = typ * qualifier
      what's more convinient
   *)
 
+ and asm_kind = {
+     asm_style: asm_style;
+     asm_is_simple: bool;
+     asm_is_volatile: bool;
+     asm_body: string;
+     asm_outputs: asm_output array;
+     asm_inputs: asm_input array;
+     asm_clobbers: string array;
+     asm_labels: string array;
+   }
+ (** and asm statement *)
+
+ and asm_output = {
+     asm_output_string: string;
+     asm_output_expr: expr;
+     asm_output_constraint: asm_output_constraint;
+   }
+
+ and asm_input = {
+     asm_input_string: string;
+     asm_input_expr: expr;
+   }
+
+ and asm_style = Clang_AST.asm_style
+ and asm_output_constraint = Clang_AST.asm_output_constraint
 
  and expr = expr_kind * type_qual * range
 
@@ -445,6 +473,7 @@ and type_qual = typ * qualifier
      proj_records: record_type StringMap.t; (** records, by unique name *)
      proj_vars: variable StringMap.t; (** variables with global lifetime, by unique name *)
      proj_funcs: func StringMap.t; (** functions, by unique name *)
+     proj_file_scope_asm: string RangeMap.t; (** file-scope assembly directives *)
 
      proj_files: string list; (** list of parsed files *)
      proj_comments: (comment * macro StringMap.t) list RangeMap.t; (** all comments *)

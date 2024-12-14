@@ -188,6 +188,8 @@ type ctx = {
 let input_files : string list ref = ref []
 (** List of input files *)
 
+let target_info = ref host_target_info
+(** Target information used for parsing *)
 
 let find_function_in_context ctx range (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
@@ -247,10 +249,11 @@ let rec parse_program (files: string list) =
 
   (* let's initialize target from the option *)
   if !opt_target_triple <> "" then 
-    Ast.target_info := get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple });
-  let target = !Ast.target_info in
-  Mopsa_c_stubs_parser.Cst.target_info := target;
-  let ctx = Clang_to_C.create_context "project" target in
+    target_info :=
+      get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple })
+  ;
+  Mopsa_c_stubs_parser.Cst.target_info := !target_info;
+  let ctx = Clang_to_C.create_context "project" !target_info in
   let nb = List.length files in
   input_files := [];
   let () =
@@ -340,6 +343,11 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               "-Wall" ::
+              (* recent versions of Clang promote warnings as errors
+                 -> we revert them to warnings
+               *)
+              "-Wno-error=incompatible-function-pointer-types" ::
+              "-Wno-error=implicit-function-declaration" ::
               "-Qunused-arguments"::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               opts @
@@ -349,7 +357,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
+  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
 
 
 and parse_stubs ctx () =
@@ -524,9 +532,45 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx end_range body)
-    | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
+    | C_AST.S_target(C_AST.S_case(es,upd)) ->
+      let es' = List.map (from_expr ctx) es in
+      let try_bundle_into_range es =
+        (* we can safely assume List.length es > 0 *)
+        let efirst, estl = List.hd es, List.tl es in
+        let tfirst = etyp efirst in 
+        match ekind efirst with
+        | E_constant (C_int first) ->
+          let rec process op acc l = match l with
+            | [] ->
+              if Z.equal acc first then None
+              else
+                if (Z.(first <= acc)) then
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite first) (ItvUtils.IntBound.Finite acc) efirst.erange)
+                else 
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite acc) (ItvUtils.IntBound.Finite first) efirst.erange)
+            | {ekind = E_constant (C_int h); etyp = th} ::tl when Z.(h = (op acc one)) && compare_typ th tfirst = 0 ->
+              process op h tl
+            | hd :: tl ->
+              let () = debug "first=%a, acc=%s, hd=%a, skipping" pp_expr efirst (Z.to_string acc) pp_expr hd in 
+              None
+          in
+          let oitv_increasing = process Z.add first estl in
+          if oitv_increasing = None then
+            process Z.sub first estl
+          else oitv_increasing
+        | _ -> None
+      in
+      begin match try_bundle_into_range es' with
+        | None ->
+          let () = debug "failed to bundle switch at range %a" pp_range srange in
+          S_c_switch_case(es', from_scope_update ctx upd)
+        | Some itv ->
+          let () = debug "bundled switch at range %a into %a" pp_range srange pp_expr itv in
+          S_c_switch_case([itv], from_scope_update ctx upd)
+      end 
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
+    | C_AST.S_asm a -> Ast.S_c_asm (C_print.string_of_statement (skind,range))
   in
   {skind; srange}
 
@@ -652,7 +696,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
   | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
   | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
   | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
-
+  | Clang_AST.Char_Unevaluated -> Ast.C_char_unevaluated
 
 (** {2 Variables} *)
 (** ============= *)
@@ -809,7 +853,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
      (* translate vector into array type *)
      let t = from_typ ctx v.vector_type in
      (* size is in bytes, length is in units of t *)
-     let len = Z.div (Z.of_int v.vector_size) (sizeof_type t) in
+     let len = Z.div (Z.of_int v.vector_size) (sizeof_type_in_target t !target_info) in
      Ast.T_c_array (t, Ast.C_array_length_cst len)
   | C_AST.T_unknown_builtin s -> Ast.T_c_unknown_builtin s
 

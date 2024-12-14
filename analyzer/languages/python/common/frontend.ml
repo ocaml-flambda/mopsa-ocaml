@@ -254,11 +254,11 @@ and from_exp exp =
       (T_py None)
 
     | E_true ->
-      E_constant (Universal.Ast.C_bool true),
+      E_constant (C_bool true),
       (T_py None)
 
     | E_false ->
-      E_constant (Universal.Ast.C_bool false),
+      E_constant (C_bool false),
       (T_py None)
 
     | E_none ->

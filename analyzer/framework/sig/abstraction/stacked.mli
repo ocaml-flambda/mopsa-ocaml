@@ -70,13 +70,13 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> bool * 's * 's
+  val subset: ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> bool * 'a * 'a
 
-  val join  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
+  val join  : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a
 
-  val meet  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
+  val meet  : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a
 
-  val widen : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's * bool
+  val widen : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a * bool
 
   val merge : t -> t * effect -> t * effect -> t
   (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
@@ -94,7 +94,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a,t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a post option
   (** Initialization function *)
 
   val exec : stmt -> ('a,t) man -> 'a flow -> 'a post option
@@ -103,7 +103,7 @@ sig
   val eval : expr -> ('a,t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   (** Handler of queries *)
 
 

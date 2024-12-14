@@ -1,14 +1,21 @@
 # MOPSA
 
-MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at making the development/use of static analyzers less painful.
+MOPSA stands for *Modular and Open Platform for Static Analysis*. It aims at easing the development and use of static analyzers.
 
 More specifically, MOPSA is a generic framework for building sound static analyzer based on the theory of abstract interpretation.
-It features a modular architecture for supporting different kinds of languages, iterators and abstractions.
+MOPSA is independent of language and abstraction choices. 
+Developers are free to add arbitrary abstractions (numeric, pointer, memory, etc.) and syntax iterators for new languages. 
+Mopsa encourages the development of independent abstractions which can cooperate or be combined to improve precision. 
 
-For the moment, MOPSA can analyze only programs written in C and Python.
+Mopsa currently support the analysis of Python, C and Python+C programs. 
+It reports run-time errors on C programs and uncaught exceptions on Python programs.
+Our [benchmarks](https://gitlab.com/mopsa/benchmarks/) provide an illustrative overview of what Mopsa can currently analyze. 
+All analyses currently provided are flow and context-sensitive (i.e, control-flow operators are taken into account by the analysis, and functions are analyzed by virtual inlining).
+The C analysis is actively developed and maintained. 
+The Python and Python+C analyses work on real-world examples, but are not actively developed.
 
-A [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/) is available, as well as [example analysis projects](https://gitlab.com/mopsa/benchmarks).
-
+A [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/) is available.
+Provided `sphinx` is installed (through `pip install sphinx sphinx_rtd_theme`), you can build this manual locally using `make -C doc/user-manual/ html`.
 
 ## License
 
@@ -18,77 +25,26 @@ See the accompanying COPYING file, or [http://www.gnu.org/licenses/](http://www.
 The documentation and example files of the MOPSA software are distributed under a Creative Commons Attribution-ShareAlike 4.0 International License. See [https://creativecommons.org/licenses/by-sa/4.0/](https://creativecommons.org/licenses/by-sa/4.0/).
 
 
-## Dependencies
+## Installation 
 
-Before compiling MOPSA, ensure that you have the following dependencies:
-
-* Apron
-* autoconf
-* CamlIDL
-* GMP
-* LLVM + Clang (version >= 6.x)
-* make
-* Menhir
-* MPFR
-* OCaml (version >= 4.08.0)
-* opam (version >= 2)
-* Yojson
-* Zarith
-* zlib
-
-The OCaml dependencies can be installed on any system with opam with:
+You can use OCaml's package manager (opam), to resolve dependencies and install Mopsa. 
+See [here on how to install opam](https://opam.ocaml.org/doc/Install.html#Using-your-distribution-39-s-package-system).
 
 ```shell
-opam install --deps-only --with-doc --with-test .
+LANG=C opam pin add mopsa --with-doc --with-test .
 ```
 
-For instance, on Ubuntu, you can use these commands to install the dependencies (tested on Ubuntu 20.04):
+You can check the [documentation](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/quick-start/installation.html) to build from source.
 
-```shell
-sudo apt install opam llvm clang llvm-dev libclang-dev libclang-cpp10-dev libgmp-dev libmpfr-dev autoconf
-opam init
-eval $(opam env)
-opam install --deps-only --with-doc --with-test .
-```
+### SV-Comp 
 
-For SV-Comp, you also need:
+For the Software-Verification Competition, you also need:
 ```shell
  sudo dpkg --add-architecture i386 && sudo apt install libc6-dev-i386
 ```
+### Multilanguage (Python+C) analysis
 
-## Compilation
-
-To compile MOPSA, just run:
-
-```shell
-./configure
-make
-```
-
-Note that the script `configure` accepts the usual configuration options (e.g. `--prefix`, `--bindir`, etc.), in addition to:
-
-* `--disable-c` to disable the compilation of the C analysis.
-* `--disable-python` to disable the compilation of the Python analysis.
-* `--enable-byte` to compile MOPSA as a bytecode executable.
-
-## Installation
-
-After compilation, the binaries are available in the `_build/install/default/bin` sub-directory.
-
-The standard command:
-```shell
-make install
-```
-will install MOPSA in your opam switch.
-
-## Opam-based compilation & installation
-
-Assuming that dependencies are installed, you can replace `./configure`, `make`, `make install` with simply:
-```shell
-opam pin add mopsa .
-```
-which compiles MOPSA and installs the binaries and libraries in your opam switch.
-
+The multilanguage analysis requires Python version 3.8, as well as development headers. You can use our [Docker images](https://gitlab.com/mopsa/mopsa-analyzer/container_registry/6390468) if needed.
 
 ## Linking against the MOPSA library
 
@@ -119,6 +75,7 @@ dune build
 ## Additional resources
 
 * [source code](https://gitlab.com/mopsa/mopsa-analyzer) on GitLab
-* [research project page](https://mopsa.lip6.fr/)
-* [user manual](https://mopsa.gitlab.io/mopsa-manual/user-manual/)
+* [user manual](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/)
 * [benchmark analysis projects](https://gitlab.com/mopsa/benchmarks) on GitLab
+* [research project page](https://mopsa.lip6.fr/)
+* [academic overview of Mopsa in STTE paper](https://hal.sorbonne-universite.fr/hal-02890500v1/document), and [in a PhD thesis](https://rmonat.fr/data/pubs/2021/thesis_monat.pdf#page=61)

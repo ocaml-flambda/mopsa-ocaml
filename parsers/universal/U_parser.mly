@@ -21,6 +21,8 @@
 
 (**
   Parser for a very simple C-like "curly bracket" language.
+
+  The supported portion of the Universal grammar is documented in the [GRAMMAR.md] file.
  *)
 
 %{

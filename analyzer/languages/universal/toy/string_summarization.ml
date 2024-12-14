@@ -34,7 +34,7 @@ struct
 
   let checks = []
 
-  let init (prog:program) man flow = flow
+  let init (prog:program) man flow = None
 
   let eval exp man flow =
     let range = erange exp in
@@ -76,7 +76,7 @@ struct
     | _ -> None
 
 
-  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> r option =
+  let ask : type r. ('a, r) query -> ('a, unit) man -> 'a flow -> ('a, r) cases option =
     fun query man flow -> None
 
   let print_expr man flow printer exp = ()

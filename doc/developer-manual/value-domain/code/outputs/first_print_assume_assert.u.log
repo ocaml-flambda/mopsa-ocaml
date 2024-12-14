@@ -1,0 +1,11 @@
+$ ./bin/mopsa -config=share/mopsa/configs/universal/sign.json analyzer/tests/universal/manual/signs/first_print_assume_assert.u
+analyzer/tests/universal/manual/signs/first_print_assume_assert.u:8.0-8
+  ⏵ cur ↦
+      sign:   x ⇀ >0,
+              y ⇀ <0,
+              z ⇀ ≥0
+      
+  |alarms| = 0
+Analysis terminated successfully
+✔ No alarm
+Time: 0.001s

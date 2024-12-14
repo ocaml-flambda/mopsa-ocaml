@@ -58,6 +58,10 @@ struct
     | Invalid -> pp_string printer "INVALID"
     | Base b -> unformat pp_base printer b
     | Fun f -> pprint printer (fbox "λ%s" f.c_func_org_name)
+
+  let is_valid = function
+    | Base _ | Fun _ -> true
+    | Null | Invalid -> false
 end
 
 
@@ -154,18 +158,15 @@ struct
 
 
   (** Filter valid pointers *)
-  let filter_valid a =
-    filter (function
-        | Base _ | Fun _ -> true
-        | Null | Invalid -> false
-      ) a
-
+  let filter_valid = filter PointerValue.is_valid
 
   (** Filter non-valid pointers *)
-  let filter_non_valid a =
-    filter (function
-        | Base _ | Fun _ -> false
-        | Null | Invalid -> true
-      ) a
+  let filter_non_valid = filter (fun p -> not (PointerValue.is_valid p))
+
+  (** Returns true if there exist valid pointer values in [a]. *)
+  let there_are_valid_pointers a = is_top a || cardinal (filter_valid a) > 0
+
+  (** Returns true if there exist non-valid pointer values in [a]. *)
+  let there_are_non_valid_pointers a = is_top a || cardinal (filter_non_valid a) > 0
 
 end

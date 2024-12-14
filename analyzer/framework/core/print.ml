@@ -103,10 +103,9 @@ let mem_printed_expr printer exp =
 (****************************************************************************)
 
 type print_selector =
-  | Key   of string
+  | Key of string
   | Index of int
-  | Head
-  | Tail
+  | Obj of print_object
 
 type print_path = print_selector list
 
@@ -119,18 +118,15 @@ let rec find_print_object path obj =
   | Key k::tl, Empty -> Empty
   | Key _::_,_ -> Exceptions.panic "find_print_object: key selector on non-map object"
 
+  | Obj o::tl, Map (m,_) -> find_print_object tl (Map.find o m)
+  | Obj o::tl, Empty -> Empty
+  | Obj _::_,_ -> Exceptions.panic "find_print_object: obj selector on non-map object"
+
   (* Lists *)
   | Index i::tl, List (l,_) -> begin try find_print_object tl (List.nth l i) with Failure _ -> raise Not_found end
   | Index i::tl, Empty -> Empty
   | Index _::_,_ -> Exceptions.panic "find_print_object: index selector on non-list object"
 
-  | Head::tl, List (l,_) -> begin try find_print_object tl (List.hd l) with Failure _ -> raise Not_found end
-  | Head::tl, Empty -> Empty
-  | Head::_,_ -> Exceptions.panic "find_print_object: head selector on non-list object"
-
-  | Tail::tl, List (l,_) -> begin try find_print_object tl (ListExt.last l) with Failure _ -> raise Not_found end
-  | Tail::tl, Empty -> Empty
-  | Tail::_,_ -> Exceptions.panic "find_print_object: tail selector on non-list object"
 
 let rec match_print_object_keys re obj =
   match obj with
@@ -175,35 +171,19 @@ let rec match_print_object_keys re obj =
 (**                    {1 Generic print functions}                          *)
 (****************************************************************************)
 
-let pprint ?(path=[]) printer obj =
-  let rec iter p o =
-    match p,o with
-    | Key k::tl, Map (m,sym) -> Map (Map.add (String k) (iter tl (try Map.find (String k) m with Not_found -> Empty)) m, sym)
-    | Key k::tl, Empty -> Map (Map.singleton ~compare:compare_print_object (String k) (iter tl Empty), default_map_symbols)
-    | Key _::_,_ -> Exceptions.panic "print: key selector on non-map object"
-    | Index i::tl, List (l,sym) -> List (List.mapi (fun j e -> if i = j then iter tl e else e) l, sym)
-    | Index i::tl, Empty -> List (List.init (i+1) (fun j -> if i = j then iter tl Empty else Empty), default_list_symbols)
-    | Index _::_,_ -> Exceptions.panic "print: index selector on non-list object"
-    | Head::tl, List (l,sym) -> List (iter tl Empty::l, sym)
-    | Head::tl, Empty -> List ([iter tl Empty], default_list_symbols)
-    | Head::_,_ -> Exceptions.panic "print: head selector on non-list object"
-    | Tail::tl, List (l,sym) -> List (l@[iter tl Empty], sym)
-    | Tail::tl, Empty -> List ([iter tl Empty], default_list_symbols)
-    | Tail::_,_ -> Exceptions.panic "print: tail selector on non-list object"
-    | [],_ ->
-      match o,obj with
-      | Map(m1,s1),Map(m2,s2) -> Map(Map.map2zo (fun k v1 -> v1) (fun k v2 -> v2) (fun k v1 v2 -> v2) m1 m2, s2)
-      | List(l1,s1),List(l2,s2) -> List(l1@l2, s2)
-      | Set(s1,ss1),Set(s2,ss2) -> Set(Set.union s1 s2,ss2)
-      | _ -> obj
-  in
-  printer.body <- iter path printer.body
-
 let rec is_leaf = function
   | Empty | Bool _ | Int _ | Float _ | String _ | Var _ -> true
   | Map _ -> false
   | List(l,_) -> List.for_all is_leaf l
   | Set(s,_) -> Set.for_all is_leaf s
+
+let rec is_atomic = function
+  | Empty | Bool _ | Int _ | Float _ | String _ | Var _ -> true
+  | _ -> false
+
+let is_empty = function
+  | Empty -> true
+  | _ -> false
 
 let rec pp_print_object fmt = function
   | Empty    -> ()
@@ -254,6 +234,59 @@ let rec pp_print_object fmt = function
         ) (Set.elements s)
         sclose
     )
+let rec merge o1 o2 =
+  if compare o1 o2 = 0 then
+    o1
+  else
+  if is_empty o1 then o2 else
+  if is_empty o2 then o1 else
+  if is_atomic o1 && is_atomic o2 then
+    List([o1; o2], default_list_symbols)
+  else
+    match o1, o2 with
+    | Empty, o | o, Empty ->
+      o
+    | List(l1, sym1), List(l2, sym2) ->
+      List(l1 @ l2, sym1)
+    | List(l, sym), o | o, List(l, sym) ->
+      List(o :: l, sym)
+    | Map(m1, sym1), Map(m2, sym2) ->
+      let m =
+        Map.map2zo
+          (fun k1 v1 -> v1)
+          (fun k2 v2 -> v2)
+          (fun k v1 v2 -> merge v1 v2)
+          m1 m2
+      in
+      Map(m, sym1)
+    | Set(s1, sym1), Set(s2, sym2) ->
+      Set(Set.union s1 s2, sym1)
+    | Set(s, sym), o | o, Set(s, sym) ->
+      Set(Set.add o s, sym)
+    | _ ->
+      Exceptions.panic "merge:@\n  @[%a@]@\nand@\n  @[%a@]"
+        pp_print_object o1
+        pp_print_object o2
+
+let rec singleton path obj =
+  match path with
+  | [] ->
+    obj
+
+  | Key k :: tl ->
+    Map (Map.singleton ~compare:compare_print_object (String k) (singleton tl obj), default_map_symbols)
+
+  | Index i :: tl ->
+    if i = 0 then List ([singleton tl obj], default_list_symbols)
+    else List (List.init (i - 1) (fun _ -> Empty) @ [singleton tl obj], default_list_symbols)
+
+  | Obj o :: tl ->
+    Map (Map.singleton ~compare:compare_print_object o (singleton tl obj), default_map_symbols)
+
+
+let pprint ?(path=[]) printer obj =
+  printer.body <- merge (singleton path obj) printer.body
+
 
 let pflush fmt printer = pp_print_object fmt printer.body
 
@@ -331,6 +364,10 @@ let pp_obj_map ?(path=[]) ?(mopen=default_map_symbols.sopen) ?(msep=default_list
 let pp_map ?(path=[]) ?(mopen=default_map_symbols.sopen) ?(msep=default_list_symbols.ssep) ?(mclose=default_map_symbols.sclose) ?(mbind=default_map_symbols.sbind) fk fv printer l =
   pp_obj_map ~path ~mopen ~msep ~mclose ~mbind printer
     (List.map (fun (k,v) -> (pbox fk k,pbox fv v)) l)
+
+let pp_mapi ?(path=[]) ?(mopen=default_map_symbols.sopen) ?(msep=default_list_symbols.ssep) ?(mclose=default_map_symbols.sclose) ?(mbind=default_map_symbols.sbind) fk fv printer l =
+  pp_obj_map ~path ~mopen ~msep ~mclose ~mbind printer
+    (List.map (fun (k,v) -> (pbox fk k,pbox fv (k, v))) l)
 
 let pp_obj_set ?(path=[]) ?(sopen=default_set_symbols.sopen) ?(ssep=default_set_symbols.ssep) ?(sclose=default_set_symbols.sclose) printer s =
   pprint ~path printer

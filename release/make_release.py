@@ -4,7 +4,7 @@
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
 #                                                                            #
-#  Copyright (C) 2017-2019 The MOPSA Project.                                #
+#  Copyright (C) 2017-2024 The MOPSA Authors.                                #
 #                                                                            #
 #  This program is free software: you can redistribute it and/or modify      #
 #  it under the terms of the GNU Lesser General Public License as published  #
@@ -24,7 +24,7 @@
 
 # Check that the source tree is ready for a release.
 # Then, call GitLab to make a new release.
-# opam-publich is _not_ done automatically.
+# opam-publish is _not_ done automatically.
 
 
 import sys
@@ -33,7 +33,7 @@ import json
 import requests
 import csv
 import re
-
+import os
 
 # Configuration
 ###############
@@ -102,10 +102,11 @@ def check_license():
     print()
     ret = subprocess.run(['./check_license.sh'])
     if ret.returncode != 0:
+        print("Consider using:\n reuse annotate  --template=header.jinja2 --copyright \"Copyright (C) 2024 The MOPSA authors.\" --license LGPL-3.0-or-later")
         exit(1)
 
 def check_changelog():
-    to_find = '#### ' + version
+    to_find = '# ' + version
     print('\nChecking whether CHANGELOG.md has a line about version ' + version)
     with open('../CHANGELOG.md') as f:
         for l in f:
@@ -116,7 +117,25 @@ def check_changelog():
     print('Fill-in the change-log information.')
     exit(1)
 
-
+def check_authors():
+    authors_md = []
+    with open("../AUTHORS.md") as a:
+        for l in a:
+            if l.startswith("-"):
+                authors_md.append(l.split("-")[1].split("<")[0].strip())
+    authors_opam = []
+    with open("../mopsa.opam") as a:
+        l = a.readline()
+        while not l.startswith("authors: ["):
+            l = a.readline()
+        for l in a:
+            if l.startswith("]"): break
+            authors_opam.append(l.strip()[1:-1])
+    authors_md.sort()
+    authors_opam.sort()
+    if authors_md != authors_opam:
+        print("ERROR: AUTHORS.md and author field of mopsa.opam do not match")
+        exit(1)
 
 # check that the local source tree is clean
 ###########################################
@@ -208,6 +227,7 @@ def check_gitlab_ci():
 #######################
 
 def do_release():
+    # TODO: add binary?
     print('\nMaking GitLab release.')
     data = {
         'name' : git_tag,
@@ -224,23 +244,23 @@ def do_release():
         print('ERROR: Cannot create GitLab release: status_code=' + str(r.status_code))
         exit(1)
     print('\n**** Release created ****\n')
-    print('You can edit add release notes, assets, etc. at:')
+    print('Please edit release notes and assets at:')
     print(project_url + '/-/releases/' + git_tag + '/edit')
 
 
 # Docker
 ########
 
-# TODO
-#def print_docker_instructions():
-#    print('\nYou can create and publish a Docker to the project Container Registry with:')
-#    docker login registry.gitlab.com
-#    docker build -t registry.gitlab.com/mopsa/mopsa .
-#    docker push registry.gitlab.com/mopsa/mopsa
+def print_docker_instructions():
+   print('\nYou can create and publish a Docker to the project Container Registry with:')
+   print(f"docker login registry.gitlab.com -p {token}")
+   # VERSIONS with ~ seem to not be accepted by Docker
+   print(f"cd ../docker/analyzer && docker build -t registry.gitlab.com/{group}/{project}:{version.replace('~', '-')} .")
+   print(f"docker push registry.gitlab.com/{group}/{project}:{version.replace('~', '-')}")
+   print(f"docker image tag registry.gitlab.com/{group}/{project}:{version.replace('~', '-')} registry.gitlab.com/{group}/{project}:stable")
+   print(f"docker push registry.gitlab.com/{group}/{project}:stable")
 
-    
-
-# OPAM
+# OPAM 
 ######
 
 def print_opam_instructions():
@@ -248,36 +268,36 @@ def print_opam_instructions():
     print('opam publish -n -v ' + version + ' ' + archive_url)
 
 
+if __name__ == "__main__":
+    if not os.getcwd().endswith("release"):
+        print("Please run the script from the release directory")
+        exit(1)
+    print('You are in branch: ' + branch)
+    print('at commit: ' + commit_sha_short + ' (' + commit_sha + ')')
+    # print('last tag is: ' + last_tag)
+    print('You are releasing version: ' + version)
+    print('to: ' + project_url)
+    print('The git tag for the release will be: ' + git_tag)
 
-# main
-######
+    check_version()
+    check_license()
+    check_changelog()
+    check_authors()
+    check_no_uncommited()
+    check_commit_sync()
+    check_no_tag()
+    check_gitlab_ci()
 
+    print('\nEverything seems ready for the release.')
+    print('\nPlease make sure that the CHANGELOG.md, README.md and AUTHORS.md files are up to date.')
+    print('\nAre you ready to perform the release?')
+    print('Type Yes to proceed.')
+    answer = input()
+    if answer.lower() != 'yes':
+        print('See you when you\'re ready!')
+        exit(1)
 
-print('You are in branch: ' + branch)
-print('at commit: ' + commit_sha_short + ' (' + commit_sha + ')')
-# print('last tag is: ' + last_tag)
-print('You are releasing version: ' + version)
-print('to: ' + project_url)
-print('The git tag for the release will be: ' + git_tag)
+    do_release()
 
-check_version()
-check_license()
-check_changelog()
-check_no_uncommited()
-check_commit_sync()
-check_no_tag()
-check_gitlab_ci()
-
-print('\nEverything seems ready for the release.')
-print('\nPlease make sure that the CHANGELOG.md, README.md and AUTHORS files are up to date.')
-print('\nAre you ready to perform the release?')
-print('Type Yes to proceed.')
-answer = input()
-if answer.lower() != 'yes':
-    print('See you when you\'re ready!')
-    exit(1)
-
-do_release()
-
-#print_docker_instructions()
-print_opam_instructions()
+    print_docker_instructions()
+    print_opam_instructions()

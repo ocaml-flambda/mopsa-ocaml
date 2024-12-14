@@ -162,6 +162,9 @@ type stmt_kind +=
 
   | S_block of stmt list (** Sequence block of statements *) * var list (** local variables declared within the block *)
 
+  | S_breakpoint of string
+  (** Trigger a breakpoint *)
+
 
 (** Utility functions to create various statements for dimension management *)
 val mk_rename : expr -> expr -> range -> stmt
@@ -180,6 +183,7 @@ val mk_expand : expr -> expr list -> range -> stmt
 val mk_expand_var : var -> var list -> range -> stmt
 val mk_fold : expr -> expr list -> range -> stmt
 val mk_fold_var : var -> var list -> range -> stmt
+val mk_breakpoint : string -> range -> stmt
 
 
 (****************************************************************************)

@@ -163,7 +163,7 @@ struct
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
 
@@ -235,7 +235,7 @@ struct
       when is_c_array_type v.vtyp -> Cases.singleton false flow
     | E_constant C_c_invalid      -> Cases.singleton true flow
     | _ ->
-      match c_expr_to_z (remove_casts e) with
+      match c_expr_to_z (remove_casts e) flow with
       | Some e -> Cases.singleton (Z.equal e Z.zero) flow
       | None ->
         (* If the above heuristics fails, fall back to dynamic evaluations *)
@@ -409,7 +409,7 @@ struct
     (* Safety condition: offset ∈ [0, size - pointer_size]. This test is
        optional as the domain does not raise out-of-bound alarms *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr flow) range) range) range)
       ~fthen:(fun flow ->
           if not (is_interesting_base base)
           then Post.return flow
@@ -418,9 +418,9 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
-            let ptr = mk_z (sizeof_type void_ptr) range in
+            let ptr = mk_z (sizeof_type void_ptr flow) range in
 
-            switch ~route:universal [
+            switch [
               (* Case 1: set after
                                                      offset
                  -----|------------------#-------------?------|--->
@@ -429,7 +429,7 @@ struct
                  transformation: nop;
               *)
               [
-                mk_binop offset O_ge (add sentinel_pos ptr range) range;
+                mk_binop ~etyp:T_bool offset O_ge (add sentinel_pos ptr range) range;
               ],
               (fun flow -> Post.return flow);
 
@@ -441,7 +441,7 @@ struct
                  offset condition: offset ∈ [0, sentinel_pos - |ptr|]
               *)
               [
-                mk_binop offset O_le (sub sentinel_pos ptr range) range;
+                mk_binop ~etyp:T_bool offset O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
@@ -485,7 +485,7 @@ struct
                  offset condition: offset = sentinel_pos
               *)
               [
-                mk_binop offset O_eq sentinel_pos range;
+                mk_binop ~etyp:T_bool offset O_eq sentinel_pos range;
               ],
               (fun flow ->
                  (* Test if the rval is a sentinel *)
@@ -596,7 +596,7 @@ struct
 
     (* Safety condition: offset ∈ [0, size - pointer_size] *)
     assume ~route:universal
-      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr) range) range) range)
+      (mk_in offset (mk_zero range) (sub size (mk_z (sizeof_type void_ptr flow) range) range) range)
       ~fthen:(fun flow ->
           if is_scalar_base base then Cases.not_handled flow else
           if not (is_interesting_base base) then Eval.singleton (mk_top typ range) flow
@@ -604,17 +604,17 @@ struct
             let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
             let before = mk_before_var_expr base ~mode range in
             let sentinel = mk_sentinel_var_expr base ~mode range in
-            let ptr = mk_z (sizeof_type void_ptr) range in
+            let ptr = mk_z (sizeof_type void_ptr flow) range in
             let top = mk_top void_ptr range in
 
 
-            switch ~route:scalar [
+            switch [
               (* Case 1: before sentinel
                  Offset condition: offset <= sentinel_pos - |ptr|
                  Transformation: weak(before)
               *)
               [
-                mk_binop offset O_le (sub sentinel_pos ptr range) range;
+                mk_binop ~etyp:T_bool offset O_le (sub sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  man.eval (weaken_var_expr before) ~route:scalar flow
@@ -625,7 +625,7 @@ struct
                  Transformation: sentinel
               *)
               [
-                mk_binop offset O_eq sentinel_pos range;
+                mk_binop ~etyp:T_bool offset O_eq sentinel_pos range;
               ],
               (fun flow ->
                  man.eval sentinel ~route:scalar flow
@@ -636,7 +636,7 @@ struct
                  Transformation: sentinel
               *)
               [
-                mk_binop offset O_ge (add sentinel_pos ptr range) range;
+                mk_binop ~etyp:T_bool offset O_ge (add sentinel_pos ptr range) range;
               ],
               (fun flow ->
                  Eval.singleton top flow
@@ -680,12 +680,12 @@ struct
     let sentinel_pos = mk_sentinel_pos_var_expr base ~mode range in
     let sentinel = mk_sentinel_var_expr base ~mode range in
     let before = mk_before_var_expr base ~mode range in
-    let ptr = mk_z (sizeof_type void_ptr) range in
+    let ptr = mk_z (sizeof_type void_ptr flow) range in
 
     (* Safety condition: [min, max] ⊆ [0, size - ptr [ *)
     assume
       (
-        mk_binop
+        mk_binop ~etyp:T_bool 
           (mk_in min (mk_zero range) (sub size ptr range) range)
           O_log_and
           (mk_in max (mk_zero range) (sub size ptr range) range)
@@ -698,21 +698,21 @@ struct
           if ok then
             switch [
               [
-                mk_binop (add sentinel_pos ptr range) O_le min range
+                mk_binop ~etyp:T_bool (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
                  Post.return flow
               );
 
               [
-                mk_binop min O_eq sentinel_pos range
+                mk_binop ~etyp:T_bool min O_eq sentinel_pos range
               ],
               (fun flow ->
-                 man.exec ~route:scalar (mk_assume (mk_binop sentinel O_eq q range) range) flow
+                 man.exec ~route:scalar (mk_assume (mk_binop ~etyp:T_bool sentinel O_eq q range) range) flow
               );
 
               [
-                mk_binop min O_le (sub sentinel_pos ptr range) range
+                mk_binop ~etyp:T_bool min O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
                  Flow.set T_cur man.lattice.bottom man.lattice flow |>
@@ -724,14 +724,14 @@ struct
           else
             switch [
               [
-                mk_binop (add sentinel_pos ptr range) O_le min range
+                mk_binop ~etyp:T_bool (add sentinel_pos ptr range) O_le min range
               ],
               (fun flow ->
                  Post.return flow
               );
 
               [
-                mk_binop min O_eq sentinel_pos range
+                mk_binop ~etyp:T_bool min O_eq sentinel_pos range
               ],
               (fun flow ->
                  man.exec ~route:universal (mk_assign sentinel_pos (add max ptr range) range) flow >>% fun flow ->
@@ -741,7 +741,7 @@ struct
               );
 
               [
-                mk_binop max O_le (sub sentinel_pos ptr range) range
+                mk_binop ~etyp:T_bool max O_le (sub sentinel_pos ptr range) range
               ],
               (fun flow ->
                  Post.return flow

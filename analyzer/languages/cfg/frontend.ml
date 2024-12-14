@@ -357,7 +357,11 @@ let convert_fundec (f:fundec) =
   (* get the variable to denote the return value *)
   let ret = match f.fun_return_type with
     | None -> None
-    | Some t -> Some f.fun_return_var
+    | Some t ->
+      if f.fun_return_var = None then
+        Some (mktmp ~typ:t ())
+      else
+        f.fun_return_var
   in
   (* convert the body in-place *)
   f.fun_body <- convert_stmt ~name:f.fun_orig_name ?ret f.fun_body;

@@ -34,8 +34,7 @@
 (**
    We support C and a subset of C++.
 
-   Not supported:
-   - Asm strings
+   Not necessarily supported:
    - attributes
    - C++ coroutines
    - C++ structured exception handling
@@ -1044,7 +1043,8 @@ and atomic_expr = {
    | Char_UTF8
    | Char_UTF16
    | Char_UTF32
- (** Kinds of character literals *)
+   | Char_Unevaluated (* for string literals *)
+ (** Kinds of character and string literals *)
 
  and choose_expr = {
      choose_cond: expr; (** condition *)
@@ -1134,7 +1134,6 @@ and atomic_expr = {
 
  and unresolved_lookup_expr = {
      unresolved_lookup_requires_ADL: bool; (** true if this declaration should be extended by argument-dependent lookup *)
-     unresolved_lookup_is_implicit: bool; (** true if this lookup is overloaded *)
      unresolved_lookup_naming_class: record_decl option;  (** the naming class of this lookup. *)
      unresolved_lookup_name: declaration_name; (** name looked up *)
      unresolved_lookup_decls: decl list;
@@ -1359,7 +1358,7 @@ and atomic_expr = {
 
  and static_assert = {
      assert_expr: expr;
-     assert_msg: string;
+     assert_msg: expr option;
      assert_is_failed: bool;
    }
  (** (C++) Represents a C++11 static_assert declaration. *)
@@ -1763,8 +1762,8 @@ and expr = {
  (** Kinds of statments. *)
  and stmt_kind =
 
-   | AsmStmt
-   (** Assembly statement TODO: contents *)
+   | AsmStmt of asm_stmt
+   (** Assembly statement *)
 
    | AttributedStmt of stmt
    (** Represents an attribute applied to a statement. TODO: attributes *)
@@ -1877,6 +1876,37 @@ and expr = {
      while_body: stmt;
    }
 (** This represents a 'while' stmt. *)
+
+ and asm_stmt = {
+     asm_style: asm_style;
+     asm_is_simple: bool;
+     asm_is_volatile: bool;
+     asm_body: string;
+     asm_outputs: asm_output array;
+     asm_inputs: asm_input array;
+     asm_clobbers: string array;
+     asm_labels: string array;
+   }
+ (** This reprents an 'asm' stmt. *)
+
+ and asm_output = {
+     asm_output_string: string;
+     asm_output_expr: expr;
+     asm_output_constraint: asm_output_constraint;
+   }
+
+ and asm_input = {
+     asm_input_string: string;
+     asm_input_expr: expr;
+   }
+
+ and asm_style =
+   | ASM_STYLE_GCC
+   | ASM_STYLE_MS
+
+ and asm_output_constraint =
+   | ASM_OUTPUT_INOUT (* '+' constraint *)
+   | ASM_OUTPUT_OUT   (* '=' constraint *)
 
  and cxx_for_range_stmt = {
      for_range_var: var_decl; (** loop variable *)

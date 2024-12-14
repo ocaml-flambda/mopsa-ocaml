@@ -42,8 +42,8 @@ struct
         (* Iterate over the list of result expressions and accumulate the most precise one *)
         let rec iter acc flow = function
           | [] -> Eval.singleton acc flow
-          | hd::tl ->       
-            match ekind acc, ekind hd with
+          | hd::tl ->
+            match ekind acc, ekind @@ remove_casts hd with
             | _, E_constant (C_top _) ->
               iter acc flow tl
 
@@ -70,7 +70,7 @@ struct
 
             | _ -> iter acc flow tl
         in
-        Some (iter hd flow tl)
+        Some (iter (remove_casts hd) flow tl)
 
 end
 

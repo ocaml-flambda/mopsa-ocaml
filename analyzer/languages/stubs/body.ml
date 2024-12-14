@@ -29,6 +29,37 @@ open Universal.Ast
 open Ast
 open Alarms
 
+(******************)
+(** Trace markers *)
+(******************)
+
+type marker += M_stub_case of stub_func * case
+
+let () = register_marker {
+    marker_print = (fun next fmt -> function
+        | M_stub_case(stub, case) ->
+          Format.fprintf fmt "stub-case (%s.%s)" stub.stub_func_name case.case_label
+        | m ->
+          next fmt m
+      );
+    marker_compare = (fun next m1 m2 ->
+        match m1, m2 with
+        | M_stub_case(stub1, case1), M_stub_case(stub2, case2) ->
+          Compare.pair String.compare String.compare
+            (stub1.stub_func_name, case1.case_label)
+            (stub2.stub_func_name, case2.case_label)
+        | _ ->
+          next m1 m2
+      );
+    marker_name = (fun next -> function
+        | M_stub_case _ -> "stub-case"
+        | m -> next m
+      );
+  }
+
+(********************)
+(** Abstract domain *)
+(********************)
 
 module Domain =
 struct
@@ -43,7 +74,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (** {2 Command-line options} *)
@@ -291,18 +322,21 @@ struct
     (* Translate the prenex encoding into an expression *)
     let cond' = prenex_to_expr quants cond f.range in
     (* Constrain the environment with the obtained condition *)
-    man.exec (cond_to_stmt cond' f.range) flow |>
-    post_to_flow man
+    man.exec (cond_to_stmt cond' f.range) flow
 
 
   (** Initialize the parameters of the stubbed function *)
-  let init_params args params range man flow =
-    List.combine args params |>
-    List.fold_left (fun flow (arg, param) ->
-        let post = man.exec (mk_add_var param range) flow >>%
-                   man.exec (mk_assign (mk_var param range) arg range) in
-        post_to_flow man post
-      ) flow
+  let rec init_params args params range man flow =
+    match params, args with
+    | [], _ -> flow
+    | param::tl_params, arg::tl_args ->
+      let post = man.exec (mk_add_var param range) flow >>%
+                 man.exec (mk_assign (mk_var param range) arg range)
+      in
+      post_to_flow man post |>
+      init_params tl_args tl_params range man
+    | _, [] ->
+      panic "stubs: insufficent number of arguments"
 
 
   (** Remove parameters from the returned flow *)
@@ -323,13 +357,11 @@ struct
 
 
   (** Execute an allocation of a new resource *)
-  let exec_local_new v res range man flow : 'a flow =
+  let exec_local_new v res range man flow : 'a post =
     (* Evaluation the allocation request *)
-    post_to_flow man (
-      man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
-      (* Assign the address to the variable *)
+    man.eval (mk_stub_alloc_resource res range) flow >>$ fun addr flow ->
+    (* Assign the address to the variable *)
       man.exec (mk_assign (mk_var v range) addr range) flow
-    )
 
 
   (** Execute a function call *)
@@ -340,7 +372,6 @@ struct
                 (mk_expr (E_call(f, args)) ~etyp:v.vtyp range)
                 range
              ) flow
-    |> post_to_flow man
 
 
   (** Execute the `local` section *)
@@ -372,7 +403,7 @@ struct
     let stmt = mk_stub_assigns assigns.content.assign_target assigns.content.assign_offset assigns.range in
     match assigns.content.assign_offset with
     | [] ->
-      man.exec stmt flow |> post_to_flow man
+      man.exec stmt flow
 
     | (l,u)::tl ->
       (* Check that offsets intervals are not empty *)
@@ -384,8 +415,7 @@ struct
       assume cond
         ~fthen:(fun flow -> man.exec stmt flow)
         ~felse:(fun flow -> Post.return flow)
-        man flow |>
-      post_to_flow man
+        man flow
 
 
 
@@ -402,25 +432,25 @@ struct
   let exec_free free man flow =
     let e = free.content in
     let stmt = mk_stub_free e free.range in
-    man.exec stmt flow |> post_to_flow man
+    man.exec stmt flow
 
 
   let exec_message msg man flow =
     if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-    then flow
+    then Post.return flow
     else match msg.content.message_kind with
       | WARN ->
         Exceptions.warn_at msg.range "%s" msg.content.message_body;
-        flow
+        Post.return flow
 
       | UNSOUND ->
-        Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) msg.range flow
+        Post.return @@ Flow.add_local_assumption (Soundness.A_stub_soundness_message msg.content.message_body) msg.range flow
 
 
   (** Execute a leaf section *)
-  let exec_leaf leaf return man flow =
+  let exec_leaf leaf return man flow : 'a post =
     match leaf with
-    | S_local local -> exec_local local man flow
+    | S_local local -> exec_local local man flow 
     | S_assumes assumes -> exec_assumes assumes man flow
     | S_requires requires -> exec_requires requires man flow
     | S_assigns assigns -> exec_assigns assigns man flow
@@ -429,30 +459,38 @@ struct
     | S_message msg -> exec_message msg man flow
 
   (** Execute the body of a case section *)
-  let exec_case case return man flow =
+  let exec_case ?(stub=None) case return man flow =
+    let flow =
+      match stub with
+      | None -> flow
+      | Some stub ->
+        man.exec (mk_add_marker (M_stub_case(stub, case)) case.case_range) flow |>
+        post_to_flow man
+    in
     List.fold_left (fun acc leaf ->
-        exec_leaf leaf return man acc
-      ) flow case.case_body |>
-
+        acc >>% fun flow -> exec_leaf leaf return man flow
+      ) (Post.return flow) case.case_body |>
+    post_to_flow man |>
     (* Clean case post state *)
     clean_post case.case_locals case.case_range man
 
 
   (** Execute the body of a stub *)
-  let exec_body ?(stub=None) body return range man flow =
+  let exec_body ?(stub=None) body return range man (flow : 'a flow) =
     (* Execute leaf sections *)
-    let flow = List.fold_left (fun flow section ->
+    let post = List.fold_left (fun post section ->
         match section with
-        | S_leaf leaf -> exec_leaf leaf return man flow
-        | _ -> flow
-      ) flow body
+        | S_leaf leaf -> post >>% fun flow -> exec_leaf leaf return man flow 
+        | _ -> post
+      ) (Post.return flow) body
     in
+    let flow = post_to_flow man post in 
     (* Execute case sections separately *)
     let flows, ctx = List.fold_left (fun (acc,ctx) section ->
         match section with
         | S_case case when not (is_case_ignored stub case) ->
           let flow = Flow.set_ctx ctx flow in
-          let flow' = exec_case case return man flow in
+          let flow' = exec_case ~stub case return man flow in
           flow':: acc, Flow.get_ctx flow'
         | _ -> acc, ctx
       ) ([], Flow.get_ctx flow) body
@@ -619,7 +657,7 @@ struct
       let return =
         match stub.stub_func_return_type with
         | None   -> None
-        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return exp None)
+        | Some t -> Some (Universal.Iterators.Interproc.Common.mk_return exp)
       in
       eval_stub_call stub args return exp.erange man flow |>
       OptionExt.return

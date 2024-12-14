@@ -61,7 +61,7 @@ void *__builtin_memcpy (void *__restrict __dest, const void *__restrict __src,
  * ensures: forall size_t i in [0, __len): (((unsigned char*)__dest)[i])' == ((unsigned char*)__src)[i];
  * ensures: return == __dest;
  */
-void *memmove (void *__dest, const void *__src, size_t __len);
+void *memmove(void *__dest, const void *__src, size_t __len);
 
 
 /*$
@@ -99,7 +99,7 @@ void *memccpy (void *__restrict __dest, const void *__restrict __src,
  * ensures: forall size_t i in [0, __len): (((unsigned char*)__dest)[i])' == __ch;
  * ensures: return == __dest;
  */
-void *memset (void *__dest, int __ch, size_t __len);
+void *memset(void *__dest, int __ch, size_t __len);
 
 
 /*$
@@ -692,5 +692,15 @@ char *strfry (char *__string);
  * ensures: return == __s;
  */
 void *memfrob (void *__s, size_t __n);
+
+/*$
+ * #alias memset;
+ */
+void *__builtin_memset(void *__dest, int __ch, size_t __len);
+
+/*$
+ * #alias memmove;
+ */
+void *__builtin_memmove(void *__dest, const void *__src, size_t __len);
 
 //#endif

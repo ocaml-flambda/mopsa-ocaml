@@ -40,6 +40,16 @@ let () =
     default = "false";
   }
 
+let opt_enforce_sign_constraints = ref false
+let () =
+  register_shared_option "universal.numeric.relational" {
+    key = "-enforce-sign-constraints";
+    category = "Numeric";
+    doc = " enforce sign constraints of variables in the relational domain";
+    spec = ArgExt.Set opt_enforce_sign_constraints;
+    default = "false";
+  }
+
 (** Query to retrieve relational variables *)
 
 type ('a,_) query +=
@@ -90,6 +100,7 @@ struct
       let name = ApronManager.name
     end)
 
+  let numeric_name = ApronManager.numeric_name
 
 
 
@@ -236,11 +247,28 @@ struct
       end
     | _ -> assert false
 
+  (** Add the sign contraint (if existing) of a given variable into the relationnal domain *)
+  let enforce_sign_constraint var ask ctx range =
+    if not !opt_enforce_sign_constraints then Fun.id else
+    let fake_range = mk_tagged_range (String_tag "var sign constraint") range in
+    match Framework.Combiners.Value.Nonrel.find_var_bounds_ctx_opt var ctx with
+    | Some (C_int_interval (Finite l, Finite u)) when Z.equal l u -> 
+      let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_eq (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+      OptionExt.bind (assume stmt ask)
+    | Some (C_int_interval (Finite l, _)) when Z.leq Z.zero l ->
+      let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_ge (mk_constant ~etyp:T_int (C_int l) fake_range) fake_range) fake_range in
+      OptionExt.bind (assume stmt ask)
+    | Some (C_int_interval (_, Finite u)) when Z.geq Z.zero u ->
+      let stmt = mk_assume (mk_binop ~etyp:T_int (mk_var var fake_range) O_le (mk_constant ~etyp:T_int (C_int u) fake_range) fake_range) fake_range in
+      OptionExt.bind (assume stmt ask)
+    | _ ->
+      Fun.id
+
   let rec exec stmt man ctx (a,bnd) =
     match skind stmt with
     | S_add { ekind = E_var (var, _) } when is_var_numeric_type var ->
-      add_missing_vars (a,bnd) [var] |>
-      OptionExt.return
+      add_missing_vars (a,bnd) [var] |> OptionExt.return |>
+      enforce_sign_constraint var man.ask ctx stmt.srange
 
     | S_remove { ekind = E_var (var, _) } when is_var_numeric_type var ->
       remove_var var (a,bnd) |>
@@ -291,8 +319,12 @@ struct
                    remove_tmp l
           in
           Some (a', bnd)
-        with ImpreciseExpression -> exec (mk_forget_var var stmt.srange) man ctx (a,bnd)
-           | UnsupportedExpression -> None
+        with
+          | ImpreciseExpression ->
+            exec (mk_forget_var var stmt.srange) man ctx (a,bnd) |>
+            enforce_sign_constraint var man.ask ctx stmt.srange
+          | UnsupportedExpression ->
+            None
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK && is_var_numeric_type var ->
@@ -352,9 +384,31 @@ struct
     else
       Values.Intervals.Integer.Value.top
 
-  let eval_interval man e (abs,bnd) =
+  let rec eval_interval man e (abs,bnd) =
     match ekind e with
-    | E_var (v,_) -> Some (bound_var v (abs,bnd))
+    | E_var (v,_) ->
+      (* we meet with the interval computed by non-relational domains so that the interval of `unsigned x` is positive *)
+      let int_nonrel = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
+      let int_rel = bound_var v (abs,bnd) in
+      Some (ItvUtils.IntItv.meet_bot int_nonrel int_rel)
+    | E_binop (O_mult, e1, e2) ->
+      let int1 = eval_interval man e1 (abs,bnd) in
+      let int2 = eval_interval man e2 (abs,bnd) in
+      begin match int1, int2 with
+      | Some int1, Some int2 ->
+        Bot.bot_lift2 ItvUtils.IntItv.mul int1 int2 |>
+        OptionExt.return
+      | _ -> None
+      end
+    | E_binop (O_convex_join, e1, e2) ->
+      let int1 = eval_interval man e1 (abs,bnd) in
+      let int2 = eval_interval man e2 (abs,bnd) in
+      begin match int1, int2 with
+      | Some int1, Some int2 ->
+        ItvUtils.IntItv.join_bot int1 int2 |>
+        OptionExt.return
+      | _ -> None
+      end
     | _ ->
       try
         let abs, bnd = add_missing_vars (abs,bnd) (Visitor.expr_vars e) in

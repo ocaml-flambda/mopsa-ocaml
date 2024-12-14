@@ -69,6 +69,9 @@ type 'a post = 'a Post.post
 let (>>%) = Post.(>>%)
 let (>>%?) = Post.(>>%?)
 
+module Path = Path
+include Path
+
 module Effect = Effect
 include Effect
 
@@ -94,6 +97,8 @@ module Print = Print
 include Avalue
 
 include Utils
+
+include Marker
 
 module Var =
 struct

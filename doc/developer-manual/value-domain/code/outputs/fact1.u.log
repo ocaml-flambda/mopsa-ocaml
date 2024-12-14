@@ -1,0 +1,15 @@
+$ ./bin/mopsa -config=share/mopsa/configs/universal/sign.json analyzer/tests/universal/manual/signs/fact1.u
+[1;38;5;40mAnalysis terminated successfully[0m
+
+[1manalyzer/tests/universal/manual/signs/fact1.u[0m: In function '[1m<>[0m':
+[1manalyzer/tests/universal/manual/signs/fact1.u:8.7-10[0m: [1;38;5;5mAssertion fail[0m
+  
+  [1m8[0m: assert([1;38;5;9my>0[0m);
+            [1;38;5;9m^^^[0m  
+  Assertion '[1m(y > 0)[0m' violated
+
+Summary of detected alarms:
+  Assertion fail: 1
+  Total: 1
+
+Time: 0.003s

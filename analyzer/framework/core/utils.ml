@@ -162,20 +162,75 @@ let switch
   in
   aux (Flow.get_ctx flow) cases
 
-let set_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a flow =
-  Flow.set tk (man.set env (Flow.get tk man.lattice flow)) man.lattice flow
+let set_env (tk:token) (env:'t) (man:('a,'t) man) (flow:'a flow) : 'a post =
+  man.set tk env flow
 
-let get_env (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
-  man.get (Flow.get tk man.lattice flow)
+let set_singleton_env env ctx man abs =
+  let flow = Flow.singleton ctx T_cur abs in
+  let post = man.set T_cur env flow in
+  let oabs =
+    Cases.fold
+      (fun acc _ flow ->
+         let abs = Flow.get T_cur man.lattice flow in
+         match acc with
+         | None -> Some abs
+         | Some acc -> Some (man.lattice.join ctx acc abs)
+      ) None post
+  in
+  match oabs with
+  | None     -> man.lattice.bottom
+  | Some abs -> abs
 
-let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a flow =
-  set_env tk (f (get_env tk man flow)) man flow
+let set_env_flow tk env man flow : 'a flow =
+  man.set tk env flow |>
+  post_to_flow man
 
-let get_pair_fst man = (fun a -> man.get a |> fst)
-let set_pair_fst man = (fun a1 a -> let old = man.get a in if a1 == fst old then a else man.set (a1, snd old) a)
+let get_env (tk:token) (man:('a,'t) man) (flow:'a flow) : ('a, 't) cases =
+  man.get tk flow
 
-let get_pair_snd man = (fun a -> man.get a |> snd)
-let set_pair_snd man = (fun a2 a -> let old = man.get a in if a2 == snd old then a else man.set (fst old, a2) a)
+let get_singleton_env ctx man abs =
+  let flow = Flow.singleton ctx T_cur abs in
+  let cases = man.get T_cur flow in
+  if Cases.is_singleton cases then
+    let env, flow = Cases.choose_result cases in
+    env
+  else
+    Exceptions.panic "get_singleton_env called on a multi-partition environment"
+
+let get_singleton_env_from_flow (tk:token) (man:('a,'t) man) (flow:'a flow) : 't =
+  let cases = man.get T_cur flow in
+  if Cases.is_singleton cases then
+    let env, flow = Cases.choose_result cases in
+    env
+  else
+    Exceptions.panic "get_env_old called on a multi-partition environment"
+
+let map_env (tk:token) (f:'t -> 't) (man:('a,'t) man) (flow:'a flow) : 'a post =
+  get_env tk man flow >>$ fun env flow ->
+  let env' = f env in
+  set_env tk env' man flow
+
+let get_pair_fst man tk flow =
+  man.get tk flow |>
+  Cases.map_result fst
+
+let set_pair_fst man tk a1 flow =
+  get_env tk man flow >>$ fun old flow ->
+  if a1 == fst old then
+    Post.return flow
+  else
+    set_env tk (a1, snd old) man flow
+
+let get_pair_snd man tk flow =
+  man.get tk flow |>
+  Cases.map_result snd
+
+let set_pair_snd man tk a2 flow =
+  get_env tk man flow >>$ fun old flow ->
+  if a2 == snd old then
+    Post.return flow
+  else
+    set_env tk (fst old, a2) man flow
 
 let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   (* Create a singleton flow with the given environment *)
@@ -184,6 +239,58 @@ let env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (a:'a) : 'a =
   let flow' = f flow |> post_to_flow man in
   Flow.get T_cur man.lattice flow'
 
-let sub_env_exec (f:'a flow -> 'a post) ctx (man:('a,'t) man) (sman:('a,'s) stack_man) (a:'t) (s:'s) : 't * 's =
-  let aa = env_exec f ctx man (man.lattice.top |> man.set a |> sman.set_sub s) in
-  man.get aa, sman.get_sub aa
+let ask_and_reduce_cases f q ?(bottom = fun () -> assert false) a =
+  let cases = f q a in
+  Cases.reduce_result
+    (fun r flow -> r)
+    ~join:(Query.join_query q)
+    ~meet:(Query.meet_query q)
+    ~bottom
+    cases
+
+let ask_and_reduce_list f q ?(bottom = fun () -> assert false) a =
+  let l = f q a in
+  match l with
+  | [] -> bottom ()
+  | (_,r)::tl ->
+    List.fold_left
+      (fun acc (_,r) -> Query.join_query q acc r)
+      r tl
+
+let ask_and_reduce = ask_and_reduce_cases
+
+let find_var_by_name ?(function_scope = None) name man flow =
+  let vars = ask_and_reduce man.ask (Query.Q_defined_variables function_scope) flow in
+  List.find
+    (fun v ->
+       name = Format.asprintf "%a" Ast.Var.pp_var v
+    ) vars
+
+let dummy_range = Location.mk_fresh_range ()
+
+let pp_vars_info man flow fmt vars =
+  let printer = Print.empty_printer () in
+  List.iter
+    (fun v ->
+       try man.print_expr flow printer (mk_var v dummy_range)
+       with Not_found -> ()
+    ) vars;
+  Format.fprintf fmt "%a" Print.pflush printer
+
+let pp_vars_info_by_name man flow fmt names =
+  pp_vars_info man flow fmt (ListExt.map_filter (fun name ->
+      try Some (find_var_by_name name man flow) 
+      with Not_found -> None
+    ) names)
+
+let pp_expr_vars_info man flow fmt e =
+  let vars = Ast.Visitor.expr_vars e in
+  pp_vars_info man flow fmt vars
+
+let pp_stmt_vars_info man flow fmt s =
+  let vars = Ast.Visitor.stmt_vars s in
+  pp_vars_info man flow fmt vars
+
+let breakpoint name man flow =
+  let _ = man.exec (mk_breakpoint name dummy_range) flow in
+  ()

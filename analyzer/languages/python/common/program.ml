@@ -44,8 +44,10 @@ struct
     match prog.prog_kind with
     | Py_program (name, globals, body) ->
        debug "globals = %a" (Format.pp_print_list pp_var) globals;
-       set_py_program (name, globals, body) flow
-    | _ -> flow
+       set_py_program (name, globals, body) flow |>
+       Post.return |>
+       Option.some
+    | _ -> None
 
   let eval _ _ _ = None
 
@@ -197,28 +199,34 @@ struct
     | hd :: tl -> hd
     | [] -> raise Not_found
 
-  let ask : type r. ('a, r) query -> _ man -> _ flow -> r option =
+  let ask : type r. ('a, r) query -> _ man -> _ flow -> ('a, r) cases option =
     fun query man flow ->
+    let get_locals body call =
+      let fd = find_function call body in
+      fd.py_func_parameters
+      @ fd.py_func_kwonly_args
+      @ (OptionExt.apply (fun x -> [x]) [] fd.py_func_kwarg)
+      @ fd.py_func_locals
+      @ [fd.py_func_ret_var]
+    in
     match query with
-    | Q_defined_variables ->
+    | Q_defined_variables None ->
        let (_, globals, body) = get_py_program flow in
        let cs = Flow.get_callstack flow in
        (try
          let allvars =
            List.fold_left (fun acc call ->
-               let fd = find_function call.Callstack.call_fun_orig_name body in
-               fd.py_func_parameters
-               @ fd.py_func_kwonly_args
-               @ (OptionExt.apply (fun x -> [x]) [] fd.py_func_kwarg)
-               @ fd.py_func_locals
-               @ [fd.py_func_ret_var]
-               @ acc
-
+               (get_locals body call.Callstack.call_fun_orig_name) @ acc
              ) globals cs
          in
-         Some allvars
+         Some (Cases.singleton allvars flow)
        with Not_found ->
          None)
+
+    | Q_defined_variables (Some call) ->
+      let (_, globals, body) = get_py_program flow in
+      Cases.singleton (get_locals body call) flow |> OptionExt.return
+
 
     | _ -> None
 

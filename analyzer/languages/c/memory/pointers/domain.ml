@@ -110,7 +110,8 @@ struct
   (** ================== *)
 
   let init prog man flow =
-    set_env T_cur Map.empty man flow
+    set_env T_cur Map.empty man flow |>
+    Option.some
 
 
 
@@ -160,35 +161,33 @@ struct
   (** ============================================== *)
 
   (** Evaluate a static points-to expression *)
-  let eval_static_points_to man flow (p:static_points_to) : (PointerSet.t * expr option * (var * mode option) option) =
+  let eval_static_points_to man flow (p:static_points_to) : ('a, PointerSet.t * expr option * (var * mode option) option) cases =
     match p with
     | AddrOf (b, o, mode) ->
-      PointerSet.base b, Some o, None
+      Cases.singleton (PointerSet.base b, Some o, None) flow
 
     | Eval(q, mode, o) ->
-      let v = get_env T_cur man flow |>
-              Map.find q
-      in
-      v, (if PointerSet.is_valid v then Some o else None), (Some (q,mode))
+      get_env T_cur man flow >>$ fun a flow ->
+      let v = Map.find q a in
+      Cases.singleton (v, (if PointerSet.is_valid v then Some o else None), (Some (q,mode))) flow
 
     | Null ->
-      PointerSet.null, None, None
+      Cases.singleton (PointerSet.null, None, None) flow
 
     | Invalid ->
-      PointerSet.invalid, None, None
+      Cases.singleton (PointerSet.invalid, None, None) flow
 
     | Top ->
-      PointerSet.top, None, None
+      Cases.singleton (PointerSet.top, None, None) flow
 
     | Fun f ->
-       PointerSet.cfun f, None, None
-      (* panic ~loc:__LOC__ "symbolic_to_value: function pointers not supported" *)
+       Cases.singleton (PointerSet.cfun f, None, None) flow
 
 
   (** Set value of an optional pointer *)
   let set_value_opt p v man flow =
     match p with
-    | None -> flow
+    | None -> Post.return flow
     | Some (p,mode) -> map_env T_cur (add p v mode) man flow
 
 
@@ -223,10 +222,11 @@ struct
       then man.exec ~route:universal (mk_remove (mk_offset p mode range) range) flow
       else Post.return flow
 
+
   (** Evaluation a pointer expression into a points-to expression *)
   let eval_points_to exp man flow =
     man.eval exp flow >>$? fun exp flow ->
-    Static_points_to.eval_opt exp |> OptionExt.lift @@ fun ptr ->
+    Static_points_to.eval_opt exp flow |> OptionExt.lift @@ fun ptr ->
     match ptr with
     | AddrOf (base, offset, mode) ->
       (* XXX for backward compatibility, the offset is converted to Universal, but maybe it should be a C expression? *)
@@ -238,11 +238,11 @@ struct
       let offset' = mk_binop o O_plus offset ~etyp:T_int exp.erange in
       man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.eval offset' flow ~translate:"Universal" >>$ fun offset' flow ->
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let values = Map.find p a in
       let evals = PointerSet.fold_points_to (fun v pt acc ->
-          let flow = set_env T_cur (Map.set p v a) man flow in
           (
+            set_env T_cur (Map.set p v a) man flow >>% fun flow ->
             ( match PointerSet.is_valid values, PointerSet.is_valid v with
               | false, false -> Post.return flow
               | true, true -> Post.return flow
@@ -270,6 +270,8 @@ struct
       Cases.singleton mk_c_points_to_top flow
 
 
+
+
   (** {2 Computation of post-conditions} *)
   (** ================================== *)
 
@@ -277,9 +279,9 @@ struct
   (** Assignment abstract transformer *)
   let assign p q mode range man flow =
     man.eval q flow >>$ fun q flow ->
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let vnew, onew =
-      match Static_points_to.eval q with
+      match Static_points_to.eval q flow with
       | AddrOf (b, offset, mode') ->
         PointerSet.base b, Some offset
 
@@ -287,7 +289,7 @@ struct
         let qo = mk_offset q mode' range in
         let offset' = mk_binop qo O_plus offset ~etyp:T_int range in
         let vq = Map.find q a in
-        let vq, offset = 
+        let vq, offset =
           match PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_valid vq) > 0,
                 PointerSet.is_top vq || PointerSet.cardinal (PointerSet.filter_non_valid vq) > 0,
                 expr_to_z offset with
@@ -315,7 +317,7 @@ struct
           | false, false, _ ->
             vq, None
         in
-        vq, offset 
+        vq, offset
 
       | Fun f ->
         PointerSet.cfun f, None
@@ -331,28 +333,39 @@ struct
     in
     let vold = Map.find p a in
     let a' = add p vnew mode a in
-    let flow = set_env T_cur a' man flow in
+    set_env T_cur a' man flow >>% fun flow ->
     let vnew = Map.find p a' in
     let o = mk_offset p mode range in
     match PointerSet.is_valid vold, PointerSet.is_valid vnew, onew with
-    | false, false, _ -> Post.return flow
-
+    (* The pointer set was valid and is still valid with an offset: we must
+       update the offset variable. *)
     | true, true, Some offset ->
       man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:universal (mk_assign o offset range) flow
 
-    | true, true, None -> Post.return flow
+    (* The pointer set was valid and is still valid, but there is no offeset to
+       update. *)
+    | true, true, None ->
+      Post.return flow
 
+    (* The pointer set was not valid and is still not valid: we do not have to
+       update the offset variable. *)
+    | false, false, _ ->
+      Post.return flow
+
+    (* The pointer set was not valid and became valid with some offeset: we must
+       add the offset variable and assign it. *)
     | false, true, Some offset ->
       man.exec ~route:universal (mk_add o range) flow >>% fun flow ->
       man.eval offset flow ~translate:"Universal" >>$ fun offset flow ->
       man.exec ~route:universal (mk_assign (strongify_var_expr o) offset range) flow
 
-    | true, false, _ -> man.exec ~route:universal (mk_remove o range) flow
+    (* The pointer set was valid and it is no longer: we must remove the offset
+       variable. *)
+    | true, false, _ ->
+      man.exec ~route:universal (mk_remove o range) flow
 
-    | _ -> assert false
-
-
+    | false, true, None -> assert false
 
 
   (* Declaration of a scalar pointer variable *)
@@ -361,14 +374,12 @@ struct
     (** Uninitialized global variable *)
     | Variable_global, None | Variable_file_static _, None ->
       (* The variable is initialized with NULL (C99 6.7.8.10) *)
-      map_env T_cur (Map.set v PointerSet.null) man flow |>
-      Post.return
+      map_env T_cur (Map.set v PointerSet.null) man flow
 
     (** Uninitialized local variable *)
     | Variable_local _, None | Variable_func_static _, None ->
       (* The value of the variable is undetermined (C99 6.7.8.10) *)
-      map_env T_cur (Map.set v PointerSet.invalid) man flow |>
-      Post.return
+      map_env T_cur (Map.set v PointerSet.invalid) man flow
 
     | _, Some (C_init_expr e) ->
       assign v e None range man flow
@@ -376,33 +387,35 @@ struct
     | _ -> assert false
 
 
-
   (** Add a pointer variable to the support of the non-rel map *)
   let add_pointer_var p range man flow =
     let o = mk_offset p None range in
-    map_env T_cur (Map.set p PointerSet.top) man flow |>
+    map_env T_cur (Map.set p PointerSet.top) man flow >>%
     man.exec ~route:universal (mk_add o range)
 
 
   (** Remove a pointer variable from the support of the non-rel map *)
   let remove_pointer_var p range man flow =
-    let flow = map_env T_cur (Map.remove p) man flow in
     let o = mk_offset p None range in
-    man.exec ~route:universal (mk_remove o range) flow
+    map_env T_cur (Map.remove p) man flow >>%
+    man.exec ~route:universal (mk_remove o range)
 
 
   (** Rename a pointer variable *)
   let rename_pointer_var p1 p2 range man flow =
-    let flow' = map_env T_cur (Map.rename p1 p2) man flow in
+    get_env T_cur man flow >>$ fun a flow ->
+
+    (* Rename the variable in the map *)
+    let a1 = Map.find p1 a in
+    map_env T_cur (Map.rename p1 p2) man flow >>% fun flow ->
 
     (* Rename the offset if present *)
-    let a1 = get_env T_cur man flow |> Map.find p1 in
     if PointerSet.is_valid a1 then
       let o1 = mk_offset p1 None range in
       let o2 = mk_offset p2 None range in
-      man.exec ~route:universal (mk_rename o1 o2 range) flow'
+      man.exec ~route:universal (mk_rename o1 o2 range) flow
     else
-      Post.return flow'
+      Post.return flow
 
 
   (** Rename a base *)
@@ -415,8 +428,7 @@ struct
         | Nt pset ->
           Map.add_inverse (PointerValue.Base base') pset a |>
           Map.remove_inverse (PointerValue.Base base)
-      ) man flow |>
-    Post.return
+      ) man flow
 
 
   (** Expand a base *)
@@ -430,8 +442,7 @@ struct
           List.fold_left (fun acc base' ->
               Map.add_inverse (PointerValue.Base base') pset acc
             ) a basel
-      ) man flow |>
-    Post.return
+      ) man flow
 
   (** Fold a set of bases *)
   let exec_fold_bases e el range man flow =
@@ -454,8 +465,7 @@ struct
             ) a' basel
         with Top.Found_TOP ->
           a
-      ) man flow |>
-    Post.return
+      ) man flow
 
   (** Invalidate a base *)
   let exec_invalidate_base e range man flow =
@@ -464,7 +474,7 @@ struct
       | E_addr (a, _) -> mk_addr_base a, mk_addr_base a ~valid:false ~invalidation_range:(Some range)
       | _ -> assert false
     in
-    let flow = map_env T_cur (fun a ->
+    map_env T_cur (fun a ->
         match Map.find_inverse (PointerValue.Base valid_base) a with
         | TOP -> a
         | Nt pset ->
@@ -475,30 +485,27 @@ struct
           else
             Map.add_inverse (PointerValue.Base invalid_base) pset a
       ) man flow
-    in
-    Post.return flow
 
 
 
   (** Filter equal pointers *)
   let assume_eq p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
-                     eval_static_points_to man flow
-    in
-    let v2, o2, p2 = Static_points_to.eval q |>
-                     eval_static_points_to man flow
-    in
+    Static_points_to.eval p flow |>
+    eval_static_points_to man flow >>$ fun (v1, o1, p1) flow ->
+
+    Static_points_to.eval q flow |>
+    eval_static_points_to man flow >>$ fun (v2, o2, p2) flow ->
+
     let v = PointerSet.meet v1 v2 in
     if PointerSet.is_bottom v then
       Flow.set T_cur man.lattice.bottom man.lattice flow |>
       Post.return
     else
-      let flow = set_value_opt p1 v man flow |>
-                 set_value_opt p2 v man
-      in
+      set_value_opt p1 v man flow >>%
+      set_value_opt p2 v man >>% fun flow ->
       remove_offset_opt p1 v1 v range man flow >>% fun flow ->
       remove_offset_opt p2 v2 v range man flow >>% fun flow ->
-      match mk_offset_constraint_opt O_eq p1 v1 o1 p2 v2 o2 range with
+      match mk_offset_constraint_opt O_eq p1 v o1 p2 v o2 range with
       | None -> Post.return flow
       | Some cond ->
         man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
@@ -508,12 +515,12 @@ struct
 
   (** Filter non-equal pointers *)
   let assume_ne p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
-                     eval_static_points_to man flow
-    in
-    let v2, o2, p2 = Static_points_to.eval q |>
-                     eval_static_points_to man flow
-    in
+    Static_points_to.eval p flow |>
+    eval_static_points_to man flow >>$ fun (v1, o1, p1) flow ->
+
+    Static_points_to.eval q flow |>
+    eval_static_points_to man flow >>$ fun (v2, o2, p2) flow ->
+
     (* Case 1: p and q point to the same base *)
     let same_base_case =
       let v = PointerSet.meet v1 v2 in
@@ -526,11 +533,10 @@ struct
       | _, _, None ->
         []
       | false, Some o1, Some o2 ->
-        let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man
-        in
-        let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
         [
+          set_value_opt p1 v man flow >>% fun flow ->
+          set_value_opt p2 v man flow >>% fun flow ->
+          let cond = mk_binop o1 O_ne o2 ~etyp:T_int range in
           man.eval cond flow ~translate:"Universal" >>$ fun cond flow ->
           man.exec ~route:universal (mk_assume cond range) flow
         ]
@@ -553,10 +559,10 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
         []
       else
-        let flow = set_value_opt p1 vv1 man flow |>
-                   set_value_opt p2 vv2 man
-        in
-        [ Post.return flow ]
+        [
+          set_value_opt p1 vv1 man flow >>%
+          set_value_opt p2 vv2 man
+        ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
@@ -567,12 +573,12 @@ struct
 
   (** Filter ordered pointers *)
   let assume_order op p q range man flow =
-    let v1, o1, p1 = Static_points_to.eval p |>
-                     eval_static_points_to man flow
-    in
-    let v2, o2, p2 = Static_points_to.eval q |>
-                     eval_static_points_to man flow
-    in
+    Static_points_to.eval p flow |>
+    eval_static_points_to man flow >>$ fun (v1, o1, p1) flow ->
+
+    Static_points_to.eval q flow |>
+    eval_static_points_to man flow >>$ fun (v2, o2, p2) flow ->
+
     let v1_valid, v1_invalid = PointerSet.filter_valid v1, PointerSet.filter_non_valid v1 in
     let v2_valid, v2_invalid = PointerSet.filter_valid v2, PointerSet.filter_non_valid v2 in
 
@@ -591,6 +597,7 @@ struct
       if PointerSet.is_bottom v
       then []
       else
+        let flow = safe_c_pointer_compare range man flow in
         [
           match mk_offset_constraint_opt op p1 v1 o1 p2 v2 o2 range with
           | None -> Post.return flow
@@ -617,11 +624,12 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2
       then []
       else
-        let flow = set_value_opt p1 vv1 man flow |>
-                   set_value_opt p2 vv2 man
-        in
-        let flow = raise_c_invalid_pointer_compare p q range man flow in
-        [ Post.return flow ]
+        [
+          set_value_opt p1 vv1 man flow >>%
+          set_value_opt p2 vv2 man >>% fun flow ->
+          raise_c_invalid_pointer_compare p q range man flow |>
+          Post.return
+        ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
@@ -632,13 +640,13 @@ struct
   (** Expand pointer p and its offset to pointers ql *)
   let expand_pointer_var p ql range man flow =
     (* Expand pointed bases *)
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let value = Map.find p a in
     let a = List.fold_left (fun acc q ->
         Map.set q value acc
       ) a ql
     in
-    let flow = set_env T_cur a man flow in
+    set_env T_cur a man flow >>% fun flow ->
     (* Expand the offset if present *)
     if PointerSet.is_valid value then
       let o = mk_offset p None range in
@@ -652,7 +660,7 @@ struct
 
   (** Fold pointers ql in p *)
   let fold_pointer_var p ql range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     (* Collect the pointer values of ql before removing them *)
     let value,a' = List.fold_left (fun (accv,acca) q ->
         let accv' = Map.find q a |> PointerSet.join accv in
@@ -661,12 +669,12 @@ struct
       ) (PointerSet.bottom,a) ql
     in
     let value' = if Map.mem p a then PointerSet.join value (Map.find p a) else value in
-    let flow = set_env T_cur (Map.set p value' a') man flow in
+    set_env T_cur (Map.set p value' a') man flow >>% fun flow ->
     (* Fold the offset if present *)
     if PointerSet.is_valid value' then
       let o = mk_offset p None range in
       let ol = ListExt.map_filter (fun q ->
-          if PointerSet.is_valid (Map.find q a) then 
+          if PointerSet.is_valid (Map.find q a) then
             Some (mk_offset q None range)
           else None
         ) ql in
@@ -679,9 +687,9 @@ struct
   (** Forget the value of pointer p *)
   let forget_pointer_var p range man flow =
     (* Forget the bases *)
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let a' = Map.set p PointerSet.top a in
-    let flow = set_env T_cur a' man flow in
+    set_env T_cur a' man flow >>% fun flow ->
     (* Forget the offset. If not already present, just add it *)
     let o = mk_offset p None range in
     let stmt =
@@ -792,23 +800,28 @@ struct
       forget_deref p stmt.srange man flow |>
       OptionExt.return
 
-    | S_invalidate e when is_c_type e.etyp  ->
+    | S_invalidate e
+      when is_c_type e.etyp  ->
       exec_invalidate_base e stmt.srange man flow |>
       OptionExt.return
 
-    | S_rename(e,e') when is_c_block_object_type e.etyp ->
+    | S_rename(e,e')
+      when is_c_block_object_type e.etyp ->
       exec_rename_base (of_c_block_object e) (of_c_block_object e') stmt.srange man flow |>
       OptionExt.return
 
-    | S_expand(e,el) when is_c_block_object_type  e.etyp ->
+    | S_expand(e,el)
+      when is_c_block_object_type  e.etyp ->
       exec_expand_base (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_fold(e,el) when is_c_block_object_type e.etyp ->
+    | S_fold(e,el)
+      when is_c_block_object_type e.etyp ->
       exec_fold_bases (of_c_block_object e) (List.map of_c_block_object el) stmt.srange man flow |>
       OptionExt.return
 
-    | S_assume(p) when is_c_pointer_type p.etyp ->
+    | S_assume(p)
+      when is_c_pointer_type p.etyp ->
       man.eval p flow >>$ (fun p flow ->
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
@@ -826,8 +839,8 @@ struct
     man.eval p flow >>$ fun p flow ->
     man.eval q flow >>$ fun q flow ->
     (* p1 and p2 should point to the same type *)
-    let elem_size_p = under_type p.etyp |> void_to_char |> sizeof_type in
-    let elem_size_q = under_type q.etyp |> void_to_char |> sizeof_type in
+    let elem_size_p = sizeof_type (under_type p.etyp |> void_to_char) flow in
+    let elem_size_q = sizeof_type (under_type q.etyp |> void_to_char) flow in
     (* FIXME: do we need to check the sign also? *)
     if not @@ Z.equal elem_size_p elem_size_q
     then panic_at range
@@ -836,12 +849,11 @@ struct
     ;
 
     (* Evaluate the pointed bases symbolically *)
-    let v1, o1, p1 = Static_points_to.eval p |>
-                     eval_static_points_to man flow
-    in
-    let v2, o2, p2 = Static_points_to.eval q |>
-                     eval_static_points_to man flow
-    in
+    Static_points_to.eval p flow |>
+    eval_static_points_to man flow >>$ fun (v1, o1, p1) flow ->
+
+    Static_points_to.eval q flow |>
+    eval_static_points_to man flow >>$ fun (v2, o2, p2) flow ->
 
     (* Size of a pointed element *)
     let elem_size = elem_size_p in
@@ -852,34 +864,48 @@ struct
       if PointerSet.is_bottom v
       then []
       else
-        let flow = set_value_opt p1 v man flow |>
-                   set_value_opt p2 v man
-        in
-        let ee =
-          mk_offset_opt p1 v o1 range |> OptionExt.bind @@ fun o1 ->
-          mk_offset_opt p2 v o2 range |> OptionExt.bind @@ fun o2 ->
-          let e = sub o1 o2 range in
-          if Z.equal elem_size Z.one
-          then Some e
-          else Some (div e (mk_z elem_size range) range)
-        in
-        match ee with
-        | None -> [man.eval (mk_top T_int range) flow] (* FIXME: why not return 0? *)
-        | Some e -> [man.eval e flow ~translate:"Universal"]
+        [
+          set_value_opt p1 v man flow >>%
+          set_value_opt p2 v man >>% fun flow ->
+          let ee =
+            mk_offset_opt p1 v o1 range |> OptionExt.bind @@ fun o1 ->
+            mk_offset_opt p2 v o2 range |> OptionExt.bind @@ fun o2 ->
+            let e = sub o1 o2 range in
+            if Z.equal elem_size Z.one
+            then Some e
+            else Some (div e (mk_z elem_size range) range)
+          in
+          match ee with
+          | None -> man.eval (mk_top T_int range) flow (* FIXME: why not return 0? *)
+          | Some e ->
+            let flow = safe_c_pointer_sub range man flow in
+            man.eval e flow ~translate:"Universal"
+        ]
     in
 
     (* Case 2: different base => undefined behavior *)
     let case2 =
-      let v1 = PointerSet.diff v1 v2 in
-      let v2 = PointerSet.diff v2 v1 in
-      if PointerSet.is_bottom v1 || PointerSet.is_bottom v2
-      then []
+      let vv1 = PointerSet.singleton_diff v1 v2 in
+      let vv2 = PointerSet.singleton_diff v2 v1 in
+      (* Weak bases may represent different concrete bases, while set difference
+         will remove them. So we need to add them. *)
+      let common_weak = PointerSet.meet v1 v2 |>
+                        PointerSet.filter
+                          (function
+                            | Base b -> base_mode b = WEAK
+                            | _ -> false)
+      in
+      let vv1 = PointerSet.union common_weak vv1 in
+      let vv2 = PointerSet.union common_weak vv2 in
+      if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
+        []
       else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
-        in
-        let flow = raise_c_invalid_pointer_sub p q range man flow in
-        [Eval.empty flow]
+        [
+          set_value_opt p1 vv1 man flow >>%
+          set_value_opt p2 vv2 man >>% fun flow ->
+          let flow = raise_c_invalid_pointer_sub p q range man flow in
+          Eval.empty flow
+        ]
     in
 
     Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)
@@ -895,16 +921,16 @@ struct
       Eval.empty flow
 
     | P_block ({ base_kind = Var v; base_valid = true}, offset, mode) when compare_typ ctype v.vtyp = 0 ->
-      assume (eq offset zero range) ~route:scalar
+      assume (eq offset zero range)
         ~fthen:(man.eval ~route:scalar (mk_var v ~mode range))
-        ~felse:(man.eval ~route:scalar (mk_top ctype range))
+        ~felse:(man.eval (mk_top ctype range))
         man flow
 
     | P_block _ ->
-      man.eval ~route:scalar (mk_top ctype range) flow
+      man.eval (mk_top ctype range) flow
 
     | P_top ->
-      man.eval ~route:scalar (mk_top ctype range) flow
+      man.eval (mk_top ctype range) flow
 
     | P_fun _ ->
       assert false
@@ -929,7 +955,7 @@ struct
       let exp' =
         match under_type p.etyp |> remove_typedef_qual with
         | T_c_void -> diff
-        | tt -> mul (mk_z (sizeof_type tt) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
+        | tt -> mul (mk_z (sizeof_type tt flow) ~typ:t1 exp.erange) diff ~typ:t1 exp.erange
       in
       man.eval exp' flow |>
       OptionExt.return
@@ -1042,10 +1068,10 @@ struct
           | P_top | P_invalid | P_block _ | P_fun _ ->
             (* Check if an overflow is possible by comparing the size of the
                cast type and the size of `size_t` (which is the size of a pointer). *)
-            let s = sizeof_type exp.etyp in
-            let st = sizeof_type (size_type ()) in
+            let s = sizeof_type exp.etyp flow in
+            let st = sizeof_type (size_type flow) flow in
             let flow =
-              if Z.(s < st) then
+              if Z.lt s st then
                 raise_c_pointer_to_integer_overflow_alarm ~warning:true p exp.etyp exp.erange man flow
               else
                 safe_c_integer_overflow_check exp.erange man flow
@@ -1073,22 +1099,18 @@ struct
       eval_deref p exp.erange man flow |>
       OptionExt.return
 
-
     | _ -> None
 
 
   (** {2 Handler of queries} *)
   (** ====================== *)
 
-  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
+  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> (a, r) cases option = fun query man flow ->
     match query with
     | Q_c_points_to e -> eval_points_to e man flow
-    | Q_defined_variables ->
-      let a = get_env T_cur man flow in
-      let vars = try Map.fold (fun v _ acc -> v :: acc) a [] with Top.Found_TOP -> [] in
-      Some vars
+
     | Universal.Heap.Recency.Q_alive_addresses_aspset ->
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$? fun a flow ->
       (* we start from the roots: non addr bases, and iterate until everything has been covered *)
       let open Cells.Domain.Domain in
       let roots = Map.fold (fun v _ roots ->
@@ -1105,7 +1127,7 @@ struct
         let reachable_from_bases =
           Map.fold
             (fun v oaset new_acc ->
-               let base = 
+               let base =
                  match vkind v with
                  | V_c_cell c -> c.base
                  |_ -> mk_base (Var v) in
@@ -1131,9 +1153,9 @@ struct
           let open Universal.Heap.Recency in
           BaseSet.fold (fun c acc -> match c.base_kind with
               | Addr a -> Pool.add a acc
-              | _ -> acc) bases Pool.empty 
+              | _ -> acc) bases Pool.empty
       in
-      begin try Some (reachable_addrs roots)
+      begin try Some (Cases.singleton (reachable_addrs roots) flow)
       with Not_found -> assert false end
 
   (* ask the heap domain for all allocated addresses, then check if all allocated Memory is still reachable from main's locals + the globals *)
@@ -1151,22 +1173,24 @@ struct
     match ekind (remove_casts exp) with
     | E_var (var,_) when is_c_pointer_type var.vtyp
                       && not (is_c_array_type var.vtyp) ->
-      let a = get_env T_cur man flow in
-      let v = Map.find var a in
-      pprint printer ~path:[ Key "pointers";
-                             fkey "%a" pp_var var ]
-        (pbox PointerSet.print v)
-      ;
-      if not (PointerSet.is_top v) then
-        PointerSet.iter (function
-            | Base b ->
-              let e = base_to_expr b exp.erange in
-              man.print_expr flow printer e
-            | _ -> ()
-          ) v;
-      if PointerSet.is_valid v then
-        let o = mk_offset var None exp.erange in
-        man.print_expr flow printer o ~route:universal
+      get_env T_cur man flow |>
+      Cases.iter_result (fun a flow ->
+          let v = Map.find var a in
+          pprint printer ~path:[ Key "pointers";
+                                 Obj (Var var)]
+            (pbox PointerSet.print v)
+          ;
+          if not (PointerSet.is_top v) then
+            PointerSet.iter (function
+                | Base b ->
+                  let e = base_to_expr b exp.erange in
+                  man.print_expr flow printer e
+                | _ -> ()
+              ) v;
+          if PointerSet.is_valid v then
+            let o = mk_offset var None exp.erange in
+            man.print_expr flow printer o ~route:universal
+        )
 
     | _ -> ()
 

@@ -33,8 +33,8 @@ type context = {
     target: C.target_info;
   }
 
-let create_context (target:C.target_info) = {
-    uid = 0;
+let create_context ?(min_uid=0) (target:C.target_info) = {
+    uid = min_uid;
     target = target;
   }
 
@@ -525,7 +525,7 @@ let simplify_func ctx (f:func) =
        let before1, e1 = remove_after before1 e1 after1 in
        scope_temp r (before1@[S_jump (S_switch (e1, simplify_block call b1)), r])
 
-    | S_jump _ | S_target _ ->
+    | S_jump _ | S_target _ | S_asm _ ->
        [s,r]
 
   and simplify_block (call:bool) (b:block) : block =

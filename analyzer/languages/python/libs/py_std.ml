@@ -62,7 +62,7 @@ struct
   let process_simple f man flow range exprs instances return =
     Utils.check_instances f man flow range exprs instances (fun _ flow -> man.eval (mk_py_top return range) flow)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
   let exec _ _ _ = None
 

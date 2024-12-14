@@ -57,10 +57,51 @@ let builtin_functions =
 
 let from_extent (e: U.extent) : Location.range = e
 
+type uvar = {
+  uvar_range: range;
+  uvar_uid: int;
+  uvar_orig_name: string;
+  uvar_uniq_name: string;
+}
+
+type var_kind +=
+  | V_uvar of uvar
+
+let () = register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_uvar var ->
+          if !Framework.Core.Ast.Var.print_uniq_with_uid then
+            Format.fprintf fmt "%s:%a" var.uvar_orig_name pp_relative_range var.uvar_range
+          else Format.fprintf fmt "%s" var.uvar_orig_name
+        | _ -> next fmt v
+      );
+
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_uvar var1, V_uvar var2 ->
+          Compare.compose [
+            (fun () -> Stdlib.compare var1.uvar_uid var2.uvar_uid);
+            (fun () -> Stdlib.compare var1.uvar_uniq_name var2.uvar_uniq_name)
+          ]
+
+        | _ -> next v1 v2
+      );
+  }
+       
+
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context) =
   try
     let (id, typ) = MS.find v var_ctx in
-    mk_uniq_var v id typ
+    let uniq_name =  (v ^ ":" ^ string_of_int id) in 
+    mkv uniq_name
+      (V_uvar {
+          uvar_range = ext;
+          uvar_uid = id;
+          uvar_orig_name = v;
+          uvar_uniq_name = uniq_name
+        })
+      typ
   with
   | Not_found ->
     Exceptions.panic_at ext
@@ -216,9 +257,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     end
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
-      let e1 = from_expr e1 ext var_ctx fun_ctx in
+      let e1 = from_expr e1 ext1 var_ctx fun_ctx in
       let typ1 = etyp e1 in
-      let e2 = from_expr e2 ext var_ctx fun_ctx in
+      let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let typ2 = etyp e2 in
       let typ = unify_typ typ1 typ2 in
       let e1,e2 = to_typ typ e1, to_typ typ e2 in
@@ -485,7 +526,6 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.lift from_typ f.return_type in
-  let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
     fun_orig_name = f.funname;
     fun_uniq_name = f.funname;
@@ -494,7 +534,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
     fun_return_type = typ;
-    fun_return_var = ret_var;
+    fun_return_var = None;
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec U.ext list) (var_ctx: var_context) =

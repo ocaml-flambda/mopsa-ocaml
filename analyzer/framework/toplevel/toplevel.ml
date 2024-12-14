@@ -28,7 +28,7 @@
 
 open Mopsa_utils
 open Core.All
-open Sig.Combiner.Stacked
+open Sig.Combiner.Domain
 
 
 (** Signature of the toplevel abstraction *)
@@ -58,7 +58,7 @@ sig
 
   val widen: (t, t) man -> t ctx -> t -> t -> t
 
-  val merge : t -> t * teffect -> t * teffect -> t
+  val merge : t -> t * effect_map -> t * effect_map -> t
 
 
   (** {2 Transfer functions} *)
@@ -66,13 +66,11 @@ sig
 
   val init : program -> (t, t) man -> t flow
 
-  exception SysBreak of t flow
-
   val exec : ?route:route -> stmt -> (t, t) man -> t flow -> t post
 
   val eval : ?route:route -> ?translate:semantic -> ?translate_when:(semantic*(expr->bool)) list -> expr -> (t, t) man -> t flow -> t eval
 
-  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> 'r
+  val ask  : ?route:route -> (t,'r) query -> (t, t) man -> t flow -> (t, 'r) cases
 
 
   (** {2 Pretty printing} *)
@@ -81,6 +79,13 @@ sig
   val print_state : ?route:route -> printer -> t -> unit
 
   val print_expr  : ?route:route -> (t,t) man -> t flow -> printer -> expr -> unit
+
+  (***************)
+  (** Exceptions *)
+  (***************)
+
+  exception SysBreak of t flow
+  exception GoBackward 
 
 end
 
@@ -94,7 +99,7 @@ let debug fmt = Debug.debug ~channel:"framework.abstraction.toplevel" fmt
 
 
 (** Encapsulate a domain into a top-level abstraction *)
-module Make(Domain:STACKED_COMBINER) : TOPLEVEL with type t = Domain.t
+module Make(Domain:DOMAIN_COMBINER) : TOPLEVEL with type t = Domain.t
 =
 struct
 
@@ -115,28 +120,19 @@ struct
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  let sman : (t,unit) stack_man = {
-    get_sub = (fun _ -> ());
-    set_sub = (fun () a -> a);
-  }
-
   let subset man ctx a a' =
-    let b, (), () = Domain.subset man sman ctx (a,()) (a',()) in
-    b
+    Domain.subset man ctx (a,a) (a',a') 
 
   let join man ctx a a' =
-    let a, (), () = Domain.join man sman ctx (a,()) (a',()) in
-    a
+    Domain.join man ctx (a,a) (a',a')
 
   let meet man ctx a a' =
-    let a, (), () = Domain.meet man sman ctx (a,()) (a',()) in
-    a
+    Domain.meet man ctx (a,a) (a',a')
 
   let widen man ctx a a' =
-    let a, (), (), _ = Domain.widen man sman ctx (a,()) (a',()) in
-    a
+    Domain.widen man ctx (a,a) (a',a')
 
-  let merge = Domain.merge
+  let merge = Domain.merge empty_path
 
 
   (** {2 Caches and route maps} *)
@@ -168,7 +164,11 @@ struct
     let flow0 = Flow.singleton ctx T_cur man.lattice.top in
 
     (* Initialize domains *)
-    let res = Domain.init prog man flow0 in
+    let res =
+      match Domain.init prog man flow0 with
+      | None      -> flow0
+      | Some post -> post_to_flow man post
+    in
 
     (* Initialize hooks *)
     let () = Hook.init () in
@@ -205,6 +205,7 @@ struct
   let exit_hook () = assert(inside_hook ()); inside_hook_flag := false
 
   exception SysBreak of Domain.t flow
+  exception GoBackward
 
   let exec ?(route = toplevel) (stmt: stmt) man (flow: Domain.t flow) : Domain.t post =
     let flow =
@@ -223,33 +224,47 @@ struct
     in
     try
       let post =
-        match Cache.exec fexec route stmt man flow with
-        | None ->
-          if Flow.is_bottom man.lattice flow
-          then Post.return flow
-          else
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
+        match skind stmt with
+        | S_breakpoint _ ->
+          Post.return flow
 
-        | Some post ->
-          (* Check that all cases were handled *)
-          let not_handled = Cases.exists (fun c flow ->
-              match c with
-              | NotHandled ->
-                (* Not handled cases with empty flows are OK *)
-                not (Flow.is_bottom man.lattice flow)
-              | _ -> false
-            ) post
-          in
-          if not_handled then
-            Exceptions.panic_at stmt.srange
-              "unable to analyze statement %a in %a"
-              pp_stmt stmt
-              pp_route route
-          ;
-          post
+        | S_add_marker m when not (is_marker_enabled m) ->
+          Post.return flow
+
+        | _ ->
+          match Cache.exec fexec route stmt man flow with
+          | None ->
+            if Flow.is_bottom man.lattice flow
+            then Post.return flow
+            else (
+              match skind stmt with
+              | S_add_marker _ ->
+                Post.return flow
+
+              | _ ->
+                Exceptions.panic_at stmt.srange
+                  "unable to analyze statement %a in %a"
+                  pp_stmt stmt
+                  pp_route route
+            )
+
+          | Some post ->
+            (* Check that all cases were handled *)
+            let not_handled = Cases.exists (fun c flow ->
+                match c with
+                | NotHandled ->
+                  (* Not handled cases with empty flows are OK *)
+                  not (Flow.is_bottom man.lattice flow)
+                | _ -> false
+              ) post
+            in
+            if not_handled then
+              Exceptions.panic_at stmt.srange
+                "unable to analyze statement %a in %a"
+                pp_stmt stmt
+                pp_route route
+            ;
+            post
       in
       let clean_post = exec_cleaners man post in
       let minimized_post = Post.remove_duplicates man.lattice clean_post in
@@ -272,13 +287,13 @@ struct
         (Printexc.get_raw_backtrace())
 
     | Sys.Break -> raise (SysBreak flow)
-    
+
     | Apron.Manager.Error exc ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Format.asprintf "Apron.Manager.Error(%a)" Apron.Manager.print_exclog exc, ""))
         (Printexc.get_raw_backtrace())
 
-    | e when (match e with Exceptions.PanicAtFrame _ -> false | _ -> true) ->
+    | e when (match e with Exit | Exceptions.PanicAtFrame _ | SysBreak _ | GoBackward -> false | _ -> true) ->
       Printexc.raise_with_backtrace
         (Exceptions.PanicAtFrame(stmt.srange, (Flow.get_callstack flow), Printexc.to_string e, ""))
         (Printexc.get_raw_backtrace())
@@ -455,13 +470,18 @@ struct
   (** {2 Handler of queries} *)
   (** ********************** *)
 
-  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> r =
+  let ask : type r. ?route:route -> (t,r) query -> (t,t) man -> t flow -> (t, r) cases =
     fun ?(route=toplevel) query man flow ->
     (* FIXME: the map of transfer functions indexed by routes is not constructed offline, due to the GADT query *)
     let domains = if compare_route route toplevel = 0 then None else Some (resolve_route route Domain.routing_table) in
     match Domain.ask domains query man flow with
-    | None -> raise Not_found
     | Some r -> r
+    | None   ->
+      match query with
+      | Sig.Abstraction.Partitioning.Q_partition_predicate range ->
+        Cases.singleton (mk_constant (C_bool true) ~etyp:T_bool range) flow
+
+      | _ -> raise Not_found
 
 
   (** {2 Pretty printer of states} *)

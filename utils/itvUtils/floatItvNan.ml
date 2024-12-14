@@ -826,7 +826,7 @@ let bwd_sub (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
 (** Backward subtraction. *)
 
 let bwd_mul (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
-  bwd_generic2 prec round FI.bwd_add x y r 
+  bwd_generic2 prec round FI.bwd_mul x y r 
 (** Backward multiplication. *)
 
 let bwd_div (prec:prec) (round:round) (x:t) (y:t) (r:t) : t * t =
@@ -861,7 +861,23 @@ let bwd_round_int (prec:prec) (round:round) (x:t) (r:t) : t =
 (** Backward rounding to int. *)
 
 let bwd_round (prec:prec) (round:round) (x:t) (r:t) : t =
-  bwd_generic1 prec round FI.bwd_round x r
+    match x.itv, r.itv with
+    | _, BOT -> bot
+    | BOT, _ -> x
+    | Nb ix, Nb ir ->
+       let m = match prec with
+         | (`SINGLE | `DOUBLE) as prec -> F.max_normal prec
+         | `EXTRA -> F.max_normal `DOUBLE
+         | `REAL -> infinity
+       in
+       (* special floats *)
+       let pinf = r.pinf && (x.pinf || ix.FI.up > m)
+       and minf = r.minf && (x.minf || ix.FI.lo < -.m)
+       and nan = r.nan && x.nan
+       in
+       (* interval of non-special floats *)
+       let itv = FI.bwd_round (fix_prec prec) round ix ir in
+       meet x (fix_itv prec { itv; pinf; minf; nan; })
 (** Backward rounding to float. *)
 
 let bwd_square (prec:prec) (round:round) (x:t) (r:t) : t =

@@ -100,6 +100,7 @@ type context = {
     ctx_typedefs: (string,typedef) Hashtbl.t;
     ctx_vars: (string,variable) Hashtbl.t; (* globals (extern & static) *)
     ctx_funcs: (string,func) Hashtbl.t;
+    mutable ctx_file_scope_asm: string RangeMap.t;
 
     ctx_simplify: C_simplify.context;
 
@@ -115,7 +116,7 @@ type context = {
 
 
 
-let create_context (project_name:string) (info:C.target_info) =
+let create_context ?(min_uid=0) (project_name:string) (info:C.target_info) =
   { ctx_name = project_name;
     ctx_tu = [];
     ctx_target = info;
@@ -126,7 +127,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_tu_funcs = Hashtbl.create 16;
     ctx_tu_static_vars = Hashtbl.create 16;
     ctx_tu_static_funcs = Hashtbl.create 16;
-    ctx_uid = 0;
+    ctx_uid = min_uid;
     ctx_enums = Hashtbl.create 16;
     ctx_enum_vals = Hashtbl.create 16;
     ctx_records = Hashtbl.create 16;
@@ -134,10 +135,11 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context info;
+    ctx_simplify = C_simplify.create_context ~min_uid info;
     ctx_files = SetExt.StringSet.empty;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
+    ctx_file_scope_asm = RangeMap.empty;
   }
 
 let new_uid ctx =
@@ -793,7 +795,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     | C.ReturnStmt None -> [S_jump (S_return (None, empty_scope())), range]
 
     | C.SwitchStmt s ->
-       if s.C.switch_init <> None
+      if s.C.switch_init <> None
        then error range "unsupported init in switch statement" "";
        let c = expr func s.C.switch_cond
        and b = deblock (stmt func s.C.switch_body)
@@ -801,11 +803,37 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        [S_jump (S_switch (c,b)), range]
 
     | C.CaseStmt s ->
-       (* TODO: constant folding? *)
-       if s.C.case_end <> None
-       then error range "unsupported case statement extension" "";
-       (S_target (S_case (expr func s.C.case_value, empty_scope())), range)::
-         (stmt func s.C.case_stmt)
+      (* TODO: constant folding? *)
+      begin match s.C.case_end with
+        | Some case_end ->
+          let values = match s.C.case_value.expr_kind, case_end.expr_kind with
+            | ConstantExpr {expr_kind = IntegerLiteral b},
+              ConstantExpr {expr_kind = IntegerLiteral e} ->
+              let rec process i acc =
+                if Z.(i <= e) then
+                  process Z.(i + one) ({case_end with expr_kind = IntegerLiteral i}::acc)
+                else
+                  List.rev acc
+              in
+              process b []
+            | _ ->
+              error range "range case statement extension currently supports constant integers" (Format.asprintf "%s" (Clang_dump.string_of_expr (OptionExt.none_to_exn s.C.case_end)));
+          in 
+          (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+          (stmt func s.C.case_stmt)
+
+        | None ->
+       (* in case of nested case stmts, we extract all of them in other_values, and keep the leaf statements *)
+       let process s =
+         let rec aux acc s = match s.C.stmt_kind with
+           | C.CaseStmt s -> aux (s.C.case_value :: acc) s.C.case_stmt
+           | _ -> List.rev acc, s in
+         aux [] s in 
+       let other_values, statements = process s.C.case_stmt in
+       let values = s.C.case_value :: other_values in 
+       (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+         (stmt func statements)
+      end
 
     | C.DefaultStmt s ->
        (S_target (S_default (empty_scope())), range)::(stmt func s)
@@ -881,9 +909,32 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        in
        [S_for (i,c,p,b), range]
 
-    | C.AsmStmt ->
-       warning range "asm statement ignored" "";
-       []
+    | C.AsmStmt s ->
+       let a = {
+           asm_style = s.C.asm_style;
+           asm_is_simple = s.C.asm_is_simple;
+           asm_is_volatile = s.C.asm_is_volatile;
+           asm_body = s.C.asm_body;
+           asm_outputs =
+             Array.map
+               (fun o -> {
+                    asm_output_string = o.C.asm_output_string;
+                    asm_output_expr = expr func o.C.asm_output_expr;
+                    asm_output_constraint = o.C.asm_output_constraint;
+                  }
+               ) s.C.asm_outputs;
+           asm_inputs =
+             Array.map
+               (fun o -> {
+                    asm_input_string = o.C.asm_input_string;
+                    asm_input_expr = expr func o.C.asm_input_expr;
+                  }
+               ) s.C.asm_inputs;
+           asm_clobbers = s.C.asm_clobbers;
+           asm_labels = s.C.asm_labels;
+         }
+       in
+       [S_asm a, range]
 
     | s -> error range "unhandled statement" (C.stmt_kind_name s)
 
@@ -1159,6 +1210,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        if a.C.assert_is_failed then
          warning decl.C.decl_range "static assertion failed: %s" a.C.assert_msg
 
+    | C.FileScopeAsmDecl s ->
+       ctx.ctx_file_scope_asm <-
+         RangeMap.add decl.C.decl_range s ctx.ctx_file_scope_asm;
+       debug (fun x -> x) s
+
     | _ -> error decl.C.decl_range "unhandled toplevel declaration" (C.decl_kind_name decl.C.decl_kind)
 
   in
@@ -1254,6 +1310,7 @@ let link_project ctx =
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
     proj_files = ctx.ctx_files |> SetExt.StringSet.elements;
+    proj_file_scope_asm = ctx.ctx_file_scope_asm;
     proj_comments = ctx.ctx_comments;
     proj_macros = cvt ctx.ctx_macros (fun t -> t.macro_name);
   }
