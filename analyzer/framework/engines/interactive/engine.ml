@@ -325,6 +325,7 @@ struct
 
     | e ->
       Interface.error e;
+      if Printexc.backtrace_status () then Printexc.print_backtrace stderr;
       Debug.warn "Error encountered (see above); jumping back to allow looking around";
       Interface.reach (interface_action action) man flow;
       interact action flow
