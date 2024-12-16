@@ -128,10 +128,13 @@
                                 ]
                             }
                         },
-                        "universal.numeric.relational"
+                        {
+                            "apply": "c.memory.packing.static_scope",
+                            "on": "universal.numeric.relational"
+                        }
                     ],
                     "reductions": [
-                        "universal.numeric.reductions.intervals_rel"
+                        "reductions.c.memory.packing.static_scope"
                     ]
                 }
             ]

@@ -526,10 +526,18 @@ struct
          man.eval (mk_top ctype range) flow
       else
         match base.base_kind with
-        | String (str,_,t) when equal_int_types t ctype flow ->
+        | String (str,_,t) ->
+          (* I do not think this is necessary `when equal_int_types t ctype flow` *)
           eval_string_literal_char str t offset range man flow
         | _ ->
-          man.eval (mk_top ctype range) flow
+          if Z.equal (sizeof_type ctype flow) (Z.of_int elem_size) then
+            let length = mk_length_var base elem_size ~mode range in
+            assume (eq offset length range) man flow
+              ~fthen:(man.eval (mk_zero range))
+              ~felse:(man.eval (mk_top ctype range))
+              ~fboth:(fun _ _ -> man.eval (mk_top ctype range) flow)
+          else
+            man.eval (mk_top ctype range) flow
 
 
 
