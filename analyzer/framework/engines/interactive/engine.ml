@@ -325,6 +325,7 @@ struct
 
     | e ->
       Interface.error e;
+      Debug.warn "Error encountered (see above); jumping back to allow looking around";
       Interface.reach (interface_action action) man flow;
       interact action flow
 
