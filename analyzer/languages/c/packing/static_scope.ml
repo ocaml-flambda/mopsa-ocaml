@@ -405,7 +405,7 @@ struct
     (*       [Locals f.c_func_unique_name] *)
     (*   in *)
     (*   packs @ user_packs_of_resource r  *)
-        
+
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r;
              addr_partitioning = Universal.Heap.Policies.G_stack_range (cs, range) } when !opt_pack_resources ->
       let prog = find_ctx Ast.c_program_ctx ctx in
@@ -428,13 +428,16 @@ struct
           else
           [Locals f.c_func_unique_name]
       in
-      packs @ user_packs_of_resource r
+      packs @ user_packs_of_resource r @
+      (if !opt_pack_only_stubs then [Globals] else [])
 
     | Addr { addr_kind = Stubs.Ast.A_stub_resource r; } ->
-      user_packs_of_resource r
+      user_packs_of_resource r @
+      (if !opt_pack_only_stubs && !opt_pack_resources then [Globals] else [])
 
     | _ ->
-      []
+      (if !opt_pack_only_stubs then [Globals] else [])
+
 
   (** Packing function returning packs of a variable *)
   let rec packs_of_var ctx v =
