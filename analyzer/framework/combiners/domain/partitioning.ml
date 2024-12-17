@@ -387,7 +387,8 @@ struct
   let ask_partition_predicate range pman flow =
     get_env T_cur pman flow >>$ fun p flow ->
     let e = mk_expr (E_partition_predicate p) ~etyp:T_bool range in
-    Cases.singleton e flow
+    let e' = ask_and_reduce (pman.ask ~route:(Below P.name)) (Q_partition_predicate range) flow in
+    Cases.singleton (mk_binop e O_log_and e' ~etyp:T_bool range) flow
 
   let exec targets =
     let df = D.exec targets in
