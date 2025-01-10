@@ -121,7 +121,6 @@ let rec concat_change old recent =
     | x, Change_seq l -> Change_seq(l@[x])
     | _ -> Change_seq [recent;old]
 
-(** Compose two changes *)
 type change_map = change PathMap.t
 
 let pp_change_map fmt map =
@@ -302,7 +301,8 @@ let is_change_tracker_enabled () = !opt_change_tracker_enabled
 let set_change_tracker_state b = opt_change_tracker_enabled := b
 
 let with_change_tracker f =
+  let old = is_change_tracker_enabled () in
   enable_change_tracker ();
-  let r = f () in
-  disable_change_tracker ();
-  r
+  let ret = f () in
+  set_change_tracker_state old;
+  ret
