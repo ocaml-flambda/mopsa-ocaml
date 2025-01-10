@@ -35,7 +35,6 @@ open Token
 open Alarm
 open Callstack
 open Change
-open Effect
 
 
 type 'a flow

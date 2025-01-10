@@ -30,7 +30,6 @@ open Lattice
 open Flow
 open Eval
 open Post
-open Effect
 open Cases
 open Route
 open Query

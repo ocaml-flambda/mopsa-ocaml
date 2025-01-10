@@ -28,7 +28,6 @@ open Ast.Expr
 open Cases
 open Ast.Semantic
 open Change
-open Effect
 
 
 type 'a eval = ('a,expr) cases

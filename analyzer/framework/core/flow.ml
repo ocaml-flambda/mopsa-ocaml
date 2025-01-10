@@ -252,7 +252,7 @@ let merge lattice ~merge_report pre (flow1,change1) (flow2,change2) =
     (fun _ a2 -> lattice.bottom)
     (fun tk a1 a2 ->
        match tk with
-       (* Effects concern only cur environments *)
+       (* Changes concern only cur environments *)
        | T_cur ->
          (* Merge the cur environments *)
          let p = get T_cur lattice pre in
