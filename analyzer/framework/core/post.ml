@@ -27,7 +27,7 @@ open Flow
 open Context
 open Lattice
 open Cases
-open Effect
+open Change
 open Mopsa_utils
 
 

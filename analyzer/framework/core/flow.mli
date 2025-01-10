@@ -34,6 +34,7 @@ open Lattice
 open Token
 open Alarm
 open Callstack
+open Change
 open Effect
 
 
@@ -125,7 +126,7 @@ val map2zo :
   (report -> report -> report) ->
   'a flow -> 'a flow -> 'a flow
 
-val merge : 'a lattice -> merge_report:(report -> report -> report) -> 'a flow -> 'a flow * effect_map -> 'a flow * effect_map -> 'a flow
+val merge : 'a lattice -> merge_report:(report -> report -> report) -> 'a flow -> 'a flow * change_map -> 'a flow * change_map -> 'a flow
 
 val get_ctx : 'a flow -> 'a ctx
 (** [get_all_ctx flow] retrieves the context pool from [flow] *)

@@ -78,14 +78,14 @@ sig
 
   val widen : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a * bool
 
-  val merge : t -> t * effect -> t * effect -> t
-  (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
+  val merge : t -> t * change -> t * change -> t
+  (** [merge pre (post1, change1) (post2, change2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
       abstraction DAG (e.g., a reduced product).
 
-      The effects [effect1] and [effect2] represent a journal of internal statements
+      The changes [change1] and [change2] represent a journal of internal statements
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
@@ -136,4 +136,3 @@ val mem_stacked_domain : string -> bool
 
 val stacked_domain_names : unit -> string list
 (** Return the names of registered stacked domains *) 
-

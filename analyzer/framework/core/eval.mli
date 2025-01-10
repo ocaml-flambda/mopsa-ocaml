@@ -27,12 +27,13 @@ open Ast.Stmt
 open Ast.Expr
 open Cases
 open Ast.Semantic
+open Change
 open Effect
 
 
 type 'a eval = ('a,expr) cases
 
-val singleton : ?effects:effect_map -> ?cleaners:stmt list -> ?translations:(semantic*expr) list -> expr -> 'a flow -> 'a eval
+val singleton : ?changes:change_map -> ?cleaners:stmt list -> ?translations:(semantic*expr) list -> expr -> 'a flow -> 'a eval
 
 val add_translation : semantic -> expr -> 'a eval -> 'a eval
 
