@@ -265,12 +265,6 @@ struct
 
 
   let merge (pre,bnd) ((a1,bnd1),e1) ((a2,bnd2),e2) =
-    let () = Debug.debug ~channel:(name ^ ".merge") "effects1 = %a@\neffects2 = %a@\na1 = %a@\na2 = %a"
-        pp_effect e1
-        pp_effect e2
-        (format print_state) (a1, bnd1)
-        (format print_state) (a2, bnd2)
-    in
     let bnd = Binding.concat bnd1 bnd2 in
     let x1,x2 =
       generic_merge
@@ -383,7 +377,7 @@ struct
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       let (a, bnd) =
         if Binding.Equiv.mem_l var bnd then
-          let itv = man.ask (mk_int_interval_query ~fast:true lval) in
+          let itv = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
           let range = erange lval in 
           exec {stmt with skind = S_assume (constraints_of_itv lval' itv range)} man ctx (a, bnd) |> OptionExt.none_to_exn
         else (a, bnd)

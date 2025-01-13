@@ -30,13 +30,13 @@ open Lattice
 open Flow
 open Eval
 open Post
-open Effect
 open Cases
 open Route
 open Query
 open Print
 open Token
 open Path
+open Change
 
 
 (*==========================================================================*)
@@ -98,8 +98,8 @@ type ('a, 't) man = {
   print_expr : ?route:route -> 'a flow -> (printer -> expr -> unit);
   (** [man.print_expr flow] is the expression printer for the type ['a]. *)
 
-  (** {3 Effects Management} *)
+  (** {3 Changes Management} *)
 
-  add_effect : stmt -> path -> 'a flow -> effect_map -> effect_map;
-  (** Add a statement to the effects map. *)
+  add_change : stmt -> path -> 'a flow -> change_map -> change_map;
+  (** Add a statement to the changes map. *)
 }

@@ -417,8 +417,8 @@ struct
         let flow = Flow.set tk abs lattice flow in
         Post.return flow
       );
-    add_effect = (fun stmt path flow effect_map ->
-       add_stmt_to_effect_map stmt (List.rev path) effect_map
+    add_change = (fun stmt path flow change_map ->
+       add_stmt_to_change_map stmt (List.rev path) change_map
       );
     exec = exec;
     eval = eval;
