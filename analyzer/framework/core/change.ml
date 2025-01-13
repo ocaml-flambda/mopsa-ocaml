@@ -199,7 +199,7 @@ let is_empty_change_vars e =
   VarSet.is_empty e.modified &&
   VarSet.is_empty e.removed
 
-(** Get the effect of a statement *)
+(** Get the changes of a statement *)
 let rec get_stmt_change_vars ~custom stmt : change_vars =
   match custom stmt with
   | Some ve -> ve
@@ -246,18 +246,18 @@ let rec get_change_vars ~custom = function
        (head of the list is the last recorded change) *)
     List.fold_right
       (fun s acc ->
-         let effect = get_stmt_change_vars ~custom s in
-         { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
-           removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
+         let change = get_stmt_change_vars ~custom s in
+         { modified = VarSet.union change.modified (VarSet.diff acc.modified change.removed);
+           removed  = VarSet.union change.removed (VarSet.diff acc.removed change.modified); }
       ) b {modified = VarSet.empty; removed = VarSet.empty}
   | Change_seq l ->
     (** Fold from the right because changes are stored in reverse order
        (head of the list is the last recorded change) *)
     List.fold_right
       (fun e acc ->
-         let effect = get_change_vars ~custom e in
-         { modified = VarSet.union effect.modified (VarSet.diff acc.modified effect.removed);
-           removed  = VarSet.union effect.removed (VarSet.diff acc.removed effect.modified); }
+         let change = get_change_vars ~custom e in
+         { modified = VarSet.union change.modified (VarSet.diff acc.modified change.removed);
+           removed  = VarSet.union change.removed (VarSet.diff acc.removed change.modified); }
       ) l {modified = VarSet.empty; removed = VarSet.empty}
   | Change_join(e1,e2) ->
     let ve1 = get_change_vars ~custom e1
@@ -270,17 +270,17 @@ let rec get_change_vars ~custom = function
     { modified = VarSet.union ve1.modified ve2.modified;
       removed = VarSet.union (VarSet.diff ve1.removed ve2.modified) (VarSet.diff ve2.removed ve1.modified); }
 
-(** Apply the effect of a log on an abstract element *)
-let apply_change_vars effect ~add ~remove ~find (other:'a) (this:'a) : 'a =
+(** Apply changes on an abstract element *)
+let apply_change_vars change ~add ~remove ~find (other:'a) (this:'a) : 'a =
   let a = VarSet.fold (fun v acc ->
       try add v (find v other) acc
       with _ -> Exceptions.panic "generic merge: error while adding variable %a" pp_var v
-    ) effect.modified this
+    ) change.modified this
   in
   VarSet.fold (fun v acc ->
       try remove v acc
       with _ -> Exceptions.panic "generic merge: error while removing variable %a" pp_var v
-    ) effect.removed a
+    ) change.removed a
   
 
 (** Generic merge operator for non-relational domains *)
