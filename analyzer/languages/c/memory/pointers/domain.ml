@@ -93,6 +93,14 @@ struct
                  sure that the statements with variables are logged in the changes. *)
               Some { modified = VarSet.empty; removed = VarSet.empty }
 
+            | S_invalidate {ekind = E_var (v, _)} ->
+              let relevant_vars = PointerSet.fold
+                  (fun pv acc -> match pv with 
+                                       | Base {base_kind = Var v} -> VarSet.add v acc
+                                       | _ -> acc)
+                  (Map.find v pre) VarSet.empty in
+              Some { modified = relevant_vars; removed = VarSet.empty }
+
             | _ -> None
           ) in
     Map.meet aa aa'
