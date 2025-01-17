@@ -415,7 +415,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
    | E_var_args e1 ->
       bp buf "__builtin_va_arg(%a,%a)"
          (bp_paren (is_comma e1) (c_buf_expr indent)) e1 (c_buf_type indent "") (fst t)
-         
+
    | E_atomic (i,e1,e2) ->
       bp buf "__atomic_%i_TODO(%a,%a)"
          i
@@ -440,7 +440,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 and c_buf_expr_bool indent buf e =
   bp buf "%a" (bp_paren (prio_expr e == 1) (c_buf_expr indent)) e
 (* add parentheses around assignments in boolean context to avoid warnings *)
-     
+
 and c_buf_char_literal buf c =
   let o = Char.code c in
   if c = '\n' then bp_str buf "\\n"
@@ -450,12 +450,12 @@ and c_buf_char_literal buf c =
   else if o = 0 then bp_str buf "\\0"
   else if o < 32 || o >= 127 then bp buf "\\x%02x" o
   else bp_char buf c
-           
+
 and c_buf_string_literal buf s =
   String.iter (c_buf_char_literal buf) s
-         
+
 and c_buf_init indent buf i = match i with
-  | I_init_expr e -> c_buf_expr indent buf e     
+  | I_init_expr e -> c_buf_expr indent buf e
   | I_init_list (l,o) ->
      bp buf "{ %a }" (bp_list (c_buf_init indent) ", ") l
   | I_init_implicit tq ->
@@ -700,7 +700,7 @@ let string_of_statement = string_from_buffer (c_buf_statement "")
 (** {2 Full source printing} *)
 
 let builtin_typedef =
-  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"; "_Float32"; "_Float32x"; "_Float64"; "_Float64x"; "__u128"]
+  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"; "__u128"]
 (* some built-in typedef we should not print *)
 
 let builtin_funcs =

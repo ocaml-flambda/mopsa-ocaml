@@ -125,14 +125,16 @@ let analyze_files (files:string list) (args:string list option) : int =
     with Exit -> exit 1
        | e ->
          let t = try Timing.stop t with _ -> 0. in
-         Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files (Some abstraction.language)
+         Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files (fun () ->
+             let front = find_language_frontend abstraction.language in 
+             front.on_panic e files t)
   end
   with
   | Exit ->
     exit 1
   | e ->
     let t = try Timing.stop t with _ -> 0. in
-    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files None
+    Output.Factory.panic ~btrace:(Printexc.get_backtrace()) e ~time:t ~files (fun () -> ())
 
 
 let run () =

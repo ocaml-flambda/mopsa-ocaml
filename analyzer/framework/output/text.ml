@@ -345,7 +345,7 @@ let report man flow ~time ~files ~out =
       ) (AssumptionSet.elements rep.report_assumptions)
 
 
-let panic exn ~btrace ~time ~files ~out o_language =
+let panic exn ~btrace ~time ~files ~out continuation =
   print out "%a@." (Debug.color_str Debug.red) "Analysis aborted";
   let () =
     match exn with
@@ -381,28 +381,7 @@ let panic exn ~btrace ~time ~files ~out o_language =
     if btrace = "" then ()
     else print out "Backtrace:@\n%s" btrace
   in
-  let () =
-    (* Provide automated testcase reduction hints if possible *)
-    match o_language, exn with
-    | Some "c", (Exceptions.Panic(msg, _) | Exceptions.PanicAtLocation(_, msg, _) | Exceptions.PanicAtFrame(_, _, msg, _)) ->
-      if List.length (List.filter (fun s -> not @@ Str.string_match (Str.regexp "share/mopsa/stubs/c/") s 0) files) > 1
-      || List.exists (fun f -> Filename.extension f = ".db") files then
-        print out "@\n%a. This however runs on a single, preprocessed file. Run mopsa with additional option: -c-preprocess-and-exit=file.i to get it. Then run mopsa on this preprocessed file@\n"
-          (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
-      else 
-        let mopsa_command, file_to_reduce =
-          Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) (List.filter (fun s -> not @@ List.mem s files) (Array.to_list Sys.argv)),
-          List.hd files
-        in
-        let timeout = int_of_float (1. +. 1.5 *. time) in
-        print out "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nenv MOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" FILE_TO_REDUCE=%s TIMEOUT_DURATION=%ds cvise ./tools/reducer-oracle.sh $FILE_TO_REDUCE@\n"
-          (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
-          msg
-          mopsa_command
-          file_to_reduce
-          timeout 
-    | _ -> () in 
-  ()
+  continuation ()
 
 let group_args_by_category args =
   let sorted = List.sort (fun arg1 arg2 ->

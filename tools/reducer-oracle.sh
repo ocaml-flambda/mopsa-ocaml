@@ -33,6 +33,9 @@ MOPSA_ERR_STRING=${MOPSA_ERR_STRING:-"man.get called on a non-singleton map"}
 # the sllooww option is not mandatory, it is supposed to perform better reductions
 FILE_TO_REDUCE=${FILE_TO_REDUCE:-small.c}
 
+# stubs need to be passed AFTER the analyzed program to Mopsa hence the different env variable
+MOPSA_STUBS=${MOPSA_STUBS:-""}
+
 ## CURRENT LIMITATIONS
 # Can only reduce a single C file.
 # If you have a multifile C project, the best approach would be to preprocess the source code, for example using cil (or implement Mopsa issue #110 to have this built-in).
@@ -41,9 +44,9 @@ FILE_TO_REDUCE=${FILE_TO_REDUCE:-small.c}
 ## ACTUAL ORACLE
 # small.c is the initial file and the one that be will be reduced
 # we first check it's syntactically valid C with clang
-clang -c $FILE_TO_REDUCE >/dev/null 2>&1 &&
+(clang -c $FILE_TO_REDUCE >/dev/null 2>&1 || (echo "Clang validation failed on $FILE_TO_REDUCE!" && exit 1)) &&
 # not sure the timeout is really needed since we supposedly reduce the program's length, at least.
 # || true to not stop if mopsa finds alarms or crashes
-timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND $FILE_TO_REDUCE 2>&1 > stdout || true" &&
+timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND $FILE_TO_REDUCE $MOPSA_STUBS 2>&1 > stdout || true" &&
 # this is the behavior we want to reproduce
 grep "$MOPSA_ERR_STRING" stdout
