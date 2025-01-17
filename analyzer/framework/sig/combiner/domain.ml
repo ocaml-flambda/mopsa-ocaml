@@ -35,7 +35,7 @@ sig
   val join: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
   val meet: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
   val widen: ('a, t) man -> 'a ctx -> t * 'a -> t * 'a -> t
-  val merge : path -> t -> t * effect_map -> t * effect_map -> t
+  val merge : path -> t -> t * change_map -> t * change_map -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) man -> 'a flow -> 'a post option
   val eval : DomainSet.t option -> expr -> ('a,t) man -> 'a flow -> 'a eval option
   val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
@@ -56,11 +56,11 @@ struct
   let meet _ _ (a,_) (a',_) = D.meet a a'
   let widen _ ctx (a,_) (a',_) = D.widen ctx a a'
   let merge path pre (a1,m1) (a2,m2) =
-    let e1 = get_effect path m1 in
-    let e2 = get_effect path m2 in
-    if compare_effect e1 e2 = 0 then a1 else
-    if is_empty_effect e1 then a2 else
-    if is_empty_effect e2 then a1
+    let e1 = get_change path m1 in
+    let e2 = get_change path m2 in
+    if compare_change e1 e2 = 0 then a1 else
+    if is_empty_change e1 then a2 else
+    if is_empty_change e2 then a1
     else D.merge pre (a1,e1) (a2,e2)
   let exec targets = D.exec
   let eval targets = D.eval

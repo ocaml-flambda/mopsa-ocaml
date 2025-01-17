@@ -37,6 +37,7 @@ A Universal program is a block of code preceded by a sequence of variable/functi
                  | <expr> <binop> <expr>    -- Binary expression
                  | "rand"(<int>, <int>)     -- Random integer
                  | "randf"(<real>, <real>)  -- Random real
+                 | "rand"                   -- Random string
                  | <id>(<expr>, ...)        -- Function call
                  | |<expr>|                 -- String length
                  | ()                       -- Void constructor
@@ -69,7 +70,8 @@ string s2 = "bb";
 
 x = successor(x);    // Variables can be set to arbitrary expressions.
 f = randf(0.1, 0.2); // `randf(f1, f2)` returns a random real number in the range [f1,f2].
-s1 = s2 @ s2;        // Strings can be concatenated with the `@` operator.
+s1 = rand();         // Creates a random string
+s1 = s2 @ s2;        // Strings can be concatenated with the `@` and `+` operators.
 x = |s1|;            // The |str| operator returns the length of strings.
 y = true;            // Boolean constants are converted to integers. `true` is 1 and `false` is 0.
 print();             // `print()` makes the analyzer print the abstract state.

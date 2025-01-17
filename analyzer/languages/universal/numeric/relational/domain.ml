@@ -81,6 +81,8 @@ let () =
       );
     }
 
+
+
 (** Factory functor *)
 
 module Make(ApronManager : APRONMANAGER) =
@@ -113,11 +115,13 @@ struct
   (** {2 Environment utility functions} *)
   (** ********************************* *)
 
+  (* boolean of return triple is true iff unify had no effect *)
   let unify abs1 abs2 =
     let env1 = Apron.Abstract1.env abs1 and env2 = Apron.Abstract1.env abs2 in
-    let env = Apron.Environment.lce env1 env2 in
+    let env, o1, o2 = Apron.Environment.lce_change env1 env2 in
     (Apron.Abstract1.change_environment ApronManager.man abs1 env false),
-    (Apron.Abstract1.change_environment ApronManager.man abs2 env false)
+    (Apron.Abstract1.change_environment ApronManager.man abs2 env false),
+    o1 = None && o2 = None
 
   let add_missing_vars (a,bnd) lv =
     let env = Apron.Abstract1.env a in
@@ -141,6 +145,22 @@ struct
     Apron.Abstract1.change_environment ApronManager.man a env' false,
     bnd
 
+  let print_state printer a =
+    if !opt_show_relational_domain then
+      let dom = Binding.Equiv.fold (fun (a, _) acc -> a::acc) (snd a) [] in
+      pp_obj_map printer
+        [
+          (String "domain",
+           List
+             (List.map (fun v -> String (Format.asprintf "%a" pp_var v)) dom,
+              { sopen = "{"; ssep = ","; sclose = "}"; sbind = "" }));
+          (String "relations", pbox (Apron_pp.pp_env ApronManager.man) a);
+        ]
+        ~path:[Key "numeric-relations"]
+    else
+      pprint printer
+        (pbox (Apron_pp.pp_env ApronManager.man) a)
+        ~path:[Key "numeric-relations"]
 
   (** {2 Lattice operators} *)
   (** ********************* *)
@@ -153,21 +173,26 @@ struct
     Apron.Abstract1.is_bottom ApronManager.man abs
 
   let subset (abs1,_) (abs2,_) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.is_leq ApronManager.man abs1' abs2'
 
   let join (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', unchanged = unify abs1 abs2 in
+    if not unchanged then
+      Debug.debug ~channel:(name ^ ".join") "Heterogenous case detected@\na1 = %a@\n~> a1' (after unification) = %a@\na1 = %a@\n~> a1' (after unification) = %a@\n"
+        (format print_state) (abs1, bnd1)
+        (format print_state) (abs1', bnd1)
+        (format print_state) (abs2, bnd2)
+        (format print_state) (abs2, bnd2);
     Apron.Abstract1.join ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
   let meet (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.meet ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
 
   let widen bnd (abs1,bnd1) (abs2,bnd2) =
-    let abs1', abs2' = unify abs1 abs2 in
+    let abs1', abs2', _ = unify abs1 abs2 in
     Apron.Abstract1.widening ApronManager.man abs1' abs2', Binding.concat bnd1 bnd2
-
 
   (** {2 Transfer functions} *)
   (** ********************** *)
@@ -190,25 +215,17 @@ struct
     Apron.Abstract1.forget_array ApronManager.man a [|v|] false, bnd
 
 
-  let merge (pre,bnd) ((a1,bnd1),e1) ((a2,bnd2),e2) =
-    let bnd = Binding.concat bnd1 bnd2 in
-    (* FIXME: the use here the generic merge provided by [Framework.Core.Effect]
-       and we do not provide a [find] function. Instead, we forget all modified
-       and removed variables, which is sound, but inefficient. This should be
-       improved by return intervals in [find] and use them in [add]. *)
-    let x1,x2 =
-      generic_merge
-        ~add:(fun v () x -> add_missing_vars x [v] |> forget_var v)
-        ~find:(fun v x -> ())
-        ~remove:(fun v x -> remove_var v x)
-        ((a1,bnd),e1) ((a2,bnd),e2)
-    in
-    meet x1 x2
+  let bound_var v (abs,bnd) =
+    if is_env_var v (abs,bnd) then
+      let vv,_ = Binding.mopsa_to_apron_var v bnd in
+      Apron.Abstract1.bound_variable ApronManager.man abs vv |>
+      Values.Intervals.Integer.Value.of_apron
+    else
+      Values.Intervals.Integer.Value.top
 
   let is_var_numeric_type v = is_numeric_type (vtyp v)
 
   let assume stmt ask (a, bnd) =
-    let () = debug "%a" pp_stmt stmt in
     match skind stmt with
     | S_assume e -> 
       begin
@@ -242,10 +259,35 @@ struct
           in
           Some (a', bnd)
         with ImpreciseExpression -> Some (a,bnd)
-           | UnsupportedExpression ->
-             let () = debug "unsupported" in None
+           | UnsupportedExpression -> None 
       end
     | _ -> assert false
+
+
+  let merge (pre,bnd) ((a1,bnd1),e1) ((a2,bnd2),e2) =
+    let bnd = Binding.concat bnd1 bnd2 in
+    let x1,x2 =
+      generic_merge
+        ~add:(fun v itv x ->
+            if is_numerical_var v then
+              let range = tag_range (Location.R_fresh (-1)) "relational merge" in 
+              add_missing_vars x [v] |>
+              forget_var v |>
+              assume (mk_assume (constraints_of_itv (mk_var v range) itv range) range) (fun _ -> assert false) |>
+              OptionExt.none_to_exn
+            else
+              x
+          )
+        ~find:(fun v x -> bound_var v x)
+        ~remove:(fun v x ->
+            if is_numerical_var v then remove_var v x else x)
+        ((a1,bnd),e1) ((a2,bnd),e2)
+    in
+    let () = Debug.debug ~channel:(name ^ ".merge") "after generic merge@\na1 = %a@\na2 = %a@\nnow meeting results"
+        (format print_state) x1
+        (format print_state) x2 
+    in
+    meet x1 x2
 
   (** Add the sign contraint (if existing) of a given variable into the relationnal domain *)
   let enforce_sign_constraint var ask ctx range =
@@ -320,17 +362,27 @@ struct
           in
           Some (a', bnd)
         with
-          | ImpreciseExpression ->
-            exec (mk_forget_var var stmt.srange) man ctx (a,bnd) |>
-            enforce_sign_constraint var man.ask ctx stmt.srange
-          | UnsupportedExpression ->
-            None
+        | ImpreciseExpression ->
+          exec (mk_forget_var var stmt.srange) man ctx (a,bnd) |>
+          enforce_sign_constraint var man.ask ctx stmt.srange
+        | UnsupportedExpression ->
+          None
       end
 
     | S_assign({ ekind = E_var (var, mode) } as lval, e) when var_mode var mode = WEAK && is_var_numeric_type var ->
+      (* let's suppose we have
+         x:w >= constant in the interval domain but NOT here
+         and now we do x:w := e
+         the naive join will not fetch the previous bounds of x:w, which will just keep x:w to top... *)
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
-      exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |>
-      OptionExt.lift @@ fun (a',bnd') ->
+      let (a, bnd) =
+        if Binding.Equiv.mem_l var bnd then
+          let itv = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
+          let range = erange lval in 
+          exec {stmt with skind = S_assume (constraints_of_itv lval' itv range)} man ctx (a, bnd) |> OptionExt.none_to_exn
+        else (a, bnd)
+      in
+      exec {stmt with skind = S_assign(lval', e)} man ctx (a,bnd) |> OptionExt.lift @@ fun (a',bnd') ->
       join (a,bnd) (a', bnd')
 
 
@@ -375,14 +427,6 @@ struct
         let vv = Binding.apron_to_mopsa_var v bnd in
         vv :: acc
       ) (Apron.Abstract1.env abs) []
-
-  let bound_var v (abs,bnd) =
-    if is_env_var v (abs,bnd) then
-      let vv,_ = Binding.mopsa_to_apron_var v bnd in
-      Apron.Abstract1.bound_variable ApronManager.man abs vv |>
-      Values.Intervals.Integer.Value.of_apron
-    else
-      Values.Intervals.Integer.Value.top
 
   let rec eval_interval man e (abs,bnd) =
     match ekind e with
@@ -439,22 +483,6 @@ struct
       | _ -> None
 
 
-  let print_state printer a =
-    if !opt_show_relational_domain then
-      let dom = Binding.Equiv.fold (fun (a, _) acc -> a::acc) (snd a) [] in
-      pp_obj_map printer
-        [
-          (String "domain",
-           List
-             (List.map (fun v -> String (Format.asprintf "%a" pp_var v)) dom,
-              { sopen = "{"; ssep = ","; sclose = "}"; sbind = "" }));
-          (String "relations", pbox (Apron_pp.pp_env ApronManager.man) a);
-        ]
-        ~path:[Key "numeric-relations"]
-    else
-      pprint printer
-        (pbox (Apron_pp.pp_env ApronManager.man) a)
-        ~path:[Key "numeric-relations"]
 
 
 

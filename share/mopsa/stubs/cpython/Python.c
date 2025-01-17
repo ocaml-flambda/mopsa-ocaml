@@ -107,7 +107,7 @@ PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
     memset(obj, '\0', size);
 
     /* somehow PyObject_INIT? */
-    Py_TYPE(obj) = type; // FIXME now done by the boundary. Maybe the refcnt should be too?
+    Py_SET_TYPE(obj, type); // FIXME now done by the boundary. Maybe the refcnt should be too?
 //    obj->ob_refcnt = 1;
 
     return obj;
@@ -131,7 +131,7 @@ _PyObject_New(PyTypeObject *type)
     if (obj == NULL)
         return PyErr_NoMemory();
 
-    Py_TYPE(obj) = type;
+    Py_SET_TYPE(obj, type);
 //    obj->ob_refcnt = 1;
 
     return obj;

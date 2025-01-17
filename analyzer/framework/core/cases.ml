@@ -27,7 +27,7 @@ open Mopsa_utils
 open Ast.Stmt
 open Flow
 open Token
-open Effect
+open Change
 open Context
 open Alarm
 open Lattice
@@ -36,7 +36,7 @@ type cleaners = StmtSet.t
 
 (** Single case of a computation *)
 type 'r case =
-  | Result of 'r * effect_map * cleaners
+  | Result of 'r * change_map * cleaners
   | Empty
   | NotHandled
 
@@ -47,8 +47,8 @@ type ('a,'r) cases = {cases: ('r case * 'a flow) Dnf.t;
 let case (case:'r case) flow : ('a,'r) cases = {cases=Dnf.singleton (case,flow);
                                                 ctx = Flow.get_ctx flow}
 
-let return ?(effects=empty_effect_map) ?(cleaners=[]) (res:'r) (flow:'a flow) =
-  case (Result (res,effects,StmtSet.of_list cleaners)) flow
+let return ?(changes=empty_change_map) ?(cleaners=[]) (res:'r) (flow:'a flow) =
+  case (Result (res,changes,StmtSet.of_list cleaners)) flow
 
 let singleton = return
 
@@ -103,17 +103,17 @@ let get_case_cleaners (case:'r case) : StmtSet.t =
 
 let set_case_cleaners (cleaners:StmtSet.t) (case:'r case) : 'r case =
   match case with
-  | Result(r,effects,_) -> Result(r,effects,cleaners)
+  | Result(r,changes,_) -> Result(r,changes,cleaners)
   | _ -> case
 
-let get_case_effects (case:'r case) : effect_map =
+let get_case_changes (case:'r case) : change_map =
   match case with
-  | Result(_,effects,_)    -> effects
-  | Empty | NotHandled -> empty_effect_map
+  | Result(_,changes,_)    -> changes
+  | Empty | NotHandled -> empty_change_map
 
-let set_case_effects (effects:effect_map) (case:'r case) : 'r case =
+let set_case_changes (changes:change_map) (case:'r case) : 'r case =
   match case with
-  | Result(r,old,cleaners) -> if old == effects then case else Result(r,effects,cleaners)
+  | Result(r,old,cleaners) -> if old == changes then case else Result(r,changes,cleaners)
   | _ -> case
 
 
@@ -148,7 +148,7 @@ let map_result
   map (fun case flow ->
       let case' =
         match case with
-        | Result (r,effects,cleaners) -> Result (f r,effects,cleaners)
+        | Result (r,changes,cleaners) -> Result (f r,changes,cleaners)
         | Empty                   -> Empty
         | NotHandled              -> NotHandled
       in
@@ -188,9 +188,9 @@ let reduce_result
   reduce
     (fun case flow ->
        match case with
-       | Result (r,effects,cleaners) -> f r flow
-       | Empty | NotHandled      -> bottom ())
-    ~join ~meet cases
+       | Result (r,changes,cleaners) -> f r flow
+       | Empty | NotHandled      -> bottom ()
+    ) ~join ~meet cases
 
 
 let print pp fmt cases =
@@ -207,27 +207,27 @@ let print_result pp fmt cases =
     fmt cases
 
 
-let map_effects
-    (f:effect_map -> 'a flow -> effect_map)
+let map_changes
+    (f:change_map -> 'a flow -> change_map)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
-       | Result(r,effects,cleaners) ->
-         let effects' = f effects flow in
-         Result(r,effects',cleaners), flow
+       | Result(r,changes,cleaners) ->
+         let changes' = f changes flow in
+         Result(r,changes',cleaners), flow
        | _ -> case, flow
     ) cases
 
-let set_effects
-    (effects:effect_map)
+let set_changes
+    (changes:change_map)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
-       | Result(r,old,cleaners) -> if old == effects then case,flow else Result(r,effects,cleaners), flow
+       | Result(r,old,cleaners) -> if old == changes then (case,flow) else (Result(r,changes,cleaners), flow)
        | _                      -> case, flow
     ) cases
 
@@ -239,27 +239,27 @@ let set_cleaners
   map
     (fun case flow ->
        match case with
-       | Result(r,effects,_) -> Result(r,effects,cleaners), flow
-       | _               -> case, flow
+       | Result(r,changes,_) -> Result(r,changes,cleaners), flow
+       | _                  -> case, flow
     ) cases
 
 
-let concat_effects
-    (old:effect_map)
+let concat_changes
+    (old:change_map)
     (cases:('a,'r) cases)
   : ('a,'r) cases =
   map
     (fun case flow ->
        match case with
        | Result(r,recent,cleaners) ->
-         (* Add effectss of non-empty environments only *)
+         (* Add changes of non-empty environments only *)
          (* FIXME: Since are always called from the binders, we can't
               require having the lattice manager. So we can't test if
               T_cur is ⊥ or not! For the moment, we rely on empty flow
               maps, but this is not always sufficient.
          *)
          if Flow.mem T_cur flow then
-           Result(r, concat_effect_map old recent, cleaners), flow
+           Result(r, concat_change_map old recent, cleaners), flow
          else
            case, flow
        | _ -> case, flow
@@ -273,7 +273,7 @@ let add_cleaners
   map
     (fun case flow ->
        match case with
-       | Result(r,effects,cleaners') -> Result(r,effects,StmtSet.union cleaners' cleaners), flow
+       | Result(r,changes,cleaners') -> Result(r,changes,StmtSet.union cleaners' cleaners), flow
        | _ -> case, flow
     ) cases
 
@@ -427,10 +427,10 @@ let remove_duplicates ?(equal=equal_case) (lattice: 'a Lattice.lattice) (cases: 
           | NotHandled, Result _ ->
             case'
 
-          | Result(r, effects, cleaners), Result(r', effects', cleaners') ->
+          | Result(r, changes, cleaners), Result(r', changes', cleaners') ->
             let cleaners = StmtSet.union cleaners cleaners' in
-            let effects = meet_effect_map effects effects' in
-            Result(r, effects, cleaners)
+            let changes = meet_change_map changes changes' in
+            Result(r, changes, cleaners)
         in
         case,flow,tl''
       else
@@ -473,10 +473,10 @@ let remove_duplicates ?(equal=equal_case) (lattice: 'a Lattice.lattice) (cases: 
                | NotHandled, Result _ ->
                  case', flow
 
-               | Result(r, effects, cleaners), Result(r', effects', cleaners') ->
+               | Result(r, changes, cleaners), Result(r', changes', cleaners') ->
                  let cleaners = StmtSet.union cleaners cleaners' in
-                 let effects = join_effect_map effects effects' in
-                 let case = Result(r, effects, cleaners) in
+                 let changes = join_change_map changes changes' in
+                 let case = Result(r, changes, cleaners) in
                  case, flow
             )
         in
@@ -517,9 +517,9 @@ let bind_opt
     (cases: ('a,'r) cases)
   : ('a,'s) cases option =
   match Dnf.to_list cases.cases with
-  | [[Result(_, effects, cleaners) as case, flow]]
+  | [[Result(_, changes, cleaners) as case, flow]]
     when StmtSet.is_empty cleaners && 
-         (not (are_effects_enabled ()) || is_empty_effect_map effects) ->
+         (not (is_change_tracker_enabled ()) || is_empty_change_map changes) ->
     f case flow
 
   | [[case, flow]] -> (
@@ -527,7 +527,7 @@ let bind_opt
       | None -> None
       | Some cases' ->
         add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-        concat_effects (get_case_effects case) |>
+        concat_changes (get_case_changes case) |>
         Option.some
     )
   
@@ -543,7 +543,7 @@ let bind_opt
            in
            let ctx' = get_ctx cases' in
            let cases'' = add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-                         concat_effects (get_case_effects case) in
+                         concat_changes (get_case_changes case) in
            (ctx',handled'), cases''.cases
         )
         (get_ctx cases,false) cases.cases in
@@ -558,15 +558,15 @@ let (>>=?) cases f = bind_opt f cases
 
 let bind f cases =
   match Dnf.to_list cases.cases with
-  | [[Result(_, effects, cleaners) as case, flow]]
+  | [[Result(_, changes, cleaners) as case, flow]]
     when StmtSet.is_empty cleaners && 
-         (not (are_effects_enabled ()) || is_empty_effect_map effects) ->
+         (not (is_change_tracker_enabled ()) || is_empty_change_map changes) ->
     f case flow
 
   | [[case, flow]] ->
     let cases' = f case flow in
     add_cleaners (get_case_cleaners case |> StmtSet.elements) cases' |>
-    concat_effects (get_case_effects case)
+    concat_changes (get_case_changes case)
   
   | _ ->
     bind_opt (fun case flow -> Some (f case flow)) cases |>
@@ -581,17 +581,17 @@ let bind_result_opt
   : ('a,'s) cases option
   =
   match Dnf.to_list cases.cases with
-  | [[Result(r, effects, cleaners), flow]]
+  | [[Result(r, changes, cleaners), flow]]
     when StmtSet.is_empty cleaners && 
-         (not (are_effects_enabled ()) || is_empty_effect_map effects) ->
+         (not (is_change_tracker_enabled ()) || is_empty_change_map changes) ->
     f r flow
 
-  | [[Result(r, effects, cleaners), flow]] -> (
+  | [[Result(r, changes, cleaners), flow]] -> (
       match f r flow with
       | None -> None
       | Some cases' ->
         add_cleaners (StmtSet.elements cleaners) cases' |>
-        concat_effects effects |>
+        concat_changes changes |>
         Option.some
     )
   
@@ -614,15 +614,15 @@ let bind_result
   : ('a,'s) cases
   =
   match Dnf.to_list cases.cases with
-  | [[Result(r, effects, cleaners), flow]]
+  | [[Result(r, changes, cleaners), flow]]
     when StmtSet.is_empty cleaners && 
-         (not (are_effects_enabled ()) || is_empty_effect_map effects) ->
+         (not (is_change_tracker_enabled ()) || is_empty_change_map changes) ->
     f r flow
 
-  | [[Result(r, effects, cleaners), flow]] ->
+  | [[Result(r, changes, cleaners), flow]] ->
     let cases' = f r flow in
     add_cleaners (StmtSet.elements cleaners) cases' |>
-    concat_effects effects
+    concat_changes changes
   
   | _ ->
     bind_result_opt (fun r flow -> Some (f r flow)) cases |>
@@ -662,16 +662,16 @@ let bind_conjunction_result
        else
          let cl,fl = List.split handled in
          let flow = List.fold_left (Flow.meet lattice) (List.hd fl) (List.tl fl) in
-         let rl,effects,cleaners =
+         let rl,changes,cleaners =
            List.fold_left
              (fun (acc1,acc2,acc3) case ->
                 match case with
-                | Result(r,effects,cleaners) -> r::acc1,meet_effect_map acc2 effects,StmtSet.union acc3 cleaners
+                | Result(r,changes,cleaners) -> r::acc1,meet_change_map acc2 changes,StmtSet.union acc3 cleaners
                 | _ -> assert false
-             ) ([],empty_effect_map,StmtSet.empty) cl in
+             ) ([],empty_change_map,StmtSet.empty) cl in
          let handled_res = f rl flow |>
                            add_cleaners (StmtSet.elements cleaners) |>
-                           concat_effects effects in
+                           concat_changes changes in
          if others = [] then
            handled_res
          else
@@ -709,16 +709,16 @@ let bind_disjunction_result
        else
          let cl,fl = List.split handled in
          let flow = List.fold_left (Flow.join lattice) (List.hd fl) (List.tl fl) in
-         let rl,effects,cleaners =
+         let rl,changes,cleaners =
            List.fold_left
              (fun (acc1,acc2,acc3) case ->
                 match case with
-                | Result(r,effects,cleaners) -> r::acc1,join_effect_map acc2 effects,StmtSet.union acc3 cleaners
+                | Result(r,changes,cleaners) -> r::acc1,join_change_map acc2 changes,StmtSet.union acc3 cleaners
                 | _ -> assert false
-             ) ([],empty_effect_map,StmtSet.empty) cl in
+             ) ([],empty_change_map,StmtSet.empty) cl in
          let handled_res = f rl flow |>
                            add_cleaners (StmtSet.elements cleaners) |>
-                           concat_effects effects in
+                           concat_changes changes in
          if others = [] then
            handled_res
          else

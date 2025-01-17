@@ -797,15 +797,13 @@ struct
             if Z.gt o uo
             then []
             else
-              let flow = man.exec (mk_assume (mk_binop offset O_eq (mk_z o range) range) range) flow |> post_to_flow man in
-              if Flow.get T_cur man.lattice flow |> man.lattice.is_bottom
-              then aux (Z.add o step)
-              else
-                let c = mk_cell base o typ in
-                Cases.singleton (Cell (c,mode)) flow :: aux (Z.add o step)
+              let cond = mk_binop offset O_eq (mk_z o range) range in
+              let c = mk_cell base o typ in
+              let ret = Cases.singleton (Cell (c,mode)) in
+              ([cond], ret) :: aux (Z.add o step)
           in
-          let evals = aux lo in
-          Cases.join_list ~empty:(fun () -> Cases.empty flow) evals
+          let cases = aux lo in
+          switch cases man flow
 
 
   (** Summarize a set of cells into a single smashed cell *)
