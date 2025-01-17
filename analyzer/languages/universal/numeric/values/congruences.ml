@@ -78,8 +78,11 @@ struct
   let unop op t a tr =
     match op with
     | O_log_not -> bot_lift1 C.log_not a
-    | O_minus  -> bot_lift1 C.neg a
-    | O_plus  -> a
+    | O_minus -> bot_lift1 C.neg a
+    | O_plus -> a
+    | O_abs -> bot_lift1 C.abs a
+    | O_wrap(l,u) -> bot_lift1 (fun a -> C.wrap a l u) a
+    | O_bit_invert -> bot_lift1 C.bit_not a
     | _ -> top
 
   let binop op t1 a1 t2 a2 tr =
