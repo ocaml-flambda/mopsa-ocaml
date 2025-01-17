@@ -942,7 +942,7 @@ struct
   let eval exp man flow =
     match ekind exp with
     (* 𝔼⟦ (t)p - (t)q | t is a numeric type ⟧ *)
-    | E_binop(O_minus, { ekind = E_c_cast(p, _); etyp = t1 }, { ekind = E_c_cast(q, _); etyp = t2 })
+    | E_binop(O_minus, ({ ekind = E_c_cast(p, pb); etyp = t1 } as pc), ({ ekind = E_c_cast(q, qb); etyp = t2 } as qc))
       when is_c_pointer_type p.etyp &&
            is_c_pointer_type q.etyp &&
            is_c_int_type t1 &&
@@ -951,9 +951,14 @@ struct
       let elem_size_p = sizeof_type (under_type p.etyp |> void_to_char) flow in
       let elem_size_q = sizeof_type (under_type q.etyp |> void_to_char) flow in
       if not @@ Z.equal elem_size_p elem_size_q then
-        man.eval (mk_top exp.etyp exp.erange) flow |>
+        let inject_ucharptr_cast p pb pc =
+          let p' = mk_c_cast p (T_c_pointer (T_c_integer C_unsigned_char)) p.erange in
+          {pc with ekind = E_c_cast(p', pb)} in
+        let pc' = inject_ucharptr_cast p pb pc in
+        let qc' = inject_ucharptr_cast q qb qc in
+        man.eval {exp with ekind = E_binop(O_minus, pc', qc')} flow |>
         OptionExt.return
-      else 
+      else
       (* (t)p - (t) q is transformed into (t)(p - q) * |t0|,
          where |t0| is the size the type pointed by p
       *)
