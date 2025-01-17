@@ -36,7 +36,7 @@ int PyType_ReadyCheat(PyTypeObject *type)
         return 1;
     }
 
-    Py_TYPE(type) = &PyType_Type;
+    Py_SET_TYPE(type, &PyType_Type);
     type->tp_flags =
         (type->tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY;
     type->tp_alloc = PyType_GenericAlloc;
@@ -90,24 +90,24 @@ static PySequenceMethods set_as_sequence =
 void
 init_flags()
 {
-    Py_TYPE(&PyType_Type) = &PyType_Type;
-    Py_TYPE(&PyBaseObject_Type) = &PyType_Type;
-    Py_TYPE(&PyLong_Type) = &PyType_Type;
-    Py_TYPE(&PyFloat_Type) = &PyType_Type;
-    Py_TYPE(&PyUnicode_Type) = &PyType_Type;
-    Py_TYPE(&PyList_Type) = &PyType_Type;
-    Py_TYPE(&PyListIter_Type) = &PyType_Type;
-    Py_TYPE(&PySlice_Type) = &PyType_Type;
-    Py_TYPE(&PySet_Type) = &PyType_Type;
-    Py_TYPE(&PySetIter_Type) = &PyType_Type;
-    Py_TYPE(&PyRange_Type) = &PyType_Type;
-    Py_TYPE(&PyRangeIter_Type) = &PyType_Type;
-    Py_TYPE(&PyTuple_Type) = &PyType_Type;
-    Py_TYPE(&PyTupleIter_Type) = &PyType_Type;
-    Py_TYPE(&_PyNone_Type) = &PyType_Type;
-    Py_TYPE(&_PyNotImplemented_Type) = &PyType_Type;
-    Py_TYPE(&PyBytes_Type) = &PyType_Type;
-    Py_TYPE(&PyDict_Type) = &PyType_Type;
+    Py_SET_TYPE(&PyType_Type, &PyType_Type);
+    Py_SET_TYPE(&PyBaseObject_Type, &PyType_Type);
+    Py_SET_TYPE(&PyLong_Type, &PyType_Type);
+    Py_SET_TYPE(&PyFloat_Type, &PyType_Type);
+    Py_SET_TYPE(&PyUnicode_Type, &PyType_Type);
+    Py_SET_TYPE(&PyList_Type, &PyType_Type);
+    Py_SET_TYPE(&PyListIter_Type, &PyType_Type);
+    Py_SET_TYPE(&PySlice_Type, &PyType_Type);
+    Py_SET_TYPE(&PySet_Type, &PyType_Type);
+    Py_SET_TYPE(&PySetIter_Type, &PyType_Type);
+    Py_SET_TYPE(&PyRange_Type, &PyType_Type);
+    Py_SET_TYPE(&PyRangeIter_Type, &PyType_Type);
+    Py_SET_TYPE(&PyTuple_Type, &PyType_Type);
+    Py_SET_TYPE(&PyTupleIter_Type, &PyType_Type);
+    Py_SET_TYPE(&_PyNone_Type, &PyType_Type);
+    Py_SET_TYPE(&_PyNotImplemented_Type, &PyType_Type);
+    Py_SET_TYPE(&PyBytes_Type, &PyType_Type);
+    Py_SET_TYPE(&PyDict_Type, &PyType_Type);
 
     PyType_Type.tp_as_sequence = 0;
     PyBaseObject_Type.tp_as_sequence = 0;

@@ -61,6 +61,10 @@ let list_domains (domains:string list) =
   let module E = (val (get_output_engine ())) in
   E.list_domains domains ~out:!opt_file
 
+let list_reductions (reductions: string list) =
+  let module E = (val (get_output_engine ())) in
+  E.list_reductions reductions ~out:!opt_file
+
 let list_checks (checks:check list) =
   let module E = (val (get_output_engine ())) in
   E.list_checks checks ~out:!opt_file

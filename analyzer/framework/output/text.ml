@@ -177,9 +177,10 @@ let pp_diagnostic out n diag callstacks kinds =
   let fun_name = match CallstackSet.choose callstacks with
     | c::_ -> Some c.call_fun_orig_name
     | _ -> None in
-  print out "@.%a Check #%d:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
+  let len = CallstackSet.cardinal callstacks in 
+  print out "@.%a Check%s:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
-    (n+1)
+    (if len <= 1 then Format.asprintf " #%d" (n+1) else Format.asprintf "s #%d-#%d" (n+1) (n+len))
     (fun fmt -> function
        | None -> ()
        | Some f ->
@@ -427,6 +428,10 @@ let help (args:ArgExt.arg list) ~out =
 let list_domains (domains:string list) ~out =
   print out "Domains:@.";
   List.iter (fun d -> print out "  %s@." d) domains
+
+let list_reductions (reductions:string list) ~out =
+  print out "Reductions:@.";
+  List.iter (fun d -> print out "  %s@." d) reductions
 
 let list_checks checks ~out =
   print out "Checks:@.";

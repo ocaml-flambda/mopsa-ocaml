@@ -154,6 +154,11 @@ let base_to_expr b range =
 (** Evaluate the size of a base in bytes *)
 let eval_base_size ?(route=toplevel) base range (man:('a,'t) man) flow =
   match base.base_kind with
+  | Var ({vkind = V_cvar cv} as var) when cv.cvar_scope = Variable_extern &&
+                         (is_c_variable_length_array_type var.vtyp ||
+                         is_c_no_length_array_type var.vtyp ) ->
+    Cases.singleton (mk_int_general_interval (ItvUtils.IntBound.Finite Z.zero) ItvUtils.IntBound.PINF range) flow 
+
   | Var var
     when is_c_variable_length_array_type var.vtyp ||
          is_c_no_length_array_type var.vtyp

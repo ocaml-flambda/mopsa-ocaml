@@ -232,13 +232,19 @@ class ReportDiff:
         self.old = old
         self.new = new
         self.time = new.time - old.time
-        self.speedup = 100.0 * (old.time - new.time) / old.time
-        self.new_alarms = new.alarms.difference(old.alarms)
-        self.removed_alarms = old.alarms.difference(new.alarms)
-        self.new_assumptions = new.assumptions.difference(old.assumptions)
-        self.removed_assumptions = old.assumptions.difference(new.assumptions)
+        self.speedup = 100.0 * (old.time - new.time) / old.time 
         self.new_success = not old.success and new.success
         self.new_failure = old.success and not new.success
+        if not (self.new_success or self.new_failure):
+            self.new_alarms = new.alarms.difference(old.alarms)
+            self.removed_alarms = old.alarms.difference(new.alarms)
+            self.new_assumptions = new.assumptions.difference(old.assumptions)
+            self.removed_assumptions = old.assumptions.difference(new.assumptions)
+        else:
+            self.new_alarms = []
+            self.removed_alarms = []
+            self.new_assumptions = []
+            self.removed_assumptions = []
 
     def is_empty(self):
         return (
@@ -267,10 +273,15 @@ class ReportDiff:
             diffs = []
             if not args.ignore_time and 1000.0*abs(self.time) > args.time_tolerance:
                 diffs.append(Diff.substitue("time: %.4f"%self.old.time, "time: %.4f"%self.new.time))
-            diffs += [Diff.add(a) for a in self.new_alarms]
-            diffs += [Diff.remove(a) for a in self.removed_alarms]
-            diffs += [Diff.add(w) for w in self.new_assumptions]
-            diffs += [Diff.remove(w) for w in self.removed_assumptions]
+            if self.new_success:
+                diffs.append("+ SUCCESS")
+            elif self.new_failure:
+                diffs.append("- FAILURE")
+            else:
+                diffs += [Diff.add(a) for a in self.new_alarms]
+                diffs += [Diff.remove(a) for a in self.removed_alarms]
+                diffs += [Diff.add(w) for w in self.new_assumptions]
+                diffs += [Diff.remove(w) for w in self.removed_assumptions]
             return "--- %s\n+++ %s\n\n%s"%(self.old.path,self.new.path,"\n\n".join([str(d) for d in diffs]))
 
 
