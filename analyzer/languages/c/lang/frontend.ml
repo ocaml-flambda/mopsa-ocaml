@@ -1239,10 +1239,11 @@ let on_panic exn files time =
         else
           mopsa_command, [], List.hd files
       in
-      let timeout = int_of_float (1. +. 1.5 *. time) in
-      Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s TIMEOUT_DURATION=%ds bash -c 'cvise %s $FILE_TO_REDUCE'@\n"
+      (* Large timeout due to potential slowdown with large parallelization *)
+      let timeout = int_of_float (5. +. 4. *. time) in
+      Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s bash -c 'cvise --timeout %d %s $FILE_TO_REDUCE'@\n"
         (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
-        msg
+        (String.escaped msg)
         mopsa_command
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) stub_files
         file_to_reduce

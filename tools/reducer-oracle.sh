@@ -22,13 +22,11 @@
 #    It should *not* contain the C file to analyze, which will be small.c
 #    Cvise creates temporary directories for its testcases, make sure paths are fully described
 MOPSA_COMMAND=${MOPSA_COMMAND:-"mopsa-c -config=c/markertail-cell-string-length-pack-rel-itv-congr.json -c-init-memset-threshold=5 -trace-partition-tail-length=1 -additional-stubs=c/sv-comp.c -use-stub=reach_error,fread_unlocked,fread,strndup,xstrndup -no-warning -ccopt=-fbracket-depth=2048 -stub-ignore-case=malloc.failure,malloc.empty -c-check-signed-implicit-cast-overflow=false -c-check-unsigned-implicit-cast-overflow=false"}
-# 3) if your program takes more than 10s to analyze, update the TIMEOUT_DURATION below, it should be a bit above the actual analysis time of your initial file
-TIMEOUT_DURATION=${TIMEOUT_DURATION:-10s}
-# 4) fill MOPSA_ERR_STRING below.
+# 3) fill MOPSA_ERR_STRING below.
 #    It should contain the crashing behavior you want to reproduce (for example "man.get called on a non-singleton map")
 #    The result will be grepped against the whole output of MOPSA_COMMAND (on both stderr+stdout)
 MOPSA_ERR_STRING=${MOPSA_ERR_STRING:-"man.get called on a non-singleton map"}
-# 5) save this file, and run (from the root of Mopsa):
+# 4) save this file, and run (from the root of Mopsa):
 # $ cvise -n $(nproc) --sllooww ./tools/reducer-oracle.sh small.c
 # the sllooww option is not mandatory, it is supposed to perform better reductions
 FILE_TO_REDUCE=${FILE_TO_REDUCE:-small.c}
@@ -47,6 +45,6 @@ MOPSA_STUBS=${MOPSA_STUBS:-""}
 (clang -c $FILE_TO_REDUCE >/dev/null 2>&1 || (echo "Clang validation failed on $FILE_TO_REDUCE!" && exit 1)) &&
 # not sure the timeout is really needed since we supposedly reduce the program's length, at least.
 # || true to not stop if mopsa finds alarms or crashes
-timeout --foreground -v $TIMEOUT_DURATION bash -c "$MOPSA_COMMAND $FILE_TO_REDUCE $MOPSA_STUBS 2>&1 > stdout || true" &&
+( $MOPSA_COMMAND $FILE_TO_REDUCE $MOPSA_STUBS 2>&1 > stdout || true ) &&
 # this is the behavior we want to reproduce
 grep "$MOPSA_ERR_STRING" stdout
