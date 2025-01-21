@@ -341,6 +341,16 @@ let compile ckind db args =
        mode := CC_NOTHING;
        ()
 
+    | "-soname"::rest when linker ->
+      (* find the argument of the linker option, and remove it *)
+      let rec aux = function
+        | [] -> []
+        | a::r ->
+          if starts_with "-Wl," a then r
+          else a::(aux r)
+      in
+      doit (aux rest)
+
     | x::rest ->
        if starts_with "-Wl," x then
          (* handle linker options *)
@@ -395,7 +405,7 @@ let compile ckind db args =
       )
       (db,[]) !srcs
   in
-  (* link objects and libraries, if neede *)
+  (* link objects and libraries, if needed *)
   match !mode with
   | CC_COMPILE | CC_NOTHING -> db
   | CC_LINK -> db_link db (if !out="" then exe_default else !out) (objs@(StringSet.elements !libs))
