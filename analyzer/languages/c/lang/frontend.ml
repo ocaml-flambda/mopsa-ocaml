@@ -1234,6 +1234,11 @@ let on_panic exn files time =
               assert (!opt_make_target <> "");
               !opt_make_target ^ ".i"
             | Some s -> s in
+          let preprocessed_file =
+            if Sys.file_exists preprocessed_file then
+              Filename.basename @@ Filename.temp_file ~temp_dir:(Sys.getcwd ()) "" ".i"
+            else
+              preprocessed_file in
           let stub_files = save_preprocessed_file (OptionExt.none_to_exn !o_prj) preprocessed_file in
           mopsa_command, stub_files, preprocessed_file
         else
