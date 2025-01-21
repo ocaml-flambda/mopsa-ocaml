@@ -341,7 +341,7 @@ let compile ckind db args =
        mode := CC_NOTHING;
        ()
 
-    | "-soname"::rest when linker ->
+    | ("-soname" | "-rpath")::rest when linker ->
       (* find the argument of the linker option, and remove it *)
       let rec aux = function
         | [] -> []
