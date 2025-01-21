@@ -83,14 +83,15 @@ struct
         ~custom:(fun stmt ->
             match skind stmt with
             | S_c_declaration (var,init,scope) ->
-              Some Effect.{ modified = VarSet.singleton var; removed = VarSet.empty }
+              Some { modified = VarSet.singleton var; removed = VarSet.empty }
 
             | S_assign ({ekind = E_c_deref _},_)
             | S_forget ({ekind = E_c_deref _}) ->
-              (* We can ignore theses statements because we transform then into statements
+              (* We do not want to log statements with dereferences in the changes. These statements are
+                 handled by the manager which translates them into equivalent statements
                  with variables, and we use the manager to execute them. Therefore, we are
-                 sure that the statements with variables are logged in the effects. *)
-              Some Effect.{ modified = VarSet.empty; removed = VarSet.empty }
+                 sure that the statements with variables are logged in the changes. *)
+              Some { modified = VarSet.empty; removed = VarSet.empty }
 
             | _ -> None
           ) in

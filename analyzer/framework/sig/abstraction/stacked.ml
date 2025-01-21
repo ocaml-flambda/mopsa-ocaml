@@ -69,14 +69,14 @@ sig
 
   val widen : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a * bool
 
-  val merge : t -> t * effect -> t * effect -> t
-  (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
+  val merge : t -> t * change -> t * change -> t
+  (** [merge pre (post1, change1) (post2, change2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
       abstraction DAG (e.g., a reduced product).
 
-      The effects [effect1] and [effect2] represent a journal of internal statements
+      The changes [change1] and [change2] represent a journal of internal statements
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
@@ -121,13 +121,13 @@ module Instrument(D:STACKED) : STACKED with type t = D.t =
 struct
   include D
 
-  (* Add stmt to the effects of the domain *)
+  (* Add stmt to the changes of the domain *)
   let exec stmt man flow =
-    if are_effects_enabled () then
+    if is_change_tracker_enabled () then
       D.exec stmt man flow |>
       OptionExt.lift @@ fun res ->
-      Cases.map_effects (fun effects flow ->
-          man.add_effect stmt [] flow effects
+      Cases.map_changes (fun changes flow ->
+          man.add_change stmt [] flow changes
         ) res
     else
       D.exec stmt man flow

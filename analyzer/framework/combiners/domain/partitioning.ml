@@ -133,15 +133,15 @@ struct
             man.set tk (Map map') flow
         );
 
-      add_effect = (fun stmt path flow effect_map ->
+      add_change = (fun stmt path flow change_map ->
           match get_singleton_env_from_flow T_cur man flow with
           | Top     -> assert false
           | Map map ->
             M.fold
               (fun p _ acc ->
                  let path' = (Ax_partitioning_partition p) :: path in
-                 man.add_effect stmt path' flow acc
-              ) map effect_map
+                 man.add_change stmt path' flow acc
+              ) map change_map
         );
     }
 

@@ -64,8 +64,7 @@ Three outcomes are possible:
   The validity of the check cannot be determined.
   This may correspond to an actual error in the program for some execution flows, or to a spurious warning caused by a too coarse abstraction.
 
-By default, Mopsa prints only errors and warnings.
-Safe checks can be display with the option ``-show-safe-checks``.
+By default, Mopsa prints only errors and warnings. These errors and warnings are grouped by program location and type, if they can happen in multiple contexts. Safe checks can be displayed with the option ``-show-safe-checks``.
 
 
 .. _assumptions:

@@ -447,7 +447,14 @@ struct
     let () = debug "packs_of_var %a" pp_var v in
     match v.vkind with
     | Memory.Cells.Domain.Domain.V_c_cell ({base = { base_kind = Var v; base_valid = true}} as c) ->
-      let user_only = not (is_c_scalar_type v.vtyp) in
+      let user_only = not (is_c_scalar_type v.vtyp) && (
+          (* if there are scalar fields in a struct, keep it *)
+          match remove_typedef_qual v.vtyp with
+          | T_c_record({c_record_kind = C_struct} as record) ->
+            not @@ List.exists (fun rf ->
+                is_c_scalar_type rf.c_field_type) record.c_record_fields
+          | _ ->
+            true) in
       packs_of_base ~user_only ctx c.base
 
     | Memory.String_length.Domain.V_c_string_length (base,_) -> packs_of_base ctx base
