@@ -137,15 +137,15 @@ struct
             man.set tk (Map map') flow
         );
 
-      add_effect = (fun stmt path flow effect_map ->
+      add_change = (fun stmt path flow change_map ->
           match get_singleton_env_from_flow T_cur man flow with
           | Top     -> assert false
           | Map map ->
             M.fold
               (fun p _ acc ->
                  let path' = (Ax_partitioning_partition p) :: path in
-                 man.add_effect stmt path' flow acc
-              ) map effect_map
+                 man.add_change stmt path' flow acc
+              ) map change_map
         );
     }
 
@@ -391,7 +391,8 @@ struct
   let ask_partition_predicate range pman flow =
     get_env T_cur pman flow >>$ fun p flow ->
     let e = mk_expr (E_partition_predicate p) ~etyp:T_bool range in
-    Cases.singleton e flow
+    let e' = ask_and_reduce (pman.ask ~route:(Below P.name)) (Q_partition_predicate range) flow in
+    Cases.singleton (mk_binop e O_log_and e' ~etyp:T_bool range) flow
 
   let exec targets =
     let df = D.exec targets in

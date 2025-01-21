@@ -28,7 +28,7 @@ open Token
 open Flow
 open Context
 open Cases
-open Effect
+open Change
 open Ast.Semantic
 open Mopsa_utils
 
@@ -37,9 +37,9 @@ type 'a eval  = ('a,expr) cases
 
 include Cases
 
-let singleton ?(effects=empty_effect_map) ?(cleaners=[]) ?(translations=[]) e flow =
+let singleton ?(changes=empty_change_map) ?(cleaners=[]) ?(translations=[]) e flow =
   let e' = List.fold_left (fun acc (s,ee) -> add_expr_translation s ee acc) e translations in
-  Cases.singleton ~effects ~cleaners e' flow
+  Cases.singleton ~changes ~cleaners e' flow
 
 let add_translation semantic e evl =
   Cases.map_result (add_expr_translation semantic e) evl

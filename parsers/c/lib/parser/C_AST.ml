@@ -262,6 +262,8 @@ and type_qual = typ * qualifier
      mutable var_kind: variable_kind; (** variable kind and life-time *)
      mutable var_type: type_qual;
      mutable var_init: init option;
+     mutable var_before_stmts: statement list; (** statements executed before the declaration of the variable *)
+     mutable var_after_stmts: statement list; (** statements executed after the declaration of the variable *)
      mutable var_range: range;
      mutable var_com: comment list; (** comments associated to the declaration *)
    }

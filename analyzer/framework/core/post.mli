@@ -24,7 +24,7 @@
 open Ast.Stmt
 open Token
 open Flow
-open Effect
+open Change
 open Context
 open Cases
 open Lattice

@@ -36,3 +36,5 @@ val create_context : ?min_uid:int -> C_AST.target_info -> context
 val simplify_func : context -> func -> unit
 (** Simplify a single C function in the given context. *)
   
+val simplify_global_init : context -> init -> statement list * init * statement list
+(** Simplify an initialization of a global variable in the given context. *)

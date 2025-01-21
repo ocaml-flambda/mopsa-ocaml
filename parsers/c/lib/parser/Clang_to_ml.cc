@@ -3560,7 +3560,12 @@ CAMLprim value MLTreeBuilderVisitor::TranslateStmt(const Stmt * node) {
           Store_field(ret, 0, Val_int(isa<GCCAsmStmt>(x) ? MLTAG_ASM_STYLE_GCC : MLTAG_ASM_STYLE_MS));
           Store_field(ret, 1, Val_bool(x->isSimple()));
           Store_field(ret, 2, Val_bool(x->isVolatile()));
-          Store_field(ret, 3, caml_copy_string(x->generateAsmString(*Context).c_str()));
+          if (isa<GCCAsmStmt>(x))
+            Store_field(ret, 3, caml_copy_string(cast<GCCAsmStmt>(x)->getAsmString()->getString().str().c_str()));
+          else if (isa<MSAsmStmt>(x))
+            Store_field(ret, 3, caml_copy_string(cast<MSAsmStmt>(x)->getAsmString().str().c_str()));
+          else
+            caml_failwith("mlClangAST: unknown AsmStmt type");
           tmp1 = caml_alloc_tuple(x->getNumOutputs());
           for (size_t i = 0; i < x->getNumOutputs(); i++)  {
             tmp2 = caml_alloc_tuple(3);
