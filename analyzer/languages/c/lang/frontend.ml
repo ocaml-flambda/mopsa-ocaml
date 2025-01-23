@@ -266,10 +266,10 @@ let save_preprocessed_file prj output_file =
   let outch = open_out output_file in 
   let () = C_print.print_project ~verbose:false outch prj in
   let () = close_out outch in
-  List.filter
+  !opt_stubs_files @ List.filter
     (fun f ->
        Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
-    ) prj.proj_files
+    ) prj.proj_files 
 
 
 (** {2 Entry point} *)
