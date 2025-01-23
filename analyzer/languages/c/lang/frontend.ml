@@ -1224,36 +1224,47 @@ let on_panic exn files time =
     if multiple_files && not !opt_store_project then
       Format.printf "@\nTo benefit from Mopsa's automated testcase reduction capabilities, please remove command-line option `-c-no-project-storage`@\n"
     else
-      let mopsa_command, stub_files, file_to_reduce =
-        let mopsa_command = Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) (List.filter (fun s -> not @@ List.mem s files) (Array.to_list Sys.argv)) in
-        if multiple_files then
-          let preprocessed_file =
-            (* Check if the file has already been preprocessed *)
-            match List.find_opt (String.ends_with ~suffix:".i") files with
-            | None ->
-              assert (!opt_make_target <> "");
-              !opt_make_target ^ ".i"
-            | Some s -> s in
-          let preprocessed_file =
-            if Sys.file_exists preprocessed_file then
-              Filename.basename @@ Filename.temp_file ~temp_dir:(Sys.getcwd ()) "" ".i"
+      if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
+        let () = Format.printf "@\n%a Do you want to try automated testcase reduction (using creduce/cvise) to find/report a minimal program that still crashes Mopsa? If yes, Mopsa will generate a preprocessed C file of your project. [Y/n]@."
+            (Debug.color_str Debug.magenta) "Mopsa encountered a fatal error."
+        in
+        let answer = input_line stdin in
+        if answer = "" || (String.lowercase_ascii answer).[0] = 'y' then
+          let mopsa_command, stub_files, file_to_reduce =
+            let mopsa_command = Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) (List.filter (fun s -> not @@ List.mem s files) (Array.to_list Sys.argv)) in
+            if multiple_files then
+              let preprocessed_file =
+                (* Check if the file has already been preprocessed *)
+                match List.find_opt (String.ends_with ~suffix:".i") files with
+                | None ->
+                  assert (!opt_make_target <> "");
+                  !opt_make_target ^ ".i"
+                | Some s -> s in
+              let preprocessed_file =
+                if Sys.file_exists preprocessed_file then
+                  Filename.basename @@ Filename.temp_file ~temp_dir:(Sys.getcwd ()) "" ".i"
+                else
+                  preprocessed_file in
+              let stub_files = save_preprocessed_file (OptionExt.none_to_exn !o_prj) preprocessed_file in
+              mopsa_command, stub_files, preprocessed_file
             else
-              preprocessed_file in
-          let stub_files = save_preprocessed_file (OptionExt.none_to_exn !o_prj) preprocessed_file in
-          mopsa_command, stub_files, preprocessed_file
+              mopsa_command, [], List.hd files
+          in
+          (* Large timeout due to potential slowdown with large parallelization *)
+          let timeout = int_of_float (5. +. 4. *. time) in
+          Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s bash -c 'cvise --timeout %d %s $FILE_TO_REDUCE'@\n"
+            (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
+            (String.escaped msg)
+            mopsa_command
+            (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) stub_files
+            file_to_reduce
+            timeout
+            (!Paths.opt_share_dir ^ "/../../tools/reducer-oracle.sh")
         else
-          mopsa_command, [], List.hd files
-      in
-      (* Large timeout due to potential slowdown with large parallelization *)
-      let timeout = int_of_float (5. +. 4. *. time) in
-      Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s bash -c 'cvise --timeout %d %s $FILE_TO_REDUCE'@\n"
-        (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
-        (String.escaped msg)
-        mopsa_command
-        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) stub_files
-        file_to_reduce
-        timeout
-        (!Paths.opt_share_dir ^ "/../../tools/reducer-oracle.sh")
+          ()
+      else
+        Format.printf "@\n%a@\n"
+          (Debug.color_str Debug.magenta) "Hint: to get automated testcase reduction instructions, launch the analysis again in a TTY (without redirections, etc)."
   | _ ->
     ()
 
