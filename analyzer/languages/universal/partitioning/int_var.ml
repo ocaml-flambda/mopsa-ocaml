@@ -67,7 +67,7 @@ struct
 
   let () = register_domain_option name {
       key = "-state-partition-int-var-with-full-name";
-      doc = "is the target name provided with full name (there may be issues if locals in different scopes have the same name otherwise)";
+      doc = "full target names are provided to option `-state-partition-int-var` (in order to differentiate variables in different scopes sharing the same name)";
       spec = ArgExt.Set opt_target_name_is_with_uid;
       category = "PARTITIONING";
       default = "false";
@@ -110,12 +110,12 @@ struct
   let is_target_var v =
     match vtyp v with
     | T_int | T_bool ->
-      Core.Ast.Var.force_print_uniq_with_uid false (fun () ->
-          let name = Format.asprintf "%a" pp_var v in
-          let () = debug "is_target_var %s %s = %b" name !opt_target_name (name = !opt_target_name) in 
-          name = !opt_target_name)
+      Core.Ast.Var.force_print_uniq_with_uid !opt_target_name_is_with_uid (fun () ->
+          let vname = Format.asprintf "%a" pp_var v in
+          let () = Debug.debug ~channel:name "is_target_var %s %s = %b" vname !opt_target_name (vname = !opt_target_name) in
+          vname = !opt_target_name)
     | _ ->
-      let () = debug "skipping var %a, of bad type %a" pp_var v pp_typ (vtyp v) in 
+      let () = Debug.debug ~channel:name "skipping var %a, of bad type %a" pp_var v pp_typ (vtyp v) in
       false
 
   let sat man post =
