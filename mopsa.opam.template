@@ -52,3 +52,4 @@ depexts: [
   ["llvm"] {os = "macos"}
   ["devel/llvm"] {os = "freebsd"}
 ]
+x-maintenance-intent: ["(latest)"]
