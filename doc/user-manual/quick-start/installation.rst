@@ -56,7 +56,11 @@ The OCaml dependencies can be installed with the following command using `opam`:
 
    $ LANG=C opam install --deps-only --with-doc --with-test .
 
+.. warning::
+   In some version of `opam < 2.3.0`, there was a bug where ``--deps-only`` does not install the external dependencies (``depexts`` in ``mopsa.opam``). In that case, we suggest running ``opam install . --depexts-only && LANG=C opam install --deps-only --with-doc --with-test .``.
 
+
+   
 If you are using Ubuntu 20.04, you can use the following commands to install the dependencies:
 
 .. code-block:: shell-session
