@@ -133,15 +133,15 @@ struct
             man.set tk (Map map') flow
         );
 
-      add_effect = (fun stmt path flow effect_map ->
+      add_change = (fun stmt path flow change_map ->
           match get_singleton_env_from_flow T_cur man flow with
           | Top     -> assert false
           | Map map ->
             M.fold
               (fun p _ acc ->
                  let path' = (Ax_partitioning_partition p) :: path in
-                 man.add_effect stmt path' flow acc
-              ) map effect_map
+                 man.add_change stmt path' flow acc
+              ) map change_map
         );
     }
 
@@ -387,7 +387,8 @@ struct
   let ask_partition_predicate range pman flow =
     get_env T_cur pman flow >>$ fun p flow ->
     let e = mk_expr (E_partition_predicate p) ~etyp:T_bool range in
-    Cases.singleton e flow
+    let e' = ask_and_reduce (pman.ask ~route:(Below P.name)) (Q_partition_predicate range) flow in
+    Cases.singleton (mk_binop e O_log_and e' ~etyp:T_bool range) flow
 
   let exec targets =
     let df = D.exec targets in
@@ -462,29 +463,44 @@ struct
              assert false
       )
 
+  let inside_partition_print_expr = ref false
+
   let print_expr targets =
     let df = D.print_expr targets in
-    (fun man flow printer exp ->
-       let dman = domain_man man in
-       man.get T_cur flow |>
-       Cases.iter_result
-         (fun a flow ->
-            match a with
-            | Top ->
-              df dman flow printer exp
+    if sat_targets ~targets ~domains:(DomainSet.singleton name) then
+      (fun man flow printer exp ->
+         let dman = domain_man man in
+         if !inside_partition_print_expr then
+           df dman flow printer exp
+         else
+           begin
+             inside_partition_print_expr := true;
+             man.get T_cur flow |>
+             Cases.iter_result
+               (fun a flow ->
+                  match a with
+                  | Top ->
+                    df dman flow printer exp
 
-            | Map map when M.is_empty map ->
-              pp_string printer "⊥"
+                  | Map map when M.is_empty map ->
+                    pp_string printer "⊥"
 
-            | Map map ->
-              pp_mapi
-                (unformat P.print)
-                (fun printer (p, e) ->
-                   let flow = set_env T_cur (singleton p e) man flow |> post_to_flow man in
-                   df dman flow printer exp
-                )
-                printer (M.bindings map)
-         )
-    )
+                  | Map map ->
+                    pp_mapi
+                      (unformat P.print)
+                      (fun printer (p, e) ->
+                         let flow = set_env T_cur (singleton p e) man flow |> post_to_flow man in
+                         df dman flow printer exp
+                      )
+                      printer (M.bindings map)
+               );
+             inside_partition_print_expr := false
+           end
+      )
+    else
+      (fun man flow printer exp ->
+         let dman = domain_man man in
+         df dman flow printer exp
+      )
 
 end

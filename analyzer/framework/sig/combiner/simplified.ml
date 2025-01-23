@@ -31,7 +31,7 @@ sig
   val domains : DomainSet.t
   val semantics : SemanticSet.t
   val routing_table : routing_table
-  val merge : path -> t -> t * effect_map -> t * effect_map -> t
+  val merge : path -> t -> t * change_map -> t * change_map -> t
   val exec : DomainSet.t option -> stmt -> ('a,t) simplified_man -> 'a ctx -> t -> t option
   val ask  : DomainSet.t option -> ('a,'r) query -> ('a,t) simplified_man -> 'a ctx -> t -> 'r option
   val print_state : DomainSet.t option -> printer -> t -> unit
@@ -47,11 +47,11 @@ struct
   let semantics = SemanticSet.empty
   let routing_table = empty_routing_table
   let merge path pre (a1,m1) (a2,m2) =
-    let e1 = get_effect path m1 in
-    let e2 = get_effect path m2 in
-    if compare_effect e1 e2 = 0 then a1 else
-    if is_empty_effect e1 then a2 else
-    if is_empty_effect e2 then a1
+    let e1 = get_change path m1 in
+    let e2 = get_change path m2 in
+    if compare_change e1 e2 = 0 then a1 else
+    if is_empty_change e1 then a2 else
+    if is_empty_change e2 then a1
     else D.merge pre (a1,e1) (a2,e2)  let exec domains = D.exec
   let ask domains  = D.ask
   let print_state targets = D.print_state
@@ -62,8 +62,8 @@ module CombinerToSimplified(T:SIMPLIFIED_COMBINER) : SIMPLIFIED with type t = T.
 struct
   include T
   let merge pre (a1,e1) (a2,e2) =
-    let te1 = singleton_effect_map empty_path e1 in
-    let te2 = singleton_effect_map empty_path e2 in
+    let te1 = singleton_change_map empty_path e1 in
+    let te2 = singleton_change_map empty_path e2 in
     T.merge empty_path pre (a1,te1) (a2,te2)
   let exec stmt man ctx a = T.exec None stmt man ctx a
   let ask query man ctx a = T.ask None query man ctx a
@@ -120,9 +120,9 @@ struct
          let post =
            set_env T_cur a' man flow
          in
-         if are_effects_enabled () then
-           post |> Cases.map_effects (fun effects flow ->
-               man.add_effect stmt [] flow effects
+         if is_change_tracker_enabled () then
+           post |> Cases.map_changes (fun changes flow ->
+               man.add_change stmt [] flow changes
              )
          else
            post
@@ -151,4 +151,3 @@ struct
          )
     )
 end
-

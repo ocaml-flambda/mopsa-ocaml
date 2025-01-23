@@ -257,6 +257,14 @@ let list_domains (domains:string list) ~out =
   in
   print out json
 
+let list_reductions (reductions:string list) ~out =
+  let json = `List (
+      reductions |>
+      List.map (fun d -> `String d)
+    )
+  in
+  print out json
+
 let list_checks checks ~out =
   let json = `List (
       List.map render_check checks

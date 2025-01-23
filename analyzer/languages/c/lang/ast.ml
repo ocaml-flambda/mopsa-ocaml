@@ -161,6 +161,9 @@ type typ +=
   | T_c_block_object of typ
   (** Type of block objects.  *)
 
+  | T_c_unknown_builtin of string
+  (** Unknown builtin type. *)
+
 
 (** {2 Function descriptor} *)
 (** *********************** *)
@@ -219,6 +222,8 @@ type cvar = {
   cvar_uid: int;
   cvar_orig_name : string;
   cvar_uniq_name : string;
+  cvar_before_stmts: stmt list; (** list of statements to execute before the declaration of a variable *)
+  cvar_after_stmts: stmt list; (** list of statements to execute after the declaration of a variable *)
 }
 
 type var_kind +=
@@ -230,9 +235,10 @@ let () =
     print = (fun next fmt v ->
         match vkind v with
         | V_cvar cvar ->
-          if !Framework.Core.Ast.Var.print_uniq_with_uid then
-            Format.fprintf fmt "%s:%a" cvar.cvar_orig_name pp_relative_range cvar.cvar_range
-          else Format.fprintf fmt "%s" cvar.cvar_orig_name
+          (* if !Framework.Core.Ast.Var.print_uniq_with_uid then *)
+          (*   Format.fprintf fmt "%s:%a" cvar.cvar_orig_name pp_relative_range cvar.cvar_range *)
+          (* else *)
+            Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );
 

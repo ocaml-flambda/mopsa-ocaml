@@ -72,8 +72,8 @@ let (>>%?) = Post.(>>%?)
 module Path = Path
 include Path
 
-module Effect = Effect
-include Effect
+module Change = Change
+include Change
 
 include Query
 

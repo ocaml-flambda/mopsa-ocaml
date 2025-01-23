@@ -110,7 +110,7 @@ let fst_pair_man (man:('a, 'b * 'c) man) : ('a, 'b) man = {
   man with
   get  = get_pair_fst man;
   set  = set_pair_fst man;
-  add_effect = (fun stmt path effect_map -> man.add_effect stmt (Ax_pair_left :: path) effect_map);
+  add_change = (fun stmt path change_map -> man.add_change stmt (Ax_pair_left :: path) change_map);
 }
 
 (** Manager of the right argument in a pair of domains *)
@@ -118,7 +118,7 @@ let snd_pair_man (man:('a, 'b * 'c) man) : ('a, 'c) man = {
   man with
   get = get_pair_snd man;
   set = set_pair_snd man;
-  add_effect = (fun stmt path effect_map -> man.add_effect stmt (Ax_pair_right :: path) effect_map);
+  add_change = (fun stmt path change_map -> man.add_change stmt (Ax_pair_right :: path) change_map);
 }
 
 (** Find the manager of a domain given the manager of a combiner containing it *)

@@ -33,13 +33,17 @@ let () = register_query {
              join = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
                        fun next query a b ->
                        match query with
-                       | Q_python_addr_of_module _ -> assert false
+                       | Q_python_addr_of_module _ ->
+                         if Compare.option compare_addr a b = 0 then a
+                         else assert false
                        | _ -> next.pool_join query a b in
                      f);
              meet = (let f: type a r. query_pool -> (a, r) query -> r -> r -> r =
                        fun next query a b ->
                        match query with
-                       | Q_python_addr_of_module _ -> assert false
+                       | Q_python_addr_of_module _ ->
+                         if Compare.option compare_addr a b = 0 then a
+                         else assert false
                        | _ -> next.pool_meet query a b in
                      f)
            }
@@ -108,7 +112,7 @@ module Domain =
       | S_py_import(modul, vasname, vroot) ->
         begin debug "stmt = %a" pp_stmt stmt;
         try
-          let obj, flow, _ = import_module man modul range flow in
+          import_module man modul range flow >>$ fun (obj, _) flow ->
           let v = match vasname with
             | None -> vroot
             | Some v -> v
@@ -116,20 +120,20 @@ module Domain =
           debug "performing assignement %a = %a" pp_var v Pp.pp_py_object obj;
           Flow.add_safe_check Alarms.CHK_PY_MODULENOTFOUNDERROR range flow |>
             man.exec (mk_assign (mk_var v range) (mk_py_object obj range) range) >>%
-          Post.return |>
-          OptionExt.return
+          Post.return
         with Module_not_found m ->
           man.exec
             (Utils.mk_builtin_raise_msg "ModuleNotFoundError" (
                  Format.asprintf "No module named '%s'" m
                ) range)
-            flow >>% Post.return |> OptionExt.return
+            flow >>% Post.return
         end
+        |> OptionExt.return
 
       | S_py_import_from(modul, name, _, vmodul) ->
         (* FIXME: objects defined in modul other than name should not appear *)
         debug "importing %s from module %s" name modul;
-        let obj, flow, ispyi = import_module man modul range flow in
+        import_module man modul range flow >>$ (fun (obj, ispyi) flow ->
         debug "%a import_module ok, adding a few eq" pp_stmt stmt;
         if ispyi then
           match kind_of_object obj with
@@ -150,7 +154,7 @@ module Domain =
                 let stmt = mk_assign (mk_var vmodul range) (mk_var v range) range in
                 man.exec stmt flow
             end
-            >>% Post.return |> OptionExt.return
+            >>% Post.return
           | _ -> assert false
         else
          let e =
@@ -173,24 +177,26 @@ module Domain =
          let () = debug "assign %a! vtyp vmodul = %a" pp_stmt stmt pp_typ (vtyp vmodul) in
          (* debug "%a" (format @@ Flow.print man.lattice.print) flow; *)
          man.exec stmt flow >>%
-         Post.return |>
-         OptionExt.return
+         Post.return
+          )
+        |> OptionExt.return
 
       | _ ->
          None
 
 
     (** Search for the module in the search path and parse its body *)
-    and import_module man name range flow =
+    and import_module man name range flow : ('a, Ast.py_object * bool) Cases.cases =
       if is_builtin_module name
-      then find_builtin_module name, flow, false
+      then Cases.return (find_builtin_module name, false) flow
       else
         let name = String.map (fun c -> if c = '.' then '/' else c) name in
-        let (addr, expr), flow, is_stub =
+        (
+          man.get T_cur flow >>$ fun env flow ->
           try
-            let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name (get_singleton_env_from_flow T_cur man flow) in
+            let (a, e), is_stub = Modules.find_singleton @@ ModulesMap.find name env in
             debug "module %s already imported, cache hit!" name;
-            (a, e), flow, is_stub
+            Cases.return ((a, e), is_stub) flow 
           with Not_found ->
             begin
               let dir = Paths.get_lang_stubs_dir "python" () in
@@ -279,10 +285,9 @@ module Domain =
                ) |>
                post_to_flow man
               in
-              (a, e), flow', is_stub
+              Cases.return ((a, e), is_stub) flow'
             end
-        in
-        (addr, expr), flow, is_stub
+        )
 
     (** Parse and import a builtin module *)
     and import_builtin_module base name =

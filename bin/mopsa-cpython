@@ -1,8 +1,8 @@
 #!/bin/bash
 
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-CONFIG=python/multilanguage.json
+CONFIG=python/tail-multilanguage.json
 SHAREDIR=$(realpath ${MOPSADIR}/share/mopsa)
 PYTHONH=$(python3 -c "import sys; print(f'/usr/include/python{sys.version_info.major}.{sys.version_info.minor}/')")
 
-${MOPSADIR}/bin/mopsa-python -config=${CONFIG} -hash-heap-address=true -unprecise-exn=MemoryError  -library-only -default-alloc-pol=range -I=$PYTHONH -ccopt="-include${SHAREDIR}/stubs/cpython/python_stubs.h" -additional-stubs=cpython/Python.c,cpython/python_stubs.c  -use-stub=memset,vasprintf,memcpy,memmove,strcpy $@
+${MOPSADIR}/bin/mopsa-python -config=${CONFIG} -marker return -hash-heap-address=true -unprecise-exn=MemoryError  -library-only -default-alloc-pol=range -I=$PYTHONH -ccopt="-include${SHAREDIR}/stubs/cpython/python_stubs.h" -additional-stubs=cpython/Python.c,cpython/python_stubs.c  -use-stub=memset,vasprintf,memcpy,memmove,strcpy $@

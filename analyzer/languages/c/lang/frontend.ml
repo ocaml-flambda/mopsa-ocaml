@@ -713,6 +713,8 @@ and from_var ctx (v: C_AST.variable) : var =
             cvar_scope = from_var_scope ctx v.var_kind;
             cvar_range = from_range v.var_range;
             cvar_uid = v.var_uid;
+            cvar_before_stmts = List.map (from_stmt ctx) v.var_before_stmts;
+            cvar_after_stmts = List.map (from_stmt ctx) v.var_after_stmts;
           })
         (from_typ ctx v.var_type)
     in
@@ -855,6 +857,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
      (* size is in bytes, length is in units of t *)
      let len = Z.div (Z.of_int v.vector_size) (sizeof_type_in_target t !target_info) in
      Ast.T_c_array (t, Ast.C_array_length_cst len)
+  | C_AST.T_unknown_builtin s -> Ast.T_c_unknown_builtin s
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
   | C_AST.Char SIGNED -> Ast.C_signed_char

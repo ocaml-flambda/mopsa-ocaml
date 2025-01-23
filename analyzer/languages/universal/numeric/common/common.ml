@@ -48,6 +48,16 @@ let pp_int_interval fmt itv = I.fprint_bot fmt itv
 
 let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
 
+(** Creates var \in itv constraint *)
+let constraints_of_itv var (itv : int_itv) range : expr =
+  match itv with
+  | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi) ->
+    mk_in var (mk_z lo range) (mk_z hi range) range
+  | Nb (ItvUtils.IntBound.MINF, ItvUtils.IntBound.Finite hi) -> mk_le var (mk_z hi range) range
+  | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.PINF) -> mk_ge var (mk_z lo range) range
+  | Nb _ -> mk_true range
+  | BOT -> assert false
+
 
 (** {2 Integer intervals with congruence} *)
 (** ************************************* *)

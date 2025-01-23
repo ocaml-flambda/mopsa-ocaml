@@ -325,6 +325,8 @@ struct
 
     | e ->
       Interface.error e;
+      if Printexc.backtrace_status () then Printexc.print_backtrace stderr;
+      Debug.warn "Error encountered (see above); jumping back to allow looking around";
       Interface.reach (interface_action action) man flow;
       interact action flow
 
@@ -363,9 +365,11 @@ struct
     try
       init_state state;
       let ret =
-        exec stmt flow |>
-        post_to_flow man
-      in
+        (
+          exec stmt flow >>% fun flow ->
+          exec (mk_stmt (S_block ([], [])) (tag_range stmt.srange "end")) flow
+        )
+        |> post_to_flow man in
       Interface.finish man ret;
       ret
     with
@@ -388,7 +392,7 @@ struct
 
   and ask : type r. ?route:route -> (Toplevel.t,r) query -> Toplevel.t flow -> (Toplevel.t, r) cases =
     fun ?(route=toplevel)query flow ->
-      Toplevel.ask query man flow
+      Toplevel.ask ~route query man flow
 
   and print_expr ?(route=toplevel) flow printer exp =
     Toplevel.print_expr ~route man flow printer exp
@@ -415,8 +419,8 @@ struct
         let flow = Flow.set tk abs lattice flow in
         Post.return flow
       );
-    add_effect = (fun stmt path flow effect_map ->
-       add_stmt_to_effect_map stmt (List.rev path) effect_map
+    add_change = (fun stmt path flow change_map ->
+       add_stmt_to_change_map stmt (List.rev path) change_map
       );
     exec = exec;
     eval = eval;

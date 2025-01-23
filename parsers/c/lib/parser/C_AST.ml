@@ -166,6 +166,9 @@ type typ =
   | T_vector of vector_type
   (** GCC vectors *)
 
+  | T_unknown_builtin of string
+  (** unknown builtin *)
+
 
 and type_qual = typ * qualifier
  (** Type with qualifier. *)
@@ -259,6 +262,8 @@ and type_qual = typ * qualifier
      mutable var_kind: variable_kind; (** variable kind and life-time *)
      mutable var_type: type_qual;
      mutable var_init: init option;
+     mutable var_before_stmts: statement list; (** statements executed before the declaration of the variable *)
+     mutable var_after_stmts: statement list; (** statements executed after the declaration of the variable *)
      mutable var_range: range;
      mutable var_com: comment list; (** comments associated to the declaration *)
    }
@@ -531,6 +536,7 @@ let rec type_is_scalar (t:typ) =
   | T_record _ -> false
   | T_complex _ -> false
   | T_vector _ -> false
+  | T_unknown_builtin _ -> false
 (** Whether a type yields a scalar value. *)
 
 

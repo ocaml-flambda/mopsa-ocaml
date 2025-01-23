@@ -153,7 +153,14 @@ struct
         in
         if cvar.cvar_scope = Variable_extern then acc
         else
-          let stmt = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
+          let decl = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
+          let stmt =
+            match cvar.cvar_before_stmts, cvar.cvar_after_stmts with
+            | [], [] -> decl
+            | before, [] -> mk_block (before @ [decl]) cvar.cvar_range
+            | [], after -> mk_block (decl::after) cvar.cvar_range
+            | before, after -> mk_block (before @ [decl] @ after) cvar.cvar_range
+          in
           acc >>% man.exec stmt
       ) (Post.return flow)
 
@@ -547,6 +554,8 @@ struct
         cvar_uid = 0;
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
+        cvar_before_stmts = [];
+        cvar_after_stmts = [];
       }) (size_type flow) in
     List.fold_left
       (fun acc arg -> acc >>% assume_valid_string arg qi range man)
