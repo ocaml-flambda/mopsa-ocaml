@@ -7,7 +7,7 @@
 (subst disabled)
 
 (source
- (uri "https://gitlab.com/mopsa/mopsa-analyzer"))
+ (uri "git+https://gitlab.com/mopsa/mopsa-analyzer"))
 
 (authors
   "Antoine Miné"
