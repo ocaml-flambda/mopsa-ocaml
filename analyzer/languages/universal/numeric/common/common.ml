@@ -84,7 +84,7 @@ let () =
   register_shared_option rounding_option_name {
     key = "-float-rounding-mode";
     category = "Numeric";
-    spec = ArgExt.Symbol (
+    spec = Arg.Symbol (
         ["near"; "zero"; "up"; "down"; "rnd"],
         (function
           | "near" -> opt_float_rounding := Apron.Texpr1.Near

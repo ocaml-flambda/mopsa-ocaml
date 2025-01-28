@@ -41,7 +41,7 @@ let () =
     key="-error-is-builtin";
     category = "C";
     doc = "assume error function corresponds to the builtin";
-    spec = ArgExt.Bool (fun b -> opt_error_builtin := b);
+    spec = Arg.Bool (fun b -> opt_error_builtin := b);
     default = "true"
   }
 

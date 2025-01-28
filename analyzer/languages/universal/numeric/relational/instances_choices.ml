@@ -37,7 +37,7 @@ let () =
     key = "-numeric";
     category = "Numeric";
     doc = " select the relational numeric domain.";
-    spec = ArgExt.Symbol (
+    spec = Arg.Symbol (
         get_instances_names (),
         (fun name ->
            let (module M : RELATIONAL) = List.find

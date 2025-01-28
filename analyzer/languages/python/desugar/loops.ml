@@ -35,14 +35,14 @@ let () =
       key = "-py-disable-desugar-for-range";
       category = "Loops";
       doc = " disable the special desugaring on for-range-based loops (desugaring not worth it when no numerical domains are available)";
-      spec = ArgExt.Clear opt_desugar_for_range;
+      spec = Arg.Clear opt_desugar_for_range;
       default = "enabled";
     };
   register_language_option "python" {
       key = "-py-disable-desugar-for-tuple";
       category = "Loops";
       doc = " disable the special desugaring on for ... in (...) loops";
-      spec = ArgExt.Clear opt_desugar_for_tuple;
+      spec = Arg.Clear opt_desugar_for_tuple;
       default = "enabled";
     }
 

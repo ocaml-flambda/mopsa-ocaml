@@ -61,7 +61,7 @@ struct
       key = "-c-check-signed-arithmetic-overflow";
       category = "C";
       doc = " check overflows in signed integer arithmetic";
-      spec = ArgExt.Bool (fun b -> opt_signed_arithmetic_overflow := b);
+      spec = Arg.Bool (fun b -> opt_signed_arithmetic_overflow := b);
       default = "true";
     }
 
@@ -71,7 +71,7 @@ struct
       key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
       doc = " check overflows in unsigned integer arithmetic";
-      spec = ArgExt.Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
+      spec = Arg.Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
       default = "false";
     }
 
@@ -81,7 +81,7 @@ struct
       key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to signed integer";
-      spec = ArgExt.Bool (fun b -> opt_signed_implicit_cast_overflow := b);
+      spec = Arg.Bool (fun b -> opt_signed_implicit_cast_overflow := b);
       default = "true";
     }
 
@@ -91,7 +91,7 @@ struct
       key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to unsigned integer";
-      spec = ArgExt.Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
+      spec = Arg.Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
       default = "true";
     }
 
@@ -102,7 +102,7 @@ struct
       key = "-c-check-explicit-cast-overflow";
       category = "C";
       doc = " check overflows in explicit casts";
-      spec = ArgExt.Bool (fun b -> opt_explicit_cast_overflow := b);
+      spec = Arg.Bool (fun b -> opt_explicit_cast_overflow := b);
       default = "false";
     }
 
@@ -113,7 +113,7 @@ struct
       key = "-c-check-float-invalid-operation";
       category = "C";
       doc = " invalid float operations generate errors instead of silent NaN";
-      spec = ArgExt.Bool (fun b -> opt_float_invalid_operation := b);
+      spec = Arg.Bool (fun b -> opt_float_invalid_operation := b);
       default = "false";
     }
 
@@ -123,7 +123,7 @@ struct
       key = "-c-check-float-division-by-zero";
       category = "C";
       doc = " float divisions by 0 generate errors instead of infinities";
-      spec = ArgExt.Bool (fun b -> opt_float_division_by_zero := b);
+      spec = Arg.Bool (fun b -> opt_float_division_by_zero := b);
       default = "false";
     }
 
@@ -133,7 +133,7 @@ struct
       key = "-c-check-float-overflow";
       category = "C";
       doc = " float overflows generate errors";
-      spec = ArgExt.Bool (fun b -> opt_float_overflow := b);
+      spec = Arg.Bool (fun b -> opt_float_overflow := b);
       default = "false";
     }
 
@@ -143,7 +143,7 @@ struct
       key = "-c-check-overflows-with-relational";
       category = "C";
       doc = " check for overflows using the relational abstract domains too (more expensive but can be more precise)";
-      spec = ArgExt.Clear opt_mnum_fast_query;
+      spec = Arg.Clear opt_mnum_fast_query;
       default = string_of_bool !opt_mnum_fast_query;
     }
 

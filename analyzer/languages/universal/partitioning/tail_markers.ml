@@ -38,7 +38,7 @@ struct
   let () = register_domain_option name {
       key = "-tail-markers";
       doc = "threshold of the number of last markers to consider when partitioning traces";
-      spec = ArgExt.Set_int opt_max_length;
+      spec = Arg.Set_int opt_max_length;
       category = "Partitioning";
       default = string_of_int !opt_max_length;
     }

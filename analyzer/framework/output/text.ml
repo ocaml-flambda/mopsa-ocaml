@@ -409,7 +409,7 @@ let help (args:ArgExt.arg list) ~out =
       print out "  %s@." (String.uppercase_ascii cat);
       List.iter (fun arg ->
           match arg.spec with
-          | ArgExt.Symbol(l,_) ->
+          | Arg.Symbol(l,_) ->
             print out "    %s={%a} %s%a@."
               arg.key
               (pp_print_list

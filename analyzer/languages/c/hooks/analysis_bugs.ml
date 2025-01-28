@@ -71,7 +71,7 @@ struct
   let () = register_language_option "C" {
       key = "-c-analysis-bugs-whitelist";
       doc = "whitelist of non-terminating functions";
-      spec = ArgExt.Set_string_list opt_whitelist;
+      spec = Arg.String (ArgExt.set_string_list_lifter opt_whitelist);
       category = "C Hooks";
       default = "";
     }

@@ -216,7 +216,7 @@ let panic exn ~btrace ~time ~files ~out =
   print out (`Assoc assoc)
 
 
-let help (args:arg list) ~out =
+let help (args:ArgExt.arg list) ~out =
   let json  = `List (
       args |>
       List.map (fun arg ->
@@ -227,21 +227,16 @@ let help (args:arg list) ~out =
             "default", `String arg.default;
             "type", `String (
               match arg.spec with
-              | ArgExt.Bool _ -> "bool"
-              | ArgExt.Set _ -> "set"
-              | ArgExt.Clear _ -> "clear"
-              | ArgExt.Unit _ -> "unit"
-              | ArgExt.Unit_delayed _ -> "unit"
-              | ArgExt.Unit_exit _ -> "unit"
-              | ArgExt.String _ -> "string"
-              | ArgExt.Set_string _ -> "string"
-              | ArgExt.String_list _ -> "string list"
-              | ArgExt.Set_string_list _ -> "string list"
-              | ArgExt.Int _ -> "int"
-              | ArgExt.Set_int _ -> "int"
-              | ArgExt.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
-              | ArgExt.Symbol_delayed (l, _) -> "symbol:" ^ (String.concat "," l)
-              | ArgExt.Symbol_exit (l, _) -> "symbol:" ^ (String.concat "," l)
+              | Arg.Bool _ -> "bool"
+              | Arg.Set _ -> "set"
+              | Arg.Clear _ -> "clear"
+              | Arg.Unit _ -> "unit"
+              | Arg.String _ -> "string"
+              | Arg.Set_string _ -> "string"
+              | Arg.Int _ -> "int"
+              | Arg.Set_int _ -> "int"
+              | Arg.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
+              | _ -> failwith "Not implemented"
             )
           ]
         )

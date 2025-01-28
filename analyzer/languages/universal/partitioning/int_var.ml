@@ -56,7 +56,7 @@ struct
   let () = register_domain_option name {
       key = "-state-partition-int-var";
       doc = "name of the variable used to partition the states";
-      spec = ArgExt.String parse_option;
+      spec = Arg.String parse_option;
       category = "PARTITIONING";
       default = "";
     }

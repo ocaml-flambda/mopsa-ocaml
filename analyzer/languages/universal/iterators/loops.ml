@@ -125,49 +125,49 @@ let () =
     key = "-widening-delay";
     category = "Loops";
     doc = " number of iterations before applying a widening";
-    spec = ArgExt.Set_int opt_loop_widening_delay;
+    spec = Arg.Set_int opt_loop_widening_delay;
     default = "0";
   };
   register_domain_option name {
     key = "-loop-unrolling";
     category = "Loops";
     doc = " number of unrolling iterations before joining the environments";
-    spec = ArgExt.Int (fun n -> opt_unrolling.unroll_global_nb <- Some n);
+    spec = Arg.Int (fun n -> opt_unrolling.unroll_global_nb <- Some n);
     default = "1";
   };
   register_domain_option name {
     key = "-loop-unrolling-at";
     category = "Loops";
     doc = " number of unrolling iterations at specific program location (syntax: [file.]line:unrolling)";
-    spec = ArgExt.String_list (fun specs -> opt_unrolling.unroll_locals <- List.map parse_unroll_local specs);
+    spec = Arg.String (ArgExt.string_list_lifter (fun specs -> opt_unrolling.unroll_locals <- List.map parse_unroll_local specs));
     default = "";
   };
   register_domain_option name {
     key = "-loop-full-unrolling";
     category = "Loops";
     doc = " unroll loops without applying widening";
-    spec = ArgExt.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb));
+    spec = Arg.Bool (fun b -> opt_unrolling.unroll_global_nb <- (if b then None else opt_unrolling.unroll_global_nb));
     default = "false";
   };
   register_domain_option name {
     key = "-loop-full-unrolling-at";
     category = "Loops";
     doc = " fully unroll loop at specific program location (syntax: [file.]line)";
-    spec = ArgExt.String_list (fun specs -> opt_unrolling.unroll_locals <- List.map parse_full_unroll_local specs);
+    spec = Arg.String (ArgExt.string_list_lifter (fun specs -> opt_unrolling.unroll_locals <- List.map parse_full_unroll_local specs));
     default = "";
   };
   register_domain_option name {
     key = "-loop-no-cache";
     category = "Loops";
     doc = " do not use cache for loops";
-    spec = ArgExt.Clear opt_loop_use_cache;
+    spec = Arg.Clear opt_loop_use_cache;
     default = "use cache";
   };
   register_domain_option name {
     key = "-loop-decr-it";
     category = "Loops";
     doc = " enable decreasing iteration";
-    spec = ArgExt.Set opt_loop_decreasing_it;
+    spec = Arg.Set opt_loop_decreasing_it;
     default = "disabled";
   }
 

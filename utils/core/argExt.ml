@@ -19,41 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-(** Command-line options.
-    Replacement for [Arg] from the standard library
- *)
-
-type spec =
-  | Unit of (unit -> unit)
-
-  | Unit_delayed of (unit -> unit)
-  (** [Unit_delayed] functions are only executed after parsing all
-      the arguments, in the order they appear on the command-line.
-  *)
-
-  | Unit_exit of (unit -> unit)
-  (** As [Unit_delayed], but exit immediately after parsing the 
-      command-line and executing all the functions (including
-      [Unit_exit] and [Unit_delayed] options).
-      Useful for [-help].
-  *)               
-
-  | Bool of (bool -> unit)
-  | Set of bool ref
-  | Clear of bool ref
-
-  | Int of (int -> unit)
-  | Set_int of int ref
-
-  | String of (string -> unit)
-  | Set_string of string ref
-
-  | String_list of (string list -> unit)
-  | Set_string_list of string list ref
-
-  | Symbol of string list * (string -> unit)
-  | Symbol_delayed of string list * (string -> unit)
-  | Symbol_exit of string list * (string -> unit)
+open Arg
 
 type arg = {
   key: string;
@@ -63,190 +29,19 @@ type arg = {
   spec: spec;
 }
 
+(* Extract relevant tuple for Stdlib.Arg (from above record) *)
+let argext_to_arg arg = arg.key, arg.spec, arg.doc
 
-(** Replacement for [Arg.parse].
-    Adds delayed Unit arguments.
- *)
-let parse (argv: string array) (args:arg list) (handler:string -> unit) (rest:string list -> unit) (msg:string) (help:unit -> unit) : unit =
-  (* separate arg into program name and actual command-line arguments *)
-  let progname, opts =
-    if Array.length argv < 1 then "?", []
-    else argv.(0), List.tl (Array.to_list argv)
-  in
-  (* Unit_delayed actions are delayed into everything is parsed *)
-  let delayed = ref [] in
-  (* Should we exit at the end of parse? *)
-  let exit_after = ref false in
-  (* utilities *)
-  let to_bool a v =
-    try bool_of_string v with _ ->
-      Printf.eprintf "%s: option %s requires a boolean argument (true or false)\n" progname a;
-      help ();
-      exit 2
-  and to_int a v =
-    try int_of_string v with _ ->
-      Printf.eprintf "%s: option %s requires an integer argument\n" progname a;
-      help ();
-      exit 2
-  in
-  (* eat argument list *)
-  let rec eat = function
-    | [] -> ()
-    | a::tl ->
-       if a = "" then
-         eat tl
-       else if a = "--" then
-         rest tl
-       else if a.[0] != '-' then (
-         handler a;
-         eat tl
-       )
-       else (
-         (* cut option at '=' if necessary *)
-         let opt, arg =
-           if String.contains a '=' then
-             let i = String.index a '=' in
-             String.sub a 0 i,
-             Some (String.sub a (i+1) (String.length a - i - 1))
-           else
-             a, None
-         in
-         (* get option argument, either after '=' or in the next
-            command-line argument *)
-         let get_arg () = match arg, tl with
-           | Some x, tl -> x, tl
-           | None, x::tl -> x, tl
-           | None, [] ->
-              Printf.eprintf "%s: option %s requires an argument\n" progname opt;
-              help ();
-              exit 2
-         and noarg () =
-           if arg <> None then (
-             Printf.eprintf "%s: option %s has no argument\n" progname opt;
-             help ();
-             exit 2
-           )
-         and get_arg_list () = match arg, tl with
-           | Some x, tl -> String.split_on_char ',' x, tl
-           | None, x::tl -> String.split_on_char ',' x, tl
-           | None, [] ->
-             Printf.eprintf "%s: option %s requires an argument\n" progname opt;
-             help ();
-             exit 2
-         in
-         if List.exists (fun x -> x.key = opt) args then (
-           let arg = List.find (fun x -> x.key = opt) args in
-           match arg.spec with
+(* Lifting to list *)
+let argext_to_arg_list = List.map argext_to_arg
 
-           | Unit_delayed f ->
-              noarg ();
-              delayed := (!delayed)@[f];
-              eat tl
 
-           | Unit_exit f ->
-              exit_after := true;
-              noarg ();
-              delayed := (!delayed)@[f];
-              eat tl
+(* FIXME: Set_string_list: if called multiple times, should we accumulate? How to bash-complete? *)
 
-           | Unit f ->
-              noarg ();
-              f ();
-              eat tl
+(* Lifter to parse comma-separated string list from Stdlib.Arg.String spec *)
+let string_list_lifter (spec_f : string list -> unit) : string -> unit =
+  fun s -> spec_f (String.split_on_char ',' s)
 
-           | Set r ->
-              noarg ();
-              r := true;
-              eat tl
-
-           | Clear r ->
-              noarg ();
-              r := false;
-              eat tl
-
-           | Bool f ->
-              let v, tl = get_arg () in
-              f (to_bool a v);
-              eat tl
-
-           | Int f ->
-              let v, tl = get_arg () in
-              f (to_int a v);
-              eat tl
-
-           | Set_int f ->
-              let v, tl = get_arg () in
-              f := to_int a v;
-              eat tl
-
-           | String f ->
-              let v, tl = get_arg () in
-              f v;
-              eat tl
-
-           | Set_string f ->
-              let v, tl = get_arg () in
-              f := v;
-              eat tl
-
-           | String_list f ->
-              let v, tl = get_arg_list () in
-              f v;
-              eat tl
-
-           | Set_string_list f ->
-              let v, tl = get_arg_list () in
-              f := (!f)@v;
-              eat tl
-
-           | Symbol (l,f) ->
-              let v, tl = get_arg () in
-              if not (List.mem v l) then (
-                Format.eprintf
-                  "%s: option %s requires an argument in the list: [%a]\n"
-                  progname a
-                  Format.(pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_print_string) l;
-                help ();
-                exit 2
-              );
-              f v;
-              eat tl
-
-           | Symbol_delayed (l,f) ->
-              let v, tl = get_arg () in
-              if not (List.mem v l) then (
-                Format.eprintf
-                  "%s: option %s requires an argument in the list: [%a]\n"
-                  progname a
-                  Format.(pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_print_string) l;
-                help ();
-                exit 2
-              );
-              delayed := (!delayed)@[(fun () -> f v)];
-              eat tl
-
-           | Symbol_exit (l,f) ->
-             exit_after := true;
-             let v, tl = get_arg () in
-             if not (List.mem v l) then (
-               Format.eprintf
-                 "%s: option %s requires an argument in the list: [%a]\n"
-                 progname a
-                  Format.(pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_print_string) l;
-               help ();
-               exit 2
-             );
-             delayed := (!delayed)@[(fun () -> f v)];
-             eat tl
-         )
-         else (
-           Printf.eprintf "%s: unknown option %s\n" progname a;
-           help ();
-           exit 2
-         )
-       )
-  in
-  eat opts;
-  (* now execute all delayed actions *)
-  List.iter (fun f -> f ()) !delayed;
-  if !exit_after then exit 0
+(* Lifter to store comma-separated string list in ref, using Stdlib.Arg.string spec *)
+let set_string_list_lifter (r : string list ref) : string -> unit =
+  fun s -> r := String.split_on_char ',' s
