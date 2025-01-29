@@ -451,10 +451,10 @@ let print dbfile args =
   let verbose = ref false
   and json = ref false
   and files = ref [] in
-  Arg.parse_argv
+  Arg.parse_argv (* FIXME BASH COMPLETION *)
     (Array.of_list ("mopsa-db"::args))
-    ["-v", Arg.Set verbose, "textual dump of all targets";
-     "-json", Arg.Set json, "JSON dump of all targets"
+    ["-v", Set verbose, "textual dump of all targets";
+     "-json", Set json, "JSON dump of all targets"
     ]
     (fun x -> files := x::(!files))
     (tool^" [-v | -json | <target list>]");

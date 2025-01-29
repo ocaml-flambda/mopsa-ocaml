@@ -60,7 +60,7 @@ struct
       key = "-c-entry";
       category = "C";
       doc = " name of the entry function to be analyzed";
-      spec = Arg.Set_string opt_entry_function;
+      spec = Set_string (opt_entry_function, ArgExt.empty);
       default = "main";
     }
 
@@ -71,7 +71,7 @@ struct
       key = "-c-check-unreachable-memory";
       category = "C";
       doc = " check for unreachable allocated memory";
-      spec = Arg.Set opt_check_memory;
+      spec = Set opt_check_memory;
       default = "main";
     }
 
@@ -92,30 +92,30 @@ struct
       key = "-c-symbolic-args";
       category = "C";
       doc = " set the number of symbolic arguments given to main (syntax: min[:max])";
-      spec = Arg.String (fun s -> opt_symbolic_args := Some (parse_symbolic_args_spec s));
+      spec = String ((fun s -> opt_symbolic_args := Some (parse_symbolic_args_spec s)), ArgExt.empty);
       default = "";
     }
 
-  let opt_arg_max_size = ref None 
+  let opt_arg_max_size = ref None
 
   let () =
     register_domain_option name {
       key = "-c-symbolic-args-max-size";
       category = "C";
       doc = " set the maximum allocated size of all symbolic arguments";
-      spec = Arg.Int (fun s -> opt_arg_max_size := Some s);
+      spec = Int ((fun s -> opt_arg_max_size := Some s), ArgExt.empty);
       default = "18446744073709551615";
     }
 
 
-  let opt_arg_min_size = ref None 
+  let opt_arg_min_size = ref None
 
   let () =
     register_domain_option name {
       key = "-c-symbolic-args-min-size";
       category = "C";
       doc = " set the maximum allocated size of all symbolic arguments";
-      spec = Arg.Int (fun s -> opt_arg_min_size := Some s);
+      spec = Int ((fun s -> opt_arg_min_size := Some s), ArgExt.empty);
       default = "1"
     }
 

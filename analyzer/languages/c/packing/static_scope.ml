@@ -111,7 +111,7 @@ struct
       key      = "-c-pack";
       category = "Numeric";
       doc      = " create a pack of variables (syntax: var,%function,%function.var,@resource)";
-      spec     = Arg.String parse_user_pack;
+      spec     = String (parse_user_pack, ArgExt.empty);
       default  = "";
     }
 
@@ -124,7 +124,7 @@ struct
       key      = "-c-pack-symargs";
       category = "Numeric";
       doc      = " create a user pack for variables related to symbolic arguments. This is equivalent to -c-pack=" ^ symargs_pack_string;
-      spec    = Arg.Unit add_symargs_pack;
+      spec    = Unit add_symargs_pack;
       default = "";
 
     }
@@ -135,7 +135,7 @@ struct
       key      = "-c-pack-only-stub-initialization";
       category = "Numeric";
       doc      = " pack only during Mopsa's stub initialization";
-      spec     = Arg.Set opt_pack_only_stubs;
+      spec     = Set opt_pack_only_stubs;
       default  = string_of_bool !opt_pack_only_stubs;
     }
 
@@ -145,7 +145,7 @@ struct
       key      = "-c-pack-resources";
       category = "Numeric";
       doc      = " pack variables based on resources (such as dynamically allocated blocks)";
-      spec     = Arg.Set opt_pack_resources;
+      spec     = Set opt_pack_resources;
       default  = string_of_bool !opt_pack_resources;
     }
 

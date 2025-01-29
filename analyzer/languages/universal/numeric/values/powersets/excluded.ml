@@ -96,7 +96,7 @@ struct
       key = "-max-excluded-set-size";
       category = "Numeric";
       doc = " maximum size of integer sets for the excluded powerset";
-      spec = Arg.Set_int opt_max_intset;
+      spec = Set_int (opt_max_intset,ArgExt.empty);
       default = string_of_int !opt_max_intset;
     }
 

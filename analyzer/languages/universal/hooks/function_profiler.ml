@@ -47,7 +47,7 @@ struct
       key = "-flamegraph";
       category = "Profiling";
       doc = " path where flame graphs samples are saved";
-      spec = Arg.Set_string opt_flame_graph_path;
+      spec = Set_string (opt_flame_graph_path,ArgExt.empty);
       default = "";
     }
 
@@ -59,7 +59,7 @@ struct
       key = "-flamegraph-resolution";
       category = "Profiling";
       doc = " resolution of the flame graph samples";
-      spec = Arg.Symbol (["s"; "ms"; "us"; "ns"], (fun r -> opt_flame_graph_resolution := r));
+      spec = Symbol (["s"; "ms"; "us"; "ns"], (fun r -> opt_flame_graph_resolution := r));
       default = "ms";
     }
 

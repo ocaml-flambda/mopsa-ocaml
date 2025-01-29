@@ -44,7 +44,7 @@ let () =
     key = "-decreasing-iter";
     category = "Loops";
     doc = " number of decreasing iterations after stabilization";
-    spec = Arg.Set_int opt_decreasing_iter;
+    spec = Set_int (opt_decreasing_iter, ArgExt.empty);
     default = "1";
   }
  

@@ -87,7 +87,7 @@ struct
       key      = "-stub-ignore-case";
       doc      = " list of stub cases to ignore";
       category = "Stubs";
-      spec     = Arg.String (ArgExt.set_string_list_lifter opt_stub_ignored_cases);
+      spec     = String (ArgExt.set_string_list_lifter opt_stub_ignored_cases, ArgExt.empty);
       default  = "";
     }
 

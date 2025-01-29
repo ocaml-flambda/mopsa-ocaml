@@ -74,77 +74,77 @@ let () =
     key = "-I";
     category = "C";
     doc = " add the directory to the search path for include files in C analysis";
-    spec = Arg.String (ArgExt.set_string_list_lifter opt_include_dirs);
+    spec = String (ArgExt.set_string_list_lifter opt_include_dirs, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-ccopt";
     category = "C";
     doc = " pass the option to the Clang frontend";
-    spec = Arg.String (ArgExt.set_string_list_lifter opt_clang);
+    spec = String (ArgExt.set_string_list_lifter opt_clang, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-make-target";
     category = "C";
     doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
-    spec = Arg.Set_string opt_make_target;
+    spec = Set_string (opt_make_target, ArgExt.empty); (* FIXME BASH *)
     default = "";
   };
   register_language_option "c" {
     key = "-without-libc";
     category = "C";
     doc = " disable stubs of the standard C library.";
-    spec = Arg.Set opt_without_libc;
+    spec = Set opt_without_libc;
     default = "false";
   };
   register_language_option "c" {
     key = "-disable-parser-cache";
     category = "C";
     doc = " disable the cache of the Clang parser.";
-    spec = Arg.Clear opt_enable_cache;
+    spec = Clear opt_enable_cache;
     default = "unset";
   };
   register_language_option "c" {
     key = "-Wall";
     category = "C";
     doc = " display compiler warnings.";
-    spec = Arg.Set opt_warn_all;
+    spec = Set opt_warn_all;
     default = "unset";
   };
   register_language_option "c" {
     key = "-use-stub";
     category = "C";
     doc = " list of functions for which the stub is used instead of the declaration.";
-    spec = Arg.String (ArgExt.set_string_list_lifter opt_use_stub);
+    spec = String (ArgExt.set_string_list_lifter opt_use_stub, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-library-only";
     category = "C";
     doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
-    spec = Arg.Set opt_library_only;
+    spec = Set opt_library_only;
     default = "false";
   };
   register_language_option "c" {
     key = "-additional-stubs";
     category = "C";
     doc = " additional stubs file";
-    spec = Arg.String (ArgExt.set_string_list_lifter opt_stubs_files);
+    spec = String (ArgExt.set_string_list_lifter opt_stubs_files, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-target-triple";
     category = "C";
     doc = " target architecture to analyze, as a triple (host if left empty).";
-    spec = Arg.Set_string opt_target_triple;
+    spec = Set_string (opt_target_triple, ArgExt.empty); (* FIXME BASH completion *)
     default = "";
   };
   register_language_option "c" {
     key = "-c-ignore-translation-units";
     category = "C";
     doc = " list of translation units ignored during linking.";
-    spec = Arg.String (ArgExt.set_string_list_lifter opt_ignored_translation_units);
+    spec = String (ArgExt.set_string_list_lifter opt_ignored_translation_units, ArgExt.empty);
     default = "";
   };
   ()

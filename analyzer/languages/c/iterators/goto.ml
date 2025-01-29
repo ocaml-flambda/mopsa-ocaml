@@ -116,7 +116,7 @@ let () =
     key = "-goto-down";
     category = "Goto";
     doc = " perform a down iteration after goto stabilization";
-    spec = Arg.Set opt_goto_down;
+    spec = Set opt_goto_down;
     default = "false";
   };
 

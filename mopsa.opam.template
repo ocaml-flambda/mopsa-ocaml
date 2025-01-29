@@ -8,6 +8,7 @@ depends: [
   "yojson" {>= "1.6.0"}
   "zarith" {>= "1.10"}
   "odoc" {with-doc}
+  "arg-complete"
 ]
 depopts: ["elina"]
 available: [!(arch = "x86_32") & !(os-family = "windows") & opam-version >= "2.1.0"]

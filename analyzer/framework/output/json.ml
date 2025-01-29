@@ -227,15 +227,15 @@ let help (args:ArgExt.arg list) ~out =
             "default", `String arg.default;
             "type", `String (
               match arg.spec with
-              | Arg.Bool _ -> "bool"
-              | Arg.Set _ -> "set"
-              | Arg.Clear _ -> "clear"
-              | Arg.Unit _ -> "unit"
-              | Arg.String _ -> "string"
-              | Arg.Set_string _ -> "string"
-              | Arg.Int _ -> "int"
-              | Arg.Set_int _ -> "int"
-              | Arg.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
+              | Bool _ -> "bool"
+              | Set _ -> "set"
+              | Clear _ -> "clear"
+              | Unit _ -> "unit"
+              | String _ -> "string"
+              | Set_string _ -> "string"
+              | Int _ -> "int"
+              | Set_int _ -> "int"
+              | Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
               | _ -> failwith "Not implemented"
             )
           ]

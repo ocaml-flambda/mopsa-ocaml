@@ -82,6 +82,28 @@ let opt_to_arg opt =
   | O_builtin d | O_language (_, d) | O_domain (_, d) | O_shared (_, d) ->
     d
 
+(** {2 Bash completion capabilities} *)
+(*************************************)
+
+let () =
+  let complete args =
+    let () = Format.eprintf "@.complete |%a|@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "|") Format.pp_print_string) args in 
+    let r = ArgExt.complete_argv args
+    (List.map (fun o ->
+         let a = opt_to_arg o in
+         a.key, a.spec, a.doc) !options)
+    ArgExt.empty in
+    let () = Format.eprintf "-> |%a|@."  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "|") Format.pp_print_string) args in 
+    r |> List.iter print_endline;
+  exit 0 in
+  let complete_arg : arg =
+    { key = "--complete";
+      doc = "Bash completion helper";
+      category = "Configuration";
+      default = "";
+      spec = Rest_all (complete, ArgExt.empty_all)} in
+  register_builtin_option complete_arg
+
 (** {2 Filters} *)
 (** *********** *)
 
@@ -144,8 +166,8 @@ let () =
     key = "-share-dir";
     category = "Configuration";
     doc = " path to the share directory";
-    spec = Arg.Set_string Paths.opt_share_dir;
-    default = "";
+    spec = Set_string (Paths.opt_share_dir, empty);
+    default = OptionExt.default "" (Sys.getenv_opt "SHAREDIR");
   }
 
 
@@ -155,8 +177,9 @@ let () =
     key = "-config";
     category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
-    spec = Arg.Set_string Config.Parser.opt_config;
-    default = "";
+    spec = Set_string (Config.Parser.opt_config, empty);
+    (* FIXME BASH: list files in config/lang/, if lang is defined... *)
+    default = OptionExt.default "" (OptionExt.lift (fun s -> s ^ "/config/") (Sys.getenv_opt "SHAREDIR")); (* FIXME: what about the language? *)
   }
 
 (** Warnings *)
@@ -165,7 +188,7 @@ let () =
     key = "-no-warning";
     category = "Debugging";
     doc = " deactivate warning messages";
-    spec = Arg.Clear Debug.print_warnings;
+    spec = Clear Debug.print_warnings;
     default = "";
   }
 
@@ -175,9 +198,11 @@ let () =
     key = "-hook";
     category = "Configuration";
     doc = " activate a hook";
-    spec = Arg.String (fun s ->
-        try Core.Hook.activate_hook s
-        with Not_found -> Exceptions.panic "hook %s not found" s
+    spec = String (
+        (fun s ->
+          try Core.Hook.activate_hook s
+          with Not_found -> Exceptions.panic "hook %s not found" s),
+        empty (* FIXME BASH *)
       );
     default = "";
   }
@@ -189,7 +214,7 @@ let () =
     key = "-cache";
     category = "Configuration";
     doc = " size of the analysis cache";
-    spec = Arg.Set_int Core.Cache.opt_cache;
+    spec = Set_int (Core.Cache.opt_cache, strings ["1"; "5"; "10"]);
     default = "5";
   }
 
@@ -203,9 +228,11 @@ let () =
     key = "-debug";
     category = "Debugging";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
-    spec = Arg.String (fun s ->
-        (* Always keep "print" channel *)
-        Debug.parse ("print," ^ s)
+    spec = String (
+        (fun s ->
+           (* Always keep "print" channel *)
+           Debug.parse ("print," ^ s)),
+        empty (* FIXME BASH *)
       );
     default = "print";
   };
@@ -213,7 +240,7 @@ let () =
     key = "-no-color";
     category = "Debugging";
     doc = " deactivate colors in debug messages.";
-    spec = Arg.Clear Debug.print_color;
+    spec = Clear Debug.print_color;
     default = "";
   }
 
@@ -223,7 +250,7 @@ let () =
     key = "-list";
     category = "Help";
     doc = " list available domains/checks/hooks; if a configuration is specified, only used domains are listed";
-    spec = Arg.Symbol (
+    spec = Symbol (
         ["domains"; "checks"; "hooks"; "reductions"],
         (fun selection ->
            let () = match selection with
@@ -295,7 +322,7 @@ let () =
     key = "-format";
     category = "Output";
     doc = " selects the output format.";
-    spec = Arg.Symbol (
+    spec = Symbol (
         ["text"; "json"],
         (fun s ->
            match s with
@@ -315,7 +342,7 @@ let () =
     key = "-lflow";
     category = "Output";
     doc = " display the last output";
-    spec = Arg.Set Output.Common.opt_display_lastflow;
+    spec = Set Output.Common.opt_display_lastflow;
     default = "false";
   }
 
@@ -326,7 +353,7 @@ let () =
     key = "-silent";
     category = "Output";
     doc = " do not return a non-zero value when detecting alarms";
-    spec = Arg.Set Output.Common.opt_silent;
+    spec = Set Output.Common.opt_silent;
     default = "unset";
   }
 
@@ -337,7 +364,7 @@ let () =
     key = "-output";
     category = "Output";
     doc = " redirect output to a file";
-    spec = Arg.String (fun s -> Output.Common.opt_file := Some s);
+    spec = String ((fun s -> Output.Common.opt_file := Some s), empty);
     default = "";
   }
 
@@ -347,7 +374,7 @@ let () =
     key = "-show-callstacks";
     category = "Alarms";
     doc = " display the call stacks when reporting alarms in text format";
-    spec = Arg.Set Output.Text.opt_show_callstacks;
+    spec = Set Output.Text.opt_show_callstacks;
     default = "false";
   }
 
@@ -356,7 +383,7 @@ let () =
     key = "-tw";
     category = "Output";
     doc = " set the tab width";
-    spec = Arg.Set_int Output.Text.opt_tw;
+    spec = Set_int (Output.Text.opt_tw, strings ["2"; "4"; "8"]);
     default = "4";
   }
 
@@ -366,7 +393,7 @@ let () =
     key = "-show-safe-checks";
     category = "Alarms";
     doc = " show safe checks when reporting alarms in text format";
-    spec = Arg.Set Output.Common.opt_show_safe_checks;
+    spec = Set Output.Common.opt_show_safe_checks;
     default = "false";
   }
 
@@ -376,7 +403,7 @@ let () =
     key = "-clean-cur-only";
     category = "Configuration";
     doc = " flag to apply cleaners on the current environment only";
-    spec = Arg.Set Core.Cases.opt_clean_cur_only;
+    spec = Set Core.Cases.opt_clean_cur_only;
     default = "";
   }
 
@@ -384,7 +411,7 @@ let () = register_builtin_option {
     key = "-hash-heap-address";
     category = "Heap";
     doc = "  format heap addresses with their hash";
-    spec = Arg.Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
+    spec = Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
     default = "false";
   }
 
@@ -392,10 +419,11 @@ let () = register_builtin_option {
     key = "-working-dir";
     category = "Configuration";
     doc = " set the working directory, used when resolving relative paths";
-    spec = Arg.String (fun s ->
+    spec = String ((fun s ->
         if Sys.file_exists s
         then Sys.chdir s
-        else Exceptions.panic "'%s' does not exist" s
+        else Exceptions.panic "'%s' does not exist" s),
+                   empty
       );
     default = "";
   }
@@ -405,7 +433,7 @@ let () =
     key = "-marker";
     category = "Partitioning";
     doc = " enable a marker for trace partitioning";
-    spec = Arg.String Core.Marker.enable_marker;
+    spec = String (Core.Marker.enable_marker, empty) (* FIXME BASH: probably a list from the registered markers? *);
     default = "";
   }
 
@@ -432,21 +460,21 @@ let () =
     key  = "-help";
     category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit (fun () -> help (); exit 0);
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   };
   register_builtin_option {
     key  = "--help";
     category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit (fun () -> help (); exit 0);
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   };
   register_builtin_option {
     key  = "-h";
     category = "Help";
     doc  = " display the list of options";
-    spec = Arg.Unit (fun () -> help (); exit 0);
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   }
 
@@ -461,6 +489,6 @@ let () =
     key = "-v";
     category = "Configuration";
     doc = " Mopsa version";
-    spec = Arg.Unit (fun () -> print_version (); exit 0);
+    spec = Unit (fun () -> print_version (); exit 0);
     default = "";
   }
