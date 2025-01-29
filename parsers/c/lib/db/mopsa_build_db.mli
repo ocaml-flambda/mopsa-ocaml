@@ -43,6 +43,7 @@ type source_kind = SOURCE_C | SOURCE_CXX | SOURCE_ASM | SOURCE_UNKNOWN
 
 type source = {
     source_path: string; (** absolute path of source file *)
+    source_obj: string; (** absolute path of the object file *)
     source_kind: source_kind;
     source_opts: string list; (** compilation options *)
     source_cwd: string; (** directory from where the compilation was launched *)

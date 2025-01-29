@@ -770,6 +770,8 @@ and from_var ctx (v: C_AST.variable) : var =
             cvar_scope = from_var_scope ctx v.var_kind;
             cvar_range = from_range v.var_range;
             cvar_uid = v.var_uid;
+            cvar_before_stmts = List.map (from_stmt ctx) v.var_before_stmts;
+            cvar_after_stmts = List.map (from_stmt ctx) v.var_after_stmts;
           })
         (from_typ ctx v.var_type)
     in
