@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # Temporary usage:
-#   Run: source ./demo-completion.sh
+#   Run: source ./mopsa-completion
 #
 # Permanent usage:
-#   Run: echo "source $(readlink -f .)/demo-completion.sh" >> ~/.bash_completion
+#   Run: echo "source $(readlink -f .)/mopsa-completion" >> ~/.bash_completion
 
 _mopsa ()
 {
