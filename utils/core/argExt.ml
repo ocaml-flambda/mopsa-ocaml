@@ -35,7 +35,6 @@ let argext_to_arg arg = arg.key, Arg_complete.arg_spec arg.spec, arg.doc
 (* Lifting to list *)
 let argext_to_arg_list = List.map argext_to_arg
 
-
 (* FIXME: Set_string_list: if called multiple times, should we accumulate? How to bash-complete? *)
 
 (* Lifter to parse comma-separated string list from Stdlib.Arg.String spec *)
@@ -45,3 +44,13 @@ let string_list_lifter (spec_f : string list -> unit) : string -> unit =
 (* Lifter to store comma-separated string list in ref, using Stdlib.Arg.string spec *)
 let set_string_list_lifter (r : string list ref) : string -> unit =
   fun s -> r := String.split_on_char ',' s
+
+
+let complete_files_in_dir ?(prefix="") directory =
+  let result =
+    let contents = Sys.readdir directory |> Array.to_list in
+    if prefix = "" then contents
+    else contents |>
+         List.map (fun s -> prefix ^ Filename.dir_sep ^ s)
+  in
+  strings result

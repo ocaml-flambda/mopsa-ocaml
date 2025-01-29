@@ -177,9 +177,16 @@ let () =
     key = "-config";
     category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
-    spec = Set_string (Config.Parser.opt_config, empty);
-    (* FIXME BASH: list files in config/lang/, if lang is defined... *)
-    default = OptionExt.default "" (OptionExt.lift (fun s -> s ^ "/config/") (Sys.getenv_opt "SHAREDIR")); (* FIXME: what about the language? *)
+    spec = Set_string (Config.Parser.opt_config,
+                       fun args ->
+                         if !Config.Parser.opt_config <> "" then
+                           let config_path = Filename.dirname (Paths.resolve_config_file !Config.Parser.opt_config) in
+                           let lang = Filename.basename config_path in
+                           ArgExt.complete_files_in_dir ~prefix:lang config_path args
+                         else
+                           empty args
+                      );
+    default = "";
   }
 
 (** Warnings *)
