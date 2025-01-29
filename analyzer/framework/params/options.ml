@@ -441,7 +441,8 @@ let () =
     key = "-marker";
     category = "Partitioning";
     doc = " enable a marker for trace partitioning";
-    spec = String (Core.Marker.enable_marker, empty) (* FIXME BASH: probably a list from the registered markers? *);
+    spec = String (Core.Marker.enable_marker,
+                   fun args -> ArgExt.strings (Core.Marker.available_markers ()) args);
     default = "";
   }
 

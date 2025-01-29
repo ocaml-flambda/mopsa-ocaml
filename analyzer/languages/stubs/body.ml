@@ -51,10 +51,11 @@ let () = register_marker {
         | _ ->
           next m1 m2
       );
-    marker_name = (fun next -> function
+    marker_print_name = (fun next -> function
         | M_stub_case _ -> "stub-case"
         | m -> next m
       );
+    marker_name = "stub-case"
   }
 
 (********************)

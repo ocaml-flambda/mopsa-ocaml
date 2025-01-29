@@ -59,7 +59,8 @@ let () =
 type marker += M_return of range
 
 let () = register_marker {
-    marker_name = (fun next -> function
+    marker_name = "return";
+    marker_print_name = (fun next -> function
         | M_return _ -> "return"
         | m          -> next m
       );

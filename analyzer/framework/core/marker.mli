@@ -28,7 +28,8 @@ open Mopsa_utils.Location
 type marker = ..
 
 type marker_info = {
-  marker_name : (marker -> string) -> marker -> string;
+  marker_name : string;
+  marker_print_name : (marker -> string) -> marker -> string;
   marker_print : (Format.formatter -> marker -> unit) -> Format.formatter -> marker -> unit;
   marker_compare : (marker -> marker -> int) -> marker -> marker -> int;
 }
@@ -51,3 +52,5 @@ val enable_marker : string -> unit
 val disable_marker : string -> unit
 
 val is_marker_enabled : marker -> bool
+
+val available_markers : unit -> string list
