@@ -19,7 +19,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-open Arg
+include Arg_complete
 
 type arg = {
   key: string;
@@ -30,7 +30,7 @@ type arg = {
 }
 
 (* Extract relevant tuple for Stdlib.Arg (from above record) *)
-let argext_to_arg arg = arg.key, arg.spec, arg.doc
+let argext_to_arg arg = arg.key, Arg_complete.arg_spec arg.spec, arg.doc
 
 (* Lifting to list *)
 let argext_to_arg_list = List.map argext_to_arg
