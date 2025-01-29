@@ -202,7 +202,15 @@ let () =
         (fun s ->
           try Core.Hook.activate_hook s
           with Not_found -> Exceptions.panic "hook %s not found" s),
-        empty (* FIXME BASH *)
+        fun args ->
+          let d =
+            List.map
+              (fun (h:(module Core.Hook.HOOK)) ->
+                 let module H = (val h) in
+                 H.name
+              ) (Core.Hook.list_hooks ())
+          in
+          ArgExt.strings (List.sort_uniq compare d) args
       );
     default = "";
   }
