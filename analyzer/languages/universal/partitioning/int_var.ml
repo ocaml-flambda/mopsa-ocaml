@@ -167,6 +167,13 @@ struct
       Option.some
 
     | S_remove{ekind = E_var(v, None)} when !opt_gc_state_partition && is_target_var v ->
+      (* Note: when `not !opt_gc_state_partition`, the state partitioning is
+         kept even when the variable is removed (for example due to being
+         outside of scope). In a way, the state partitioning is lifted into a
+         trace partitioning
+
+         TODO: Clarification of the concretization.
+      *)
       exec_and_remove stmt v man flow |>
       Option.some
 
