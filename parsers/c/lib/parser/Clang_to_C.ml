@@ -757,18 +757,17 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        with Invalid_argument msg ->
          warning range "multiple declaration of a function have incompatible return type" msg
       );
-
       (* favor argument names from functions with a body, a
          non-empty argument list, or from stubs
       *)
       if
-        (f.C.function_body <> None ||
-         (func.func_parameters = [||] &&  params <> [||]) ||
+        ((func.func_parameters = [||] &&  params <> [||]) ||
          has_stub_comment f.C.function_com)
         &&
         ((match func.func_body with
          | None -> true
-         | Some b -> List.length b.blk_stmts = 0) || List.mem func.func_org_name forced_stub_list)
+         | Some b ->
+           List.length b.blk_stmts = 0) || (List.mem func.func_org_name forced_stub_list) )
       then
       (
         func.func_parameters <- params;
@@ -777,13 +776,15 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
 
       let coms = List.map (fun m -> m, macros_map) f.C.function_com in
       func.func_com <- comment_macro_unify func.func_com coms;
-      (* fill in body *)
+      (* fill in body, override parameters in that case (to avoid inconsistencies) *)
       if func.func_body <> None && f.C.function_body <> None
       then warning range "function is defined twice with a body" org_name;
       (match f.C.function_body with
        | None -> ()
        | Some b ->
-          func.func_body <-
+         func.func_parameters <- params;
+         func.func_variadic <- f.C.function_is_variadic;
+             func.func_body <-
             Some (stmt (Some func) b |> deblock |> resolve_scope);
           func.func_range <- range;
           func.func_name_range <- name_range
