@@ -648,7 +648,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
           if var.var_init <> None
           then warning range "variable is defined twice with initializers" org_name;
           let init = init func i in
-          if variable_is_global kind then
+          if variable_is_global kind && !simplify then
             let before, init, after = simplify_global_init ctx.ctx_simplify init in
             var.var_init <- Some init;
             var.var_before_stmts <- before;
