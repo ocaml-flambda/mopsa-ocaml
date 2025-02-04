@@ -11,6 +11,9 @@
 # it can also be used to compare two different versions of Mopsa 
 # ./dual_mopsa_debugging.sh "~/old_mopsa/bin/mopsa-c" "~/new_mopsa/bin/mopsa-c" "file.c -engine=interactive"
 
+# once in the terminal, use [TMUX PREFIX] and type `:setw synchronize-panes` to desynchronize panels. [TMUX PREFIX] is Ctrl-b by default.
+# Use [TMUX PREFIX] followeed by o to switch panes.
+
 ORIGINAL=$1
 BUGGY=$2
 JOINT_OPTIONS=$3
