@@ -163,3 +163,53 @@ Output
    Print the full abstract state at the end of the analysis (default: unset).
 
    The abstract state when ``main`` returns is displayed as if the ``_mopsa_print()`` primitive was called.
+
+
+
+Partitioning
+------------
+
+Mopsa currently supports trace partitioning and a simplified implementation of state partitioning. More developer-oriented details can be found in the `initial partitioning merge request <https://gitlab.com/mopsa/mopsa-analyzer/-/merge_requests/130>`_. Examples of configurations leveraging these partitioning are provided for the C analysis (configurations prefixed by ``state`` or ``tail``).
+
+
+Trace partitioning
+~~~~~~~~~~~~~~~~~~~
+
+Mopsa supports a variant of trace partitioning [ESOP05]_. Trace partitioning keeps some abstract states separate (depending on the analysis trace) to improve precision. Our implementation, keeps a potentially bounded abstract trace to separate abstract states while maintaining full analysis coverage. The abstract trace consists in the k latest trace markers. Currently, trace markers correspond to control conditions (if, switch, different return locations), and case disjunctions when handling C stubs [SAS20]_.
+
+.. option:: -tail-markers
+
+   Threshold of the number of last markers to consider when partitioning traces
+
+.. option:: -marker
+
+   Enable a marker for trace partitioning. By default all markers are enabled.
+   Currently, there are four markers:
+   
+   #. ``if`` for the branches of the ``S_if`` statement.
+   #. ``return`` for the branches of the ``S_return`` statement.
+   #. ``switch`` for the cases of the ``S_c_switch`` statement.
+   #. ``stub-case`` for the cases of stubs.
+
+State partitioning
+~~~~~~~~~~~~~~~~~~
+
+An example of state partitioning is given in the `IntVar <https://gitlab.com/mopsa/mopsa-analyzer/-/blob/main/analyzer/languages/universal/partitioning/int_var.ml>`_ partitioning domain.
+This domain partition the states w.r.t. to the values of a specified numeric variable.
+
+.. option:: -state-partition-int-var
+
+   Pass the variable used to partition the states. Full syntax is ``var@value1,value2,value3`` to enable state partitioning on ``var``, based on three different values. Reduced syntax ``var`` uses 0 and 1 as default values for state partitioning.
+
+.. option:: -state-partition-int-var-with-full-name
+
+   Boolean flag to pass disambuguous variable names to the previous command. Useful to differentiate variables in different scopes sharing the same name.
+
+.. option:: -keep-state-partition-forever
+
+   Keep state partition even when a variable has been removed (typically, due to scoping).
+
+
+.. [ESOP05] Laurent Mauborgne, Xavier Rival: `Trace partitioning in abstract interpretation based static analyzers. <https://www.di.ens.fr/~rival/papers/esop05-partitioning.pdf>`_ ESOP 2005.
+
+.. [SAS20] Abdelraouf Ouadjaout, Antoine Miné: `A Library Modeling Language for the Static Analysis of C Programs. <https://www-apr.lip6.fr/~mine/publi/ouadjaout-al-sas20.pdf>`_ SAS 2020: 223–246.

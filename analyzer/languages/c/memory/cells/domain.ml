@@ -694,9 +694,7 @@ struct
     let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
-  let merge pre (a,e) (a',e') =
-    assert false
-
+  let merge _ _ _ = assert false
 
   (** {2 Cell expansion} *)
   (** ****************** *)
