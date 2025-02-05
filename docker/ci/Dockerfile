@@ -12,9 +12,9 @@ FROM ubuntu:24.04
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
              llvm-dev libclang-dev libclang-cpp-dev clang \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget adduser less emacs-nox
+             rsync m4 curl wget adduser less emacs-nox bash-completion
 
-ENV OPAM_DEPS dune apron zarith menhir yojson
+ENV OPAM_DEPS dune apron zarith menhir yojson arg-complete
 
 ARG DEBIAN_FRONTEND=noninteractive
 

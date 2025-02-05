@@ -1,13 +1,13 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 USER root
 
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
              llvm-dev libclang-dev libclang-cpp-dev clang  \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget libc6-dev-i386 zip
+             rsync m4 curl wget libc6-dev-i386 zip bash-completion
 
-ENV OPAM_DEPS apron zarith menhir yojson
+ENV OPAM_DEPS apron zarith menhir yojson arg-complete
 
 ARG DEBIAN_FRONTEND=noninteractive
 
