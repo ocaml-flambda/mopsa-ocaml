@@ -84,7 +84,15 @@ struct
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
     man.exec ~route:(Below name) (mk_fold bb bbl range) flow
-
+  
+  let expr_contains_call e =
+    exists_expr
+    (fun e ->
+       match ekind e with
+       | E_call _ -> true
+       | _ -> false)
+    (fun s -> false)
+    e
 
   let exec stmt man flow =
     match skind stmt with
@@ -233,6 +241,16 @@ struct
     | E_c_cast(e,_) when is_c_type e.etyp &&
                          compare_typ exp.etyp e.etyp = 0 ->
       man.eval e flow |>
+      OptionExt.return
+
+    (* If binop expression contains a call, evaluate it before evaluating the binop expression *)
+    | E_binop(op, e1, e2)
+      when is_c_type e1.etyp &&
+           is_c_type e2.etyp &&
+           (expr_contains_call e1 || expr_contains_call e2) ->
+      man.eval e1 flow >>$? fun e1 flow ->
+      man.eval e2 flow >>$? fun e2 flow ->
+      man.eval (mk_binop e1 op e2 ~etyp:exp.etyp exp.erange) flow ~route:(Below name) |>
       OptionExt.return
 
     | _ -> None

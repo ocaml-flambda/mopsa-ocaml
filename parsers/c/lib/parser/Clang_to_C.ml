@@ -169,7 +169,7 @@ let has_stub_comment l =
     ) l
 
 
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) (forced_stub_list: string list) =
   (* utilities *)
   (* ********* *)
 
@@ -426,7 +426,10 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
            )
            else merge rest
       in
-      let enum = merge (if org_name = "" then [] else Hashtbl.find_all ctx.ctx_enums org_name) in
+      let enum = merge (if org_name = "" then
+                          (Hashtbl.fold (fun _ r acc ->
+                               if Stdlib.compare r.enum_range enum.enum_range = 0 then r::acc else acc) ctx.ctx_enums [])
+                        else Hashtbl.find_all ctx.ctx_enums org_name) in
       if nice_name <> "" then Hashtbl.add ctx.ctx_enums nice_name enum;
       Hashtbl.add ctx.ctx_tu_enums e.C.enum_uid enum;
       enum
@@ -517,8 +520,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       in
       let record =
         if org_name = "" then (
-          Hashtbl.add ctx.ctx_records org_name record;
-          record
+          merge (Hashtbl.fold (fun _ r acc ->
+              if Stdlib.compare r.record_range record.record_range = 0 then r::acc else acc) ctx.ctx_records [])
         )
         else merge (Hashtbl.find_all ctx.ctx_records org_name)
       in
@@ -645,7 +648,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
           if var.var_init <> None
           then warning range "variable is defined twice with initializers" org_name;
           let init = init func i in
-          if variable_is_global kind then
+          if variable_is_global kind && !simplify then
             let before, init, after = simplify_global_init ctx.ctx_simplify init in
             var.var_init <- Some init;
             var.var_before_stmts <- before;
@@ -754,26 +757,34 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        with Invalid_argument msg ->
          warning range "multiple declaration of a function have incompatible return type" msg
       );
-
       (* favor argument names from functions with a body, a
          non-empty argument list, or from stubs
       *)
-      if f.C.function_body <> None ||
-         (func.func_parameters = [||] &&  params <> [||]) ||
-         has_stub_comment f.C.function_com then (
+      if
+        ((func.func_parameters = [||] &&  params <> [||]) ||
+         has_stub_comment f.C.function_com)
+        &&
+        ((match func.func_body with
+         | None -> true
+         | Some b ->
+           List.length b.blk_stmts = 0) || (List.mem func.func_org_name forced_stub_list) )
+      then
+      (
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
       );
 
       let coms = List.map (fun m -> m, macros_map) f.C.function_com in
       func.func_com <- comment_macro_unify func.func_com coms;
-      (* fill in body *)
+      (* fill in body, override parameters in that case (to avoid inconsistencies) *)
       if func.func_body <> None && f.C.function_body <> None
       then warning range "function is defined twice with a body" org_name;
       (match f.C.function_body with
        | None -> ()
        | Some b ->
-          func.func_body <-
+         func.func_parameters <- params;
+         func.func_variadic <- f.C.function_is_variadic;
+             func.func_body <-
             Some (stmt (Some func) b |> deblock |> resolve_scope);
           func.func_range <- range;
           func.func_name_range <- name_range

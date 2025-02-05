@@ -49,6 +49,7 @@ let source_kind_name = function
 
 type source = {
     source_path: string; (** absolute path of source file *)
+    source_obj: string; (** absolute path of the object file *)
     source_kind: source_kind;
     source_opts: string list; (** compilation options *)
     source_cwd: string; (** directory from where the compilation was launched *)
@@ -57,6 +58,7 @@ type source = {
 
 let source_unknown (path:string) = {
     source_path = path;
+    source_obj = path;
     source_kind = SOURCE_UNKNOWN;
     source_opts = [];
     source_cwd = Sys.getcwd();
@@ -137,7 +139,7 @@ let print_file_json (name,kind) =
   | Library (k,contents) ->
       Printf.printf "    \"type\": \"library\",\n";
       Printf.printf "    \"kind\": \"%s\",\n" (library_kind_name k);
-      let cnt = StringMap.fold (fun tag _ acc -> tag::acc) contents [] in
+      let cnt = StringMap.fold (fun _ (file,_) acc -> file::acc) contents [] in
       Printf.printf "    \"contents\": [%a]\n" (print_list_json ", " (fun ch tag -> Printf.printf "\"%s\"" (String.escaped tag))) (List.rev cnt);
   | Executable contents ->
       Printf.printf "    \"type\": \"executable\",\n";
@@ -333,6 +335,7 @@ let db_compile (db:db) (kind:source_kind) (src:string) (obj:string) (args: strin
   let s =
     { source_kind = kind;
       source_path = src;
+      source_obj = obj;
       source_opts = args;
       source_cwd = Sys.getcwd ();
     }
