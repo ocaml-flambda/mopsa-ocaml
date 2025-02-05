@@ -1,7 +1,7 @@
 # 1.1
 
 Release 1.1 brings several expressivity, precision and interface improvements, notably:
-- [Trace and state partitioning](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/options/general.html#partitioning)
+- [Trace and state partitioning](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/options/general.html#partitioning). :warning: introduces [breaking changes](https://gitlab.com/mopsa/mopsa-analyzer/-/merge_requests/130#breaking-changes) in the API of domains.
 - [Suggestions to trigger automatic testcase reduction whenever Mopsa crashes](https://mopsa.gitlab.io/mopsa-analyzer/user-manual/debugging/automated-testcase-reduction.html)
   + As a side-effect, Mopsa is able to generate preprocessed files from make targets using option `-c-preprocess-and-exit=file.i`, which might be useful for other users too! This has been experimented on our coreutils benchmarks, and can also be used to generate the preprocessed files used in the [Software-Verification Benchmarks](https://gitlab.com/sosy-lab/benchmarking/sv-benchmarks#programs)
 - Bash completion support, thanks to [arg-complete](https://opam.ocaml.org/packages/arg-complete/) developped by [Simmo Saan](http://sim642.eu/).
