@@ -68,6 +68,14 @@ The front end supports the following options that are available with all C confi
 
    Output Clang's warnings that are generated during parsing.
 
+.. option:: -c-no-project-storage
+
+   By default, Mopsa keeps the full parser project in memory, which can be used to trigger :ref:`automated testcase reduction <automated-testcase-reduction>` if runtime errors are encountered. It however consumes memory and can be disabled using this option.
+
+.. option:: -c-preprocess-and-exit=file.i
+
+   Preprocess a multi-file project, store the result in `file.i`, and exit. Cf :ref:`Leveraging Mopsa to ease multi-file reduction <c-multi-reduction>`.
+
 .. _c-stub-options:
 
 C Library Stubs

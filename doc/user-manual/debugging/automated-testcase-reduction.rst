@@ -17,9 +17,6 @@ Whenever an internal error interrupts the analysis of a program, Mopsa automatic
    The error message to search for should not be program specific, as it could hinder the automated testcase reduction. Feel free to edit the error message to remove explicit program expressions or program locations.
 
 
-
-In the case of multi-file projects, it will first ask the user to generate a preprocessed file (by calling Mopsa again with ``-c-preprocess-and-exit=file.i``).
-
 Differential-configuration reduction
 ------------------------------------
 
@@ -28,6 +25,8 @@ We have had some recent successes in differential-configuration reduction, easin
 
 Leveraging Mopsa to ease multi-file reduction
 ---------------------------------------------
+
+.. _c-multi-reduction :
 
 One of the current usability barriers to automated test-case reduction through creduce and its sibling cvise is the support of multi-file projects. Indeed, `creduce requires the explicit list of files to be reduced <https://github.com/csmith-project/creduce/blob/31e855e290970cba0286e5032971509c0e7c0a80/creduce/creduce.in#L197>`_ . This list can be difficult to establish on large open-source projects, such as coreutils, where a build system like make takes care of compiling the various sources into an executable, through a list of complex rules. In addition, some large projects may use different files with different compilation options, which would create an additional difficulty in using standard creduce.
 
