@@ -9,4 +9,4 @@
  (section share_root)
  (package mopsa)
  (files
-  (mopsa-completion as bash_completion/completions/mopsa)))
+  (mopsa-completion as bash_completion/completions/mopsa-completion)))
