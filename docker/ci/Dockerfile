@@ -30,7 +30,8 @@ RUN \
     apt-get update && \
     apt-get install --no-install-recommends -y $APT_DEPS && \
     adduser --disabled-password --gecos 'Mopsa' mopsa && \
-    adduser mopsa sudo
+    adduser mopsa sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # the multilanguage analysis currently requires python with version <= 3.8
 RUN \
