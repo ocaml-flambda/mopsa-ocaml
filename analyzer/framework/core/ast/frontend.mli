@@ -34,6 +34,9 @@ type frontend = {
   parse: string list -> program;
   (** Parser function that translates a list of input source files into
       a Mopsa {!Program.program} *)
+
+  on_panic: exn -> string list -> float -> unit;
+  (** Function called when the analysis of a program terminates with an exception, and *when the output is in text mode*. Provided with the exception, list of files and analysis time. Current usecase: provide automated testcase reduction capabilities in the C analysis. *)
 }
 (** Frontends *)
 

@@ -346,7 +346,7 @@ let report man flow ~time ~files ~out =
       ) (AssumptionSet.elements rep.report_assumptions)
 
 
-let panic exn ~btrace ~time ~files ~out =
+let panic exn ~btrace ~time ~files ~out continuation =
   print out "%a@." (Debug.color_str Debug.red) "Analysis aborted";
   let () =
     match exn with
@@ -356,7 +356,9 @@ let panic exn ~btrace ~time ~files ~out =
     | Exceptions.PanicAtLocation (range, msg, "") -> print out "panic in %a: %s@." Location.pp_range range msg
     | Exceptions.PanicAtLocation (range, msg, loc) -> print out "%a: panic raised in %s: %s@." Location.pp_range range loc msg
 
-    | Exceptions.PanicAtFrame (range, cs, msg, "") -> print out "panic in %a: %s@\nTrace:@\n%a@." Location.pp_range range msg pp_callstack cs
+    | Exceptions.PanicAtFrame (range, cs, msg, "") ->
+      print out "panic in %a: %s@\nTrace:@\n%a@." Location.pp_range range msg pp_callstack cs;
+
     | Exceptions.PanicAtFrame (range, cs, msg, loc) -> print out "%a: panic raised in %s: %s@\nTrace:@\n%a@." Location.pp_range range loc msg pp_callstack cs
 
     | Exceptions.SyntaxError (range, msg) -> print out "%a: syntax error: %s@." Location.pp_range range msg
@@ -380,7 +382,7 @@ let panic exn ~btrace ~time ~files ~out =
     if btrace = "" then ()
     else print out "Backtrace:@\n%s" btrace
   in
-  ()
+  continuation ()
 
 let group_args_by_category args =
   let sorted = List.sort (fun arg1 arg2 ->

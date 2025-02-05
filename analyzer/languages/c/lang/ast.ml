@@ -235,9 +235,9 @@ let () =
     print = (fun next fmt v ->
         match vkind v with
         | V_cvar cvar ->
-          (* if !Framework.Core.Ast.Var.print_uniq_with_uid then *)
-          (*   Format.fprintf fmt "%s:%a" cvar.cvar_orig_name pp_relative_range cvar.cvar_range *)
-          (* else *)
+          if !Framework.Core.Ast.Var.print_uniq_with_uid then
+            Format.fprintf fmt "%s:%a" cvar.cvar_orig_name pp_relative_range cvar.cvar_range
+          else
             Format.fprintf fmt "%s" cvar.cvar_orig_name
         | _ -> next fmt v
       );

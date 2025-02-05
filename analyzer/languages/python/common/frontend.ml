@@ -525,4 +525,5 @@ let () =
   register_frontend {
     lang = "python";
     parse = parse_program;
+    on_panic = fun _ _ _ -> ();
   }

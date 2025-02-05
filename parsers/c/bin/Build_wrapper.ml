@@ -341,6 +341,16 @@ let compile ckind db args =
        mode := CC_NOTHING;
        ()
 
+    | ("-soname" | "-rpath")::rest when linker ->
+      (* find the argument of the linker option, and remove it *)
+      let rec aux = function
+        | [] -> []
+        | a::r ->
+          if starts_with "-Wl," a then r
+          else a::(aux r)
+      in
+      doit (aux rest)
+
     | x::rest ->
        if starts_with "-Wl," x then
          (* handle linker options *)
@@ -395,7 +405,7 @@ let compile ckind db args =
       )
       (db,[]) !srcs
   in
-  (* link objects and libraries, if neede *)
+  (* link objects and libraries, if needed *)
   match !mode with
   | CC_COMPILE | CC_NOTHING -> db
   | CC_LINK -> db_link db (if !out="" then exe_default else !out) (objs@(StringSet.elements !libs))
@@ -450,11 +460,13 @@ let print dbfile args =
   let tool = wrapper_name in
   let verbose = ref false
   and json = ref false
+  and listobj = ref false
   and files = ref [] in
   Arg.parse_argv (* FIXME BASH COMPLETION *)
     (Array.of_list ("mopsa-db"::args))
     ["-v", Set verbose, "textual dump of all targets";
-     "-json", Set json, "JSON dump of all targets"
+     "-json", Set json, "JSON dump of all targets";
+     "-listobj", Set listobj, "list object files for target";
     ]
     (fun x -> files := x::(!files))
     (tool^" [-v | -json | <target list>]");
@@ -474,7 +486,17 @@ let print dbfile args =
       Printf.printf "List of executables:\n";
       List.iter (fun s -> Printf.printf "%s\n" s) (get_executables db)
     )
-    else
+    else if !listobj then
+      List.iter
+        (fun exe ->
+          try
+            let srcs = get_executable_sources db exe in
+            List.iter (fun src -> Printf.printf "%s " src.source_obj) srcs;
+            Printf.printf "\n"
+          with Not_found ->
+            Printf.printf "%s not found\n" exe
+        ) (List.rev !files)
+   else
       List.iter
         (fun exe ->
           try

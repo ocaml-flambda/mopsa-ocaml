@@ -1,6 +1,6 @@
 (install
  (files
-  mopsa mopsa.bin
+  mopsa
   (glob_files mopsa-*)
   (glob_files_rec mopsa-wrappers/**))
  (section bin))

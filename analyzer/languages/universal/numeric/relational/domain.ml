@@ -377,7 +377,7 @@ struct
       let lval' = { lval with ekind = E_var(var, Some STRONG) } in
       let (a, bnd) =
         if Binding.Equiv.mem_l var bnd then
-          let itv = man.ask (Q_avalue(e, Common.V_int_interval_fast)) in
+          let itv = man.ask (mk_int_interval_query ~fast:true lval) in
           let range = erange lval in 
           exec {stmt with skind = S_assume (constraints_of_itv lval' itv range)} man ctx (a, bnd) |> OptionExt.none_to_exn
         else (a, bnd)

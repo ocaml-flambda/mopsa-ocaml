@@ -658,9 +658,9 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.exec (mk_add vv range) flow ~route:universal >>% fun flow ->
+    man.exec (mk_add vv range) flow  >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.exec (mk_assign vv init' range) ~route:universal
+    man.exec (mk_assign vv init' range) 
 
 
   let exec stmt man flow =
@@ -672,7 +672,7 @@ struct
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
       let lval' = mk_num_var_expr lval in
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
-      man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
+      man.exec (mk_assign lval' rval' stmt.srange) flow  |>
       OptionExt.return
 
     | S_assume(e) when is_c_num_type e.etyp ->
@@ -680,19 +680,19 @@ struct
       begin match expr_to_z e' with
         | Some n when Z.(n = zero) -> Post.return (Flow.remove T_cur flow)
         | Some n                   -> Post.return flow
-        | None                     -> man.exec (mk_assume e' stmt.srange) flow ~route:universal
+        | None                     -> man.exec (mk_assume e' stmt.srange) flow 
       end |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.exec (mk_add vv stmt.srange) ~route:universal |>
+      man.exec (mk_add vv stmt.srange)  |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.exec (mk_remove vv stmt.srange) flow ~route:universal |>
+      man.exec (mk_remove vv stmt.srange) flow  |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
@@ -701,7 +701,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.exec (mk_rename vv1 vv2 stmt.srange) flow ~route:universal |>
+      man.exec (mk_rename vv1 vv2 stmt.srange) flow  |>
       OptionExt.return
 
     | S_expand({ekind = E_var _} as e, el)
@@ -710,7 +710,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_expand v vl stmt.srange) flow ~route:universal |>
+      man.exec (mk_expand v vl stmt.srange) flow  |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -719,7 +719,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_fold v vl stmt.srange) flow ~route:universal |>
+      man.exec (mk_fold v vl stmt.srange) flow  |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
@@ -731,7 +731,7 @@ struct
         else
           mk_top vv.etyp stmt.srange
       in
-      man.exec (mk_assign vv top stmt.srange) flow ~route:universal |>
+      man.exec (mk_assign vv top stmt.srange) flow  |>
       OptionExt.return
 
     | _ -> None
