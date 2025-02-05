@@ -157,7 +157,7 @@ let () =
     key = "-c-preprocess-and-exit";
     category = "C";
     doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option; then exit";
-    spec = ArgExt.Set_string opt_save_preprocessed_file;
+    spec = ArgExt.Set_string (opt_save_preprocessed_file, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
