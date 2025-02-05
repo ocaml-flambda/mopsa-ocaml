@@ -1,7 +1,13 @@
-# Next version: 1.1
+# 1.1
 
 - !241 by @rmonat: pre-release fixes (CHANGELOG.md, ...)
-
+- !265 by @rmonat: bash completion support
+- !246 by @aouadjaout: transform bitfields into bitwise operations
+- !266 by @rmonat: ci fix
+- !144 by @rmonat: leveraging creduce/cvise testcase reduction for Mopsa
+- !240 by @rmonat + @aouadjaout: remove `post_to_flow` in stubs
+- !253 by @rmonat: state partitioning improvements
+- !260 by @antoine_mine: mopsadb: remember object files for target, prints absolute path for objects in libraries
 - !250 by @rmonat: fix #206 (panic: pointers do not point to the same type)
 - !259 by @aouadjaout: simplify initializers of global and static variables in C
 - !261 by @antoine_mine: fix for #211 (Inline assembly parsing messes $ and % symbols)
