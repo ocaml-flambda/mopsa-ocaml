@@ -88,7 +88,7 @@ let opt_to_arg opt =
 let () =
   let complete args =
     (* let () = Format.eprintf "@.complete |%a| {%s} %s@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "|") Format.pp_print_string) args (OptionExt.default "" (OptionExt.lift (fun s -> s ^ "/config/") (Sys.getenv_opt "SHAREDIR"))) in  *)
-    let r = ArgExt.complete_argv args
+    let r = ArgExt.complete_argv ~prefer_getopt_long:true args
     (List.map (fun o ->
          let a = opt_to_arg o in
          a.key, a.spec, a.doc) !options)
