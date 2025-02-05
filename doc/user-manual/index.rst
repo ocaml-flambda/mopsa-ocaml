@@ -131,6 +131,11 @@ Additional resources
    benchmarks/multilanguage
 
 .. toctree::
+   :caption: Debugging
+
+   debugging/automated-testcase-reduction
+
+.. toctree::
    :caption: Index
    :hidden:
 

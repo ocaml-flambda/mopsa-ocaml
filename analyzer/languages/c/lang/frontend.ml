@@ -69,6 +69,12 @@ let opt_stubs_files = ref []
 let opt_ignored_translation_units = ref []
 (** List of translation units to ignore during linking *)
 
+let opt_save_preprocessed_file = ref ""
+(** Where to save the preprocessed file *)
+
+let opt_store_project = ref true
+(** Store project in memory for automated testcase reduction capabilities *)
+
 let () =
   register_language_option "c" {
     key = "-I";
@@ -147,6 +153,20 @@ let () =
     spec = ArgExt.Set_string_list opt_ignored_translation_units;
     default = "";
   };
+  register_language_option "c" {
+    key = "-c-preprocess-and-exit";
+    category = "C";
+    doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option; then exit";
+    spec = ArgExt.Set_string opt_save_preprocessed_file;
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-c-no-project-storage";
+    category = "C";
+    doc = " do not keep the full project in memory (used for automated testcase reduction, but may consume memory)";
+    spec = ArgExt.Clear opt_store_project;
+    default = "";
+  };
   ()
 
 
@@ -190,6 +210,9 @@ let input_files : string list ref = ref []
 
 let target_info = ref host_target_info
 (** Target information used for parsing *)
+
+let o_prj : Mopsa_c_parser.C_AST.project option ref = ref None
+(** Saved project *)
 
 let find_function_in_context ctx range (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
@@ -238,12 +261,24 @@ let is_ignored_translation_unit file =
        n >= n' && (String.equal file' (String.sub file (n - n') n'))
     ) !opt_ignored_translation_units
 
+(* Save prj into single preprocessed file at output_file. Returns the list of stub files that need to be used when analyzing the preprocessed file *)
+let save_preprocessed_file prj output_file = 
+  let outch = open_out output_file in 
+  let () = C_print.print_project ~verbose:false outch prj in
+  let () = close_out outch in
+  !opt_stubs_files @ List.filter
+    (fun f ->
+       Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
+    ) prj.proj_files 
+
+
 (** {2 Entry point} *)
 (** =============== *)
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
+  if !opt_save_preprocessed_file <> "" then Clang_to_C.simplify := false;
 
   if files = [] then panic "no input file";
 
@@ -270,6 +305,29 @@ let rec parse_program (files: string list) =
       panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es in
   let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
+  if !opt_store_project then o_prj := Some prj;
+  let () =
+    if !opt_save_preprocessed_file <> "" then
+      let stub_files = save_preprocessed_file prj !opt_save_preprocessed_file in
+      let ppl = Format.pp_print_list
+          ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
+          Format.pp_print_string in
+      let () = warn "Preprocessed file generated to %s." !opt_save_preprocessed_file in
+      let () =
+        if List.length stub_files > 0 then
+          warn "If you want to run Mopsa on this file, do not forget to keep libc stubs (%a), e.g@\n%a"
+            ppl stub_files
+            ppl (List.append
+                   (List.filter (fun a ->
+                        not @@ List.mem a files
+                        && not @@ String.starts_with ~prefix:"-make-target=" a
+                        && not @@ String.starts_with ~prefix:"-c-preprocess-and-exit=" a)
+                       (Array.to_list Sys.argv))
+                   (!opt_save_preprocessed_file::stub_files)
+                );
+      in
+      exit 0
+  in
   {
     prog_kind = from_project prj;
     prog_range = mk_program_range files;
@@ -357,7 +415,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
+  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx !opt_use_stub
 
 
 and parse_stubs ctx () =
@@ -1160,9 +1218,77 @@ and from_stub_predicates com_map =
         ) acc
     ) com_map StringMap.empty
 
+let on_panic exn files time =
+  (* Provide automated testcase reduction hints if possible *)
+  match exn with
+  | Exceptions.Panic(msg, _) | Exceptions.PanicAtLocation(_, msg, _) | Exceptions.PanicAtFrame(_, _, msg, _) ->
+    (* we can simplify now that we're in the frontend *)
+    let multiple_files = List.length
+        (List.filter (fun s ->
+             not @@ (try
+               let _ = Str.search_forward (Str.regexp "share/mopsa/stubs/c/") s 0 in
+               true
+             with Not_found -> false)) files) > 1
+                         || List.exists (fun f -> Filename.extension f = ".db") files in
+    if multiple_files && not !opt_store_project then
+      Format.printf "@\nTo benefit from Mopsa's automated testcase reduction capabilities, please remove command-line option `-c-no-project-storage`@\n"
+    else
+      let mopsa_command, stub_files, file_to_reduce =
+        let mopsa_command = Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) (List.filter (fun s -> not @@ List.mem s files) (Array.to_list Sys.argv)) in
+        match multiple_files, List.find_opt (String.ends_with ~suffix:".i") files with
+        | false, None ->
+          (* single file: easy *)
+          mopsa_command, [], List.hd files
+        | true, None ->
+          (* multiple files, but no preprocessed one: to generate *)
+          if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
+            let () = Format.printf "@\n%a Do you want to try automated testcase reduction (using creduce/cvise) to find/report a minimal program that still crashes Mopsa? If yes, Mopsa will generate a preprocessed C file of your project. [Y/n]@."
+                (Debug.color_str Debug.magenta) "Mopsa encountered a fatal error."
+            in
+            let answer = input_line stdin in
+            if answer = "" || (String.lowercase_ascii answer).[0] = 'y' then
+              let preprocessed_file =
+                assert (!opt_make_target <> "");
+                !opt_make_target ^ ".i" in
+              let preprocessed_file =
+                if Sys.file_exists preprocessed_file then
+                  Filename.basename @@ Filename.temp_file ~temp_dir:(Sys.getcwd ()) "" ".i"
+                else
+                  preprocessed_file in
+              let stub_files = save_preprocessed_file (OptionExt.none_to_exn !o_prj) preprocessed_file in
+              mopsa_command, stub_files, preprocessed_file
+            else
+              exit 2
+          else
+            let () = Format.printf "@\n%a@\n"
+              (Debug.color_str Debug.magenta) "Hint: to get automated testcase reduction instructions, launch the analysis again in a TTY (without redirections, etc)." in
+            exit 2
+        | _, Some s ->
+          (* multiple files, including a preprocessed one: no preprocessing to generate again *)
+          mopsa_command, List.filter (fun s ->
+              try
+                let _ = Str.search_forward (Str.regexp "share/mopsa/stubs/c/") s 0 in
+                true
+              with Not_found -> false) files, s
+      in
+      (* Large timeout due to potential slowdown with large parallelization *)
+      let timeout = int_of_float (5. +. 4. *. time) in
+      Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s bash -c 'cvise --timeout %d %s $FILE_TO_REDUCE'@\n"
+        (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
+        (String.escaped msg)
+        mopsa_command
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) stub_files
+        file_to_reduce
+        timeout
+        (!Paths.opt_share_dir ^ "/../../tools/reducer-oracle.sh")
+  | _ ->
+    ()
+
+
 (* Front-end registration *)
 let () =
   register_frontend {
     lang = "c";
     parse = parse_program;
+    on_panic = on_panic;
   }

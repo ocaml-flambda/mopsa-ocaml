@@ -26,6 +26,7 @@ open Program
 type frontend = {
   lang: string;
   parse: string list -> program;
+  on_panic: exn -> string list -> float -> unit;
 }
 
 let frontends : frontend list ref = ref []

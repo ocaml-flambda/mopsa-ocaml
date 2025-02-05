@@ -332,4 +332,5 @@ let () =
   register_frontend {
     lang = "repl";
     parse = parse_program;
+    on_panic = fun _ _ _ -> ();
   }

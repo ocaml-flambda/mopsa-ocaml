@@ -1,6 +1,0 @@
-#!/bin/bash
-
-MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-SHAREDIR=$(realpath ${MOPSADIR}/share/mopsa)
-
-${MOPSADIR}/bin/mopsa.exe -share-dir=${SHAREDIR} $@
