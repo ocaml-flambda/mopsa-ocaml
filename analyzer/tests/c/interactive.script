@@ -3,6 +3,7 @@ c
 b 6
 c
 p x, s
+e pointers | tail -n 2
 p x:main
 p x:f
 p x:*,s:*
