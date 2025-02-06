@@ -53,11 +53,12 @@ let () = register_marker {
         | _ ->
           next m1 m2
       );
-    marker_name = (fun next -> function
+    marker_print_name = (fun next -> function
         | M_c_switch_case _
         | M_c_switch_default _ -> "switch"
         | m -> next m
       );
+    marker_name = "switch"
   }
 
 (********************)

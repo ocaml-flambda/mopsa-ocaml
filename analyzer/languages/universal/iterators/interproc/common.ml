@@ -36,7 +36,7 @@ let () = register_domain_option name {
     key = "-recursion-limit";
     doc = "Limit of recursive calls";
     category = "Interprocedural Analysis";
-    spec = ArgExt.Set_int opt_recursion_limit;
+    spec = Set_int (opt_recursion_limit,ArgExt.empty);
     default = string_of_int !opt_recursion_limit;
   }
 
@@ -47,7 +47,7 @@ let () =
     key = "-disable-var-renaming-recursive-call";
     category = "Interprocedural Analysis";
     doc = " disable renaming of local variables when detecting recursive calls";
-    spec = ArgExt.Clear opt_rename_local_variables_on_recursive_call;
+    spec = Clear opt_rename_local_variables_on_recursive_call;
     default = ""
   }
 
@@ -59,7 +59,8 @@ let () =
 type marker += M_return of range
 
 let () = register_marker {
-    marker_name = (fun next -> function
+    marker_name = "return";
+    marker_print_name = (fun next -> function
         | M_return _ -> "return"
         | m          -> next m
       );

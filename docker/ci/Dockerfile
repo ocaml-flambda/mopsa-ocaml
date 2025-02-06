@@ -12,9 +12,9 @@ FROM ubuntu:24.04
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
              llvm-dev libclang-dev libclang-cpp-dev clang \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget adduser less emacs-nox
+             rsync m4 curl wget adduser less emacs-nox bash-completion
 
-ENV OPAM_DEPS dune apron zarith menhir yojson
+ENV OPAM_DEPS dune apron zarith menhir yojson arg-complete
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -30,7 +30,8 @@ RUN \
     apt-get update && \
     apt-get install --no-install-recommends -y $APT_DEPS && \
     adduser --disabled-password --gecos 'Mopsa' mopsa && \
-    adduser mopsa sudo
+    adduser mopsa sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # the multilanguage analysis currently requires python with version <= 3.8
 RUN \
