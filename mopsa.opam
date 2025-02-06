@@ -28,7 +28,7 @@ doc: "https://mopsa.gitlab.io/mopsa-analyzer/user-manual/"
 bug-reports: "https://gitlab.com/mopsa/mopsa-analyzer/issues"
 dev-repo: "git+https://gitlab.com/mopsa/mopsa-analyzer.git"
 depends: [
-  "ocaml" {>= "4.12.0"}
+  "ocaml" {>= "4.13.0"}
   "dune" {>= "3.7"}
   "ocamlfind"
   "apron" {>= "0.9.15"}
@@ -82,6 +82,7 @@ depexts: [
   ["llvm"] {os = "macos"}
   ["devel/llvm"] {os = "freebsd"}
 ]
+x-maintenance-intent: ["(latest)"]
 post-messages: [
   "Mopsa installed.
 

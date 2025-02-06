@@ -1,5 +1,5 @@
 depends: [
-  "ocaml" {>= "4.12.0"}
+  "ocaml" {>= "4.13.0"}
   "dune" {>= "3.7"}
   "ocamlfind"
   "apron" {>= "0.9.15"}
@@ -53,6 +53,7 @@ depexts: [
   ["llvm"] {os = "macos"}
   ["devel/llvm"] {os = "freebsd"}
 ]
+x-maintenance-intent: ["(latest)"]
 post-messages: [
   "Mopsa installed.
 

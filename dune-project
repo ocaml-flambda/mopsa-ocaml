@@ -6,6 +6,9 @@
 
 (subst disabled)
 
+(source
+ (uri "git+https://gitlab.com/mopsa/mopsa-analyzer.git"))
+
 (authors
   "Antoine Miné"
   "Abdelraouf Ouadjaout"
@@ -24,9 +27,6 @@
 )
 
 (license "LGPL-3.0-or-later")
-
-(source
-  (uri git+https://gitlab.com/mopsa/mopsa-analyzer.git))
 
 (homepage "https://mopsa.lip6.fr")
 
