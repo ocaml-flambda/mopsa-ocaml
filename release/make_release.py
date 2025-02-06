@@ -97,12 +97,12 @@ def check_version():
     else:
         print('ERROR: the VERSION file (' + l + ') should match the version you provided (' + version + ').')
         exit(1)
-    
+
 def check_license():
     print()
     ret = subprocess.run(['./check_license.sh'])
     if ret.returncode != 0:
-        print("Consider using:\n reuse annotate  --template=header.jinja2 --copyright \"Copyright (C) 2024 The MOPSA authors.\" --license LGPL-3.0-or-later")
+        print("Consider using:\n reuse annotate  --template=header.jinja2 --copyright \"Copyright (C) 2025 The MOPSA authors.\" --license LGPL-3.0-or-later")
         exit(1)
 
 def check_changelog():
