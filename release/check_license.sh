@@ -36,7 +36,7 @@ PYFILES=`find .. -name \*.py | grep -v tests | grep -v benchmarks`
 SHELLFILES=`find .. -name \*.sh`
 MAKEFILES="`find .. -name \*.mk` `find .. -name \*.in | grep -v META.in` `find .. -name \*.ac` `find .. -name Makefile` ../configure.ac"
 ALL="$MLFILES $CFILES $HFILES $CCFILES $PYFILES $MAKEFILES $SHELLFILES"
-FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/ | grep -v /doc/`
+FILES=`echo "$ALL" | grep -v /parsers/python/ | grep -v /_build/ | grep -v /lib/ | grep -v /benchmarks/ | grep -v /tests/ | grep -v /ci/ | grep -v /doc/ | grep -v tools/benchexec_mopsa_info.py`
 echo "Looking for files missing the text '$KEY'."
 echo "Checking" `echo $FILES | wc -w` "file(s)."
 
