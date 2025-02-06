@@ -462,11 +462,11 @@ let print dbfile args =
   and json = ref false
   and listobj = ref false
   and files = ref [] in
-  Arg.parse_argv
+  Arg.parse_argv (* FIXME BASH COMPLETION *)
     (Array.of_list ("mopsa-db"::args))
-    ["-v", Arg.Set verbose, "textual dump of all targets";
-     "-json", Arg.Set json, "JSON dump of all targets";
-     "-listobj", Arg.Set listobj, "list object files for target";
+    ["-v", Set verbose, "textual dump of all targets";
+     "-json", Set json, "JSON dump of all targets";
+     "-listobj", Set listobj, "list object files for target";
     ]
     (fun x -> files := x::(!files))
     (tool^" [-v | -json | <target list>]");

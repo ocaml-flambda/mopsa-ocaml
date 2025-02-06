@@ -37,7 +37,7 @@ let () =
     key = "-engine";
     category = "Debugging";
     doc = "selects analysis mode";
-    spec =  ArgExt.Symbol (
+    spec =  Symbol (
          ["automatic"; "interactive"; "dap"],
         (fun s ->
            match s with
@@ -55,13 +55,14 @@ let () =
 let parse_options passed_args f () =
   let files = ref [] in
   let args  = ref None in
-  ArgExt.parse passed_args
-               (Params.Options.get_options ())
+  try
+    Arg.parse_argv passed_args
+    (ArgExt.argext_to_arg_list (Params.Options.get_options ()))
                (fun filename -> files := filename :: !files)
-               (fun rest -> args := Some rest)
-               "Modular Open Platform for Static Analysis"
-               Params.Options.help;
-  f !files !args
+               "Modular Open Platform for Static Analysis";
+    f !files !args
+  with Stdlib.Arg.Bad f ->
+    Params.Options.help (); 2
 
 
 (** {2 Parsing} *)

@@ -13,6 +13,27 @@ To analyze programs, Mopsa provides five binaries:
 
 - ``mopsa-universal`` works on a toy imperative language defined within Mopsa.
 
+Argument autocompletion
+-----------------------
+
+Mopsa has bash completion capabilities. To enable them:
+
+- If you installed Mopsa from source, from its `bin` repository run:
+
+  .. code-block:: shell
+
+    echo "source $(readlink -f .)/mopsa-completion" >> ~/.bash_completion
+
+
+- If you installed Mopsa through opam, follow the instructions given at the end of the install performed by opam, or equivalently run:
+
+  .. code-block:: shell
+
+    echo "source $OPAM_SWITCH_PREFIX/share/bash_completion/completions/mopsa-completion" >> ~/.bash_completion
+
+In case you get a message such as `_get_comp_words_by_ref: command not found`, make sure `bash-completion` is installed and try to `source /etc/bash_completion`.
+
+
 C analysis
 ----------
 

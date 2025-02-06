@@ -49,10 +49,11 @@ let () = register_marker {
         | _ ->
           next m1 m2
       );
-    marker_name = (fun next -> function
+    marker_print_name = (fun next -> function
         | M_stub_case _ -> "stub-case"
         | m -> next m
       );
+    marker_name = "stub-case"
   }
 
 (********************)
@@ -85,7 +86,7 @@ struct
       key      = "-stub-ignore-case";
       doc      = " list of stub cases to ignore";
       category = "Stubs";
-      spec     = ArgExt.Set_string_list opt_stub_ignored_cases;
+      spec     = String (ArgExt.set_string_list_lifter opt_stub_ignored_cases, ArgExt.empty);
       default  = "";
     }
 

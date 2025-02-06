@@ -7,7 +7,7 @@
 (subst disabled)
 
 (source
- (uri "git+https://gitlab.com/mopsa/mopsa-analyzer"))
+ (uri "git+https://gitlab.com/mopsa/mopsa-analyzer.git"))
 
 (authors
   "Antoine Miné"
@@ -28,7 +28,7 @@
 
 (license "LGPL-3.0-or-later")
 
-(homepage "https://gitlab.com/mopsa/mopsa-analyzer")
+(homepage "https://mopsa.lip6.fr")
 
 (documentation "https://mopsa.gitlab.io/mopsa-analyzer/user-manual/")
 
@@ -45,6 +45,6 @@
 It features a modular architecture to support different kinds of languages, iterators, and abstract domains.
 For the moment, MOPSA can analyze programs written in a subset of C and Python.
 It reports run-time errors on C programs and uncaught exceptions on Python programs.")
- (depends (ocaml (>= 4.12.0)) dune conf-autoconf ocamlfind (apron (>= 0.9.15)) conf-libclang menhir mlgmpidl (yojson (>= 1.6.0)) (zarith (>= 1.4)))
+ (depends (ocaml (>= 4.12.0)) dune conf-autoconf ocamlfind (apron (>= 0.9.15)) conf-libclang menhir mlgmpidl (yojson (>= 1.6.0)) (zarith (>= 1.4)) arg-complete)
  (depopts elina)
 )

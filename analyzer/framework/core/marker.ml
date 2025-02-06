@@ -28,7 +28,8 @@ open Mopsa_utils
 type marker = ..
 
 type marker_info = {
-  marker_name : (marker -> string) -> marker -> string;
+  marker_name : string;
+  marker_print_name : (marker -> string) -> marker -> string;
   marker_print : (Format.formatter -> marker -> unit) -> Format.formatter -> marker -> unit;
   marker_compare : (marker -> marker -> int) -> marker -> marker -> int;
 }
@@ -46,10 +47,13 @@ let compare_marker m1 m2 = !compare_marker_chain m1 m2
 let pp_marker fmt m = !pp_marker_chain fmt m
 let get_marker_name m = !name_marker_chain m
 
+let all_markers = ref []
+
 let register_marker info =
   pp_marker_chain := info.marker_print !pp_marker_chain;
   compare_marker_chain := info.marker_compare !compare_marker_chain;
-  name_marker_chain := info.marker_name !name_marker_chain
+  name_marker_chain := info.marker_print_name !name_marker_chain;
+  all_markers := info.marker_name :: !all_markers
 
 type stmt_kind +=
   | S_add_marker of marker
@@ -71,6 +75,8 @@ let is_marker_enabled m =
   | l ->
     let name = get_marker_name m in
     List.exists (fun name' -> String.equal name name') !opt_enabled_markers
+
+let available_markers () = !all_markers
 
 let () = register_stmt_with_visitor {
     print = (fun next fmt stmt ->

@@ -46,7 +46,7 @@ struct
       key = "-c-show-line-coverage";
       category = "Coverage";
       doc = " turn on per-line coverage reporting";
-      spec = ArgExt.Set opt_per_line_coverage;
+      spec = Set opt_per_line_coverage;
       default = "";
     }
 

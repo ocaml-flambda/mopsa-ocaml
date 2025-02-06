@@ -36,7 +36,7 @@ let () =
     key = "-show-relational-def-domain";
     category = "Numeric";
     doc = " display the domain on which the relational abstract state is defined";
-    spec = ArgExt.Set opt_show_relational_domain;
+    spec = Set opt_show_relational_domain;
     default = "false";
   }
 
@@ -46,7 +46,7 @@ let () =
     key = "-enforce-sign-constraints";
     category = "Numeric";
     doc = " enforce sign constraints of variables in the relational domain";
-    spec = ArgExt.Set opt_enforce_sign_constraints;
+    spec = Set opt_enforce_sign_constraints;
     default = "false";
   }
 

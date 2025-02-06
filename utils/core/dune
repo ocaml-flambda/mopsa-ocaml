@@ -2,4 +2,4 @@
  (name utils_core)
  (public_name mopsa.mopsa_utils.core)
  (library_flags -linkall)
- (libraries str unix))
+ (libraries str unix arg-complete))
