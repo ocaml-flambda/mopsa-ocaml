@@ -20,8 +20,6 @@
 (****************************************************************************)
 
 (** Main handler of standalone C programs. *)
-
-
 open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
@@ -30,6 +28,7 @@ open Ast
 open Common
 open Common.Points_to
 open Common.Base
+open Common.Runtime
 open Universal.Numeric.Common
 module StringMap = MapExt.StringMap
 
@@ -118,10 +117,82 @@ struct
       spec = Int ((fun s -> opt_arg_min_size := Some s), ArgExt.empty);
       default = "1"
     }
+  (** Runtime testing options *)
+  let ffitest_flag = ref false
+  module StringSet = Set.Make(String)
+  let ffitest_extfuns : Type_shapes.extfun_desc StringMap.t ref = ref (StringMap.empty)
+  let ffitest_missing_funs : StringSet.t ref = ref (StringSet.empty)
+
+  let read_lines str =
+    let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
+    let rec read_all_lines file =
+      let line = try Some (input_line file) with End_of_file -> None in
+      match line with
+      | None -> []
+      | Some s -> s :: read_all_lines file
+    in
+    try
+      let names = read_all_lines file in
+      close_in file;
+      names
+    with e ->
+      (* some unexpected exception occurs *)
+      close_in_noerr file;
+      (* emergency closing *)
+      raise e
+
+
+  let () = register_domain_option name {
+    key = "-external-functions";
+    category="Runtime";
+    doc=" file containing function names of functions to test (if contained in the file)";
+    spec = ArgExt.String(fun s ->
+      let parse_functions fn =
+        match Type_shapes.deserialize_extfun fn with
+        | Some {name; desc} -> (name, desc)
+        | None ->
+          (* FIXME: perhaps we want a different error here? *)
+          failwith (Format.asprintf "input error: cannot parse external type declaration %s" fn)
+      in
+      let funs = read_lines s in
+      let funs = List.map parse_functions funs in
+      ffitest_extfuns := StringMap.of_list funs
+    );
+    default=""
+  }
+
+  let () = register_domain_option name {
+    key = "-runtimetest";
+    category="Runtime";
+    doc=" test C stubs";
+    spec = ArgExt.Set ffitest_flag;
+    default=""
+  }
+
 
 
 
   let checks = []
+
+  (** Utility functions *)
+  (** ================= *)
+
+  let mk_lowlevel_subscript_access a i t range =
+    mk_c_deref (mk_binop a O_plus i ~etyp:(pointer_type t) range) range
+
+  let assign_array a i t e r range =
+    let lval = mk_lowlevel_subscript_access a i t r in
+    let stmt = mk_assign lval e range in
+    stmt
+
+  let function_report_outcome (rep: report) =
+    let total, safe, error, warning, info, unimplemented, checks_map = Output.Text.construct_checks_summary ~print:false rep None in
+    if error > 0 || warning > 0 then
+      Error
+    else if unimplemented > 0 then
+      Unimplemented
+    else if info > 0 then Info
+    else Safe
 
 
   (** Initialization of environments *)
@@ -129,13 +200,145 @@ struct
 
   let init prog man flow =
     match prog.prog_kind with
-    | C_program p -> 
+    | C_program p ->
       set_c_program p flow |>
       set_c_target_info !Frontend.target_info |>
       Post.return |>
       Option.some
 
     | _ -> None
+
+
+  (** OCaml runtime function test machinery *)
+  (** ===================================== *)
+
+  let type_shape_of_function (f: c_fundec) : Type_shapes.fn_type_shapes option =
+    match StringMap.find_opt f.c_func_org_name (!ffitest_extfuns) with
+    | Some { shape = Some ty } -> Some ty
+    (* a runtime function we should test of unknown shape *)
+    | Some { shape = None } ->
+      let default_shape_args = List.map (fun _ -> Type_shapes.Any) (f.c_func_parameters) in
+      let default_shape_ret = Type_shapes.Any in
+      Some { arguments=default_shape_args; return=default_shape_ret }
+    (* not a runtime function we should test *)
+    | None -> None
+
+  let virtual_runtime_arguments array tys range : expr list =
+    let len = List.length tys in
+    if len > 5 then [mk_c_address_of array range; mk_int len range]
+    else List.init len (fun i -> mk_lowlevel_subscript_access array (mk_int i range) ffi_value_typ range)
+
+  let virtual_runtime_argument_array tys range : (stmt list) * (expr list) =
+    let size = C_array_length_cst (Z.of_int (List.length tys)) in
+    let tmp_active_var = mktmp ~typ:(T_c_array (ffi_value_typ, size)) () in
+    let tmp_active = mk_var tmp_active_var range in
+    let declare_var = mk_c_declaration tmp_active_var None Variable_global range in
+    let assignments = List.mapi (fun i ty ->
+      [
+        assign_array tmp_active (mk_int i range) ffi_value_typ (mk_top ffi_value_typ range) range range;
+        mk_ffi_init_with_shape (mk_lowlevel_subscript_access tmp_active (mk_int i range) ffi_value_typ range) ty range
+      ]
+    ) tys in
+    let args = virtual_runtime_arguments tmp_active tys range in
+    declare_var :: List.concat assignments, args
+
+  let eval_is_ret_val range retval man flow =
+    match ekind retval with
+    | E_constant C_unit ->
+      let flow = raise_ffi_void_return range man flow in
+      Cases.singleton false flow
+    | _ ->
+      Cases.singleton true flow
+
+
+  let exec_arity_check f (ty: Type_shapes.fn_type_shapes) range man flow =
+    let actual = List.length (f.c_func_parameters) in
+    let expected = List.length (ty.arguments) in
+    if actual != expected && expected <= 5  then
+      let flow = raise_ffi_arity_mismatch range ~actual ~expected man flow in
+      Post.return flow
+    else if expected > 5 && actual != 2 then
+      let flow = raise_ffi_arity_mismatch range ~actual ~expected:2 man flow in
+      Post.return flow
+    else
+      let flow = safe_ffi_arity_check range man flow in
+      Post.return flow
+
+  let exec_virtual_runtime_function_test_exn (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =
+    let range = f.c_func_name_range in
+    let {Type_shapes.arguments = arg_shapes; return = ret_shape } = ty in
+    let stmts, args = virtual_runtime_argument_array arg_shapes range in
+    (* check the OCaml side arity and the C side arity agree *)
+    exec_arity_check f ty f.c_func_range man flow >>% fun flow ->
+    (* allocate the runtime arguments *)
+    man.exec (mk_block stmts range) flow >>% fun flow ->
+    (* execute the external function *)
+    man.eval (mk_c_call f args range) flow >>$ fun exp flow ->
+    (* check the return value is not void *)
+    eval_is_ret_val f.c_func_range exp man flow >>$ fun has_ret flow ->
+    if has_ret && not (Flow.is_empty flow) then
+      (* assert the result shape *)
+      man.exec (mk_ffi_assert_shape exp ret_shape f.c_func_range) flow
+    else
+      Post.return flow
+
+  let exec_virtual_runtime_function_test f ty man flow =
+    try
+      exec_virtual_runtime_function_test_exn f ty man flow
+    with e ->
+      (* something went wrong in the analysis *)
+      let flow = raise_ffi_internal_error "An unexpected exception was raised during the analysis." f.c_func_range man flow in
+      Post.return flow
+
+
+  let rec exec_all_runtime_functions (fs: (c_fundec * Type_shapes.fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
+    match fs with
+    | [] ->
+      (* eventually, we reverse the results to be again in program order *)
+      Cases.singleton (List.rev results) (Flow.join_list man.lattice ~empty: (fun () -> flow) flows)
+    | (f, ty) :: fs ->
+        let () = Debug.debug ~channel:"runtime_functions" "analyzing %s at %a" (f.c_func_org_name) pp_range f.c_func_range in
+        (* NOTE: This is tricky. This bind only works, because even if the flow is empty,
+           the monad will still execute the subsequent part. This is crucially different
+          from the usual [>>$], which silently drops empty.  *)
+        exec_virtual_runtime_function_test f ty man flow >>% fun flow' ->
+        let report = Flow.get_report flow' in
+        let res = function_report_outcome report in
+        exec_all_runtime_functions fs man (flow' :: flows) ((f.c_func_org_name, res) :: results) flow
+
+
+  let output_results skipped_functions results to_test =
+    let pp_unknown_functions fmt set =
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
+    in
+    let pp_runtime_analysis_results fmt results =
+      List.iter (fun (f, res) -> Format.fprintf fmt "%s (%s)\n" f (Output.Text.icon_of_diag res)) results
+    in
+    let pp_missing_functions fmt map =
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) map [])
+    in
+    let results_map = StringMap.of_list results in
+    let missing_functions = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
+      if not (!Output.Text.opt_no_ffi_report) then
+        Format.printf
+          "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
+          pp_runtime_analysis_results
+          results
+          pp_unknown_functions
+          skipped_functions
+          pp_missing_functions
+          missing_functions
+
+  let exec_runtime_tests c_functions man flow =
+    (* Determine the runtime functions to execute; we sort them by program order *)
+    let c_functions = List.sort (fun f g -> compare_range f.c_func_range g.c_func_range) c_functions in
+    let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
+    (* Execute all the runtime functions, yielding a list of results for each function *)
+    exec_all_runtime_functions ffi_functions man [] [] flow >>$ fun results flow ->
+    (* we output the results, the functions that were assumed to be missing,
+       and compute the functions that should have been checked but were not. *)
+    output_results (!ffitest_missing_funs) results (!ffitest_extfuns);
+    Post.return flow
 
 
   (** Computation of post-conditions *)
@@ -614,6 +817,19 @@ struct
 
   let exec stmt man flow =
     match skind stmt with
+    | S_program  ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _) when !ffitest_flag ->
+      (* Initialize global variables *)
+      init_globals c_globals man flow >>%? fun flow ->
+      (* Execute stub directives *)
+      exec_stub_directives c_stub_directives man flow >>%? fun flow ->
+      (* Execute all runtime functions *)
+      exec_runtime_tests c_functions man flow |>
+      OptionExt.return
+
+    | S_c_ext_call (f, exprs) ->
+      ffitest_missing_funs := StringSet.add (f.c_func_org_name) (!ffitest_missing_funs);
+      man.exec ~route:(Below name) stmt flow |> OptionExt.return
+
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
       (* Initialize global variables *)
@@ -632,7 +848,7 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         call_main entry args c_functions man flow |>
-        OptionExt.return 
+        OptionExt.return
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
@@ -684,7 +900,11 @@ struct
   let eval_exit name code range man flow =
     man.eval code flow >>$ fun _ flow ->
     exec_exit_functions name range man flow >>% fun flow ->
-    Eval.singleton (mk_unit range) flow
+    Cases.empty flow
+
+  let eval_abort range man flow =
+    Cases.empty flow
+
 
   let eval exp man flow =
     match ekind exp with
@@ -694,7 +914,9 @@ struct
     | E_c_builtin_call("quick_exit", [code]) ->
       eval_exit "quick_exit" code exp.erange man flow |>
       OptionExt.return
-
+    | E_c_builtin_call("abort", []) ->
+      eval_abort exp.erange man flow |>
+      OptionExt.return
     | _ -> None
 
 
@@ -735,10 +957,10 @@ struct
         records;
       Some (Cases.singleton all_vars flow)
 
-    | Q_defined_variables (Some call) -> 
+    | Q_defined_variables (Some call) ->
       let prog = get_c_program flow in
-      Cases.singleton (get_locals prog call) flow 
-      |> OptionExt.return 
+      Cases.singleton (get_locals prog call) flow
+      |> OptionExt.return
 
     (* Get the value of a variable *)
     | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->

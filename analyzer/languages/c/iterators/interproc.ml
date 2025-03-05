@@ -367,14 +367,11 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
-    let fundec_has_been_modified = ref false in 
-    if List.length args > 0 && List.length fundec.c_func_parameters > 0 then
-      debug "%s %a %a" fundec.c_func_org_name pp_typ (List.hd fundec.c_func_parameters).vtyp pp_typ (List.hd args).etyp;
-    if fundec.c_func_org_name = "__builtin_alloca" then
+    (* if fundec.c_func_org_name = "__builtin_alloca" then
       match args with
       | [size] -> eval_alloca_call size range man flow
       | _ -> panic_at range "invalid call to alloca"
-    else
+    else *)
     if is_builtin_function fundec.c_func_org_name
     then
       let exp' = mk_expr (E_c_builtin_call(fundec.c_func_org_name, args)) ~etyp:fundec.c_func_return range in
@@ -400,7 +397,7 @@ struct
        * all paritions, since we can't keep a relation between the partitions
        * before calling the function and the paritions after the return *)
       let caller_alloca_addrs = Cases.reduce_result
-          (fun addrs _ -> addrs) caller_alloca_addrs 
+          (fun addrs _ -> addrs) caller_alloca_addrs
           ~join:AddrSet.join
           ~meet:AddrSet.meet
           ~bottom:(fun () -> AddrSet.bottom)
@@ -426,11 +423,11 @@ struct
         )
         else
          let is_modified, fundec = rename_variables_in_fundec (Flow.get_callstack flow) fundec in
-         let () = fundec_has_been_modified := is_modified in 
+         let () = fundec_has_been_modified := is_modified in
          let flow =
-           if !fundec_has_been_modified then 
+           if !fundec_has_been_modified then
            (* after fundec renaming, we save the updated program in the context for the interactive engine *)
-             let old_c_program = get_c_program flow in 
+             let old_c_program = get_c_program flow in
              let new_c_program =
                {old_c_program with
                 c_functions = fundec :: old_c_program.c_functions } in
@@ -486,16 +483,18 @@ struct
             if man.lattice.is_bottom (Flow.get T_cur man.lattice flow) then flow
             else
               let r = bind_list args man.eval flow in
-              let flow = r >>$ (fun _ flow -> Post.return flow)|> post_to_flow man in
-              let () = warn_at range "%a" pp_assumption_kind (Soundness.A_ignore_undefined_function c_func_org_name) in
-              Flow.add_local_assumption
-                (Soundness.A_ignore_undefined_function c_func_org_name)
-                range flow
+              (* NOTE: Is this how we want to implement this functionality? *)
+              (* UNSOUND: We skip an external call here without executing the code. To remedy this, we notify the domains about the external call and execute the havoc statement. *)
+              let flow = r >>$ (fun args flow -> man.exec (mk_c_ext_call fundec args range) flow )|> post_to_flow man in
+              let () = warn_at range "%a" pp_assumption_kind (Soundness.A_havoc_undefined_function c_func_org_name) in
+              flow
+              (* Unknown functions are no longer assumed to not modify the state. *)
           in
+          man.exec (mk_havoc range) flow >>$ (fun _ flow ->
           if is_c_void_type c_func_return then
             Eval.singleton (mk_unit range) flow
           else
-            man.eval (mk_top c_func_return range) flow
+            man.eval (mk_top c_func_return range) flow)
       in
       (* free alloca addresses *)
       ret >>$ fun e flow ->
@@ -532,7 +531,7 @@ struct
         man.eval (mk_top (under_type p.etyp) range) flow
 
     | P_null ->
-      Common.Alarms.raise_c_null_deref_alarm p man flow |> Eval.empty 
+      Common.Alarms.raise_c_null_deref_alarm p man flow |> Eval.empty
 
     | _ ->
       panic_at range

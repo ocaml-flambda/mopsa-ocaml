@@ -26,14 +26,14 @@ let builtin_functions = Hashtbl.create 16
 let _ =
   List.iter (fun a -> Hashtbl.add builtin_functions a ()) [
       "__builtin_constant_p";
-      "__builtin_expect";
+      (* "__builtin_expect"; *)
 
       "__builtin_va_start";
       "__builtin_va_end";
       "__builtin_va_copy";
 
-      "__builtin_alloca";
-      "alloca";
+      (* "__builtin_alloca";
+      "alloca"; *)
 
       "printf";
       "__printf_chk";
@@ -103,6 +103,29 @@ let _ =
 
       "exit";
       "quick_exit";
+
+      "abort";
+
+      (* OCaml Runtime Primitives, which are
+         implemented in the runtime domain. *)
+      "_ffi_garbage_collect";
+      "_ffi_mark_active_contents";
+      "_ffi_mark_active_ptr";
+      "_ffi_assert_active";
+      "_ffi_assert_active_ptr";
+      "_ffi_register_root";
+      "_ffi_unregister_root";
+      "_ffi_acquire_lock";
+      "_ffi_release_lock";
+      "_ffi_assert_locked";
+      "_ffi_fresh_value_ptr";
+      "_ffi_set_shape";
+      "_ffi_assert_shape";
+      "_ffi_is_immediate";
+      "_ffi_unimplemented";
+      "_ffi_pass_on_shape";
+      "_ffi_assert_shape_subset";
+      "_ffi_assert_shape_compat";
 
       "__builtin_isfinite";
       "__builtin_isnormal";

@@ -31,7 +31,12 @@ open Common
 
 (** Command-line option to enable display of alarms call stacks *)
 let opt_show_callstacks = ref false
-
+let opt_no_unimplemented_detailed_checks = ref false
+(* NOTE: The time is not stable accross executions on different machines *)
+let opt_no_time = ref false
+let opt_no_detailed_checks = ref false
+let opt_no_analysis_summary = ref false
+let opt_no_ffi_report = ref false
 
 (** Command-line option to specify the number of spaces to use for
     printing tabs
@@ -74,11 +79,15 @@ let color_of_diag = function
   | Unreachable -> Debug.gray
   | Error       -> Debug.red
   | Warning     -> Debug.orange
+  | Info        -> Debug.fushia
+  | Unimplemented  -> Debug.blue
 
 let icon_of_diag = function
   | Safe        -> "✔"
   | Warning     -> "⚠"
   | Error       -> "✗"
+  | Info        -> "ⓘ"
+  | Unimplemented -> "?"
   | Unreachable -> "🛇"
 
 (** Highlight source code at a given location range *)
@@ -177,7 +186,7 @@ let pp_diagnostic out n diag callstacks kinds =
   let fun_name = match CallstackSet.choose callstacks with
     | c::_ -> Some c.call_fun_orig_name
     | _ -> None in
-  let len = CallstackSet.cardinal callstacks in 
+  let len = CallstackSet.cardinal callstacks in
   print out "@.%a Check%s:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (if len <= 1 then Format.asprintf " #%d" (n+1) else Format.asprintf "s #%d-#%d" (n+1) (n+len))
@@ -230,40 +239,43 @@ let pp_diagnostic out n diag callstacks kinds =
 
 
 let incr_check_diag len check diag checks_map =
-  let (safe,error,warning) =
+  let (safe,error,warning,info,unimplemented) =
     match CheckMap.find_opt check checks_map with
     | Some x -> x
-    | None   -> (0,0,0)
+    | None   -> (0,0,0,0,0)
   in
   let total =
     match diag with
-    | Safe        -> safe+len,error,warning
-    | Unreachable -> safe,error,warning
-    | Error       -> safe,error+len,warning
-    | Warning     -> safe,error,warning+len
+    | Safe        -> safe+len,error,warning,info,unimplemented
+    | Unreachable -> safe,error,warning,info,unimplemented
+    | Error       -> safe,error+len,warning,info,unimplemented
+    | Unimplemented      -> safe,error,warning,info,unimplemented+len
+    | Warning     -> safe,error,warning+len,info,unimplemented
+    | Info     -> safe,error,warning,info+len,unimplemented
   in
   CheckMap.add check total checks_map
 
 let construct_checks_summary ?(print=false) rep out =
   let diag_groups = Alarm.group_diagnostics rep.report_diagnostics in
   RangeDiagnosticWoCsMap.fold (fun (range, diagWoCs) css acc ->
-      let (i,safe,error,warning,checks_map) = acc in
+      let (i,safe,error,warning,info,unimplemented,checks_map) = acc in
       let len = CallstackSet.cardinal css in
       let checks_map' = incr_check_diag len diagWoCs.diag_check diagWoCs.diag_kind checks_map in
       match diagWoCs.diag_kind with
       | Unreachable ->
-        i, safe, error, warning, checks_map'
+        i, safe, error, warning,  info, unimplemented, checks_map'
 
       | Safe ->
         if print && !opt_show_safe_checks then pp_diagnostic out i diagWoCs css [];
-        i+len, safe+len, error, warning, checks_map'
-
-      | Error | Warning ->
+        i+len, safe+len, error, warning,  info, unimplemented, checks_map'
+      | Unimplemented when !opt_no_unimplemented_detailed_checks ->
+        i+len, safe, error, warning,  info, unimplemented + len, checks_map'
+      | Error | Warning | Info | Unimplemented ->
         (* Get the set of alarms kinds and callstacks *)
         let kinds =
           AlarmSet.fold
             (fun a kinds ->
-               AlarmKindSet.add a.alarm_kind kinds
+                AlarmKindSet.add a.alarm_kind kinds
             ) diagWoCs.diag_alarms AlarmKindSet.empty in
         (* Join alarm kinds *)
         let rec iter = function
@@ -284,34 +296,38 @@ let construct_checks_summary ?(print=false) rep out =
         in
         let kinds' = iter (AlarmKindSet.elements kinds) in
         if print then pp_diagnostic out i diagWoCs css kinds';
-        let error',warning' =
-          if diagWoCs.diag_kind = Error then
-            error+len, warning
-          else
-            error, warning+len in
-        i+len, safe, error', warning', checks_map'
-    ) diag_groups (0,0,0,0,CheckMap.empty)
+        (match diagWoCs.diag_kind with
+        | Error -> i+len, safe, error+len, warning, info, unimplemented, checks_map'
+        | Info -> i+len, safe, error, warning, info + len, unimplemented, checks_map'
+        | Warning -> i+len, safe, error, warning+len, info, unimplemented, checks_map'
+        | Unimplemented -> i+len, safe, error, warning, info, unimplemented + len, checks_map'
+        | _ -> assert false)
+    ) diag_groups (0,0,0,0,0,0,CheckMap.empty)
 
-let print_checks_summary checks_map total safe error warning out =
+let print_checks_summary checks_map total safe error warning info unimplemented out =
   let pp diag singluar plural fmt n =
     if n = 0 then () else
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v2>Checks summary: %a%a%a%a (selectivity: %.2f%%)@,%a@]@.@."
+  print out "@[<v2>Checks summary: %a%a%a%a%a%a (selectivity: %.2f%%)@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
     (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
+    (pp Info "info" "info") info
+    (pp Unimplemented "unimplemented" "unimplemented") unimplemented
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
-       (fun fmt (check,(safe,error,warning)) ->
-          fprintf fmt "%a: %d total%a%a%a"
+       (fun fmt (check,(safe,error,warning,info, unimplemented)) ->
+          fprintf fmt "%a: %d total%a%a%a%a%a"
             pp_check check
             (safe+error+warning)
             (pp Safe "safe" "safe") safe
             (pp Error "error" "errors") error
             (pp Warning "warning" "warnings") warning
+            (pp Info "info" "info") info
+            (pp Unimplemented "unimplemented" "unimplemented") unimplemented
        )
     ) (CheckMap.bindings checks_map)
 
@@ -331,11 +347,11 @@ let report man flow ~time ~files ~out =
   if is_safe_report rep
   then print out "%a No alarm@." ((Debug.color Debug.green) pp_print_string) "✔";
 
-  print out "Analysis time: %.3fs@." time;
+  if not (!opt_no_time) then print out "Analysis time: %.3fs@." time;
 
-  let total, safe, error, warning, checks_map = construct_checks_summary ~print:true rep out in
-  print_checks_summary checks_map total safe error warning out
-  ;
+  let total, safe, error, warning, info, unimplemented, checks_map = construct_checks_summary ~print:(not (!opt_no_detailed_checks)) rep out in
+
+  if not (!opt_no_analysis_summary) then print_checks_summary checks_map total safe error warning info unimplemented out;
   if not (is_sound_report rep) then
     let nb = AssumptionSet.cardinal rep.report_assumptions in
     print out "%d assumption%a:@,  @[<v>%a@]@.@."

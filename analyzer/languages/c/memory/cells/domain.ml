@@ -730,7 +730,8 @@ struct
       Cases.singleton None flow
 
     | _ ->
-      Cases.empty flow
+      (* UNSOUND: If we cannot resolve a pointer, we continue with [None] (similar to [P_top]) instead of failing. *)
+      Cases.singleton None flow
 
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) cases =
@@ -745,7 +746,6 @@ struct
 
       (* Get the size of the base *)
       eval_base_size base range man flow >>$ fun size flow ->
-
       (* Compute the interval and create a finite number of cells *)
       let offset_itv, c = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       match c with
@@ -777,7 +777,13 @@ struct
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
-        if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+        (* UNSOUND: if the pointer range is negative, then we set the entire region to [Top].
+           This is unsound, because it constitues and out-of-bounds access. *)
+        if uo < lo then
+          (* guanranteed to be out of bounds, we set the location to top *)
+          let region = Region (base, Z.zero, Z.sub us elm,step) in
+            Cases.singleton region flow
+        else if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
           (* too many cases -> top *)
           let region = Region (base, lo, uo ,step) in
           man.exec (mk_assume (mk_binop offset O_ge (mk_z lo range) range) range) flow >>% fun flow ->
@@ -1154,11 +1160,7 @@ struct
     expand ptr range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      let flow =
-        Flow.add_local_assumption
-          (Soundness.A_ignore_modification_undetermined_pointer ptr)
-          range flow
-      in
+      (* UNSOUND: If we cannot determine where a pointer points to, we treat assignment as a no-op. *)
       Post.return flow
 
     | Cell (c,mode) ->
@@ -1176,7 +1178,6 @@ struct
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow >>%
       add_cell c range man
-
     | _ ->
       add_base b man flow
 
@@ -1293,6 +1294,22 @@ struct
 
 
 
+  (** havoc *)
+  let exec_havoc stmt range man flow =
+    let env = get_env T_cur man flow in
+    let havoc_cell (c: cell) flow =
+      match c.base with
+      | { base_kind = Var v; base_valid = true; }  ->
+        let var = mk_cell_var c in
+        let ty = match c.typ with Numeric ty -> ty | Pointer -> T_c_pointer T_c_void in
+        man.exec (mk_havoc_var var ty range) flow
+      | _ -> Post.return flow
+    in
+    let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in
+    let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
+    let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells [] in
+    havoc_cells cells
+
 
   (** Forget the value of an lval *)
   let exec_forget lval range man flow =
@@ -1336,6 +1353,7 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
+      (* this is not executed if aggregates is enabled *)
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
@@ -1377,6 +1395,9 @@ struct
     | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_type e.etyp ->
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
+
+    | S_havoc ->
+      exec_havoc stmt stmt.srange man flow |> OptionExt.return
 
     | _ -> None
 

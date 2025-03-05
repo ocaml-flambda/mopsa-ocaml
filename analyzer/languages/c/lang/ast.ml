@@ -292,6 +292,7 @@ type constant +=
   (** Invalid pointer value *)
 
 
+
 type expr_kind +=
   | E_c_conditional of expr (** condition *) * expr (** then *) * expr (** else *)
   (** ?: ternary operator *)
@@ -348,6 +349,8 @@ type expr_kind +=
       a block will duplicate every cell in the block, while expanding
       the block object will update the pointers that point to the
       block.  *)
+
+  | E_ffi_call of string * expr list
 
 
 
@@ -425,6 +428,12 @@ type stmt_kind +=
       for now, we keep only a string representation to display warnings;
       see C_AST.asm_kind for a more usable representation when support is added
    *)
+  (* runtime external call *)
+  | S_c_ext_call of c_fundec * expr list
+
+
+
+
 
 type c_program = {
   c_globals : (var * c_var_init option) list; (** global variables of the program *)
@@ -938,6 +947,16 @@ let mk_c_null range =
 let mk_c_declaration v init scope range =
   mk_stmt (S_c_declaration (v, init, scope)) range
 
+
+let mk_ffi_call f exprs range =
+  mk_expr (E_ffi_call (f, exprs)) range
+
+let mk_c_ext_call f exprs range =
+  mk_stmt (S_c_ext_call (f, exprs)) range
+
+
+
+
 let is_c_global_scope = function
   | Variable_global | Variable_extern | Variable_file_static _ -> true
   | Variable_func_static _ | Variable_local _ | Variable_parameter _ -> false
@@ -1127,6 +1146,9 @@ let () =
 
        | E_c_block_object(e1), E_c_block_object(e2) ->
          compare_expr e1 e2
+
+       | E_ffi_call (f, es1), E_ffi_call (g, es2) ->
+          Compare.pair compare (Compare.list compare_expr) (f, es1) (g, es2)
 
        | _ -> next e1 e2
     )
@@ -1456,9 +1478,9 @@ let vasprintf_stub is_constant_string format (dst:expr) range man flow =
     if is_constant_string then "_mopsa_constant_vasprintf"
     else "_mopsa_general_vasprintf" in
   let f = find_c_fundec_by_name f flow in
-  let exp = mk_c_call f (dst::format::[]) range in 
+  let exp = mk_c_call f (dst::format::[]) range in
   man.eval exp flow
- 
+
 (********************)
 (** Stack variables *)
 (********************)

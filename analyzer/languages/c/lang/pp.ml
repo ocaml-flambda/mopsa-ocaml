@@ -24,7 +24,7 @@ open Mopsa
 open Ast
 
 let print_implicit_cast = false
- 
+
 let rec pp_c_type_short fmt =
   function
   | T_c_void -> pp_print_string fmt "void"
@@ -178,6 +178,7 @@ let () =
       | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e
       | E_c_predefined _ -> assert false
       | E_c_atomic (op,e1,e2) -> fprintf fmt "__atomic(%i,%a,%a)" op pp_expr e1 pp_expr e2
+      | E_ffi_call (f, args) -> fprintf fmt "ffi %s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | _ -> default fmt expr
     );
   register_stmt_pp (fun default fmt stmt ->
@@ -212,6 +213,7 @@ let () =
       | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
       | S_c_asm s -> fprintf fmt "%s;" s
+      | S_c_ext_call (f, es) -> fprintf fmt "external %s(%a)" f.c_func_org_name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) es
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->

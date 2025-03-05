@@ -153,6 +153,8 @@ type diagnostic_kind =
   | Warning
   | Safe
   | Error
+  | Info
+  | Unimplemented
   | Unreachable
 
 type 'a diagnostic_ = {
@@ -194,32 +196,68 @@ let mk_warning_diagnostic check callstack range =
     diag_alarms = AlarmSet.empty;
     diag_callstack = callstack }
 
+let mk_info_diagnostic alarm =
+  { diag_range = alarm.alarm_range;
+    diag_check = alarm.alarm_check;
+    diag_kind = Info;
+    diag_alarms = AlarmSet.singleton alarm;
+    diag_callstack = alarm.alarm_callstack }
+
+let mk_unimplemented_diagnostic alarm =
+  { diag_range = alarm.alarm_range;
+    diag_check = alarm.alarm_check;
+    diag_kind = Unimplemented;
+    diag_alarms = AlarmSet.singleton alarm;
+    diag_callstack = alarm.alarm_callstack }
+
+
 let pp_diagnostic_kind fmt = function
   | Warning   -> pp_print_string fmt "warning"
   | Safe      -> pp_print_string fmt "safe"
   | Error     -> pp_print_string fmt "error"
   | Unreachable -> pp_print_string fmt "unreachable"
+  | Info -> pp_print_string fmt "info"
+  | Unimplemented -> pp_print_string fmt "unimplemented"
 
 let pp_diagnostic fmt d =
   match d.diag_kind with
-  | Safe | Unreachable ->
+  | Safe | Unreachable | Unimplemented ->
     pp_diagnostic_kind fmt d.diag_kind
-  | Error | Warning ->
+  | Error | Warning | Info ->
     fprintf fmt "%a: %a"
       pp_diagnostic_kind d.diag_kind
       pp_alarm_set d.diag_alarms
 
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let subset_diagnostic_kind s1 s2 =
   if s1 == s2 then true else
   match s1,s2 with
+  | _, Unimplemented -> true
+  | Unimplemented, _ -> false
   | Unreachable, _ -> true
   | _, Unreachable -> false
   | _, Warning     -> true
   | Warning, _     -> false
+  | Info, Safe      -> false
+  | Safe, Info      -> true
   | Error, Error   -> true
   | Safe, Safe     -> true
+  | Info, Info      -> true
   | Error,Safe     -> false
   | Safe,Error     -> false
+  | Info, Error    -> false
+  | Error, Info    -> false
 
 
 let subset_diagnostic d1 d2 =
@@ -228,13 +266,31 @@ let subset_diagnostic d1 d2 =
   && AlarmSet.subset d1.diag_alarms d2.diag_alarms
   && compare_callstack d1.diag_callstack d2.diag_callstack = 0
 
+
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let join_diagnostic_kind s1 s2 =
   if s1 == s2 then s1 else
   match s1,s2 with
+  | Unimplemented, _ | _, Unimplemented -> Unimplemented
   | Unreachable, x | x, Unreachable  -> x
   | Warning, x     | x, Warning      -> Warning
   | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
+  | Info, Info                       -> Info
+  | Safe, Info                       -> Info
+  | Info, Safe                       -> Info
+  | Error, Info    | Info, Error
   | Error, Safe    | Safe, Error     -> Warning
 
 
@@ -254,14 +310,30 @@ let join_diagnostic d1 d2 =
     }
   )
 
+(*
+      Unimplemented
+           |
+        Warning
+        /     \
+      Info   Error
+        |      |
+      Safe     |
+        \     /
+      Unreachable
+
+*)
 let meet_diagnostic_kind s1 s2 =
   if s1 == s2 then s1 else
   match s1,s2 with
   | Unreachable, _ | _, Unreachable  -> Unreachable
+  | Unimplemented, x     | x, Unimplemented  -> x
   | Warning, x     | x, Warning      -> x
   | Error, Error                     -> Error
   | Safe, Safe                       -> Safe
-  | Error, Safe    | Safe, Error     -> Exceptions.panic "unsound intersection of diagnostics"
+  | Info, Info                       -> Info
+  | Info, Safe | Safe, Info          -> Safe
+  | Info, Error | Error, Info
+  | Error, Safe    | Safe, Error     -> Unreachable
 
 let meet_diagnostic d1 d2 =
   if d1 == d2 then d1 else
@@ -305,8 +377,14 @@ let add_alarm_to_diagnostic a d =
 
   | Unreachable ->
     { d with diag_kind = Error;
-             diag_alarms = AlarmSet.singleton a;
-    }
+             diag_alarms = AlarmSet.singleton a; }
+  | Unimplemented ->
+    (* Unimplemented absorbs all other alarms *)
+    d
+  | Info ->
+    (* If there is an alarm, we switch to error (see [Safe]) *)
+    { d with diag_kind = Error;
+             diag_alarms = AlarmSet.add a d.diag_alarms;  }
 
 let compare_diagnostic d1 d2 =
   Compare.quadruple
@@ -427,8 +505,8 @@ let is_safe_report r =
        CheckMap.for_all
          (fun check diag ->
             match diag.diag_kind with
-            | Safe  | Unreachable  -> true
-            | Error | Warning      -> false
+            | Safe  | Unreachable | Info        -> true
+            | Error | Warning | Unimplemented   -> false
          ) checks
     ) r.report_diagnostics
 
@@ -525,8 +603,8 @@ let count_alarms r =
        CheckMap.fold
          (fun check diag (errors,warnings) ->
             match diag.diag_kind with
-            | Error              -> errors + 1, warnings
-            | Warning            -> errors, warnings + 1
+            | Error | Unimplemented        -> errors + 1, warnings
+            | Warning | Info     -> errors, warnings + 1
             | Safe | Unreachable -> errors, warnings
          ) checks acc
     ) r.report_diagnostics (0,0)
@@ -563,7 +641,7 @@ let fold2zo_report f1 f2 f r1 r2 init =
     )
     r1.report_diagnostics r2.report_diagnostics init
 
-let exists2zo_report f1 f2 f r1 r2 =
+(*= let exists2zo_report f1 f2 f r1 r2 =
   RangeCallStackMap.exists2zo
     (fun range checks1 -> CheckMap.exists (fun check -> f1) checks1)
     (fun range checks2 -> CheckMap.exists (fun check -> f2) checks2)
@@ -588,7 +666,7 @@ module RangeDiagnosticWoCsMap = MapExt.Make(
     type t = range * diagnosticWoCs
     let compare (r1, d1) (r2, d2) =
       Compare.pair
-        compare_range 
+        compare_range
         (Compare.quadruple
            compare_range compare_check compare AlarmSet.compare)
         (r1, (d1.diag_range,d1.diag_check,d1.diag_kind,d1.diag_alarms))
@@ -603,10 +681,37 @@ let group_diagnostics (rangecs: diagnostic CheckMap.t RangeCallStackMap.t)
           let css =
             try RangeDiagnosticWoCsMap.find (range, dWoCs) acc
             with Not_found -> CallstackSet.empty in
-          RangeDiagnosticWoCsMap.add (range, dWoCs) (CallstackSet.add diagnostic.diag_callstack css) acc  
+          RangeDiagnosticWoCsMap.add (range, dWoCs) (CallstackSet.add diagnostic.diag_callstack css) acc
         ) cm acc
     )
-    rangecs RangeDiagnosticWoCsMap.empty 
+    rangecs RangeDiagnosticWoCsMap.empty *)
+
+module CallstackSet = SetExt.Make(struct type t = callstack let compare = compare_callstack end)
+
+module RangeDiagnosticWoCsMap = MapExt.Make(
+  struct
+    type t = range * diagnosticWoCs
+    let compare (r1, d1) (r2, d2) =
+      Compare.pair
+        compare_range
+        (Compare.quadruple
+           compare_range compare_check compare AlarmSet.compare)
+        (r1, (d1.diag_range,d1.diag_check,d1.diag_kind,d1.diag_alarms))
+        (r2, (d2.diag_range,d2.diag_check,d2.diag_kind,d2.diag_alarms))
+  end)
+
+let group_diagnostics (rangecs: diagnostic CheckMap.t RangeCallStackMap.t)
+  : CallstackSet.t RangeDiagnosticWoCsMap.t =
+  RangeCallStackMap.fold (fun (range, cs) cm acc ->
+      CheckMap.fold (fun check diagnostic acc ->
+          let dWoCs = {diagnostic with diag_callstack = ()} in
+          let css =
+            try RangeDiagnosticWoCsMap.find (range, dWoCs) acc
+            with Not_found -> CallstackSet.empty in
+          RangeDiagnosticWoCsMap.add (range, dWoCs) (CallstackSet.add diagnostic.diag_callstack css) acc
+        ) cm acc
+    )
+    rangecs RangeDiagnosticWoCsMap.empty
 
 let find_diagnostic rangecs check report =
   RangeCallStackMap.find rangecs report.report_diagnostics |>
