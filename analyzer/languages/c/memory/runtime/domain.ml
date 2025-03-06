@@ -104,7 +104,8 @@ struct
   (** ================== *)
 
   let init prog man flow =
-    set_env T_cur (Map.empty, Lock.embed Locked) man flow
+    set_env T_cur (Map.empty, Lock.embed Locked) man flow |>
+    Option.some
 
 
 
@@ -113,7 +114,7 @@ struct
 
   (* S(v) *)
   let status_var man flow var =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match Map.find_opt var m with
     | Some ((stat, _), _) -> Cases.singleton stat flow
     | None ->
@@ -197,7 +198,7 @@ struct
       let flow = raise_ffi_internal_error (Format.asprintf "status(%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
 and status_deref man flow e range =
-    match Static_points_to.eval_opt e with
+    match Static_points_to.eval_opt e flow with
     | None | Some (Fun _) ->
       let flow = raise_ffi_internal_error (Format.asprintf "status(*%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
@@ -233,7 +234,7 @@ and status_deref man flow e range =
 
   (* S(v) *)
   let shapes_var man flow var =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match Map.find_opt var m with
     | Some ((_, _), shapes) -> Cases.singleton shapes flow
     | None ->
@@ -284,7 +285,7 @@ and status_deref man flow e range =
       let flow = raise_ffi_internal_error (Format.asprintf "shapes(%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
 and shapes_deref man flow e range =
-    match Static_points_to.eval_opt e with
+    match Static_points_to.eval_opt e flow with
     | None | Some (Fun _) ->
       let flow = raise_ffi_internal_error (Format.asprintf "shapes(*%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
@@ -319,21 +320,19 @@ and shapes_deref man flow e range =
   (** ============================================== *)
 
   let mark_var_active var range man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let m' = update_status var (Stat.embed Active) m in
-    let flow = set_env T_cur (m', l) man flow in
-    Post.return flow
+    set_env T_cur (m', l) man flow
 
   let eval_set_shape_var var ss range man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match Map.find_opt var m with
     | None ->
       let flow = raise_ffi_shape_missing range pp_var var man flow in
       Cases.empty flow
     | Some ((status, roots), _) ->
       let m' = Map.add var ((status, roots), ss) m in
-      let flow = set_env T_cur (m', l) man flow in
-      Post.return flow
+      set_env T_cur (m', l) man flow
 
   let unwrap_expr_as_var exp ?(fail = fun man flow -> raise_ffi_not_variable exp man flow)  man flow =
     match ekind (remove_casts exp) with
@@ -359,7 +358,7 @@ and shapes_deref man flow e range =
       Cases.singleton None flow
 
   let eval_ocaml_value_shape_of_var var range man flow =
-    let (m, l) = get_env T_cur man flow  in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match lookup_shapes var m with
     | None ->
       let flow = raise_ffi_shape_missing range pp_var var man flow in
@@ -376,7 +375,7 @@ and shapes_deref man flow e range =
 
   let eval_number_exp_to_integer exp man flow =
     man.eval ~translate:"Universal" exp flow >>$ fun exp' flow ->
-    let kind_itv = man.ask (Universal.Numeric.Common.mk_int_interval_query exp') flow in
+    man.ask (Universal.Numeric.Common.mk_int_interval_query exp') flow >>$ fun kind_itv flow ->
     match Itv.bounds_opt kind_itv with
     | Some l, Some r when Z.equal l r -> Cases.singleton (Integer l) flow
     | Some l, Some r -> Cases.singleton (IntegerRange (l, r)) flow
@@ -400,26 +399,23 @@ and shapes_deref man flow e range =
   (** ============================================== *)
 
   let exec_add var man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let m' = Map.add var ((Stat.embed Untracked, Root.embed NotRooted), Shape.non_ocaml_value) m in
-    let flow = set_env T_cur (m', l) man flow in
-    Post.return flow
+    set_env T_cur (m', l) man flow
 
   let exec_remove var man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let m' = Map.remove var m in
-    let flow = set_env T_cur (m', l) man flow in
-    Post.return flow
+    set_env T_cur (m', l) man flow
 
 
   let exec_update var expr man flow =
     status_expr man flow expr >>$ fun status flow ->
     shapes_expr man flow expr >>$ fun shapes flow ->
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let m' = update_status var status m in
     let m'' = update_shapes var shapes m' in
-    let flow = set_env T_cur (m'', l) man flow in
-    Post.return flow
+    set_env T_cur (m'', l) man flow
 
 
   let exec_check_ext_call_arg arg man flow =
@@ -507,10 +503,10 @@ and shapes_deref man flow e range =
 
 
   let eval_garbage_collect range man flow =
-    let (m, l)  = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let upd_set ((s, r), shapes) = if Stat.is_const s Active && not (Root.is_const r Rooted) then ((Stat.embed Stale, r), shapes) else ((s, r), shapes) in
     let m' = Map.map (fun s -> upd_set s) m in
-    let flow = set_env T_cur (m', l) man flow in
+    set_env T_cur (m', l) man flow >>% fun flow ->
     Eval.singleton (mk_unit range) flow
 
   let eval_assert_valid_var var m exp man flow =
@@ -529,13 +525,13 @@ and shapes_deref man flow e range =
       Eval.singleton (mk_unit exp.erange) flow
 
   let eval_assert_valid exp man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     unwrap_expr_as_var exp man flow >>$ fun var flow ->
     eval_assert_valid_var var m exp man flow
 
 
   let exec_register_root_var var range man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let vexp = (mk_var var range) in
     match Map.find_opt var m with
     | Some ((_, Nbt Rooted), _) ->
@@ -546,7 +542,7 @@ and shapes_deref man flow e range =
       Post.return flow
     | Some ((Nbt Active, Nbt NotRooted), shapes) ->
       let m' = Map.add var ((Nbt Active, Root.embed Rooted), shapes) m in
-      let flow = set_env T_cur (m', l) man flow in
+      set_env T_cur (m', l) man flow >>% fun flow ->
       let flow = safe_ffi_roots_check range man flow in
       Post.return flow
     | _ ->
@@ -554,12 +550,12 @@ and shapes_deref man flow e range =
       Post.return flow
 
   let exec_unregister_root_var var range man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     let vexp = (mk_var var range) in
     match Map.find_opt var m with
     | Some ((status, Nbt Rooted), shapes) ->
       let m' = Map.add var ((status, Root.embed NotRooted), shapes) m in
-      let flow = set_env T_cur (m', l) man flow in
+      set_env T_cur (m', l) man flow >>% fun flow ->
       let flow = safe_ffi_roots_check range man flow in
       Post.return flow
     | Some ((_, _), _) | None ->
@@ -587,7 +583,7 @@ and shapes_deref man flow e range =
       Eval.singleton (mk_unit exp.erange) flow
 
   let eval_assert_runtime_lock range man flow =
-    let (m, l): _ * Lock.t = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun ((m, l):  _ * Lock.t) flow ->
     match l with
     | Nbt Locked ->
       let flow = safe_ffi_runtime_lock_check range man flow in
@@ -597,9 +593,9 @@ and shapes_deref man flow e range =
       Eval.singleton (mk_unit range) flow
 
   let eval_update_runtime_lock range new_state man flow =
-    let (m, l): _ * Lock.t = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun ((m, l):  _ * Lock.t) flow ->
     let l' = (if new_state then Lock.embed Locked else Lock.embed Unlocked) in
-    let flow = set_env T_cur (m, l') man flow in
+    set_env T_cur (m, l') man flow >>% fun flow ->
     Eval.singleton (mk_unit range) flow
 
 
@@ -626,7 +622,7 @@ and shapes_deref man flow e range =
 
 
   let eval_is_immediate_var var range man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match Map.find_opt var m with
     | None ->
       let flow = raise_ffi_shape_missing range pp_var var man flow in
@@ -639,7 +635,7 @@ and shapes_deref man flow e range =
         Cases.empty flow
       | Some (ss', rt) ->
         let m' = update_shapes var (Shape.ocaml_value ss') m in
-        let flow = set_env T_cur (m', l) man flow in
+        set_env T_cur (m', l) man flow >>% fun flow ->
         Cases.singleton rt flow
 
   (* Given an expression of type [enum ffi_shape], this function computes
@@ -793,7 +789,7 @@ and shapes_deref man flow e range =
 
 
   let eval_var_status var man flow =
-    let (m, l) = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun (m, l) flow ->
     match lookup_status var m with
     | Some s ->
       Cases.singleton s flow
@@ -812,9 +808,11 @@ and shapes_deref man flow e range =
   (** ====================== *)
 
 
-  let ask : type a r. (a,r) query -> (a,t) man -> a flow -> r option = fun query man flow ->
+  let ask : type a r. (a,r) query -> (a,t) man -> a flow ->  (a, r) cases option =
+    fun query man flow ->
     match query with
-    | Q_ffi_status var -> eval_var_status var man flow |> OptionExt.return
+    | Q_ffi_status var ->
+        eval_var_status var man flow |> OptionExt.return
     | _ -> None
 
   (** {2 Pretty printer} *)

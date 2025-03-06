@@ -367,6 +367,7 @@ struct
 
   (** Eval a function call *)
   let eval_call fundec args range man flow =
+    let fundec_has_been_modified  = ref false in
     (* if fundec.c_func_org_name = "__builtin_alloca" then
       match args with
       | [size] -> eval_alloca_call size range man flow
