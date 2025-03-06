@@ -380,7 +380,7 @@ struct
     let flow', nexp' =
     if !opt_float_invalid_operation then
       (* This interval query is duplicated, because it can fail and is not necessary if [opt_float_invalid_operation] is false. *)
-      let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
       if itv.nan then
           (* invalid operation exception, remove NaN from result *)
           let float_no_nan = float_class ~valid:true ~inf:true () in
@@ -396,7 +396,7 @@ struct
     let flow', nexp' =
       if !opt_float_overflow then
         (* This interval query is duplicated, because it can fail and is not necessary if [opt_float_overflow] is false. *)
-        let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+        let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
         if itv.pinf || itv.minf then
           (* overflow exception, remove infinities from result *)
           let float_no_inf = float_class ~valid:true ~nan:true () in

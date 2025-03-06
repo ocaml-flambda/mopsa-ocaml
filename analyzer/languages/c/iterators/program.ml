@@ -146,7 +146,7 @@ struct
     key = "-external-functions";
     category="Runtime";
     doc=" file containing function names of functions to test (if contained in the file)";
-    spec = ArgExt.String(fun s ->
+    spec = ArgExt.String((fun s ->
       let parse_functions fn =
         match Type_shapes.deserialize_extfun fn with
         | Some {name; desc} -> (name, desc)
@@ -157,7 +157,7 @@ struct
       let funs = read_lines s in
       let funs = List.map parse_functions funs in
       ffitest_extfuns := StringMap.of_list funs
-    );
+    ), (fun _ -> []));
     default=""
   }
 

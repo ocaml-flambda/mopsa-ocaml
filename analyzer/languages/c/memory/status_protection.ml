@@ -15,7 +15,7 @@ open Common.Runtime
 module Domain =
 struct
 
-  (** {2 Domain header *)
+  (** {2 Domain header} *)
   (** ================ *)
 
   include GenStatelessDomainId(struct
@@ -43,7 +43,7 @@ struct
 
  (* evaluate a pointer to its points-to base *without dereferencing it* *)
  let eval_pointer expr man flow =
-  match Common.Static_points_to.eval_opt expr with
+  match Common.Static_points_to.eval_opt expr flow with
   | None ->
     let flow = raise_ffi_internal_error (Format.asprintf "evaluation of pointer expression %a not supported" pp_expr expr) expr.erange man flow in
     Cases.empty flow
@@ -77,7 +77,8 @@ struct
   (** {2 Transfer functions} *)
   (** ====================== *)
 
-  let init prog man flow = flow
+  (* FIXME: This seems broken *)
+  let init prog man flow = None
 
   let exec stmt man flow =
     match skind stmt with

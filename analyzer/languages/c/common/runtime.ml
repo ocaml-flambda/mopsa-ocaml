@@ -345,14 +345,15 @@ let safe_ffi_arity_check range man flow =
 (* Points-to query *)
 (* =============== *)
 
-type ('a,_) query += Q_ffi_status : var -> ('a, ('a, Status.t Bot_top.with_bot_top) cases) query
+type ('a,_) query += Q_ffi_status : var -> ('a, Status.t Bot_top.with_bot_top) query
 
+(* FIXME: This is most likely broken. *)
 let () = register_query {
     join = (
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
           match query with
-          | Q_ffi_status _ -> Cases.join a b
+          | Q_ffi_status _ -> assert false
           | _ -> next.pool_join query a b
       in
       f
@@ -361,7 +362,7 @@ let () = register_query {
       let f : type a r. query_pool -> (a,r) query -> r -> r -> r =
         fun next query a b ->
           match query with
-          | Q_ffi_status _ -> Cases.meet a b
+          | Q_ffi_status _ -> assert false
           | _ -> next.pool_meet query a b
       in
       f

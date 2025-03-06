@@ -177,10 +177,10 @@ let () =
     key = "-config";
     category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
-    spec = Set_string (Config.Parser.opt_config,
+    spec = Set_string (Mopsa_config.Parser.opt_config,
                        fun args ->
-                         if !Config.Parser.opt_config <> "" then
-                           let config_path = Filename.dirname (Paths.resolve_config_file !Config.Parser.opt_config) in
+                         if !Mopsa_config.Parser.opt_config <> "" then
+                           let config_path = Filename.dirname (Paths.resolve_config_file !Mopsa_config.Parser.opt_config) in
                            let lang = Filename.basename config_path in
                            ArgExt.complete_files_in_dir ~prefix:lang config_path args
                          else
@@ -281,7 +281,7 @@ let () =
              Output.Factory.list_domains
 
            | "reductions" ->
-             let reductions = Config.Parser.all_reductions () in
+             let reductions = Mopsa_config.Parser.all_reductions () in
              List.sort_uniq compare reductions |>
              Output.Factory.list_reductions
 
@@ -401,6 +401,8 @@ let () =
     default = "4";
   }
 
+let () =
+  register_builtin_option {
     key = "-no-detailed-errors-unimplemented";
     category = "Alarms";
     doc = " hide errors related to unimplemented from the detailed analysis results";

@@ -634,11 +634,13 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2
       then []
       else
-        let flow = set_value_opt p1 vv1 man flow |>
-                   set_value_opt p2 vv2 man
-        in
+        [
+          set_value_opt p1 vv1 man flow >>%
+          set_value_opt p2 vv2 man
+        ]
+
         (* UNSOUND: This pointer comparison is undefined behavior, but we allow it here. *)
-        [ Post.return flow ]
+        (* [ Post.return flow ] *)
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
@@ -913,11 +915,12 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
         []
       else
-        let flow = set_value_opt p1 v1 man flow |>
-                   set_value_opt p2 v2 man
-        in
+        [
+        set_value_opt p1 v1 man flow >>% fun flow ->
+        set_value_opt p2 v2 man flow >>% fun flow ->
+          (* in *)
         (* UNSOUND: This is undefined behavior, but we return [Top] instead of failing. *)
-        [man.eval (mk_top T_int range) flow]
+        man.eval (mk_top T_int range) flow]
     in
 
     Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)

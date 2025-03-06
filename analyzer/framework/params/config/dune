@@ -1,5 +1,5 @@
 (library
- (name config)
+ (name mopsa_config)
  (public_name mopsa.mopsa_analyzer.framework.params.config)
  (library_flags -linkall)
  (libraries yojson sig combiners))

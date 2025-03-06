@@ -2,4 +2,4 @@
  (name params)
  (public_name mopsa.mopsa_analyzer.framework.params)
  (library_flags -linkall)
- (libraries config output))
+ (libraries mopsa_config output))

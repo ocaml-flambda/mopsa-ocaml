@@ -20,6 +20,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  *)
 
-module Config = Config
+module Config = Mopsa_config
 module Options = Options
 module Paths = Paths

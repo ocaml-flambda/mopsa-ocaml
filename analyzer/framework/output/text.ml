@@ -315,9 +315,9 @@ let print_checks_summary checks_map total safe error warning info unimplemented 
     (pp Safe "safe" "safe") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
-    (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
     (pp Info "info" "info") info
     (pp Unimplemented "unimplemented" "unimplemented") unimplemented
+    (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (check,(safe,error,warning,info, unimplemented)) ->
           fprintf fmt "%a: %d total%a%a%a%a%a"
