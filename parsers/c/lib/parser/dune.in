@@ -11,6 +11,7 @@
     -Wno-strict-aliasing -Wall -Wno-comment
    (:include clang_flags)
    (:include clang_resource)))
+ (library_flags (:include library_linking_flags))
  (c_library_flags (:include library_flags)))
 
 (rule
@@ -36,4 +37,12 @@
                                      (run @LLVMCONFIG@ --ldflags)
                                      (echo "@LLVM_CCLIBS@ -lclang -lstdc++ ")
                                      (run @LLVMCONFIG@ --libs --system-libs)
+                                     (echo ")")))))
+
+(rule
+ (targets library_linking_flags)
+ (action (with-stdout-to %{targets} (progn
+                                     (echo "(")
+                                     (echo "-ccopt ")
+                                     (run @LLVMCONFIG@ --ldflags)
                                      (echo ")")))))
