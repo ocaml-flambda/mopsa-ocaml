@@ -80,14 +80,14 @@ let () =
     key = "-I";
     category = "C";
     doc = " add the directory to the search path for include files in C analysis";
-    spec = String (ArgExt.set_string_list_lifter opt_include_dirs, ArgExt.empty);
+    spec = String (ArgExt.set_string_list_accumulating_lifter opt_include_dirs, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-ccopt";
     category = "C";
     doc = " pass the option to the Clang frontend";
-    spec = String (ArgExt.set_string_list_lifter opt_clang, ArgExt.empty);
+    spec = String (ArgExt.set_string_list_accumulating_lifter opt_clang, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
@@ -262,14 +262,14 @@ let is_ignored_translation_unit file =
     ) !opt_ignored_translation_units
 
 (* Save prj into single preprocessed file at output_file. Returns the list of stub files that need to be used when analyzing the preprocessed file *)
-let save_preprocessed_file prj output_file = 
-  let outch = open_out output_file in 
+let save_preprocessed_file prj output_file =
+  let outch = open_out output_file in
   let () = C_print.print_project ~verbose:false outch prj in
   let () = close_out outch in
   !opt_stubs_files @ List.filter
     (fun f ->
        Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
-    ) prj.proj_files 
+    ) prj.proj_files
 
 
 (** {2 Entry point} *)
@@ -283,7 +283,7 @@ let rec parse_program (files: string list) =
   if files = [] then panic "no input file";
 
   (* let's initialize target from the option *)
-  if !opt_target_triple <> "" then 
+  if !opt_target_triple <> "" then
     target_info :=
       get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple })
   ;
@@ -595,7 +595,7 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
       let try_bundle_into_range es =
         (* we can safely assume List.length es > 0 *)
         let efirst, estl = List.hd es, List.tl es in
-        let tfirst = etyp efirst in 
+        let tfirst = etyp efirst in
         match ekind efirst with
         | E_constant (C_int first) ->
           let rec process op acc l = match l with
@@ -604,12 +604,12 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
               else
                 if (Z.(first <= acc)) then
                   Some (mk_int_general_interval (ItvUtils.IntBound.Finite first) (ItvUtils.IntBound.Finite acc) efirst.erange)
-                else 
+                else
                   Some (mk_int_general_interval (ItvUtils.IntBound.Finite acc) (ItvUtils.IntBound.Finite first) efirst.erange)
             | {ekind = E_constant (C_int h); etyp = th} ::tl when Z.(h = (op acc one)) && compare_typ th tfirst = 0 ->
               process op h tl
             | hd :: tl ->
-              let () = debug "first=%a, acc=%s, hd=%a, skipping" pp_expr efirst (Z.to_string acc) pp_expr hd in 
+              let () = debug "first=%a, acc=%s, hd=%a, skipping" pp_expr efirst (Z.to_string acc) pp_expr hd in
               None
           in
           let oitv_increasing = process Z.add first estl in
@@ -625,7 +625,7 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
         | Some itv ->
           let () = debug "bundled switch at range %a into %a" pp_range srange pp_expr itv in
           S_c_switch_case([itv], from_scope_update ctx upd)
-      end 
+      end
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
     | C_AST.S_asm a -> Ast.S_c_asm (C_print.string_of_statement (skind,range))
