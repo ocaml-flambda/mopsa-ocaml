@@ -46,6 +46,12 @@ let set_string_list_lifter (r : string list ref) : string -> unit =
   fun s -> r := String.split_on_char ',' s
 
 
+(* Lifter to store comma-separated string list in ref,
+   accumulates strings in the order in which it is called *)
+let set_string_list_accumulating_lifter (r : string list ref) : string -> unit =
+  fun s -> r := !r @ String.split_on_char ',' s
+
+
 let complete_files_in_dir ?(prefix="") directory =
   let result =
     let contents = Sys.readdir directory |> Array.to_list in
