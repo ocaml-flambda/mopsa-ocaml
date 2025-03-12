@@ -123,18 +123,16 @@ struct
   let ffitest_extfuns : Type_shapes.extfun_desc StringMap.t ref = ref (StringMap.empty)
   let ffitest_missing_funs : StringSet.t ref = ref (StringSet.empty)
 
-  let read_lines str =
+
+
+  let externals_version = "v0.1"
+
+  let read_file str =
     let file = try open_in str with Sys_error _ -> failwith (Format.asprintf "cannot open file %s" str) in
-    let rec read_all_lines file =
-      let line = try Some (input_line file) with End_of_file -> None in
-      match line with
-      | None -> []
-      | Some s -> s :: read_all_lines file
-    in
     try
-      let names = read_all_lines file in
+      let text = In_channel.input_all file in
       close_in file;
-      names
+      text
     with e ->
       (* some unexpected exception occurs *)
       close_in_noerr file;
@@ -147,17 +145,17 @@ struct
     category="Runtime";
     doc=" file containing function names of functions to test (if contained in the file)";
     spec = ArgExt.String((fun s ->
-      let parse_functions fn =
-        match Type_shapes.deserialize_extfun fn with
-        | Some {name; desc} -> (name, desc)
-        | None ->
-          (* FIXME: perhaps we want a different error here? *)
-          failwith (Format.asprintf "input error: cannot parse external type declaration %s" fn)
-      in
-      let funs = read_lines s in
-      let funs = List.map parse_functions funs in
-      ffitest_extfuns := StringMap.of_list funs
-    ), (fun _ -> []));
+      let funs = read_file s in
+      match Type_shapes.deserialize_extfuns funs with
+      | Some { version; extfuns=funs } when version = externals_version ->
+        let funs_map: (string * Type_shapes.extfun_desc) list = List.map (fun (f: Type_shapes.extfun) -> (f.name, f.desc)) funs in
+        ffitest_extfuns := StringMap.of_list funs_map
+      | Some {version; _} ->
+          failwith (Format.asprintf "version mismatch: expected version %s, but got %s" externals_version version)
+      | None ->
+        (* FIXME: perhaps we want a different error here? *)
+        failwith (Format.asprintf "input error (current version %s): cannot parse external function declaration %s" externals_version funs)
+   ), (fun _ -> []));
     default=""
   }
 
