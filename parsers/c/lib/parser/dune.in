@@ -45,6 +45,7 @@
                                      (echo "(")
                                      (echo "-ccopt ")
                                      (run @LLVMCONFIG@ --ldflags)
-                                     (echo "-cclib -Wl,-rpath=")
+                                     (echo "-cclib -Wl,-rpath=@APRONLIBDIR@:")
+;                                     (echo "-cclib -Wl,-rpath=")
                                      (run @LLVMCONFIG@ --libdir)
                                      (echo ")")))))
