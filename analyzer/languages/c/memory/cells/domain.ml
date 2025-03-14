@@ -168,7 +168,7 @@ struct
                 let () = debug "WARN: get_access_path failed for record %a, offset %s@." pp_typ typ (Z.to_string offset) in
                 pp_cell_lowlevel fmt c; []
 
-              | Some field -> 
+              | Some field ->
                 let candidate' = Format.asprintf ".%s" field.c_field_org_name in
                 let offset' = Z.(offset - of_int field.c_field_offset) in
                 get_access_path path' candidate' offset' field.c_field_type
@@ -499,8 +499,8 @@ struct
   (** ======================== *)
 
   (** [phi c a range] returns a constraint expression over cell [c] found in [a] *)
-  let phi (c:cell) (a:t) range man flow = 
-    let () = debug "phi %a at %a" pp_cell c pp_range range in 
+  let phi (c:cell) (a:t) range man flow =
+    let () = debug "phi %a at %a" pp_cell c pp_range range in
     if cell_set_mem c a.cells then Cases.singleton None flow
 
     else if is_c_pointer_type @@ cell_type c then
@@ -526,7 +526,7 @@ struct
             else Cases.singleton None flow in
         aux cells
       else
-        Cases.singleton None flow 
+        Cases.singleton None flow
 
     else if not (is_c_int_type @@ cell_type c) then
       Cases.singleton None flow
@@ -621,7 +621,7 @@ struct
       let v = mk_cell_var c in
       man.exec ~route:scalar (mk_add_var v range) flow >>% fun flow ->
       phi c a range man flow >>$ fun phi_oe flow ->
-      match phi_oe with 
+      match phi_oe with
       | Some e ->
         let stmt = mk_assume (mk_binop (mk_var v range) O_eq e ~etyp:u8 range) range in
         man.exec stmt flow
@@ -730,7 +730,8 @@ struct
       Cases.singleton None flow
 
     | _ ->
-      Cases.empty flow
+      (* UNSOUND: If we cannot resolve a pointer, we continue with [None] (similar to [P_top]) instead of failing. *)
+      Cases.singleton None flow
 
   (** Expand a pointer dereference into a cell. *)
   let expand p range man flow : ('a, expansion) cases =
@@ -745,7 +746,6 @@ struct
 
       (* Get the size of the base *)
       eval_base_size base range man flow >>$ fun size flow ->
-
       (* Compute the interval and create a finite number of cells *)
       let offset_itv, c = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_congr_interval_query offset) flow in
       match c with
@@ -772,12 +772,18 @@ struct
         in
         let uo =
           match uo with
-          | None -> Z.sub us elm 
+          | None -> Z.sub us elm
           | Some u -> Z.min u (Z.sub us elm)
         in
 
         let nb = Z.div Z.((uo + step) - lo) step in
-        if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
+        (* UNSOUND: if the pointer range is negative, then we set the entire region to [Top].
+           This is unsound, because it constitues and out-of-bounds access. *)
+        if uo < lo then
+          (* guanranteed to be out of bounds, we set the location to top *)
+          let region = Region (base, Z.zero, Z.sub us elm,step) in
+            Cases.singleton region flow
+        else if nb > Z.of_int !opt_deref_expand || not (is_interesting_base base) then
           (* too many cases -> top *)
           let region = Region (base, lo, uo ,step) in
           man.exec (mk_assume (mk_binop offset O_ge (mk_z lo range) range) range) flow >>% fun flow ->
@@ -829,7 +835,7 @@ struct
       (* Coverage test: |cells| = ((hi - lo) / step) + 1 *)
       let nb_cells = List.length cells in
       if nb_cells = 0 || Z.(of_int nb_cells < (div (hi - lo) step) + one) then
-        let () = debug "not covering nb_cells=%d, hi=%s, lo=%s, step=%s, results in T" nb_cells (Z.to_string hi) (Z.to_string lo) (Z.to_string step) in 
+        let () = debug "not covering nb_cells=%d, hi=%s, lo=%s, step=%s, results in T" nb_cells (Z.to_string hi) (Z.to_string lo) (Z.to_string step) in
         top
       else
         (* Create a temporary smash and populate it with the values of cells *)
@@ -890,7 +896,7 @@ struct
     let v1 = mk_cell_var c1 in
     let v2 = mk_cell_var c2 in
     map_env T_cur (fun a ->
-        { a with 
+        { a with
           cells = cell_set_add c2 (cell_set_remove c1 a.cells) flow }
       ) man flow
     >>% fun flow ->
@@ -980,19 +986,19 @@ struct
 
     (* dereferencing one character of a string *)
     | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) ->
-      man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow 
+      man.eval (mk_c_character (String.get s (Z.to_int lo)) range t) ~route:scalar flow
 
     (* dereferencing characters of a string, abstracted as interval here *)
     | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.geq lo Z.zero && Z.equal step Z.one && Z.lt hi (Z.of_int @@ String.length s) &&
          String.length s < 20 ->
       (* ^^would it make sense to check cell-deref-expand param? *)
       let chars =
-        let hi = Z.to_int hi in 
+        let hi = Z.to_int hi in
         let rec aux pos =
           if pos <= hi then
             let c_pos = String.get s pos in
             let c_int = int_of_char c_pos in
-            let c_int = if is_signed t && c_int >= 128 then c_int - 256 else c_int in 
+            let c_int = if is_signed t && c_int >= 128 then c_int - 256 else c_int in
             c_int :: (aux (pos+1))
           else []
         in aux (Z.to_int lo)
@@ -1005,10 +1011,10 @@ struct
 
     (* dereferencing null delimiter of a string *)
     | Region ({base_kind = String (s, C_char_ascii, t)}, lo, hi, step) when not !opt_smash_only_pointers && Z.equal lo hi && Z.equal step Z.one && Z.equal hi (Z.of_int @@ String.length s) ->
-      man.eval (mk_zero ~typ:t range) ~route:scalar flow 
+      man.eval (mk_zero ~typ:t range) ~route:scalar flow
 
     | Region (base,lo,hi,step) ->
-      let () = debug "%a" pp_expansion expansion in 
+      let () = debug "%a" pp_expansion expansion in
       smash_region base lo hi step t range man flow >>$ fun ret flow ->
       man.eval ret flow ~route:scalar
 
@@ -1154,11 +1160,7 @@ struct
     expand ptr range man flow >>$ fun expansion flow ->
     match expansion with
     | Top ->
-      let flow =
-        Flow.add_local_assumption
-          (Soundness.A_ignore_modification_undetermined_pointer ptr)
-          range flow
-      in
+      (* UNSOUND: If we cannot determine where a pointer points to, we treat assignment as a no-op. *)
       Post.return flow
 
     | Cell (c,mode) ->
@@ -1176,7 +1178,6 @@ struct
       let c = mk_cell b Z.zero v.vtyp in
       add_base b man flow >>%
       add_cell c range man
-
     | _ ->
       add_base b man flow
 
@@ -1293,6 +1294,22 @@ struct
 
 
 
+  (** havoc *)
+  let exec_havoc stmt range man flow =
+    get_env T_cur man flow >>$ fun env flow ->
+    let havoc_cell (c: cell) flow =
+      match c.base with
+      | { base_kind = Var v; base_valid = true; }  ->
+        let var = mk_cell_var c in
+        let ty = match c.typ with Numeric ty -> ty | Pointer -> T_c_pointer T_c_void in
+        man.exec (mk_havoc_var var ty range) flow
+      | _ -> Post.return flow
+    in
+    let havoc_cells (cells: cell list) = List.fold_left (fun acc c -> Post.bind (havoc_cell c) acc) (Post.return flow) cells in
+    let cells_of c = OffCells.fold (fun z c a -> ((Cells.elements c) @ a)) c [] in
+    let cells = CellSet.fold (fun a b c -> cells_of b @ c ) env.cells [] in
+    havoc_cells cells
+
 
   (** Forget the value of an lval *)
   let exec_forget lval range man flow =
@@ -1336,6 +1353,7 @@ struct
   let exec stmt man flow =
     match skind stmt with
     | S_c_declaration (v,init,scope) ->
+      (* this is not executed if aggregates is enabled *)
       exec_declare v scope stmt.srange man flow |>
       OptionExt.return
 
@@ -1377,6 +1395,9 @@ struct
     | S_forget({ ekind = E_stub_quantified_formula(quants, e)}) when is_c_type e.etyp ->
       exec_forget_quant quants e stmt.srange man flow |>
       OptionExt.return
+
+    | S_havoc ->
+      exec_havoc stmt stmt.srange man flow |> OptionExt.return
 
     | _ -> None
 

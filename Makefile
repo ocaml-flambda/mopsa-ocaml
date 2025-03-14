@@ -25,6 +25,9 @@
 all:
 	opam exec -- dune build --profile release -p mopsa
 
+watch:
+	opam exec -- dune build --watch --profile release -p mopsa
+
 install:
 	opam exec -- dune install --profile release
 

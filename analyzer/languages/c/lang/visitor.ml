@@ -92,6 +92,12 @@ let () =
           | {exprs = args} -> {exp with ekind = E_c_builtin_call(f, args)}
         )
 
+      | E_ffi_call(f, args) ->
+          {exprs = args; stmts = []},
+          (function
+            | {exprs = args} -> {exp with ekind = E_ffi_call(f, args)}
+          )
+
       | E_c_arrow_access(p, idx, fld) ->
         {exprs = [p]; stmts = []},
         (function
@@ -171,7 +177,7 @@ let () =
           | _ -> assert false
         )
 
-      | E_c_block_object ee -> 
+      | E_c_block_object ee ->
         {exprs = [ee]; stmts = []},
         (function
           | {exprs = [ee]} -> {exp with ekind = E_c_block_object(ee)}
@@ -250,6 +256,10 @@ let () =
         )
       | S_c_switch_default _ -> leaf stmt
       | S_c_asm _ -> leaf stmt
+      | S_c_ext_call (f, es) ->
+        {exprs = es; stmts = []},
+        (function {exprs;stmts = []} -> { stmt with skind = S_c_ext_call (f, exprs) }
+          | _ -> assert false )
 
       | _ -> default stmt
     );
