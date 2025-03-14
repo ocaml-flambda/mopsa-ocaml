@@ -621,6 +621,7 @@ enable_byte
 disable_python
 disable_c
 CLANGRESOURCEDIR
+APRONLIBDIR
 LLVM_CCLIBS
 LLVM_MAJOR_VERSION
 CLANG
@@ -5028,6 +5029,15 @@ fi
 CLANGRESOURCEDIR="(echo \"$CLANGDIR\")"
 
 
+
+if [ -z "${APRONLIBDIR}" ]; then
+  APRONLIBDIR="$(ocamlfind query apron)/lib"
+fi
+
+echo "checking for apron lib... $APRONLIBDIR"
+
+
+
 # Deactivation of C analysis
 # Check whether --enable-c was given.
 if test ${enable_c+y}
@@ -6243,5 +6253,3 @@ if test -n "$ac_unrecognized_opts" && test "$enable_option_checking" != no; then
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: unrecognized options: $ac_unrecognized_opts" >&5
 printf "%s\n" "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
-
-
