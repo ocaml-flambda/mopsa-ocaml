@@ -1,0 +1,5 @@
+(library
+ (name runtime)
+ (package mopsa)
+ (libraries mopsa framework c_lang c_common universal)
+ (flags :standard -open C_lang.Lang -open C_common))

@@ -281,12 +281,12 @@ struct
               | _ -> assert false in
             let under_bitfield_typ = match field.c_field_type with
               | T_c_bitfield (t, _) -> t
-              | _ -> assert false in 
+              | _ -> assert false in
             let new_l, new_r = discard_same_offsets l records in
-            let init_top = C_init_expr (mk_top under_bitfield_typ range) in 
+            let init_top = C_init_expr (mk_top under_bitfield_typ range) in
             let l1,l2 = flatten_init (Some init_top) o under_bitfield_typ range flow in
             aux new_l (List.rev_append l1 acc1) (List.rev_append l2 acc2) new_r
-          else 
+          else
             match l with
             | [] ->
               let l1,l2 = flatten_init None o field.c_field_type range flow in
@@ -421,13 +421,13 @@ struct
       in
 
       (* Get the fields to copy *)
-      let fields = 
+      let fields =
         match record_kind with
         | C_struct -> fields
         | C_union ->
           (* In case of union get the field with the greatest size *)
           let fieldopt, _ = List.fold_left (fun (accfield, accsize) field ->
-              let size = sizeof_type field.c_field_type flow in 
+              let size = sizeof_type field.c_field_type flow in
               if Z.geq size accsize then
                 (Some field, size)
               else (accfield, accsize)
@@ -497,7 +497,7 @@ struct
 
   (** 𝔼⟦ p->f ⟧ -> *(( typeof(p->f)* )(( char* )p + alignof(p->f))) *)
   let arrow_access p i f t range = mk_lowlevel_arrow_access p i t range
-  
+
   (** 𝔼⟦ &(a[i]) ⟧ = a + i *)
   let address_of_array_subscript a i t range = mk_binop a O_plus i ~etyp:t range
 

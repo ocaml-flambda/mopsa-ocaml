@@ -75,6 +75,7 @@ let pp_base_verbose fmt base =
 
 type check += CHK_C_INVALID_MEMORY_ACCESS
 
+
 let () =
   register_check (fun next fmt -> function
       | CHK_C_INVALID_MEMORY_ACCESS -> fprintf fmt "Invalid memory access"

@@ -2,4 +2,4 @@
  (name core)
  (public_name mopsa.mopsa_analyzer.framework.core)
  (library_flags -linkall)
- (libraries ast mopsa_utils yojson))
+ (libraries sexplib ppx_sexp_conv ast mopsa_utils yojson))

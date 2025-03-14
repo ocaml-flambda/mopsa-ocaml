@@ -26,7 +26,7 @@
 open Mopsa
 open Universal.Ast
 open Ast
-open Common.Base
+open Base
 
 
 (** Static points-to values *)

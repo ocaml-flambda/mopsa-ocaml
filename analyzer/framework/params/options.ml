@@ -271,25 +271,25 @@ let () =
            let () = match selection with
            | "domains" ->
              let domains =
-               if !Config.Parser.opt_config = "" then
-                 Config.Parser.all_domains ()
+               if !Mopsa_config.Parser.opt_config = "" then
+                 Mopsa_config.Parser.all_domains ()
                else
-                 Paths.resolve_config_file !Config.Parser.opt_config |>
-                 Config.Parser.domains
+                 Paths.resolve_config_file !Mopsa_config.Parser.opt_config |>
+                 Mopsa_config.Parser.domains
              in
              List.sort_uniq compare domains |>
              Output.Factory.list_domains
 
            | "reductions" ->
-             let reductions = Config.Parser.all_reductions () in 
+             let reductions = Config.Parser.all_reductions () in
              List.sort_uniq compare reductions |>
              Output.Factory.list_reductions
 
            | "checks" ->
              let checks =
-               if !Config.Parser.opt_config = "" then
+               if !Mopsa_config.Parser.opt_config = "" then
                  (* List checks of all registered domains *)
-                 let domains = Config.Parser.all_domains () in
+                 let domains = Mopsa_config.Parser.all_domains () in
                  List.fold_left
                    (fun acc domain ->
                       try
@@ -306,8 +306,8 @@ let () =
                       with Not_found -> acc
                    ) [] domains
                else
-                 let abstraction = Config.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
-                 let domain = Config.Builder.from_json abstraction.domain in
+                 let abstraction = Mopsa_config.Parser.(parse @@ Paths.resolve_config_file !opt_config) in
+                 let domain = Mopsa_config.Builder.from_json abstraction.domain in
                  let module Domain = (val domain) in
                  Domain.checks
              in
@@ -372,7 +372,6 @@ let () =
     default = "unset";
   }
 
-
 (** Output stream *)
 let () =
   register_builtin_option {
@@ -402,6 +401,48 @@ let () =
     default = "4";
   }
 
+    key = "-no-detailed-errors-unimplemented";
+    category = "Alarms";
+    doc = " hide errors related to unimplemented from the detailed analysis results";
+    spec = ArgExt.Set Output.Text.opt_no_unimplemented_detailed_checks;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-detailed-errors";
+    category = "Alarms";
+    doc = " hide the detailed analysis results (=the errors with their location)";
+    spec = ArgExt.Set Output.Text.opt_no_detailed_checks;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-analysis-time";
+    category = "Alarms";
+    doc = " hide the time it took the analysis to execute";
+    spec = ArgExt.Set Output.Text.opt_no_time;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-analysis-summary";
+    category = "Alarms";
+    doc = " hide the summary of the analysis at the end";
+    spec = ArgExt.Set Output.Text.opt_no_analysis_summary;
+    default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-no-ffi-functions-report";
+    category = "Alarms";
+    doc = " hide the summary of the analyzed functions, the skipped functions, and the missing functions";
+    spec = ArgExt.Set Output.Text.opt_no_ffi_report;
+    default = "false";
+  }
 
 let () =
   register_builtin_option {
@@ -456,13 +497,13 @@ let () =
 (** Help message *)
 let help () =
   let options =
-    if !Config.Parser.opt_config = "" then
+    if !Mopsa_config.Parser.opt_config = "" then
       List.map opt_to_arg !options
     else
       (* Get the language and domains of selected configuration *)
-      let config = Paths.resolve_config_file !Config.Parser.opt_config in
-      let lang = Config.Parser.(language config) in
-      let domains = Config.Parser.(domains config) in
+      let config = Paths.resolve_config_file !Mopsa_config.Parser.opt_config in
+      let lang = Mopsa_config.Parser.(language config) in
+      let domains = Mopsa_config.Parser.(domains config) in
 
       (* Get the options *)
       (get_builtin_options ())    @

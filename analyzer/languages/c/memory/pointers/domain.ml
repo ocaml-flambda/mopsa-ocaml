@@ -29,8 +29,9 @@ open Common
 open Common.Points_to
 open Common.Base
 open Common.Alarms
-open Static_points_to
+open Common.Static_points_to
 open Value
+open Stubs.Ast (* for the printing functions *)
 
 
 
@@ -95,7 +96,7 @@ struct
 
             | S_invalidate {ekind = E_var (v, _)} ->
               let relevant_vars = PointerSet.fold
-                  (fun pv acc -> match pv with 
+                  (fun pv acc -> match pv with
                                        | Base {base_kind = Var v} -> VarSet.add v acc
                                        | _ -> acc)
                   (Map.find v pre) VarSet.empty in
@@ -596,7 +597,7 @@ struct
       if PointerSet.is_bottom v1_invalid && PointerSet.is_bottom v2_invalid
       then []
       else
-        let flow = raise_c_invalid_pointer_compare p q range man flow in
+        (* UNSOUND: This pointer comparison is undefined behaivor, but we ignore it here. *)
         [ Post.return flow ]
     in
 
@@ -633,12 +634,11 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2
       then []
       else
-        [
-          set_value_opt p1 vv1 man flow >>%
-          set_value_opt p2 vv2 man >>% fun flow ->
-          raise_c_invalid_pointer_compare p q range man flow |>
-          Post.return
-        ]
+        let flow = set_value_opt p1 vv1 man flow |>
+                   set_value_opt p2 vv2 man
+        in
+        (* UNSOUND: This pointer comparison is undefined behavior, but we allow it here. *)
+        [ Post.return flow ]
     in
     let bottom_case = Flow.set T_cur man.lattice.bottom man.lattice flow |>
                       Post.return
@@ -835,6 +835,10 @@ struct
         assume_ne p (mk_c_null stmt.srange) stmt.srange man flow)
       |> OptionExt.return
 
+    | S_havoc_var(v, ty) when is_c_pointer_type ty ->
+      assign v (mk_top ty stmt.srange) None stmt.srange man flow |>
+      OptionExt.return
+
     | _ -> None
 
 
@@ -892,7 +896,7 @@ struct
         ]
     in
 
-    (* Case 2: different base => undefined behavior *)
+    (* Case 2: different base => arbitrary integer *)
     let case2 =
       let vv1 = PointerSet.singleton_diff v1 v2 in
       let vv2 = PointerSet.singleton_diff v2 v1 in
@@ -909,12 +913,11 @@ struct
       if PointerSet.is_bottom vv1 || PointerSet.is_bottom vv2 then
         []
       else
-        [
-          set_value_opt p1 vv1 man flow >>%
-          set_value_opt p2 vv2 man >>% fun flow ->
-          let flow = raise_c_invalid_pointer_sub p q range man flow in
-          Eval.empty flow
-        ]
+        let flow = set_value_opt p1 v1 man flow |>
+                   set_value_opt p2 v2 man
+        in
+        (* UNSOUND: This is undefined behavior, but we return [Top] instead of failing. *)
+        [man.eval (mk_top T_int range) flow]
     in
 
     Eval.join_list (case1 @ case2) ~empty:(fun () -> Eval.empty flow)
@@ -1209,7 +1212,7 @@ struct
               ) v;
           if PointerSet.is_valid v then
             let o = mk_offset var None exp.erange in
-            man.print_expr flow printer o 
+            man.print_expr flow printer o
         )
 
     | _ -> ()

@@ -36,6 +36,8 @@ depends: [
   "mlgmpidl"
   "yojson" {>= "1.6.0"}
   "zarith" {>= "1.10"}
+  "sexplib"
+  "ppx_sexp_conv"
   "odoc" {with-doc}
   "arg-complete" {>= "0.2.1"}
 ]
