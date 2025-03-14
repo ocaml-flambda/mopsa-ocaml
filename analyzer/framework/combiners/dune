@@ -2,4 +2,5 @@
  (name combiners)
  (public_name mopsa.mopsa_analyzer.framework.combiners)
  (libraries mopsa.mopsa_analyzer.framework.combiners.common domain value)
+ (library_flags -linkall)
  (allow_overlapping_dependencies))

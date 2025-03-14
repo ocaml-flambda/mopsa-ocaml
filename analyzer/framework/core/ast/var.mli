@@ -62,6 +62,10 @@
 open Mopsa_utils
 open Semantic
 
+val print_uniq_with_uid : bool ref
+
+val force_print_uniq_with_uid : bool -> (unit -> 'a) -> 'a
+
 (****************************************************************************)
 (**                            {1 Access modes}                             *)
 (****************************************************************************)

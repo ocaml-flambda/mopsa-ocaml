@@ -52,7 +52,7 @@ let compare_pos (pos1: pos) (pos2: pos) =
 (** Return the relative path of `file` w.r.t. the current working directory *)
 let relative_path file =
   let wd = Sys.getcwd () in
-  if Str.string_match (Str.regexp ("^" ^ wd ^ "/.+")) file 0 then
+  if Str.string_match (Str.regexp ("^" ^ (Str.quote wd) ^ "/.+")) file 0 then
     let n1 = String.length wd in
     let n2 = String.length file in
     "./" ^ String.sub file (n1 + 1) (n2 - n1 - 1)
@@ -174,7 +174,10 @@ let is_program_range = function
   | _ -> false
 
 let match_range_file file r =
-  let pred f = Str.string_match (Str.regexp (".*" ^ (Str.quote file) ^ "$")) f 0 in
+  let pred f =
+    Str.string_match (Str.regexp (".*" ^ (Str.quote file) ^ "$")) f 0 ||
+    Str.string_match (Str.regexp (".*" ^ (Str.quote f) ^ "$")) file 0
+  in
   match untag_range r with
   | R_orig(p, _) -> pred p.pos_file
   | R_program pl -> List.exists pred pl

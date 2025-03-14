@@ -1,4 +1,5 @@
 (library
  (name combiners_common)
  (public_name mopsa.mopsa_analyzer.framework.combiners.common)
+ (library_flags -linkall)
  (libraries core mopsa_utils))

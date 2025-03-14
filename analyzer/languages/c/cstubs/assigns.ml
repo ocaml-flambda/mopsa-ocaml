@@ -52,7 +52,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
 

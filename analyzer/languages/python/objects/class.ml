@@ -37,7 +37,7 @@ struct
 
   let checks = []
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
 
   let rec eval  exp man (flow: 'a flow) =

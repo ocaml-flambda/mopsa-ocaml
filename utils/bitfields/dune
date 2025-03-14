@@ -2,4 +2,5 @@
  (name bitfields)
  (public_name mopsa.mopsa_utils.bitfields)
  (libraries utils_core itvUtils congUtils zarith)
+ (library_flags -linkall)
  (flags (:standard -open Utils_core)))

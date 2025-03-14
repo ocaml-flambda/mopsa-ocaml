@@ -2,4 +2,5 @@
  (name python_hooks)
  (package mopsa)
  (libraries python_lang mopsa framework stubs)
+ (library_flags -linkall)
  (flags :standard -open Python_lang.Lang))

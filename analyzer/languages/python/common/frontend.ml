@@ -35,14 +35,14 @@ let () =
       key = "-gc";
       category = "Python";
       doc = " perform abstract garbage collection after function calls";
-      spec = ArgExt.Set opt_gc_after_functioncall;
+      spec = Set opt_gc_after_functioncall;
       default = "";
     };
   register_domain_option "python.frontend" {
       key = "-gc-percent";
       category = "Python";
       doc = Format.asprintf " percent of abstract garbage collection calls (default: %d)" !opt_gc_percent_calls;
-      spec = ArgExt.Set_int opt_gc_percent_calls;
+      spec = Set_int (opt_gc_percent_calls, ArgExt.empty);
       default = "";
     }
 
@@ -254,11 +254,11 @@ and from_exp exp =
       (T_py None)
 
     | E_true ->
-      E_constant (Universal.Ast.C_bool true),
+      E_constant (C_bool true),
       (T_py None)
 
     | E_false ->
-      E_constant (Universal.Ast.C_bool false),
+      E_constant (C_bool false),
       (T_py None)
 
     | E_none ->
@@ -525,4 +525,5 @@ let () =
   register_frontend {
     lang = "python";
     parse = parse_program;
+    on_panic = fun _ _ _ -> ();
   }

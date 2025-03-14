@@ -2,4 +2,5 @@
  (name c_common)
  (public_name mopsa.mopsa_analyzer.c.common)
  (libraries mopsa framework c_lang universal)
+ (library_flags -linkall)
  (flags :standard -open C_lang.Lang))

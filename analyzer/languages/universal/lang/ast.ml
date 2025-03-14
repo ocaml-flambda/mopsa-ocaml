@@ -36,7 +36,6 @@ type float_prec =
   | F_REAL        (** no rounding, abstracted as double *)
 
 type typ +=
-  | T_bool (** Boolean *)
   | T_int (** Mathematical integers with arbitrary precision. *)
   | T_float of float_prec (** Floating-point real numbers. *)
   | T_string (** Strings. *)
@@ -69,7 +68,6 @@ let () =
     print = (fun default fmt typ ->
         match typ with
         | T_unit -> pp_print_string fmt "unit"
-        | T_bool -> pp_print_string fmt "bool"
         | T_int -> pp_print_string fmt "int"
         | T_float p -> pp_float_prec fmt p
         | T_string -> pp_print_string fmt "string"
@@ -86,7 +84,6 @@ let () =
 
 type constant +=
   | C_unit
-  | C_bool of bool
   | C_int of Z.t (** Integer numbers, with arbitrary precision. *)
   | C_float of float (** Floating-point numbers. *)
   | C_string of string (** String constants. *)
@@ -116,7 +113,6 @@ let () =
 
     print = (fun default fmt -> function
         | C_unit -> fprintf fmt "()"
-        | C_bool(b) -> fprintf fmt "%a" Format.pp_print_bool b
         | C_string(s) -> fprintf fmt "\"%s\"" s
         | C_int(n) -> Z.pp_print fmt n
         | C_float(f) -> pp_print_float fmt f
@@ -154,20 +150,21 @@ type operator +=
   | O_filter_float_class of float_class (** filter float by class *)
 
   (* Binary operators *)
-  | O_plus       (** + *)
-  | O_minus      (** - *)
-  | O_mult       (** * *)
-  | O_div        (** / *)
-  | O_mod        (** % *)
-  | O_ediv       (** euclidian division *)
-  | O_erem       (** remainder for euclidian division *)
-  | O_pow        (** power *)
-  | O_bit_and    (** & *)
-  | O_bit_or     (** | *)
-  | O_bit_xor    (** ^ *)
-  | O_bit_rshift (** >> *)
-  | O_bit_lshift (** << *)
-  | O_concat     (** concatenation of arrays and strings *)
+  | O_plus        (** + *)
+  | O_minus       (** - *)
+  | O_mult        (** * *)
+  | O_div         (** / *)
+  | O_mod         (** % where the remainder can be negative, following C *)
+  | O_ediv        (** euclidian division *)
+  | O_erem        (** remainder for euclidian division *)
+  | O_pow         (** power *)
+  | O_bit_and     (** & *)
+  | O_bit_or      (** | *)
+  | O_bit_xor     (** ^ *)
+  | O_bit_rshift  (** >> *)
+  | O_bit_lshift  (** << *)
+  | O_concat      (** concatenation of arrays and strings *)
+  | O_convex_join (** convex join of arithmetic expressions *)
 
   (* Float predicates *)
   | O_float_class of float_class
@@ -203,6 +200,7 @@ let () =
         | O_bit_xor    -> pp_print_string fmt "^"
         | O_bit_rshift -> pp_print_string fmt ">>"
         | O_bit_lshift -> pp_print_string fmt "<<"
+        | O_convex_join -> pp_print_string fmt "⋓"
         | O_float_class c -> Format.fprintf fmt "float_class[%a]" pp_float_class c
         | O_filter_float_class c -> Format.fprintf fmt "filter_float_class[%a]" pp_float_class c
         | op           -> default fmt op
@@ -222,7 +220,7 @@ type fundec = {
   fun_locvars : var list; (** list of local variables *)
   mutable fun_body: stmt; (** body of the function *)
   fun_return_type: typ option; (** return type *)
-  fun_return_var: var; (** variable storing the return value *)
+  fun_return_var: var option; (** variable storing the return value *)
 }
 
 type fun_builtin =
@@ -244,12 +242,14 @@ let compare_fun_expr x y = match x, y with
 (** {2 Universal program} *)
 (*  ********************* *)
 
+type u_program =  {
+  universal_gvars   : var list;
+  universal_fundecs : fundec list;
+  universal_main    : stmt;
+}
+
 type prog_kind +=
-  | P_universal of {
-      universal_gvars   : var list;
-      universal_fundecs : fundec list;
-      universal_main    : stmt;
-    }
+  | P_universal of u_program
 
 let () =
   register_program {
@@ -281,6 +281,24 @@ let () =
         | _ -> default fmt prg
       );
   }
+
+module UProgramKey = GenContextKey(struct
+    type 'a t = u_program
+    let print pp fmt prog = Format.fprintf fmt "U program"
+  end)
+
+
+(** Flow-insensitive context to keep the analyzed C program *)
+let u_program_ctx = UProgramKey.key
+
+(** Set the C program in the flow *)
+let set_u_program prog flow =
+  Flow.set_ctx (Flow.get_ctx flow |> add_ctx u_program_ctx prog) flow
+
+(** Get the C program from the flow *)
+let get_u_program flow =
+  Flow.get_ctx flow |> find_ctx u_program_ctx
+
 
 
 (** {2 Universal expressions} *)
@@ -810,9 +828,14 @@ let rec expr_to_const e : constant option =
       | Some (C_bool b1), Some (C_bool b2) ->
         Some (C_bool (b1 && b2))
 
-      | Some (C_top T_bool), x
-      | x, Some (C_top T_bool) ->
-        x
+      | Some (C_top T_bool), Some (C_bool false)
+      | Some (C_bool false), Some (C_top T_bool) ->
+        Some (C_bool false)
+
+      | Some (C_top T_bool), Some (C_bool true)
+      | Some (C_bool true), Some (C_top T_bool)
+      | Some (C_top T_bool), Some (C_top T_bool) ->
+        Some (C_top T_bool)
 
       | _ -> None
     end
@@ -823,8 +846,13 @@ let rec expr_to_const e : constant option =
       | Some (C_bool b1), Some (C_bool b2) ->
         Some (C_bool (b1 || b2))
 
-      | Some (C_top T_bool), x
-      | x, Some (C_top T_bool) ->
+      | Some (C_top T_bool), Some (C_bool true)
+      | Some (C_bool true), Some (C_top T_bool) ->
+        Some (C_bool true)
+
+      | Some (C_top T_bool), Some (C_bool false)
+      | Some (C_bool false), Some (C_top T_bool)
+      | Some (C_top T_bool), Some (C_top T_bool) ->
         Some (C_top T_bool)
 
       | _ -> None

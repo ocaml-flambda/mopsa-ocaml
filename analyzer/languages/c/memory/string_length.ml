@@ -77,7 +77,7 @@ struct
       key = "-c-track-string-length";
       category = "C";
       doc = " track lengths of dynamic strings";
-      spec = ArgExt.Bool (fun b -> opt_track_length := b);
+      spec = Bool (fun b -> opt_track_length := b);
       default = "true";
     }
 
@@ -190,10 +190,10 @@ struct
     | _ -> false
 
 
-  let equal_int_types t1 t2 =
+  let equal_int_types t1 t2 flow =
     match remove_typedef_qual t1, remove_typedef_qual t2 with
     | T_c_integer _, T_c_integer _ ->
-      sizeof_type t1 = sizeof_type t2 &&
+      sizeof_type t1 flow = sizeof_type t2 flow &&
       is_signed t1 = is_signed t2
     | _ -> true
 
@@ -202,7 +202,7 @@ struct
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (** {2 Abstract transformers} *)
@@ -228,7 +228,7 @@ struct
         let length = mk_length_var base elem_size range in
         let size = elem_of_offset bsize elem_size range in
 
-        man.exec ~route:universal (mk_add length range) flow >>% fun flow ->
+        man.exec  (mk_add length range) flow >>% fun flow ->
         man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -242,7 +242,7 @@ struct
 
       | _ ->
         let length = mk_length_var base elem_size range in
-        man.exec ~route:universal (mk_remove length range) flow
+        man.exec  (mk_remove length range) flow
 
 
   (** 𝕊⟦ rename(base1,base2); ⟧ *)
@@ -253,7 +253,7 @@ struct
     else
       let length1 = mk_length_var base1 elem_size range in
       let length2 = mk_length_var base2 elem_size range in
-      man.exec ~route:universal (mk_rename length1 length2 range) flow
+      man.exec  (mk_rename length1 length2 range) flow
 
 
   (** 𝕊⟦ expand(base,bases); ⟧ *)
@@ -275,7 +275,7 @@ struct
       if lengths = [] then
         Post.return flow
       else
-        man.exec ~route:universal (mk_expand length1 lengths range) flow
+        man.exec  (mk_expand length1 lengths range) flow
 
 
   (** Fold the length variable of a base *)
@@ -295,10 +295,10 @@ struct
       if lengths = [] then
          eval_base_size base range man flow >>$ fun bsize flow ->
          let size = elem_of_offset bsize elem_size range in
-         man.exec ~route:universal (mk_forget length range) flow >>% fun flow ->
+         man.exec  (mk_forget length range) flow >>% fun flow ->
          man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
       else
-        man.exec ~route:universal (mk_fold length lengths range) flow
+        man.exec  (mk_fold length lengths range) flow
 
 
   (** 𝕊⟦ forget(e); ⟧ *)
@@ -318,7 +318,7 @@ struct
           let length = mk_length_var base elem_size range in
           eval_base_size base range man flow >>$ fun bsize flow ->
           let size = elem_of_offset bsize elem_size range in
-          man.exec ~route:universal (mk_forget length range) flow >>% fun flow ->
+          man.exec  (mk_forget length range) flow >>% fun flow ->
           man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -337,7 +337,7 @@ struct
         let length = mk_length_var base elem_size range in
         eval_base_size base range man flow >>$ fun bsize flow ->
         let size = elem_of_offset bsize elem_size range in
-        man.exec ~route:universal (mk_forget length range) flow >>% fun flow ->
+        man.exec  (mk_forget length range) flow >>% fun flow ->
         man.exec (mk_assume (mk_in length (mk_zero range) size range) range) flow
 
 
@@ -366,7 +366,7 @@ struct
       match base.base_kind with
       | String _ -> Post.return flow
       | Var _ | Addr _ ->
-        let char_size = sizeof_type lval.etyp in
+        let char_size = sizeof_type lval.etyp flow in
         let length = mk_length_var base elem_size ~mode range in
         let offset = elem_of_offset boffset elem_size range in
         if char_size = Z.of_int elem_size &&
@@ -390,7 +390,8 @@ struct
             (* Transformation: length := offset; *)
             [ mk_in offset zero length range;
               mk_eq rhs zero range ],
-            (fun flow -> man.exec ~route:universal (mk_assign length offset range) flow)
+            (fun flow ->
+               man.exec  (mk_assign length offset range) flow)
             ;
 
             (* setnon0 case *)
@@ -421,7 +422,7 @@ struct
           ] man flow
 
         else
-          man.exec ~route:universal (mk_forget length range) flow
+          man.exec  (mk_forget length range) flow
 
 
   (** Transformers entry point *)
@@ -473,7 +474,7 @@ struct
 
   (** 𝔼⟦ *(str + offset) ⟧ *)
   let eval_string_literal_char str t boffset range man flow =
-    let char_size = sizeof_type t in
+    let char_size = sizeof_type t flow in
     let length = Z.(div (of_int (String.length str)) char_size) in
     let offset = elem_of_offset boffset (Z.to_int char_size) range in
     man.eval offset flow >>$ fun offset flow ->
@@ -485,7 +486,7 @@ struct
         [mk_in offset zero (mk_z (Z.pred length) range) range],
         (fun flow ->
            (* Get the interval of the offset *)
-           let itv = man.ask (mk_int_interval_query offset) flow in
+           let itv = ask_and_reduce man.ask (mk_int_interval_query offset) flow in
            (* itv should be included in [0,length-1] *)
            let max = I.of_z Z.zero (Z.pred length) in
            begin match I.meet_bot itv (Bot.Nb max) with
@@ -494,7 +495,7 @@ struct
                (* Get the interval of possible chars *)
                let indexes = I.to_list itv' in
                let char_at i =
-                 I.cst (extract_multibyte_integer str (Z.to_int (Z.mul char_size i)) t)
+                 I.cst (extract_multibyte_integer str (Z.to_int (Z.mul char_size i)) t flow)
                in
                let chars =
                  List.fold_left (fun acc i -> char_at i :: acc)
@@ -526,15 +527,26 @@ struct
          man.eval (mk_top ctype range) flow
       else
         match base.base_kind with
-        | String (str,_,t) when equal_int_types t ctype ->
-          eval_string_literal_char str t offset range man flow
+        | String (str,_,t) ->
+          if equal_int_types t ctype flow then
+            (* FIXME: is this necessary? *)
+            eval_string_literal_char str t offset range man flow
+          else
+            man.eval (mk_top ctype range) flow
         | _ ->
-          man.eval (mk_top ctype range) flow
+          if Z.equal (sizeof_type ctype flow) (Z.of_int elem_size) then
+            let length = mk_length_var base elem_size ~mode range in
+            assume (eq offset length range) man flow
+              ~fthen:(man.eval (mk_zero range))
+              ~felse:(man.eval (mk_top ctype range))
+              ~fboth:(fun _ _ -> man.eval (mk_top ctype range) flow)
+          else
+            man.eval (mk_top ctype range) flow
 
 
 
   let assume_string_literal_char_eq str t boffset mode n range man flow =
-    let char_size = Z.to_int (sizeof_type t) in
+    let char_size = Z.to_int (sizeof_type t flow) in
     let blen = String.length str in
     (* When n = 0, require that byte-offset = byte-length(str) *)
     if Z.(n = zero) then
@@ -563,14 +575,14 @@ struct
 
   (** 𝕊⟦ *(p + i) != n ⟧ *)
   let assume_ne base boffset mode etype n range man flow =
-    match base.base_kind, c_expr_to_z n with
-    | String (str,_,t), Some c when sizeof_type t = sizeof_type etype ->
+    match base.base_kind, c_expr_to_z n flow with
+    | String (str,_,t), Some c when Z.equal (sizeof_type t flow) (sizeof_type etype flow) ->
       assume_string_literal_char_ne str t boffset mode c range man flow
 
     | String _, _ ->
       Post.return flow
 
-    | _ when sizeof_type etype = Z.of_int elem_size ->
+    | _ when Z.equal (sizeof_type etype flow) (Z.of_int elem_size) ->
       let length = mk_length_var base elem_size ~mode range in
       let offset = elem_of_offset boffset elem_size range in
       assume (eq n zero range) man flow
@@ -582,14 +594,14 @@ struct
 
   (** 𝕊⟦ *(p + i) == n ⟧ *)
   let assume_eq base boffset mode etype n range man flow =
-    match base.base_kind, c_expr_to_z n with
-    | String (str,_,t), Some c when sizeof_type t = sizeof_type etype ->
+    match base.base_kind, c_expr_to_z n flow with
+    | String (str,_,t), Some c when Z.equal (sizeof_type t flow) (sizeof_type etype flow) ->
       assume_string_literal_char_eq str t boffset mode c range man flow
 
     | String _, _ ->
       Post.return flow
 
-    | _ when sizeof_type etype = Z.of_int elem_size ->
+    | _ when Z.equal (sizeof_type etype flow) (Z.of_int elem_size) ->
       let length = mk_length_var base elem_size ~mode range in
       let offset = elem_of_offset boffset elem_size range in
       switch [
@@ -621,8 +633,8 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let assume_forall_eq i a b base boffset mode ctype n range man flow =
-    let char_size = sizeof_type ctype in
-    if char_size <> Z.of_int elem_size then Post.return flow else
+    let char_size = sizeof_type ctype flow in
+    if not (Z.equal char_size (Z.of_int elem_size)) then Post.return flow else
     (** Get symbolic bounds of the offset *)
     let quants = [(FORALL,i,S_interval(a,b))] in
     match Common.Quantified_offset.bound_div boffset char_size quants man flow with
@@ -636,8 +648,8 @@ struct
     man.eval bsize flow >>$ fun bsize flow ->
     let size = elem_of_offset bsize elem_size range in
     (* Ensure that [min, max] ⊆ [0, size-1] *)
-    man.exec (mk_assume (ge min zero range) range) ~route:universal flow >>% fun flow ->
-    man.exec (mk_assume (le max (pred size range) range) range) ~route:universal flow >>% fun flow ->
+    man.exec (mk_assume (ge min zero range) range)  flow >>% fun flow ->
+    man.exec (mk_assume (le max (pred size range) range) range)  flow >>% fun flow ->
     switch [
       (*          length    min     max
          |-----------0-------|nnnnnnnn|------>
@@ -650,7 +662,7 @@ struct
       *)
       [ eq min length range ],
       (fun flow ->
-         match c_expr_to_z n with
+         match c_expr_to_z n flow with
          | Some n when Z.(n = zero) -> Post.return flow
          | Some n -> Cases.empty flow
          | None ->
@@ -680,7 +692,7 @@ struct
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let assume_forall_ne_zero i a b base boffset ctype mode range man flow =
     (** Get symbolic bounds of the offset *)
-    let char_size = sizeof_type ctype in
+    let char_size = sizeof_type ctype flow in
     let quants = [(FORALL,i,S_interval(a,b))] in
     match Common.Quantified_offset.bound_div boffset char_size quants man flow with
     | Top.TOP -> Post.return flow
@@ -690,8 +702,8 @@ struct
 
     let length =
       match base.base_kind with
-      | String (str,_,t) when sizeof_type t = sizeof_type ctype ->
-        Some (mk_z (Z.div (Z.of_int (String.length str)) (sizeof_type t)) range)
+      | String (str,_,t) when sizeof_type t flow = sizeof_type ctype flow ->
+        Some (mk_z (Z.div (Z.of_int (String.length str)) (sizeof_type t flow)) range)
         | String _ -> None
       | _ when char_size = Z.of_int elem_size ->
         Some (mk_length_var base elem_size ~mode range)
@@ -726,7 +738,7 @@ struct
   let assume_exists_ne i a b  = assume_ne
 
   let assume_forall_ne i a b base boffset mode ctype n range man flow =
-    match c_expr_to_z n with
+    match c_expr_to_z n flow with
     | Some n when Z.(n = zero) ->
       assume_forall_ne_zero i a b base boffset ctype mode range man flow
     | Some n -> Post.return flow
@@ -741,8 +753,8 @@ struct
   (* FIXME: this transfer function is sound only when the offset is an
      affine function with coefficient 1, i.e. of the form ∀i + a *)
   let assume_forall_eq2 i a b base1 boffset1 mode1 ctype1 base2 boffset2 mode2 ctype2 range man flow =
-    if not (equal_int_types ctype1 ctype2) ||
-       sizeof_type ctype1 <> Z.of_int elem_size then Post.return flow
+    if not (equal_int_types ctype1 ctype2 flow) ||
+       sizeof_type ctype1 flow <> Z.of_int elem_size then Post.return flow
     else
 
       (* Get symbolic bounds of quantified offsets *)
@@ -764,7 +776,7 @@ struct
         evl4 >>$ fun max2 flow ->
 
         let get_length base mode = match base.base_kind with
-          | String (str,_,t) when equal_int_types t ctype1 ->
+          | String (str,_,t) when equal_int_types t ctype1 flow ->
             Some (mk_int ((String.length str) / elem_size) range)
           | String _ -> None
           | _ -> Some (mk_length_var base elem_size ~mode:mode range)
@@ -796,7 +808,7 @@ struct
             (fun flow -> Cases.empty flow);
 
             [ log_and cover1 cover2 range ],
-            (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range) ~route:universal flow);
+            (fun flow -> man.exec (mk_assume (eq (sub length1 min1 range) (sub length2 min2 range) range) range)  flow);
           ] man flow
 
   let assume_exists_ne2 i a b base1 boffset1 mode1 ctype1 base2 boffset2 mode2 ctype2 range man flow =

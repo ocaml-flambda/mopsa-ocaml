@@ -80,6 +80,7 @@ let pp_character_kind fmt = function
   | C_char_utf8 -> pp_print_string fmt "u8"
   | C_char_utf16 -> pp_print_string fmt "u"
   | C_char_utf32 -> pp_print_string fmt "U"
+  | C_char_unevaluated -> ()
 
 
 let () =
@@ -201,11 +202,16 @@ let () =
       | S_c_return(Some e,_) -> fprintf fmt "return %a;" pp_expr e
       | S_c_break _ -> fprintf fmt "break;"
       | S_c_continue _ -> fprintf fmt "continue;"
-      | S_c_switch_case(e,_) -> fprintf fmt "case %a:" pp_expr e
+      | S_c_switch_case([{ekind = E_constant (Universal.Ast.C_int_interval (Finite lo, Finite hi))}], _) ->
+        fprintf fmt "case %s ... %s:" (Z.to_string lo) (Z.to_string hi)
+      | S_c_switch_case([e],_) -> fprintf fmt "case %a:" pp_expr e
+      | S_c_switch_case(es,_) ->
+        List.iter (fun e -> fprintf fmt "case %a:@," pp_expr e) es
       | S_c_switch_default _ -> fprintf fmt "default:"
       | S_c_label l -> fprintf fmt "%s:" l
       | S_c_goto (l,_) -> fprintf fmt "goto %s;" l
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
+      | S_c_asm s -> fprintf fmt "%s;" s
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->

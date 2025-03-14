@@ -35,7 +35,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let exec stmt man flow =
       let range = srange stmt in

@@ -7,4 +7,5 @@
 (library
  (name parsing)
  (public_name mopsa.mopsa_c_stubs_parser.parsing)
+ (library_flags -linkall)
  (libraries mopsa_utils mopsa_c_parser zarith))

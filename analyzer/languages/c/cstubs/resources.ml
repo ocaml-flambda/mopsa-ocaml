@@ -65,7 +65,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
 
   (** Computation of post-conditions *)

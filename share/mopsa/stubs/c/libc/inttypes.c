@@ -38,8 +38,7 @@ static const intmax_t _INTMAX_MIN = INTMAX_MIN;
 
 /*$
  * requires: __n > _INTMAX_MIN;
- * ensures:  (__n >= 0 implies return == __n) and
- *           (__n < 0 implies return == - __n);
+ * ensures:  if __n >= 0 then return == __n else return == - __n end;
  */
 intmax_t imaxabs (intmax_t __n);
 

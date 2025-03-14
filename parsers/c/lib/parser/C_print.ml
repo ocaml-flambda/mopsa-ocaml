@@ -32,10 +32,10 @@ open Clang_utils
 let ignore_implicit_casts = true
 (** Only print explicit casts, not implici ones. *)
 
-let print_loc = true
+let print_loc = ref true
 (** Prints location information in comment for global declarations. *)
 
-let print_comments = true
+let print_comments = ref true
 (** Prints comments attached to declarations. *)
 
 let print_scope = false
@@ -85,7 +85,7 @@ let inc_indent indent =
 
 
 let bp_loc indent buf loc =
-  if print_loc
+  if !print_loc
   then bp buf "%s/* %s */\n" indent (Clang_dump.string_of_loc loc.Clang_AST.range_begin)
 
           
@@ -231,6 +231,7 @@ and raw_buf_type buf = function
     | T_record r -> bp buf "%s %s" (string_of_record_kind r.record_kind) r.record_unique_name
     | T_complex f -> bp buf "%s _Complex" (string_of_float_type f)
     | T_vector v -> bp buf "vector(%a, %i, %i)" raw_buf_type_qual v.vector_type v.vector_size v.vector_kind
+    | T_unknown_builtin s -> bp_str buf s
 (* raw (non-C) representation of a type, somewhat more clear than C sytnax *)
 
 
@@ -261,7 +262,7 @@ and c_buf_type_base buf (t,q) = match t with
         (string_of_qualifier q) (string_of_record_kind r.record_kind) r.record_unique_name
   | T_complex f -> bp buf "%s%s _Complex" (string_of_qualifier q) (string_of_float_type f)
   | T_vector v -> bp buf "%a" c_buf_type_base v.vector_type
-
+  | T_unknown_builtin s -> bp_str buf s
 
 (* prints the rest of the type; inner prints the innermost part of the type *)
 and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
@@ -293,6 +294,9 @@ and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
 
     | T_vector v ->
        bp buf "__attribute__((__vector_size__(%i)))" v.vector_size
+
+    | T_unknown_builtin _ ->
+       inner buf var
 
 (* array length *)             
 and len indent buf = function
@@ -415,7 +419,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
    | E_var_args e1 ->
       bp buf "__builtin_va_arg(%a,%a)"
          (bp_paren (is_comma e1) (c_buf_expr indent)) e1 (c_buf_type indent "") (fst t)
-         
+
    | E_atomic (i,e1,e2) ->
       bp buf "__atomic_%i_TODO(%a,%a)"
          i
@@ -440,7 +444,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 and c_buf_expr_bool indent buf e =
   bp buf "%a" (bp_paren (prio_expr e == 1) (c_buf_expr indent)) e
 (* add parentheses around assignments in boolean context to avoid warnings *)
-     
+
 and c_buf_char_literal buf c =
   let o = Char.code c in
   if c = '\n' then bp_str buf "\\n"
@@ -450,12 +454,12 @@ and c_buf_char_literal buf c =
   else if o = 0 then bp_str buf "\\0"
   else if o < 32 || o >= 127 then bp buf "\\x%02x" o
   else bp_char buf c
-           
+
 and c_buf_string_literal buf s =
   String.iter (c_buf_char_literal buf) s
-         
+
 and c_buf_init indent buf i = match i with
-  | I_init_expr e -> c_buf_expr indent buf e     
+  | I_init_expr e -> c_buf_expr indent buf e
   | I_init_list (l,o) ->
      bp buf "{ %a }" (bp_list (c_buf_init indent) ", ") l
   | I_init_implicit tq ->
@@ -488,7 +492,7 @@ and c_buf_for_init indent buf b =
   | [S_expression e,_] -> c_buf_expr indent buf e
   | _ -> c_buf_expr indent buf (E_statement b, (T_void, no_qual), empty_range)
             
-and c_buf_statement indent buf ((s,_):statement) =
+and c_buf_statement indent buf ((s,r):statement) =
   let indent2 = inc_indent indent in
   match s with
   | S_local_declaration v ->
@@ -543,14 +547,49 @@ and c_buf_statement indent buf ((s,_):statement) =
         
   | S_target (S_label s) -> bp buf "%s%s:;\n" indent s
                                
-  | S_target (S_case (e1, u)) ->
+  | S_target (S_case ([e1], u)) ->
      bp buf "%scase %a:;%a\n"
         indent (c_buf_expr indent2) e1 c_buf_update u
 
+  | S_target (S_case ([], u)) -> assert false
+
+  | S_target (S_case (e1::tl, u)) ->
+    bp buf "%scase %a:;%a\n"
+      indent (c_buf_expr indent2) e1
+      (c_buf_statement indent) (S_target (S_case (tl, u)), r)
+
   | S_target (S_default u) -> bp buf "%sdefault:;%a\n" indent c_buf_update u
 
+  | S_asm a ->
+     bp buf "%s__asm__%s%s(\"%a\" : %a %s %a %s %a %s %a);"
+       indent
+       (if a.asm_is_volatile then " __volatile__ " else "")
+       (if Array.length a.asm_labels > 0 then " goto " else "")
+       c_buf_string_literal a.asm_body
+       (bp_array (fun buf o ->
+            bp buf "\"%a\" (%a)"
+              (* already declared in output_string? *)
+              (* (match o.asm_output_constraint with *)
+              (*  | ASM_OUTPUT_INOUT -> "+" *)
+              (*  | ASM_OUTPUT_OUT   -> "=") *)
+              c_buf_string_literal o.asm_output_string
+              (c_buf_expr indent2) o.asm_output_expr
+          ) ", "
+       ) a.asm_outputs
+       (if Array.length a.asm_inputs = 0 then "" else ":")
+       (bp_array (fun buf o ->
+            bp buf "\"%a\" (%a)"
+              c_buf_string_literal o.asm_input_string
+              (c_buf_expr indent2) o.asm_input_expr
+          ) ", "
+       ) a.asm_inputs
+       (if Array.length a.asm_clobbers = 0 then "" else ":")
+       (bp_array (fun buf c -> bp buf "\"%a\"" c_buf_string_literal c) ", ") a.asm_clobbers
+       (if Array.length a.asm_labels = 0 then "" else ":")
+       (bp_array (fun buf c -> bp buf "%s" c) ", ") a.asm_labels
+
 and c_buf_com indent buf v =
-  if print_comments
+  if !print_comments
   then List.iter (fun c -> bp buf "%s%s\n" indent c.Clang_AST.com_text) v
                           
 and c_buf_var_decl_inner indent buf v =
@@ -608,12 +647,14 @@ let c_buf_enum_decl indent buf e =
   if e.enum_defined then
     bp buf "%senum %s { /* type: %s */\n%a%s};\n" indent
        e.enum_unique_name
-       (string_of_integer_type e.enum_integer_type)
+       (match e.enum_integer_type with
+        | None -> "None"
+        | Some s -> string_of_integer_type s)
        (bp_list f "") e.enum_values
        indent
   else
     bp buf "%senum %s;\n" indent e.enum_unique_name
-    
+
 let c_buf_record_decl indent buf r =
   let indent2 = inc_indent indent in
   let f buf v =
@@ -655,6 +696,7 @@ let string_of_string_literal = string_from_buffer c_buf_string_literal
 let string_of_enum_decl = string_from_buffer (c_buf_enum_decl "")
 let string_of_record_decl = string_from_buffer (c_buf_record_decl "")
 let string_of_typedef = string_from_buffer (c_buf_typedef "")
+let string_of_statement = string_from_buffer (c_buf_statement "")
 
 
 
@@ -662,11 +704,11 @@ let string_of_typedef = string_from_buffer (c_buf_typedef "")
 (** {2 Full source printing} *)
 
 let builtin_typedef =
-  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"]
+  ["__NSConstantString"; "__builtin_va_list"; "__uint128_t"; "__u128"]
 (* some built-in typedef we should not print *)
 
 let builtin_funcs =
-  ["__builtin_va_start"; "__builtin_va_end"; "__sigsetjmp";
+  ["__builtin_va_start"; "__builtin_va_end"; "__builtin_va_copy"; "__sigsetjmp";
    "_gl_verify_function2"; "_gl_verify_function3"; "_gl_verify_function4";
    "_gl_verify_function5"; "_gl_verify_function6"; "_gl_verify_function7";
    "_gl_verify_function8"; "_gl_verify_function9"; "_gl_verify_function10";
@@ -707,6 +749,7 @@ let print_types_ordered
       | T_record r -> ()
       | T_enum _ -> ()
       | T_vector v -> explore (fst v.vector_type)
+      | T_unknown_builtin _ -> ()
     in
     if not (Hashtbl.mem black t.typedef_uid) then (
       if Hashtbl.mem gray t.typedef_uid then invalid_arg "cyclic type dependencies";
@@ -732,6 +775,7 @@ let print_types_ordered
       | T_record r -> if mustdef then record true r
       | T_enum _ -> ()
       | T_vector v -> explore mustdef (fst v.vector_type)
+      | T_unknown_builtin _ -> ()
     in
     if not (Hashtbl.mem black r.record_uid) then (
       if Hashtbl.mem gray r.record_uid then invalid_arg "cyclic type dependencies";
@@ -746,9 +790,15 @@ let print_types_ordered
   StringMap.iter (fun _ -> typedef) td;
   StringMap.iter (fun _ -> record true) re
 (* internal function to print records and typedefs in correct order of dependency *)
-  
-      
-let print_project (ch:out_channel) (p:project) =
+
+
+let print_project ?(verbose = true) (ch:out_channel) (p:project) =
+  let old_pl, old_pc = !print_loc, !print_comments in
+  if not verbose then (
+    print_loc := false;
+    print_comments := false;
+  );
+
   let pr f _ x = output_string ch (f x) in
   let pf = Printf.fprintf in
 
@@ -778,8 +828,12 @@ let print_project (ch:out_channel) (p:project) =
   output_string ch "\n/* global variable definitions */\n\n";
   let vars = StringMap.filter (fun _ v -> v.var_init <> None) vars in
   StringMap.iter (pr string_of_var_decl) vars;
-  
+
   output_string ch "\n/* functions definitions */\n\n";
   let funcs = StringMap.filter (fun _ v -> v.func_body <> None) funcs in
-  StringMap.iter (pr string_of_func_decl) funcs
-                 
+  StringMap.iter (pr string_of_func_decl) funcs;
+
+  if not verbose then (
+    print_loc := old_pl;
+    print_comments := old_pc;
+  )

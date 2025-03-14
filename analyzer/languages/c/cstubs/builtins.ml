@@ -48,7 +48,7 @@ struct
   (** Initialization of environments *)
   (** ============================== *)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
 
 
@@ -75,11 +75,11 @@ struct
       eval_base_size ~route:(Below name) base range man flow
 
 
-  let byte_to_element t bytes range =
+  let byte_to_element t bytes range flow =
     let elm =
       match remove_typedef_qual t with
       | T_c_void -> Z.one
-      | tt -> sizeof_type tt in
+      | tt -> sizeof_type tt flow in
     if Z.equal elm Z.one
     then bytes
     else mk_binop bytes O_div (mk_z elm range) ~etyp:bytes.etyp range
@@ -109,7 +109,7 @@ struct
         match pt with
         | P_block (base,_,mode) ->
           eval_base_bytes base mode exp.erange man flow >>$ fun bytes flow ->
-          man.eval (byte_to_element (under_type e.etyp) bytes exp.erange) flow
+          man.eval (byte_to_element (under_type e.etyp) bytes exp.erange flow) flow
 
         | _ ->
           man.eval (mk_top ul exp.erange) flow
@@ -155,7 +155,7 @@ struct
       Some (
         resolve_pointer e man flow >>$ fun pt flow ->
         match pt with
-        | P_block(_,o,_) -> Eval.singleton (byte_to_element (under_type e.etyp) o exp.erange) flow
+        | P_block(_,o,_) -> Eval.singleton (byte_to_element (under_type e.etyp) o exp.erange flow) flow
         | _ -> man.eval (mk_top ul exp.erange) flow
       )
 

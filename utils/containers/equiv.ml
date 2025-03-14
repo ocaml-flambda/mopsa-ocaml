@@ -25,6 +25,7 @@ module type OrderedType =
   sig
     type t
     val compare : t -> t -> int
+    val print : Format.formatter -> t -> unit
   end
 
 
@@ -98,18 +99,19 @@ struct
     | Not_found -> false
 
   let concat (e1:t) (e2:t) =
-    let patch compare k v1 v2 =
+    let patch kp vp compare k v1 v2 =
       match v1, v2 with
       | None, None -> None
       | Some vv, None | None, Some vv -> Some vv
       | Some vv1, Some vv2 ->
         if compare vv1 vv2 = 0
         then Some vv1
-        else Exceptions.panic "Equiva.concat: key points to different values"
+        else Exceptions.panic "Equiva.concat: key %a points to different values %a and %a"
+            kp k vp vv1 vp vv2
     in
     {
-      lr = LR.merge (patch R.compare) e1.lr e2.lr;
-      rl = RL.merge (patch L.compare) e1.rl e2.rl;
+      lr = LR.merge (patch L.print R.print R.compare) e1.lr e2.lr;
+      rl = RL.merge (patch R.print L.print L.compare) e1.rl e2.rl;
     }
 
   let mem_l (l : L.t) (e: t) =

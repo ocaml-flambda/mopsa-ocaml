@@ -82,6 +82,28 @@ let opt_to_arg opt =
   | O_builtin d | O_language (_, d) | O_domain (_, d) | O_shared (_, d) ->
     d
 
+(** {2 Bash completion capabilities} *)
+(*************************************)
+
+let () =
+  let complete args =
+    (* let () = Format.eprintf "@.complete |%a| {%s} %s@." (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "|") Format.pp_print_string) args (OptionExt.default "" (OptionExt.lift (fun s -> s ^ "/config/") (Sys.getenv_opt "SHAREDIR"))) in  *)
+    let r = ArgExt.complete_argv ~prefer_getopt_long:true args
+    (List.map (fun o ->
+         let a = opt_to_arg o in
+         a.key, a.spec, a.doc) !options)
+    ArgExt.empty in
+    (* let () = Format.eprintf "-> |%a|@."  (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "|") Format.pp_print_string) args in  *)
+    r |> List.iter print_endline;
+  exit 0 in
+  let complete_arg : arg =
+    { key = "--complete";
+      doc = "Bash completion helper";
+      category = "Configuration";
+      default = "";
+      spec = Rest_all (complete, ArgExt.empty_all)} in
+  register_builtin_option complete_arg
+
 (** {2 Filters} *)
 (** *********** *)
 
@@ -144,8 +166,8 @@ let () =
     key = "-share-dir";
     category = "Configuration";
     doc = " path to the share directory";
-    spec = ArgExt.Set_string Paths.opt_share_dir;
-    default = "";
+    spec = Set_string (Paths.opt_share_dir, empty);
+    default = OptionExt.default "" (Sys.getenv_opt "SHAREDIR");
   }
 
 
@@ -155,7 +177,15 @@ let () =
     key = "-config";
     category = "Configuration";
     doc = " path to the configuration file to use for the analysis";
-    spec = ArgExt.Set_string Config.Parser.opt_config;
+    spec = Set_string (Config.Parser.opt_config,
+                       fun args ->
+                         if !Config.Parser.opt_config <> "" then
+                           let config_path = Filename.dirname (Paths.resolve_config_file !Config.Parser.opt_config) in
+                           let lang = Filename.basename config_path in
+                           ArgExt.complete_files_in_dir ~prefix:lang config_path args
+                         else
+                           empty args
+                      );
     default = "";
   }
 
@@ -165,7 +195,7 @@ let () =
     key = "-no-warning";
     category = "Debugging";
     doc = " deactivate warning messages";
-    spec = ArgExt.Clear Debug.print_warnings;
+    spec = Clear Debug.print_warnings;
     default = "";
   }
 
@@ -175,9 +205,19 @@ let () =
     key = "-hook";
     category = "Configuration";
     doc = " activate a hook";
-    spec = ArgExt.String (fun s ->
-        try Core.Hook.activate_hook s
-        with Not_found -> Exceptions.panic "hook %s not found" s
+    spec = String (
+        (fun s ->
+          try Core.Hook.activate_hook s
+          with Not_found -> Exceptions.panic "hook %s not found" s),
+        fun args ->
+          let d =
+            List.map
+              (fun (h:(module Core.Hook.HOOK)) ->
+                 let module H = (val h) in
+                 H.name
+              ) (Core.Hook.list_hooks ())
+          in
+          ArgExt.strings (List.sort_uniq compare d) args
       );
     default = "";
   }
@@ -189,7 +229,7 @@ let () =
     key = "-cache";
     category = "Configuration";
     doc = " size of the analysis cache";
-    spec = ArgExt.Set_int Core.Cache.opt_cache;
+    spec = Set_int (Core.Cache.opt_cache, strings ["1"; "5"; "10"]);
     default = "5";
   }
 
@@ -203,9 +243,11 @@ let () =
     key = "-debug";
     category = "Debugging";
     doc = " select active debug channels. (syntax: <c1>,<c2>,...,<cn> and '_' can be used as a wildcard)";
-    spec = ArgExt.String (fun s ->
-        (* Always keep "print" channel *)
-        Debug.parse ("print," ^ s)
+    spec = String (
+        (fun s ->
+           (* Always keep "print" channel *)
+           Debug.parse ("print," ^ s)),
+        empty (* FIXME BASH *)
       );
     default = "print";
   };
@@ -213,7 +255,7 @@ let () =
     key = "-no-color";
     category = "Debugging";
     doc = " deactivate colors in debug messages.";
-    spec = ArgExt.Clear Debug.print_color;
+    spec = Clear Debug.print_color;
     default = "";
   }
 
@@ -223,10 +265,10 @@ let () =
     key = "-list";
     category = "Help";
     doc = " list available domains/checks/hooks; if a configuration is specified, only used domains are listed";
-    spec = ArgExt.Symbol_exit (
-        ["domains"; "checks"; "hooks"],
+    spec = Symbol (
+        ["domains"; "checks"; "hooks"; "reductions"],
         (fun selection ->
-           match selection with
+           let () = match selection with
            | "domains" ->
              let domains =
                if !Config.Parser.opt_config = "" then
@@ -237,6 +279,11 @@ let () =
              in
              List.sort_uniq compare domains |>
              Output.Factory.list_domains
+
+           | "reductions" ->
+             let reductions = Config.Parser.all_reductions () in 
+             List.sort_uniq compare reductions |>
+             Output.Factory.list_reductions
 
            | "checks" ->
              let checks =
@@ -278,7 +325,8 @@ let () =
              List.sort_uniq compare d |>
              Output.Factory.list_hooks
 
-           | _ -> assert false
+           | _ -> assert false in
+           exit 0
         ));
     default = "";
   }
@@ -289,7 +337,7 @@ let () =
     key = "-format";
     category = "Output";
     doc = " selects the output format.";
-    spec = ArgExt.Symbol (
+    spec = Symbol (
         ["text"; "json"],
         (fun s ->
            match s with
@@ -309,7 +357,7 @@ let () =
     key = "-lflow";
     category = "Output";
     doc = " display the last output";
-    spec = ArgExt.Set Output.Common.opt_display_lastflow;
+    spec = Set Output.Common.opt_display_lastflow;
     default = "false";
   }
 
@@ -320,7 +368,7 @@ let () =
     key = "-silent";
     category = "Output";
     doc = " do not return a non-zero value when detecting alarms";
-    spec = ArgExt.Set Output.Common.opt_silent;
+    spec = Set Output.Common.opt_silent;
     default = "unset";
   }
 
@@ -331,7 +379,7 @@ let () =
     key = "-output";
     category = "Output";
     doc = " redirect output to a file";
-    spec = ArgExt.String (fun s -> Output.Common.opt_file := Some s);
+    spec = String ((fun s -> Output.Common.opt_file := Some s), empty);
     default = "";
   }
 
@@ -341,8 +389,17 @@ let () =
     key = "-show-callstacks";
     category = "Alarms";
     doc = " display the call stacks when reporting alarms in text format";
-    spec = ArgExt.Set Output.Text.opt_show_callstacks;
+    spec = Set Output.Text.opt_show_callstacks;
     default = "false";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-tw";
+    category = "Output";
+    doc = " set the tab width";
+    spec = Set_int (Output.Text.opt_tw, strings ["2"; "4"; "8"]);
+    default = "4";
   }
 
 
@@ -351,7 +408,7 @@ let () =
     key = "-show-safe-checks";
     category = "Alarms";
     doc = " show safe checks when reporting alarms in text format";
-    spec = ArgExt.Set Output.Common.opt_show_safe_checks;
+    spec = Set Output.Common.opt_show_safe_checks;
     default = "false";
   }
 
@@ -361,7 +418,7 @@ let () =
     key = "-clean-cur-only";
     category = "Configuration";
     doc = " flag to apply cleaners on the current environment only";
-    spec = ArgExt.Set Core.Cases.opt_clean_cur_only;
+    spec = Set Core.Cases.opt_clean_cur_only;
     default = "";
   }
 
@@ -369,8 +426,31 @@ let () = register_builtin_option {
     key = "-hash-heap-address";
     category = "Heap";
     doc = "  format heap addresses with their hash";
-    spec = ArgExt.Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
+    spec = Bool (fun b -> Core.Ast.Addr.opt_hash_addr := b);
     default = "false";
+  }
+
+let () = register_builtin_option {
+    key = "-working-dir";
+    category = "Configuration";
+    doc = " set the working directory, used when resolving relative paths";
+    spec = String ((fun s ->
+        if Sys.file_exists s
+        then Sys.chdir s
+        else Exceptions.panic "'%s' does not exist" s),
+                   empty
+      );
+    default = "";
+  }
+
+let () =
+  register_builtin_option {
+    key = "-marker";
+    category = "Partitioning";
+    doc = " enable a marker for trace partitioning";
+    spec = String (Core.Marker.enable_marker,
+                   fun args -> ArgExt.strings (Core.Marker.available_markers ()) args);
+    default = "";
   }
 
 (** Help message *)
@@ -396,21 +476,21 @@ let () =
     key  = "-help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_exit help;
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   };
   register_builtin_option {
     key  = "--help";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_exit help;
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   };
   register_builtin_option {
     key  = "-h";
     category = "Help";
     doc  = " display the list of options";
-    spec = ArgExt.Unit_exit help;
+    spec = Unit (fun () -> help (); exit 0);
     default = "";
   }
 
@@ -425,6 +505,6 @@ let () =
     key = "-v";
     category = "Configuration";
     doc = " Mopsa version";
-    spec = ArgExt.Unit_exit print_version;
+    spec = Unit (fun () -> print_version (); exit 0);
     default = "";
   }

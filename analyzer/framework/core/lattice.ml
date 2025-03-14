@@ -21,7 +21,7 @@
 
 (** Interface of lattice structures *)
 
-open Effect
+open Change
 open Context
 open Print
 
@@ -86,6 +86,6 @@ type 'a lattice = {
   join:      'a ctx -> 'a -> 'a -> 'a;
   meet:      'a ctx -> 'a -> 'a -> 'a;
   widen:     'a ctx -> 'a -> 'a -> 'a;
-  merge:     'a -> 'a * teffect -> 'a * teffect -> 'a;
+  merge:     'a -> 'a * change_map -> 'a * change_map -> 'a;
   print:     printer -> 'a -> unit;
 }

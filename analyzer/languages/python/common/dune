@@ -2,4 +2,5 @@
  (name python_common)
  (package mopsa)
  (libraries python_lang python_hooks mopsa framework universal mopsa_py_parser)
+ (library_flags -linkall)
  (flags :standard -open Python_lang.Lang -open Python_hooks))

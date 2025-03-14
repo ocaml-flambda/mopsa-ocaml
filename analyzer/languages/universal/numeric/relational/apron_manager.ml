@@ -27,4 +27,5 @@ sig
   type t
   val man : t Apron.Manager.t
   val name : string
+  val numeric_name : string
 end

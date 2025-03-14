@@ -1,0 +1,16 @@
+<CONFIG> ::= { "language": <STRING>, "domain": <DOMAIN> }
+
+<DOMAIN> ::= <STRING>
+         | { "domain" : <STRING> (, "semantic" : <STRING>)? }
+         | { "switch" : [<DOMAIN>, ...] (, "semantic" : <STRING>)? }
+         | { "compose": [<DOMAIN>, ...] (, "semantic" : <STRING>)? }
+         | { "apply"  : <STRING> (, "semantic" : <STRING>)? , "on": <DOMAIN> }
+         | { "nonrel" : <VALUE-DOMAIN> (, "semantic" : <STRING>)? }
+         | { "product": [<DOMAIN>, ...] (, "semantic" : <STRING>)?
+             (, "reductions": [<STRING>, ...])? }
+
+<VALUE-DOMAIN>  ::= <STRING>
+         | { "domain" : <STRING> }
+         | { "apply"  : <STRING>, "on": <VALUE-DOMAIN> }
+         | { "union"  : [<VALUE-DOMAIN>, ...] }
+         | { "product": [<VALUE-DOMAIN>, ...] (, "reductions": [<STRING>, ...])? }

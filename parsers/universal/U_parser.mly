@@ -21,6 +21,8 @@
 
 (**
   Parser for a very simple C-like "curly bracket" language.
+
+  The supported portion of the Universal grammar is documented in the [GRAMMAR.md] file.
  *)
 
 %{
@@ -235,6 +237,9 @@ expr:
 
 | e1=ext(expr) o=binary_op e2=ext(expr)
     { AST_binary (o,e1,e2) }
+
+| TOK_RAND TOK_LPAREN TOK_RPAREN
+    { AST_rand_string }
 
 | TOK_RAND TOK_LPAREN e1=ext(sign_int_literal) TOK_COMMA e2=ext(sign_int_literal) TOK_RPAREN
     { AST_rand (e1, e2) }

@@ -36,7 +36,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let search_mro man range flow attr c mro =
       let rec search mro =

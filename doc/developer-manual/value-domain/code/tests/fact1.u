@@ -1,0 +1,8 @@
+int n;
+int y = 1;
+assume (n >= 0);
+while (n != 0) {
+      y = y * n;
+      n = n - 1;
+}
+print();

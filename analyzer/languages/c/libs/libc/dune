@@ -2,4 +2,5 @@
  (name libc)
  (package mopsa)
  (libraries file_descriptor formatted_io mopsa framework c_lang c_common)
+ (library_flags -linkall)
  (flags :standard -open C_lang.Lang -open C_common))

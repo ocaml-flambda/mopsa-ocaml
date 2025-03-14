@@ -672,24 +672,45 @@ long double ceill(long double __x);
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(return) and return >= 0.;
- * ensures:  (__x >= 0. implies return == __x) and
- *           (__x <= 0. implies return == -__x);
+ * case "pos" {
+ *  assumes: __x >= 0.;
+ *  ensures: return == __x;
+ * }
+ *
+ * case "neg" {
+ *  assumes: __x <= 0.;
+ *  ensures: return == -__x;
+ * }
  */
 double fabs(double __x);
 
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(return) and return >= 0.;
- * ensures:  (__x >= 0. implies return == __x) and
- *           (__x <= 0. implies return == -__x);
+ * case "pos" {
+ *   assumes: __x >= 0.;
+ *   ensures: return == __x;
+ * }
+ * 
+ * case "neg" {
+ *  assumes: __x <= 0.;
+ *  ensures: return == -__x;
+ * }
  */
 float fabsf(float __x);
 
 /*$
  * requires: valid_float(__x);
  * ensures:  valid_float(return) and return >= 0.;
- * ensures:  (__x >= 0. implies return == __x) and
- *           (__x <= 0. implies return == -__x);
+ * case "pos" {
+ *  assumes: __x >= 0.;
+ *  ensures: return == __x;
+ * }
+ * 
+ * case "neg" {
+ *  assumes: __x <= 0.;
+ *  ensures: return == -__x;
+ * }
  */
 long double fabsl(long double __x);
 

@@ -48,6 +48,16 @@ let pp_int_interval fmt itv = I.fprint_bot fmt itv
 
 let compare_int_interval itv1 itv2 = I.compare_bot itv1 itv2
 
+(** Creates var \in itv constraint *)
+let constraints_of_itv var (itv : int_itv) range : expr =
+  match itv with
+  | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.Finite hi) ->
+    mk_in var (mk_z lo range) (mk_z hi range) range
+  | Nb (ItvUtils.IntBound.MINF, ItvUtils.IntBound.Finite hi) -> mk_le var (mk_z hi range) range
+  | Nb (ItvUtils.IntBound.Finite lo, ItvUtils.IntBound.PINF) -> mk_ge var (mk_z lo range) range
+  | Nb _ -> mk_true range
+  | BOT -> assert false
+
 
 (** {2 Integer intervals with congruence} *)
 (** ************************************* *)
@@ -74,7 +84,7 @@ let () =
   register_shared_option rounding_option_name {
     key = "-float-rounding-mode";
     category = "Numeric";
-    spec = ArgExt.Symbol (
+    spec = Symbol (
         ["near"; "zero"; "up"; "down"; "rnd"],
         (function
           | "near" -> opt_float_rounding := Apron.Texpr1.Near
@@ -134,7 +144,7 @@ let round () : ItvUtils.FloatItvNan.round =
 let interval_of_num_expr e man flow : int_itv =
   match expr_to_z e with
   | Some n -> I.of_range_bot n n
-  | None -> man.ask (mk_int_interval_query ~fast:true e) flow
+  | None -> ask_and_reduce man.ask (mk_int_interval_query ~fast:true e) flow
 
 (** Evaluate a numeric condition using intervals *)
 let eval_num_cond cond man flow : bool option =

@@ -49,7 +49,7 @@ module Domain =
     (*==========================================================================*)
     let exec _ _ _ = None
 
-    let init prog man flow = flow
+    let init prog man flow = None
 
     let eval exp man flow =
       let range = erange exp in

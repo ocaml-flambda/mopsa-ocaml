@@ -100,6 +100,7 @@ type context = {
     ctx_typedefs: (string,typedef) Hashtbl.t;
     ctx_vars: (string,variable) Hashtbl.t; (* globals (extern & static) *)
     ctx_funcs: (string,func) Hashtbl.t;
+    mutable ctx_file_scope_asm: string RangeMap.t;
 
     ctx_simplify: C_simplify.context;
 
@@ -115,7 +116,7 @@ type context = {
 
 
 
-let create_context (project_name:string) (info:C.target_info) =
+let create_context ?(min_uid=0) (project_name:string) (info:C.target_info) =
   { ctx_name = project_name;
     ctx_tu = [];
     ctx_target = info;
@@ -126,7 +127,7 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_tu_funcs = Hashtbl.create 16;
     ctx_tu_static_vars = Hashtbl.create 16;
     ctx_tu_static_funcs = Hashtbl.create 16;
-    ctx_uid = 0;
+    ctx_uid = min_uid;
     ctx_enums = Hashtbl.create 16;
     ctx_enum_vals = Hashtbl.create 16;
     ctx_records = Hashtbl.create 16;
@@ -134,10 +135,11 @@ let create_context (project_name:string) (info:C.target_info) =
     ctx_vars = Hashtbl.create 16;
     ctx_funcs = Hashtbl.create 16;
     ctx_names = Hashtbl.create 16;
-    ctx_simplify = C_simplify.create_context info;
+    ctx_simplify = C_simplify.create_context ~min_uid info;
     ctx_files = SetExt.StringSet.empty;
     ctx_comments = RangeMap.empty;
     ctx_macros = Hashtbl.create 16;
+    ctx_file_scope_asm = RangeMap.empty;
   }
 
 let new_uid ctx =
@@ -167,7 +169,7 @@ let has_stub_comment l =
     ) l
 
 
-let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) =
+let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: string list) (coms:comment list) (macros:C.macro list) (keep_static:bool) (forced_stub_list: string list) =
   (* utilities *)
   (* ********* *)
 
@@ -302,6 +304,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         | C.Type_LongDouble -> T_float LONG_DOUBLE, no_qual
         | C.Type_Float128 -> T_float FLOAT128, no_qual
         | C.Type_BuiltinFn -> T_builtin_fn, no_qual
+        | C.Type_unknown_builtin s -> T_unknown_builtin s, no_qual
         | _ -> error range "unhandled builtin type" (C.string_of_type t)
        )
 
@@ -336,6 +339,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
   (* translate type declarations *)
   (* *************************** *)
 
+  and fmt_range fmt r = Format.fprintf fmt "%s--%s" (Clang_dump.string_of_loc r.Clang_AST.range_begin) (Clang_dump.string_of_loc r.Clang_AST.range_end)
+
+
   (* enums *)
 
   and enum_decl e =
@@ -354,11 +360,13 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       let range = e.C.enum_range in
       (* integer type *)
       let itype = match e.C.enum_integer_type with
-      | None -> SIGNED_INT
+      | None -> None 
       | Some tq ->
-         match type_qual range tq with
-         | T_integer i, _ -> i
-         | _ -> SIGNED_INT
+        Some (
+          match type_qual range tq with
+          | T_integer i, _ -> i
+          | _ -> SIGNED_INT
+        )
       in
       (* create record *)
       let enum =
@@ -409,12 +417,19 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
         | a::rest ->
            if type_unifiable ctx.ctx_target (T_enum enum) (T_enum a) then (
              (* found compatible type *)
-             if !log_merge then Printf.printf "found enum declaration for '%s' (%s and %s)\n" org_name enum.enum_unique_name a.enum_unique_name;
+             let () =
+               if !log_merge then
+                 Format.printf "found enum declaration for '%s' (%s@%a and %s@%a)@." org_name enum.enum_unique_name fmt_range enum.enum_range a.enum_unique_name fmt_range enum.enum_range
+               else ()
+             in
              enum_unify ctx.ctx_target a enum
            )
            else merge rest
       in
-      let enum = merge (if org_name = "" then [] else Hashtbl.find_all ctx.ctx_enums org_name) in
+      let enum = merge (if org_name = "" then
+                          (Hashtbl.fold (fun _ r acc ->
+                               if Stdlib.compare r.enum_range enum.enum_range = 0 then r::acc else acc) ctx.ctx_enums [])
+                        else Hashtbl.find_all ctx.ctx_enums org_name) in
       if nice_name <> "" then Hashtbl.add ctx.ctx_enums nice_name enum;
       Hashtbl.add ctx.ctx_tu_enums e.C.enum_uid enum;
       enum
@@ -505,8 +520,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       in
       let record =
         if org_name = "" then (
-          Hashtbl.add ctx.ctx_records org_name record;
-          record
+          merge (Hashtbl.fold (fun _ r acc ->
+              if Stdlib.compare r.record_range record.record_range = 0 then r::acc else acc) ctx.ctx_records [])
         )
         else merge (Hashtbl.find_all ctx.ctx_records org_name)
       in
@@ -600,7 +615,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
             prev.var_type <- t;
             prev.var_com <- !c
           with Invalid_argument msg ->
-            warning range "incompatible variable types" (Printf.sprintf "variable %s, type1 %s, type2 %s, %s" org_name (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
+            warning range "incompatible variable types" (Format.asprintf "variable %s (ranges %a %a) type1 %s, type2 %s, %s" org_name fmt_range range fmt_range prev.var_range (string_of_type_qual prev.var_type) (string_of_type_qual typ) msg)
       );
       (* make variable *)
       let var = match prev with
@@ -617,6 +632,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
             var_init = None;
             var_range = range;
             var_com = !c;
+            var_before_stmts = [];
+            var_after_stmts = [];
           }
       in
       if variable_is_global kind && prev = None then Hashtbl.add ctx.ctx_vars org_name var;
@@ -630,7 +647,14 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        | Some i ->
           if var.var_init <> None
           then warning range "variable is defined twice with initializers" org_name;
-          var.var_init <- Some (init func i);
+          let init = init func i in
+          if variable_is_global kind && !simplify then
+            let before, init, after = simplify_global_init ctx.ctx_simplify init in
+            var.var_init <- Some init;
+            var.var_before_stmts <- before;
+            var.var_after_stmts <- after
+          else
+            var.var_init <- Some init;
           var.var_range <- range
         );
       var
@@ -703,6 +727,8 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
                 var_init = None;
                 var_range = p.C.var_range;
                 var_com = p.C.var_com;
+                var_before_stmts = [];
+                var_after_stmts = [];
               }
             in
             Hashtbl.add ctx.ctx_tu_vars p.C.var_uid var;
@@ -731,26 +757,34 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        with Invalid_argument msg ->
          warning range "multiple declaration of a function have incompatible return type" msg
       );
-
       (* favor argument names from functions with a body, a
          non-empty argument list, or from stubs
       *)
-      if f.C.function_body <> None ||
-         (func.func_parameters = [||] &&  params <> [||]) ||
-         has_stub_comment f.C.function_com then (
+      if
+        ((func.func_parameters = [||] &&  params <> [||]) ||
+         has_stub_comment f.C.function_com)
+        &&
+        ((match func.func_body with
+         | None -> true
+         | Some b ->
+           List.length b.blk_stmts = 0) || (List.mem func.func_org_name forced_stub_list) )
+      then
+      (
         func.func_parameters <- params;
         func.func_variadic <- f.C.function_is_variadic
       );
 
       let coms = List.map (fun m -> m, macros_map) f.C.function_com in
       func.func_com <- comment_macro_unify func.func_com coms;
-      (* fill in body *)
+      (* fill in body, override parameters in that case (to avoid inconsistencies) *)
       if func.func_body <> None && f.C.function_body <> None
       then warning range "function is defined twice with a body" org_name;
       (match f.C.function_body with
        | None -> ()
        | Some b ->
-          func.func_body <-
+         func.func_parameters <- params;
+         func.func_variadic <- f.C.function_is_variadic;
+             func.func_body <-
             Some (stmt (Some func) b |> deblock |> resolve_scope);
           func.func_range <- range;
           func.func_name_range <- name_range
@@ -783,7 +817,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     | C.ReturnStmt None -> [S_jump (S_return (None, empty_scope())), range]
 
     | C.SwitchStmt s ->
-       if s.C.switch_init <> None
+      if s.C.switch_init <> None
        then error range "unsupported init in switch statement" "";
        let c = expr func s.C.switch_cond
        and b = deblock (stmt func s.C.switch_body)
@@ -791,11 +825,37 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        [S_jump (S_switch (c,b)), range]
 
     | C.CaseStmt s ->
-       (* TODO: constant folding? *)
-       if s.C.case_end <> None
-       then error range "unsupported case statement extension" "";
-       (S_target (S_case (expr func s.C.case_value, empty_scope())), range)::
-         (stmt func s.C.case_stmt)
+      (* TODO: constant folding? *)
+      begin match s.C.case_end with
+        | Some case_end ->
+          let values = match s.C.case_value.expr_kind, case_end.expr_kind with
+            | ConstantExpr {expr_kind = IntegerLiteral b},
+              ConstantExpr {expr_kind = IntegerLiteral e} ->
+              let rec process i acc =
+                if Z.(i <= e) then
+                  process Z.(i + one) ({case_end with expr_kind = IntegerLiteral i}::acc)
+                else
+                  List.rev acc
+              in
+              process b []
+            | _ ->
+              error range "range case statement extension currently supports constant integers" (Format.asprintf "%s" (Clang_dump.string_of_expr (OptionExt.none_to_exn s.C.case_end)));
+          in 
+          (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+          (stmt func s.C.case_stmt)
+
+        | None ->
+       (* in case of nested case stmts, we extract all of them in other_values, and keep the leaf statements *)
+       let process s =
+         let rec aux acc s = match s.C.stmt_kind with
+           | C.CaseStmt s -> aux (s.C.case_value :: acc) s.C.case_stmt
+           | _ -> List.rev acc, s in
+         aux [] s in 
+       let other_values, statements = process s.C.case_stmt in
+       let values = s.C.case_value :: other_values in 
+       (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
+         (stmt func statements)
+      end
 
     | C.DefaultStmt s ->
        (S_target (S_default (empty_scope())), range)::(stmt func s)
@@ -871,9 +931,32 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        in
        [S_for (i,c,p,b), range]
 
-    | C.AsmStmt ->
-       warning range "asm statement ignored" "";
-       []
+    | C.AsmStmt s ->
+       let a = {
+           asm_style = s.C.asm_style;
+           asm_is_simple = s.C.asm_is_simple;
+           asm_is_volatile = s.C.asm_is_volatile;
+           asm_body = s.C.asm_body;
+           asm_outputs =
+             Array.map
+               (fun o -> {
+                    asm_output_string = o.C.asm_output_string;
+                    asm_output_expr = expr func o.C.asm_output_expr;
+                    asm_output_constraint = o.C.asm_output_constraint;
+                  }
+               ) s.C.asm_outputs;
+           asm_inputs =
+             Array.map
+               (fun o -> {
+                    asm_input_string = o.C.asm_input_string;
+                    asm_input_expr = expr func o.C.asm_input_expr;
+                  }
+               ) s.C.asm_inputs;
+           asm_clobbers = s.C.asm_clobbers;
+           asm_labels = s.C.asm_labels;
+         }
+       in
+       [S_asm a, range]
 
     | s -> error range "unhandled statement" (C.stmt_kind_name s)
 
@@ -1149,6 +1232,11 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
        if a.C.assert_is_failed then
          warning decl.C.decl_range "static assertion failed: %s" a.C.assert_msg
 
+    | C.FileScopeAsmDecl s ->
+       ctx.ctx_file_scope_asm <-
+         RangeMap.add decl.C.decl_range s ctx.ctx_file_scope_asm;
+       debug (fun x -> x) s
+
     | _ -> error decl.C.decl_range "unhandled toplevel declaration" (C.decl_kind_name decl.C.decl_kind)
 
   in
@@ -1244,6 +1332,7 @@ let link_project ctx =
     proj_vars = cvt ctx.ctx_vars (fun t -> t.var_unique_name);
     proj_funcs = cvt ctx.ctx_funcs (fun t -> t.func_unique_name);
     proj_files = ctx.ctx_files |> SetExt.StringSet.elements;
+    proj_file_scope_asm = ctx.ctx_file_scope_asm;
     proj_comments = ctx.ctx_comments;
     proj_macros = cvt ctx.ctx_macros (fun t -> t.macro_name);
   }

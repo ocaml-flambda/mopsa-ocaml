@@ -71,8 +71,8 @@ let render_callstack cs  =
   `List (List.map render_call cs)
 
 let aggregate_alarms report =
-  RangeMap.fold
-    (fun range checks acc ->
+  RangeCallStackMap.fold
+    (fun (range, cs) checks acc ->
        CheckMap.fold
          (fun check diag acc ->
             match diag.diag_kind with
@@ -92,13 +92,13 @@ let render_alarm_messages kinds =
   `String (Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@,") pp_alarm_kind) kinds)
 
 let render_alarms report =
-  RangeMap.fold
-    (fun range checks acc ->
+  RangeCallStackMap.fold
+    (fun (range, cs) checks acc ->
       CheckMap.fold
-        (fun check diag acc ->
+        (fun check diag (safe, total, acc) ->
           match diag.diag_kind with
           | Safe when not !opt_show_safe_checks ->
-             acc
+             safe + 1, total + 1, acc
 
           | Safe | Error | Warning ->
               (* Get the set of alarms kinds and callstacks *)
@@ -131,13 +131,15 @@ let render_alarms report =
                     "title", render_check check;
                     "messages", render_alarm_messages kinds';
                     "range", render_range range;
-                    "callstacks", `List (List.map render_callstack (CallstackSet.elements diag.diag_callstacks))
+                    "callstack", render_callstack diag.diag_callstack
                   ]
               in
+              (if diag.diag_kind = Safe then safe + 1 else safe),
+              total + 1,
               json_diag :: acc
-          | _ -> acc
+          | _ -> safe, total, acc
         ) checks acc
-    ) report.report_diagnostics []
+    ) report.report_diagnostics (0, 0, [])
 
 
 let render_soudness_assumtion h =
@@ -170,20 +172,22 @@ let render_env (var,value)  =
 
 let report man flow ~time ~files ~out : unit =
   let rep = Flow.get_report flow in
+  let safe, total, checks = render_alarms rep in 
   let json  = `Assoc [
       "success", `Bool true;
       "time", `Float time;
       "mopsa_version", `String Version.version;
       "mopsa_dev_version", `String Version.dev_version;
       "files", `List (List.map (fun f -> `String f) files);
-      "checks", `List (render_alarms rep);
+      "selectivity", `String (Format.asprintf "%d/%d" safe total);
+      "checks", `List checks;
       "assumptions", `List (AssumptionSet.elements rep.report_assumptions |> List.map render_soudness_assumtion );
     ]
   in
   print out json
 
 
-let panic exn ~btrace ~time ~files ~out =
+let panic exn ~btrace ~time ~files ~out _ =
   let open Exceptions in
   let error,range,cs =
     match exn with
@@ -212,7 +216,7 @@ let panic exn ~btrace ~time ~files ~out =
   print out (`Assoc assoc)
 
 
-let help (args:arg list) ~out =
+let help (args:ArgExt.arg list) ~out =
   let json  = `List (
       args |>
       List.map (fun arg ->
@@ -223,21 +227,16 @@ let help (args:arg list) ~out =
             "default", `String arg.default;
             "type", `String (
               match arg.spec with
-              | ArgExt.Bool _ -> "bool"
-              | ArgExt.Set _ -> "set"
-              | ArgExt.Clear _ -> "clear"
-              | ArgExt.Unit _ -> "unit"
-              | ArgExt.Unit_delayed _ -> "unit"
-              | ArgExt.Unit_exit _ -> "unit"
-              | ArgExt.String _ -> "string"
-              | ArgExt.Set_string _ -> "string"
-              | ArgExt.String_list _ -> "string list"
-              | ArgExt.Set_string_list _ -> "string list"
-              | ArgExt.Int _ -> "int"
-              | ArgExt.Set_int _ -> "int"
-              | ArgExt.Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
-              | ArgExt.Symbol_delayed (l, _) -> "symbol:" ^ (String.concat "," l)
-              | ArgExt.Symbol_exit (l, _) -> "symbol:" ^ (String.concat "," l)
+              | Bool _ -> "bool"
+              | Set _ -> "set"
+              | Clear _ -> "clear"
+              | Unit _ -> "unit"
+              | String _ -> "string"
+              | Set_string _ -> "string"
+              | Int _ -> "int"
+              | Set_int _ -> "int"
+              | Symbol (l, _) -> "symbol:" ^ (String.concat "," l)
+              | _ -> failwith "Not implemented"
             )
           ]
         )
@@ -248,6 +247,14 @@ let help (args:arg list) ~out =
 let list_domains (domains:string list) ~out =
   let json = `List (
       domains |>
+      List.map (fun d -> `String d)
+    )
+  in
+  print out json
+
+let list_reductions (reductions:string list) ~out =
+  let json = `List (
+      reductions |>
       List.map (fun d -> `String d)
     )
   in

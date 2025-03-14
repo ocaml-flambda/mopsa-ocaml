@@ -61,7 +61,7 @@
                                 {
                                     "product": [
                                         "universal.numeric.values.intervals.integer",
-                                        "universal.numeric.values.powerset"
+                                        "universal.numeric.values.powersets.standard"
                                     ],
                                     "reductions": [
                                         "universal.numeric.reductions.intervals_powerset"

@@ -1,5 +1,3 @@
-# Makefile.  Generated from Makefile.in by configure.
-
 ##############################################################################
 #                                                                            #
 #  This file is part of MOPSA, a Modular Open Platform for Static Analysis.  #
@@ -22,10 +20,16 @@
 ##############################################################################
 
 
-.PHONY: all tests clean distclean
+.PHONY: all tests install clean
 
 all:
 	opam exec -- dune build --profile release -p mopsa
+
+install:
+	opam exec -- dune install --profile release
+
+uninstall:
+	opam exec -- dune uninstall --profile release
 
 clean:
 	opam exec -- dune clean -p mopsa
@@ -60,6 +64,27 @@ python-tests.extension = py
 python-tests.analyzer = mopsa-python
 endif
 
+SV_COMP_FILES = bin/mopsa bin/mopsa-c bin/mopsa-sv-comp share/mopsa/configs/c/*.json share/mopsa/stubs/c/ LICENSE* README.md
+OPAM_BIN = $(shell which ocaml)
+OPAM_ROOT = $(realpath $(shell dirname $(OPAM_BIN))/..)
+
+sv-comp: all
+	rm -rIf mopsa mopsa.zip
+	mkdir mopsa
+	cp $(OPAM_ROOT)/share/apron/lib/libapron.so mopsa/
+	cp $(OPAM_ROOT)/share/apron/lib/libpolkaMPQ.so mopsa/
+	cp $(OPAM_ROOT)/share/apron/lib/liboctMPQ.so mopsa/
+	cp -L -r --parents $(SV_COMP_FILES) mopsa/
+	sed -i '5 i export LD_LIBRARY_PATH=$$(realpath $${MOPSADIR}):$${LD_LIBRARY_PATH}' ./mopsa/bin/mopsa
+	zip -r mopsa.zip mopsa
+
+TMP := $(shell mktemp -d)
+sv-comp-test: sv-comp
+  # The mopsa machine has a compatible libc version
+	unzip -d $(TMP) mopsa.zip
+	sudo docker pull registry.gitlab.com/sosy-lab/benchmarking/competition-scripts/user:latest
+	sudo docker run --rm -i -t --volume=$(TMP):/tool --workdir=/tool registry.gitlab.com/sosy-lab/benchmarking/competition-scripts/user:latest bash
+	rm -rI $(TMP)
 
 tests: $(TESTS)
 
@@ -67,5 +92,5 @@ $(TESTS):
 	@ - $(foreach test, $(shell find $($@.directory) -name "*tests.$($@.extension)"), \
 		echo ""; \
 		echo "Running test $($@.analyzer) $(test)"; \
-		./bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
+		./_build/install/default/bin/$($@.analyzer) -no-warning -unittest $(MOPSAPARAM) $(test); \
 	)

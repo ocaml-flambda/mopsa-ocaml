@@ -2,4 +2,5 @@
  (name heap)
  (public_name mopsa.mopsa_analyzer.universal.heap)
  (libraries framework mopsa lang mopsa_utils)
+ (library_flags -linkall)
  (flags :standard -open Lang))

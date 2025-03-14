@@ -27,9 +27,8 @@
   This allows extracting from an actual build a database of the sources
   we need to consider to analyze a specific binary or library.
 
-  Note: we generate a single binary to wrap a bunch of tools.
-  The name used to invoke the tool, argv.(0), tells which tool to
-  emulate.
+  The name of the wrapped binary is passed as first argument,
+  followed by the binary arguments.
  *)
 
 
@@ -280,10 +279,13 @@ let compile ckind db args =
   let libs = ref StringSet.empty in
   let srcs = ref [] in
 
-  let rec doit = function
+  let rec doit ?(linker=false) = function
     | [] -> ()
 
     (* mode change *)
+    | "-E" :: rest when linker ->
+      (* ignore -Wl,-E, don't change mode *)
+      doit rest
     | ("-E" | "-fsyntax-only" | "-S")::rest ->
        mode := CC_NOTHING;
        doit rest
@@ -339,11 +341,21 @@ let compile ckind db args =
        mode := CC_NOTHING;
        ()
 
+    | ("-soname" | "-rpath")::rest when linker ->
+      (* find the argument of the linker option, and remove it *)
+      let rec aux = function
+        | [] -> []
+        | a::r ->
+          if starts_with "-Wl," a then r
+          else a::(aux r)
+      in
+      doit (aux rest)
+
     | x::rest ->
        if starts_with "-Wl," x then
          (* handle linker options *)
          let opts = List.tl (Str.split (Str.regexp ",") x) in
-         doit (opts@rest)
+         doit ~linker:true (opts@rest)
        else if x.[0] = '-' && String.length x > 1 then
          match x.[1] with
          | 'I' | 'D' | 'U' | 'l' | 'L' ->
@@ -393,7 +405,7 @@ let compile ckind db args =
       )
       (db,[]) !srcs
   in
-  (* link objects and libraries, if neede *)
+  (* link objects and libraries, if needed *)
   match !mode with
   | CC_COMPILE | CC_NOTHING -> db
   | CC_LINK -> db_link db (if !out="" then exe_default else !out) (objs@(StringSet.elements !libs))
@@ -445,13 +457,16 @@ let print dbfile args =
   let db = try load_db dbfile with Unix.Unix_error _ -> empty_db in
 
   (* argument parsing *)
-  let tool = Filename.basename (Sys.argv.(0)) in
+  let tool = wrapper_name in
   let verbose = ref false
   and json = ref false
+  and listobj = ref false
   and files = ref [] in
-  Arg.parse
-    ["-v", Arg.Set verbose, "textual dump of all targets";
-     "-json", Arg.Set json, "JSON dump of all targets"
+  Arg.parse_argv (* FIXME BASH COMPLETION *)
+    (Array.of_list ("mopsa-db"::args))
+    ["-v", Set verbose, "textual dump of all targets";
+     "-json", Set json, "JSON dump of all targets";
+     "-listobj", Set listobj, "list object files for target";
     ]
     (fun x -> files := x::(!files))
     (tool^" [-v | -json | <target list>]");
@@ -471,7 +486,17 @@ let print dbfile args =
       Printf.printf "List of executables:\n";
       List.iter (fun s -> Printf.printf "%s\n" s) (get_executables db)
     )
-    else
+    else if !listobj then
+      List.iter
+        (fun exe ->
+          try
+            let srcs = get_executable_sources db exe in
+            List.iter (fun src -> Printf.printf "%s " src.source_obj) srcs;
+            Printf.printf "\n"
+          with Not_found ->
+            Printf.printf "%s not found\n" exe
+        ) (List.rev !files)
+   else
       List.iter
         (fun exe ->
           try
@@ -510,8 +535,10 @@ let main () =
   let logname = Filename.concat (Filename.dirname dbfile) "mopsa.log" in
   if !log then logfile := open_out_gen [Open_wronly;Open_creat;Open_append] 0o644 logname;
 
-  let tool = Filename.basename (Sys.argv.(0))
-  and args = List.tl (Array.to_list Sys.argv) in
+  let tool, args =
+    if Array.length Sys.argv < 2 then "mospa-db", []
+    else Sys.argv.(1), (List.tl (List.tl (Array.to_list Sys.argv)))
+  in
 
   if !log then Printf.fprintf !logfile "DB: db file is %s\n%!" dbfile;
   if !log then Printf.fprintf !logfile "DB: got %s %a\n%!" tool (print_list " " output_string) args;
@@ -547,8 +574,8 @@ let main () =
   );
 
   (* now execute the original command *)
-  exec_unwrapped Sys.argv (* note: this does not return *)
-
+  let argv = Array.sub Sys.argv 1 (Array.length Sys.argv - 1) in
+  exec_unwrapped argv (* note: this does not return *)
 
 
 let _ = main ()

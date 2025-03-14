@@ -990,12 +990,16 @@ int vsprintf (char *__restrict __s, const char *__restrict __format,
 int vsnprintf (char *__restrict __s, size_t __maxlen,
                const char *__restrict __format, __gnuc_va_list __arg);
 
+/* built-in */
+int vasprintf (char **__restrict __ptr, const char *__restrict __f,
+               __gnuc_va_list __arg);
+
 /*$
  * requires: valid_ptr_or_fail(__ptr);
- * requires: valid_string_or_fail(__f);
+ * requires: valid_string_or_fail(fmt);
  * unsound: "vasprintf format is not checked";
  *
- * case "success" {
+ * case "not-constant" {
  *   local: char* r = _mopsa_new_valid_string();
  *   local: size_t l = strlen(r);
  *   assigns: *__ptr;
@@ -1007,9 +1011,21 @@ int vsnprintf (char *__restrict __s, size_t __maxlen,
  *   ensures: return == -1;
  *  }
  */
-int vasprintf (char **__restrict __ptr, const char *__restrict __f,
-               __gnuc_va_list __arg);
+int _mopsa_general_vasprintf(char **__ptr, const char *fmt);
 
+/*$
+ * requires: valid_ptr_or_fail(__ptr);
+ * requires: valid_string_or_fail(fmt);
+ * local: size_t s = strlen(fmt);
+ * local: char* str = new Memory;
+ * assigns: *__ptr;
+ * ensures: size(str) == s+1;
+ * ensures: forall size_t i in [0, s]: str[i] == fmt[i];
+ * ensures: (*__ptr)' == str;
+ * ensures: return >= 0 and return == s;
+ */
+int _mopsa_constant_vasprintf(char **__ptr, const char *fmt);
+ 
 /*$
  * local:    void* f = _mopsa_find_file_resource(__fd);
  * requires: alive_resource(f, FileRes);

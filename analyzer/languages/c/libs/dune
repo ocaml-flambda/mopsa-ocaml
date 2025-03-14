@@ -2,4 +2,5 @@
  (name c_libs)
  (package mopsa)
  (libraries libc mopsa framework c_lang c_common)
+ (library_flags -linkall)
  (flags :standard -open C_lang.Lang -open C_common))

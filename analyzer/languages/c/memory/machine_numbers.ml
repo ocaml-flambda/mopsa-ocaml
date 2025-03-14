@@ -57,52 +57,52 @@ struct
 
   let opt_signed_arithmetic_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-arithmetic-overflow";
       category = "C";
       doc = " check overflows in signed integer arithmetic";
-      spec = ArgExt.Bool (fun b -> opt_signed_arithmetic_overflow := b);
+      spec = Bool (fun b -> opt_signed_arithmetic_overflow := b);
       default = "true";
     }
 
   let opt_unsigned_arithmetic_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-arithmetic-overflow";
       category = "C";
       doc = " check overflows in unsigned integer arithmetic";
-      spec = ArgExt.Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
+      spec = Bool (fun b -> opt_unsigned_arithmetic_overflow := b);
       default = "false";
     }
 
   let opt_signed_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-signed-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to signed integer";
-      spec = ArgExt.Bool (fun b -> opt_signed_implicit_cast_overflow := b);
+      spec = Bool (fun b -> opt_signed_implicit_cast_overflow := b);
       default = "true";
     }
 
   let opt_unsigned_implicit_cast_overflow = ref true
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-unsigned-implicit-cast-overflow";
       category = "C";
       doc = " check overflows in implicit casts to unsigned integer";
-      spec = ArgExt.Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
+      spec = Bool (fun b -> opt_unsigned_implicit_cast_overflow := b);
       default = "true";
     }
 
 
   let opt_explicit_cast_overflow = ref false
   let () =
-    register_domain_option name {
+    register_shared_option name {
       key = "-c-check-explicit-cast-overflow";
       category = "C";
       doc = " check overflows in explicit casts";
-      spec = ArgExt.Bool (fun b -> opt_explicit_cast_overflow := b);
+      spec = Bool (fun b -> opt_explicit_cast_overflow := b);
       default = "false";
     }
 
@@ -113,7 +113,7 @@ struct
       key = "-c-check-float-invalid-operation";
       category = "C";
       doc = " invalid float operations generate errors instead of silent NaN";
-      spec = ArgExt.Bool (fun b -> opt_float_invalid_operation := b);
+      spec = Bool (fun b -> opt_float_invalid_operation := b);
       default = "false";
     }
 
@@ -123,7 +123,7 @@ struct
       key = "-c-check-float-division-by-zero";
       category = "C";
       doc = " float divisions by 0 generate errors instead of infinities";
-      spec = ArgExt.Bool (fun b -> opt_float_division_by_zero := b);
+      spec = Bool (fun b -> opt_float_division_by_zero := b);
       default = "false";
     }
 
@@ -133,10 +133,19 @@ struct
       key = "-c-check-float-overflow";
       category = "C";
       doc = " float overflows generate errors";
-      spec = ArgExt.Bool (fun b -> opt_float_overflow := b);
+      spec = Bool (fun b -> opt_float_overflow := b);
       default = "false";
     }
 
+  let opt_mnum_fast_query = ref true
+  let () =
+    register_domain_option name {
+      key = "-c-check-overflows-with-relational";
+      category = "C";
+      doc = " check for overflows using the relational abstract domains too (more expensive but can be more precise)";
+      spec = Clear opt_mnum_fast_query;
+      default = string_of_bool !opt_mnum_fast_query;
+    }
 
 
   (** Numeric variables *)
@@ -234,26 +243,35 @@ struct
     let typ = cexp.etyp in
     (* Function that performs the actual check *)
     let do_check ?(exp=cexp) raise_alarm =
-      let rmin, rmax = rangeof typ in
+      let rmin, rmax = rangeof typ flow in
       let ritv = IntItv.of_z rmin rmax in
-      let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query nexp) flow in
       if IntItv.subset itv ritv then
         safe_c_integer_overflow_check range man flow |>
         Eval.singleton cexp |>
         Eval.add_translation "Universal" nexp
       else
-        let nexp' = wrap_expr nexp (rmin, rmax) range in
-        let flow' =
-          if raise_alarm
-          then
-            if IntItv.meet itv ritv |> IntItv.is_bottom then
-              raise_c_integer_overflow_alarm ~warning:false exp nexp typ range man flow flow
-            else
-              raise_c_integer_overflow_alarm ~warning:true exp nexp typ range man flow flow
-          else flow
-        in
-        Eval.singleton cexp flow' |>
-        Eval.add_translation "Universal" nexp'
+        let itv =
+          if not !opt_mnum_fast_query then
+            ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query ~fast:false nexp) flow
+          else itv in 
+        if not !opt_mnum_fast_query && IntItv.subset itv ritv then
+          safe_c_integer_overflow_check range man flow |>
+          Eval.singleton cexp |>
+          Eval.add_translation "Universal" nexp
+        else
+          let nexp' = wrap_expr nexp (rmin, rmax) range in
+          let flow' =
+            if raise_alarm
+            then
+              if IntItv.meet itv ritv |> IntItv.is_bottom then
+                raise_c_integer_overflow_alarm ~warning:false exp nexp typ range man flow flow
+              else
+                raise_c_integer_overflow_alarm ~warning:true exp nexp typ range man flow flow
+            else flow
+          in
+          Eval.singleton cexp flow' |>
+          Eval.add_translation "Universal" nexp'
     in
     match ekind cexp with
     (* Arithmetics on signed integers may overflow *)
@@ -309,7 +327,7 @@ struct
     let n = match ekind nexp with E_binop(_,_,n) -> n | _ -> assert false in
     let range = cexp.erange in
     (* Condition: n ∈ [0, bits(t) - 1] *)
-    let bits = sizeof_type t |> Z.mul (Z.of_int 8) in
+    let bits = sizeof_type t flow |> Z.mul (Z.of_int 8) in
     let cond = mk_in n (mk_zero range) (mk_z (Z.pred bits) range) range in
     assume cond
       ~fthen:(fun tflow ->
@@ -328,7 +346,7 @@ struct
   let check_float_valid cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     let prec = get_c_float_precision typ in
-    let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
+    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
     let flow', nexp' =
       if !opt_float_invalid_operation then
         if itv.nan then
@@ -375,7 +393,7 @@ struct
     let zero = mk_float ~prec 0. range in
     let cond = ne denominator zero range in
     if !opt_float_division_by_zero then
-      let itv = man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
+      let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec denominator) flow in
       if FltItv.contains_zero itv then
         (* division by zero possible, make two cases *)
         assume cond
@@ -418,7 +436,7 @@ struct
 
     (* 𝔼⟦ ⊤int ⟧ *)
     | E_constant(C_top t) when is_c_int_type t ->
-      let l, u = rangeof t in
+      let l, u = rangeof t flow in
       let nexp = mk_z_interval l u ~typ:(to_num_type t) exp.erange in
       Eval.singleton exp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -453,7 +471,7 @@ struct
       man.eval e flow >>$? fun e flow ->
       let cexp = rebuild_c_expr exp [e] in
       let ne = get_expr_translation "Universal" e in
-      let _,hi = rangeof exp.etyp in
+      let _,hi = rangeof exp.etyp flow in
       let nexp = sub (mk_z hi exp.erange) ne exp.erange in
       Eval.singleton cexp flow |>
       Eval.add_translation "Universal" nexp |>
@@ -606,7 +624,7 @@ struct
 
   let add_var_bounds vv t flow =
     if is_c_int_type t then
-      let l,u = rangeof t in
+      let l,u = rangeof t flow in
       let vv = match ekind vv with E_var (vv, _) -> vv | _ -> assert false in
       Framework.Combiners.Value.Nonrel.add_var_bounds_flow vv (C_int_interval (ItvUtils.IntBound.Finite l,ItvUtils.IntBound.Finite u)) flow
     else
@@ -628,7 +646,7 @@ struct
       | Variable_local _, None | Variable_func_static _, None ->
         (* The value of the variable is undetermined (C99 6.7.8.10) *)
         if is_c_int_type v.vtyp then
-          let l,u = rangeof v.vtyp in
+          let l,u = rangeof v.vtyp flow in
           Eval.singleton (mk_z_interval l u range) flow
         else
           Eval.singleton (mk_top (to_num_type v.vtyp) range) flow
@@ -640,9 +658,9 @@ struct
     in
 
     init' >>$ fun init' flow ->
-    man.exec (mk_add vv range) flow ~route:universal >>% fun flow ->
+    man.exec (mk_add vv range) flow  >>% fun flow ->
     add_var_bounds vv v.vtyp flow |>
-    man.exec (mk_assign vv init' range) ~route:universal
+    man.exec (mk_assign vv init' range) 
 
 
   let exec stmt man flow =
@@ -652,9 +670,9 @@ struct
       OptionExt.return
 
     | S_assign({ekind = E_var _} as lval, rval) when etyp lval |> is_c_num_type ->
-      man.eval ~translate:"Universal" lval flow >>$? fun lval' flow ->
+      let lval' = mk_num_var_expr lval in
       man.eval ~translate:"Universal" rval flow >>$? fun rval' flow ->
-      man.exec (mk_assign lval' rval' stmt.srange) flow ~route:universal |>
+      man.exec (mk_assign lval' rval' stmt.srange) flow  |>
       OptionExt.return
 
     | S_assume(e) when is_c_num_type e.etyp ->
@@ -662,19 +680,19 @@ struct
       begin match expr_to_z e' with
         | Some n when Z.(n = zero) -> Post.return (Flow.remove T_cur flow)
         | Some n                   -> Post.return flow
-        | None                     -> man.exec (mk_assume e' stmt.srange) flow ~route:universal
+        | None                     -> man.exec (mk_assume e' stmt.srange) flow 
       end |>
       OptionExt.return
 
     | S_add ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       add_var_bounds vv v.etyp flow |>
-      man.exec (mk_add vv stmt.srange) ~route:universal |>
+      man.exec (mk_add vv stmt.srange)  |>
       OptionExt.return
 
     | S_remove ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
-      man.exec (mk_remove vv stmt.srange) flow ~route:universal |>
+      man.exec (mk_remove vv stmt.srange) flow  |>
       OptionExt.return
 
     | S_rename(({ekind = E_var _} as v1), ({ekind = E_var _} as v2))
@@ -683,7 +701,7 @@ struct
       ->
       let vv1 = mk_num_var_expr v1 in
       let vv2 = mk_num_var_expr v2 in
-      man.exec (mk_rename vv1 vv2 stmt.srange) flow ~route:universal |>
+      man.exec (mk_rename vv1 vv2 stmt.srange) flow  |>
       OptionExt.return
 
     | S_expand({ekind = E_var _} as e, el)
@@ -692,7 +710,7 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_expand v vl stmt.srange) flow ~route:universal |>
+      man.exec (mk_expand v vl stmt.srange) flow  |>
       OptionExt.return
 
     | S_fold(({ekind = E_var _} as e),el)
@@ -701,19 +719,19 @@ struct
       ->
       let v = mk_num_var_expr e in
       let vl = List.map mk_num_var_expr el in
-      man.exec (mk_fold v vl stmt.srange) flow ~route:universal |>
+      man.exec (mk_fold v vl stmt.srange) flow  |>
       OptionExt.return
 
     | S_forget ({ekind = E_var _} as v) when is_c_num_type v.etyp ->
       let vv = mk_num_var_expr v in
       let top =
         if is_c_int_type v.etyp then
-          let lo,hi = rangeof v.etyp in
+          let lo,hi = rangeof v.etyp flow in
           mk_z_interval lo hi stmt.srange
         else
           mk_top vv.etyp stmt.srange
       in
-      man.exec (mk_assign vv top stmt.srange) flow ~route:universal |>
+      man.exec (mk_assign vv top stmt.srange) flow  |>
       OptionExt.return
 
     | _ -> None
@@ -722,7 +740,7 @@ struct
   let ask _ _ _ =
     None
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
 
   (** {2 Pretty printer} *)

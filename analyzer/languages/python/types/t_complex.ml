@@ -35,7 +35,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let eval exp man flow =
       let range = erange exp in

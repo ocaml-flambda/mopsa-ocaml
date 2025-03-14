@@ -44,7 +44,7 @@ let () =
     key = "-decreasing-iter";
     category = "Loops";
     doc = " number of decreasing iterations after stabilization";
-    spec = ArgExt.Set_int opt_decreasing_iter;
+    spec = Set_int (opt_decreasing_iter, ArgExt.empty);
     default = "1";
   }
  
@@ -63,7 +63,7 @@ struct
 
   let checks = []
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
 
   (* flow iterator for CFG *)                         

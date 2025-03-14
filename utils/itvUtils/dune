@@ -3,4 +3,5 @@
  (public_name mopsa.mopsa_utils.itvUtils)
  (libraries utils_core zarith)
  (flags (:standard -open Utils_core))
+ (library_flags -linkall)
  (foreign_stubs (language c) (names floats_round)))

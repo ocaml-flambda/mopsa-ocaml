@@ -1,1 +1,7 @@
-mopsa-wrapper
+#!/bin/bash
+
+MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/../.."
+TOOL="$(basename "$0")"
+
+MOPSADB=${MOPSADB-`pwd`/mopsa.db} ${MOPSADIR}/bin/build_wrapper.exe ${TOOL} "$@"
+

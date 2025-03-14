@@ -1,6 +1,6 @@
 # Contents
 
-The Docker image has MOPSA compiled from the master branch on the GitLab repository.
+The Docker image has MOPSA compiled from the main branch on the GitLab repository.
 This removes the need for the user to compile MOPSA from source and can be useful for Continuous Integration.
 
 

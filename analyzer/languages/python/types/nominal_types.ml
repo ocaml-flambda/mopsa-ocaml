@@ -35,7 +35,7 @@ struct
 
   let checks = []
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
   let class_le (_, b: class_address * py_object list) (d, _: class_address * py_object list) : bool =
     let res = List.exists (fun x -> match akind @@ fst x with

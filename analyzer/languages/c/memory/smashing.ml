@@ -315,34 +315,34 @@ struct
 
   (** Functions for managing smash variables *)
   let add_smash base styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_add_var (mk_smash_var {base;styp}) range)
-      ~route:scalar flow
+       flow
 
   let remove_smash base styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_remove_var (mk_smash_var {base;styp}) range)
-      ~route:scalar flow
+       flow
 
   let rename_smash base1 base2 styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_rename_var (mk_smash_var {base=base1;styp}) (mk_smash_var {base=base2;styp}) range)
-      ~route:scalar flow
+       flow
 
   let forget_smash base styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_forget_var (mk_smash_var {base;styp}) range)
-      ~route:scalar flow
+       flow
 
   let expand_smash base basel styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_expand_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~route:scalar flow
+       flow
 
   let fold_smash base basel styp range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_fold_var (mk_smash_var {base;styp}) (List.map (fun b -> mk_smash_var {base=b;styp}) basel) range)
-      ~route:scalar flow
+       flow
 
 
   (** {2 Offset of the first uninitialized element} *)
@@ -377,58 +377,42 @@ struct
 
   (** Functions for managing uninit variables *)
   let add_uninit base range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_add_var (mk_uninit_var base) range)
-      ~route:scalar flow
+       flow
 
   let set_uninit_to_base_size base range man flow =
     eval_base_size base range man flow >>$ fun size flow ->
-    man.exec (mk_assign (mk_uninit_expr base range) size range) ~route:scalar flow
+    man.exec ~route:scalar (mk_assign (mk_uninit_expr base range) size range)  flow
 
   let remove_uninit base range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_remove_var (mk_uninit_var base) range)
-      ~route:scalar flow
+       flow
 
   let rename_uninit base1 base2 range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_rename_var (mk_uninit_var base1) (mk_uninit_var base2) range)
-      ~route:scalar flow
+       flow
 
   let forget_uninit base range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_forget_var (mk_uninit_var base) range)
-      ~route:scalar flow
+       flow
 
   let expand_uninit base basel range man flow =
-    man.exec
+    man.exec ~route:scalar 
       (mk_expand_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~route:scalar flow
+       flow
 
   let fold_uninit base basel range man flow =
-    man.exec
+    man.exec ~route:scalar
       (mk_fold_var (mk_uninit_var base) (List.map mk_uninit_var basel) range)
-      ~route:scalar flow
+       flow
 
   
   (** {2 Unification} *)
   (** *************** *)
-
-  
-  (** [is_aligned o n man flow] checks whether the value of an
-      expression [o] is aligned w.r.t. type [t] *)
-  let is_aligned ?(route=toplevel) e t man flow =
-    let s = sizeof_type t in
-    if is_c_expr_equals_z e Z.zero then true else
-    if Z.(s = one) then true
-    else
-      man.eval ~route e flow |>
-      Cases.for_all_result (fun ee flow ->
-          (* Compute the step-interval of ee *)
-          let _, c = man.ask (Universal.Numeric.Common.mk_int_congr_interval_query ee) flow in
-          let c' = Bot.Nb (s,Z.zero) in
-          Universal.Numeric.Common.C.included_bot c c'
-        )
 
   (** Synthesis function of integer smashes *)
   let phi_int s init range man flow =
@@ -436,11 +420,12 @@ struct
        bases where the uninit offset is not aligned w.r.t. to
        the type of the smash *)
     if Init.is_partial init
-    && not (is_aligned (mk_uninit_expr s.base range) (typ_of_styp s.styp) ~route:scalar man flow)
+    && not (Common.Quantified_offset.is_aligned (mk_uninit_expr s.base range) (sizeof_type (typ_of_styp s.styp) flow) man flow)
     then
+      let () = debug "phi_int impossible" in 
       Post.return flow
     else
-      (* Two cases are considered (inspired synthesis function of the Cells domain):
+      (* Three cases are considered (inspired synthesis function of the Cells domain):
 
          Case #1: ∃ s' : sizeof(s) = sizeof(s')
                ⇒ s = wrap(s', rangeof(s))
@@ -454,6 +439,7 @@ struct
                   ∨ ...
                   ∨ s = s' / 2^(8*(sizeof(s') - 1)) mod 256
       *)
+      let () = debug "phi_int" in 
       let int_type = match s.styp with Int t -> t | _ -> assert false in
       let esmash_strong = mk_smash_expr s ~mode:(Some STRONG) range in
       STypeSet.fold
@@ -462,32 +448,32 @@ struct
            let esmash' = mk_smash_expr s' range in
            match styp' with
            (* Case #1 *)
-           | Int _ when Z.(sizeof_styp s.styp = sizeof_styp styp') ->
-             let e = wrap_expr esmash' (rangeof_styp s.styp) range in
+           | Int _ when Z.(sizeof_styp s.styp flow = sizeof_styp styp' flow) ->
+             let e = wrap_expr esmash' (rangeof_styp s.styp flow) range in
              let cond = eq esmash_strong e range in
-             Post.bind (man.exec (mk_assume cond range) ~route:scalar) acc
+             Post.bind (man.exec (mk_assume cond range) ) acc
 
            (* Case #2 *)
            | Int C_unsigned_char ->
-             let n = sizeof_styp s.styp |> Z.to_int in
+             let n = sizeof_styp s.styp flow |> Z.to_int in
              let rec sum i =
                if i = 0 then esmash' else
                  let m = Z.(of_int 256 ** i) in
                  add (sum (i-1)) (mul (mk_z m range) esmash' range) range
              in
-             let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp) range in
+             let e = wrap_expr (sum (n-1)) (rangeof_styp s.styp flow) range in
              let cond = eq esmash_strong e range in
-             Post.bind (man.exec (mk_assume cond range) ~route:scalar) acc
+             Post.bind (man.exec (mk_assume cond range) ) acc
 
            (* Case #3 *)
            | Int _ when int_type = C_unsigned_char ->
              acc >>% fun flow ->
-             let n = sizeof_styp styp' |> Z.to_int in
+             let n = sizeof_styp styp' flow |> Z.to_int in
              let rec aux i =
                if i = n then [] else
                  let e = _mod_ (div esmash' (mk_z Z.(of_int 2 ** Stdlib.(8 * i)) range) range) (mk_int 256 range) range in
                  let cond = eq esmash_strong e range in
-                 man.exec (mk_assume cond range) ~route:scalar flow :: aux (i+1)
+                 man.exec (mk_assume cond range)  flow :: aux (i+1)
              in
              aux 0 |>
              Post.join_list ~empty:(fun () -> Post.return flow)
@@ -496,11 +482,42 @@ struct
            | _ -> acc
         ) (Init.types init) (Post.return flow)
 
+  let phi_nullptr s init range man flow =
+    let () = debug "phi_nullptr" in 
+    (* Synthesis is not supported for partially initialized
+       bases where the uninit offset is not aligned w.r.t. to
+       the type of the smash *)
+    if Init.is_partial init
+    && not (Common.Quantified_offset.is_aligned (mk_uninit_expr s.base range) (sizeof_type (typ_of_styp s.styp) flow) man flow)
+    then
+      let () = debug "nonaligned case?!" in 
+      Post.return flow
+    else
+      let init_types = Init.types init in
+      let () = debug "%a" (format @@ STypeSet.print) init_types in 
+      if STypeSet.subset (STypeSet.singleton (Int (C_unsigned_char))) init_types then
+        (* FIXME: check it works for multiple pointers, not sure in the current state *)
+        (* FIXME: update local state too?! *)
+        (* let's try the synthesis *)
+        let s_u8 = mk_smash s.base (T_c_integer C_unsigned_char) in 
+        let s_u8 = mk_smash_expr s_u8 range in
+        man.eval s_u8 flow ~translate:"Universal" >>$ fun s_u8 flow ->
+        (* if the smash is reduced to {0}, we can synthesize a NULL pointer *)
+        let () = debug "querying for %a:%a" pp_expr s_u8 pp_typ (etyp s_u8) in 
+        let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query s_u8) flow in
+        if Bot.bot_dfl1 false ItvUtils.IntItv.is_zero itv then
+          (* TODO: synthesis for null pointers *)
+          let newsmash = mk_smash_expr s ~mode:(Some STRONG) range in
+          man.exec (mk_assume (eq newsmash (mk_zero range) range) range) flow
+        else 
+        Post.return flow
+      else 
+        Post.return flow 
 
   (** [phi s r m f] synthesizes the value of smash [s] when existing
       smashes in the same base exist *)
   let phi (s:smash) range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     let init = State.find s.base a in
     match init with
     (* Only fully initialized bases are supported for the moment *)
@@ -509,11 +526,14 @@ struct
 
     | Init.Partial ts
     | Init.Full ts ->
+      let () = debug "here, ts = %a" (format @@ STypeSet.print) ts in 
       if STypeSet.mem s.styp ts then
+        let () = debug "no synthesis required" in 
         Post.return flow
       else
-        let flow = set_env T_cur (State.add s.base (Init.add s.styp init) a) man flow in
-        man.exec (mk_add_var (mk_smash_var s) range) ~route:scalar flow >>% fun flow ->
+        let () = debug "trying synthesis" in 
+        set_env T_cur (State.add s.base (Init.add s.styp init) a) man flow >>% fun flow ->
+        man.exec (mk_add_var (mk_smash_var s) range)  flow >>% fun flow ->
         if STypeSet.is_empty ts then
           Post.return flow
         else
@@ -524,26 +544,28 @@ struct
         (* Synthesis of integer values *)
         | Int int_type -> phi_int s init range man flow
 
-        (* No synthesis for pointer values *)
-        | Ptr -> Post.return flow
+        (* Synthesis of NULL pointer if possible. No synthesis otherwise *)
+        | Ptr ->
+          phi_nullptr s init range man flow 
 
 
   (** Singleton unification range *)
   let unify_range = tag_range (mk_fresh_range ()) "smashing-unification"
 
-  let unify man sman ctx ((a,s):t*'s) ((a',s'):t*'s) : t * 's * t * 's =
+  let unify man ctx ((a,s):t*'s) ((a',s'):t*'s) : 's * 's =
+    let () = debug "unification!" in 
     State.fold2zo
       (* No unification for bases present in one branch only *)
       (fun b init acc -> acc)
       (fun b' init' acc -> acc)
-      (fun base init init' (a,s,a',s') ->
-         let doit a init s other_init =
+      (fun base init init' (s,s') ->
+         let doit init s other_init =
            match init, other_init with
-           | Init.Bot, _ | _, Init.Bot -> a,s
+           | Init.Bot, _ | _, Init.Bot -> s
 
-           | Init.None, Init.None -> a,s
+           | Init.None, Init.None -> s
 
-           | Init.Partial _, Init.None -> a,s
+           | Init.Partial _, Init.None -> s
 
            (* The base becomes partially initialized from offset 0 *)
            | Init.None, Init.Partial _
@@ -551,41 +573,41 @@ struct
              (* Add the uninit variable and initialize it to 0 *)
              (* Note that there is no need to add a smashes in order
                 to keep the values of the other flow *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             sub_env_exec (man.exec (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ~route:scalar) ctx man sman a s
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (man.exec (mk_assign (mk_uninit_expr base unify_range) zero unify_range) ) ctx man
 
            (* The base becomes partially initialized from offset size(base) *)
            | Init.Full _, Init.None ->
              (* Add the uninit variable and initialize it to size *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             sub_env_exec (set_uninit_to_base_size base unify_range man) ctx man sman a s
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (set_uninit_to_base_size base unify_range man) ctx man
 
            (* The base becomes partially initialized from offset size(base) with possible synthesis of missing smashes *)
            | Init.Full ts1, Init.Partial ts2 ->
              (* Add the uninit variable and initialize it to size(base) *)
-             let a,s = sub_env_exec (add_uninit base unify_range man) ctx man sman a s in
-             let a,s = sub_env_exec (set_uninit_to_base_size base unify_range man) ctx man sman a s in
+             env_exec (add_uninit base unify_range man) ctx man s |>
+             env_exec (set_uninit_to_base_size base unify_range man) ctx man |>
              (* Synthesize missing smashes *)
              STypeSet.fold
-               (fun styp (a,s) ->
-                  sub_env_exec (phi {base; styp} unify_range man) ctx man sman a s
-               ) (STypeSet.diff ts2 ts1) (a,s)
+               (fun styp s ->
+                  env_exec (phi {base; styp} unify_range man) ctx man s
+               ) (STypeSet.diff ts2 ts1)
 
            (* Initialization state will not change, but possible synthesis of missing smashes *)
            | Init.Partial ts1, Init.Full ts2
            | Init.Partial ts1, Init.Partial ts2
            | Init.Full ts1, Init.Full ts2 ->
              STypeSet.fold
-               (fun styp (a,s) ->
-                  sub_env_exec (phi {base; styp} unify_range man) ctx man sman a s
-               ) (STypeSet.diff ts2 ts1) (a,s)
+               (fun styp s ->
+                  env_exec (phi {base; styp} unify_range man) ctx man s
+               ) (STypeSet.diff ts2 ts1) s
 
          in
-         let a,s = doit a init s init' in
-         let a',s' = doit a' init' s' init in
-         (a,s,a',s')
+         let s = doit init s init' in
+         let s' = doit init' s' init in
+         (s,s')
       )
-      a a' (a,s,a',s')
+      a a' (s,s')
 
 
 
@@ -598,30 +620,40 @@ struct
 
   let is_bottom _ = false
 
-  let subset man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let subset man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     true, s, s'
 
-  let join man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let join man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     State.join a a', s, s'
 
-  let meet man sman ctx (a,s) (a',s') =
-    let a, s, a', s' = unify man sman ctx (a,s) (a',s') in
+  let meet man ctx (a,s) (a',s') =
+    let s, s' = unify man ctx (a,s) (a',s') in
     State.join a a', s, s'
 
-  let widen man sman ctx (a,s) (a',s') =
-    let (a, s, s') = join man sman ctx (a,s) (a',s') in
+  let widen man ctx (a,s) (a',s') =
+    let (a, s, s') = join man ctx (a,s) (a',s') in
     (a, s, s', true)
 
   let merge _ _ _  = assert false
 
 
+
+  (** {2 Pretty printer} *)
+  (** ****************** *)
+
+  let print_state printer (a:t) =
+    pprint printer ~path:[Key "smash"] (pbox State.print a)
+
+  let print_expr man flow printer exp = ()
+
   (** {2 Initialization procedure} *)
   (** **************************** *)
 
   let init prog man flow =
-    set_env T_cur State.empty man flow
+    set_env T_cur State.empty man flow |>
+    Option.some
 
 
   (** {2 Utility functions} *)
@@ -646,13 +678,21 @@ struct
 
   (** Predicate defining interesting bases to smash *)
   let rec is_interesting_base base =
+    let () = debug "is_interesting_base %a" pp_base base in 
     match base with
     | { base_valid = false } -> false
+
+    (* | { base_kind = Var {vkind = V_c_smash s}; base_valid = true } -> *)
+    (*   is_interesting_base s.base *)
 
     | { base_kind = Var {vkind = Cstubs.Aux_vars.V_c_primed_base base}; base_valid = true } ->
        is_interesting_base base
 
-    | { base_kind = Var v } when is_c_array_type v.vtyp ->
+    | { base_kind = Var v } 
+      when is_c_array_type v.vtyp || is_c_record_type v.vtyp -> 
+      (* FIXME: keep structs having more than N fields or containing arrays? *)
+      (* FIXME: see what is sufficient for uthash, but this is too constraining... *)
+      let () = debug "is_c_array_type" in
       (* Keep arrays of scalars or records with fields having the same scalar type *)
       let rec aux t =
         match remove_typedef_qual t with
@@ -671,9 +711,16 @@ struct
       in
       aux v.vtyp
 
+
     | { base_kind = Addr _ } -> true
 
-    | _ -> false
+    (* | { base_kind = Var v } -> *)
+    (*   is_c_record_type v.vtyp ||  *)
+    (*   let () = debug "%a:%a" pp_var v pp_typ v.vtyp in *)
+    (*   false  *)
+
+    | _ ->
+      false
 
 
   (** Fold an exec transfer function over a set of stypes *)
@@ -703,11 +750,13 @@ struct
 
   (** 𝕊⟦ add(base); ⟧ *)
   let exec_add_base base range man flow =
+    let () = debug "adding base %a?" pp_base base in 
     if not (is_interesting_base base) then
+      let () = debug "uninteresting base %a, skipping add" pp_base base in 
       Post.return flow
     else
-      map_env T_cur (State.add base Init.None) man flow |>
-      Post.return
+      let () = debug "ok" in 
+      map_env T_cur (State.add base Init.None) man flow
 
 
   (** 𝕊⟦ type v; ⟧ *)
@@ -720,9 +769,9 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       (* Remove the base from the map *)
-      let flow = set_env T_cur (State.remove base a) man flow in
+      set_env T_cur (State.remove base a) man flow >>% fun flow ->
       (* Remove associated vars *)
       exec_smashes (remove_smash base) base a range man flow >>% fun flow ->
       exec_uninit
@@ -737,8 +786,8 @@ struct
       (* Remove base2 before doing renaming *)
       exec_remove_base base2 range man flow >>% fun flow ->
       (* Rename the base in the map *)
-      let a = get_env T_cur man flow in
-      let flow = set_env T_cur (State.rename base1 base2 a) man flow in
+      get_env T_cur man flow >>$ fun a flow ->
+      set_env T_cur (State.rename base1 base2 a) man flow >>% fun flow ->
       (* Rename associated vars *)
       exec_smashes (rename_smash base1 base2) base1 a range man flow >>% fun flow ->
       exec_uninit (rename_uninit base1 base2) base1 a range man flow
@@ -750,12 +799,12 @@ struct
       Post.return flow
     else
       (* Expand the base in the map *)
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let init = State.find base a in
       let a' = List.fold_left (fun acc b ->
           State.add b init acc
         ) a bases in
-      let flow = set_env T_cur a' man flow in
+      set_env T_cur a' man flow >>% fun flow ->
       (* Expand associated variables *)
       exec_smashes (expand_smash base bases) base a range man flow >>% fun flow ->
       exec_uninit (expand_uninit base bases) base a range man flow
@@ -772,21 +821,21 @@ struct
       | x::y::z -> panic_at range "smash: folding of multiple bases not supported"
 
       | [base'] when not (is_interesting_base base') ->
-        let a = get_env T_cur man flow in
-        let flow = set_env T_cur (State.add base Init.None a) man flow in
+        get_env T_cur man flow >>$ fun a flow ->
+        set_env T_cur (State.add base Init.None a) man flow >>% fun flow ->
         exec_smashes (remove_smash base) base a range man flow >>% fun flow ->
         exec_uninit (remove_uninit base) base a range man flow
 
       | [base'] ->
         (* Fold the base in the map *)
-        let a = get_env T_cur man flow in
+        get_env T_cur man flow >>$ fun a flow ->
         let init = State.find base a in 
         let init' = State.find base' a in
         let init'' = if base_mode base = STRONG then init' else Init.join init init' in
         let a' = State.add base init'' a |>
                  State.remove base'
         in
-        let flow = set_env T_cur a' man flow in
+        set_env T_cur a' man flow >>% fun flow ->
         (* Fold associated variables *)
         exec_smashes (fold_smash base [base']) base' a range man flow >>% fun flow ->
         exec_uninit (fold_uninit base [base']) base' a range man flow
@@ -798,7 +847,7 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       let init = State.find base a in
       let s = mk_smash base lval.etyp in
       let vsmash = mk_smash_var s in
@@ -813,20 +862,20 @@ struct
            than the one with the type of lval, which will be put to
            top after *)
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-        let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
+        set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
         if STypeSet.mem s.styp ts then
-          man.exec (mk_forget_var vsmash range) ~route:scalar flow
+          man.exec (mk_forget_var vsmash range)  flow
         else
-          man.exec (mk_add_var vsmash range) ~route:scalar flow
+          man.exec (mk_add_var vsmash range)  flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-        let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+        set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
         if STypeSet.mem s.styp ts then
-          man.exec (mk_forget_var vsmash range) ~route:scalar flow
+          man.exec (mk_forget_var vsmash range)  flow
         else
-          let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-          man.exec (mk_add_var vsmash range) ~route:scalar flow
+          set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
+          man.exec (mk_add_var vsmash range)  flow
 
 
   (** 𝕊⟦ ∀i ∈ [lo,hi]: forget( *(p + i) ) ⟧ *)
@@ -835,8 +884,15 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let a = get_env T_cur man flow in
-      let init = State.find base a in
+      get_env T_cur man flow >>$ fun a flow ->
+      let () = debug "base %a" pp_base base in 
+      let init =
+        try State.find base a
+        with Not_found ->
+        match base with
+        | { base_kind = Var { vkind = Cstubs.Aux_vars.V_c_primed_base base }; base_valid = true } ->
+          State.find base a
+        | _ -> raise Not_found in
       let s = mk_smash base lval.etyp in
       let vsmash = mk_smash_var s in
       let uninit = mk_uninit_expr base ~mode range in
@@ -845,7 +901,7 @@ struct
       | Init.Bot -> Post.return flow
 
       | Init.None ->
-        if not (is_aligned offset lval.etyp man flow) then
+        if not (Common.Quantified_offset.is_aligned offset (sizeof_type lval.etyp flow) man flow) then
           Post.return flow
         else
           (* In case of unintialized base, three cases are possible:
@@ -866,30 +922,29 @@ struct
                          min
           *)
           let min, max = Common.Quantified_offset.bound offset quants in
-          let elm = mk_z (sizeof_type lval.etyp) range in
+          let elm = mk_z (sizeof_type lval.etyp flow) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (eq min zero range)
             ~fthen:(fun flow ->
-                man.exec (mk_add_var vsmash range) ~route:scalar flow >>% fun flow ->
+                man.exec (mk_add_var vsmash range)  flow >>% fun flow ->
                 assume_num (eq max (sub size elm range) range)
                   ~fthen:(fun flow ->
                       (* Case #1 *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
-                      set_env T_cur (State.add base init' a) man flow |>
-                      Post.return
+                      set_env T_cur (State.add base init' a) man flow
                     )
                   ~felse:(fun flow ->
                       (* Case #2 *)
                       let init' = Init.Partial (STypeSet.singleton s.styp) in
-                      set_env T_cur (State.add base init' a) man flow |>
-                      man.exec (mk_add uninit range) ~route:scalar >>% fun flow ->
-                      man.exec (mk_assign uninit (add max elm range) range) ~route:scalar flow
-                    ) ~route:scalar man flow
+                      set_env T_cur (State.add base init' a) man flow >>%
+                      man.exec (mk_add uninit range)  >>% fun flow ->
+                      man.exec (mk_assign uninit (add max elm range) range)  flow
+                    )  man flow
               )
             ~felse:(fun flow ->
                 (* Case #3 *)
                 Post.return flow
-              )  ~route:scalar man flow
+              )   man flow
         
 
       | Init.Full ts ->
@@ -897,22 +952,22 @@ struct
            than the one with the type of lval, which will be put to
            top after *)
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-        let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
+        set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
         if STypeSet.mem s.styp ts then
-          man.exec (mk_forget_var vsmash range) ~route:scalar flow
+          man.exec (mk_forget_var vsmash range)  flow
         else
-          man.exec (mk_add_var vsmash range) ~route:scalar flow
+          man.exec (mk_add_var vsmash range)  flow
 
       | Init.Partial ts ->
         fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-        let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+        set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
         begin if STypeSet.mem s.styp ts then
-            man.exec (mk_forget_var vsmash range) ~route:scalar flow
+            man.exec (mk_forget_var vsmash range)  flow
           else
-            let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
-            man.exec (mk_add_var vsmash range) ~route:scalar flow
+            set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
+            man.exec (mk_add_var vsmash range)  flow
         end >>% fun flow ->
-        if not (is_aligned offset lval.etyp man flow) then
+        if not (Common.Quantified_offset.is_aligned offset (sizeof_type lval.etyp flow) man flow) then
           Post.return flow
         else
           (* In case of partially intialized base, three cases are possible:
@@ -933,7 +988,7 @@ struct
                          min
           *)
           let min, max = Common.Quantified_offset.bound offset quants in
-          let elm = mk_z (sizeof_type lval.etyp) range in
+          let elm = mk_z (sizeof_type lval.etyp flow) range in
           eval_base_size base range man flow >>$ fun size flow ->
           assume_num (le min (add uninit elm range) range)
             ~fthen:(fun flow ->
@@ -941,18 +996,17 @@ struct
                   ~fthen:(fun flow ->
                       (* Case #1 *)
                       let init' = Init.Full (STypeSet.singleton s.styp) in
-                      set_env T_cur (State.add base init' a) man flow |>
-                      Post.return
+                      set_env T_cur (State.add base init' a) man flow
                     )
                   ~felse:(fun flow ->
                       (* Case #2 *)
-                      man.exec (mk_assign uninit (add max elm range) range) ~route:scalar flow
-                    ) ~route:scalar man flow
+                      man.exec (mk_assign uninit (add max elm range) range)  flow
+                    )  man flow
               )
             ~felse:(fun flow ->
                 (* Case #3 *)
                 Post.return flow
-              )  ~route:scalar man flow
+              )   man flow
 
 
 
@@ -966,20 +1020,20 @@ struct
     if not (is_interesting_base base) then
       Post.return flow
     else
-      let a = get_env T_cur man flow in
+      get_env T_cur man flow >>$ fun a flow ->
       (* Non-aligned offset destroys all existing smashes *)
-      if not (is_aligned offset lval.etyp man flow) then
+      if not (Common.Quantified_offset.is_aligned offset (sizeof_type lval.etyp flow) man flow) then
         exec_smashes (forget_smash base) base a range man flow
       else
         let s = mk_smash base lval.etyp in
         let vsmash = mk_smash_var s in
         let esmash = mk_smash_expr s ~mode range in
-        let elm = mk_z (sizeof_type lval.etyp) range in
+        let elm = mk_z (sizeof_type lval.etyp flow) range in
         match State.find base a with
         | Init.Bot -> Post.return flow
 
         | Init.None ->
-          man.exec (mk_add_var vsmash range) ~route:scalar flow >>% fun flow ->
+          man.exec (mk_add_var vsmash range)  flow >>% fun flow ->
           (* If this is the first time we initialize the base, we look at two cases:
 
              Case #1: begin intialization
@@ -998,86 +1052,101 @@ struct
             ~fthen:(fun flow ->
                 (* Case #1 *)
                 let init = Init.Partial (STypeSet.singleton s.styp) in
-                let flow = set_env T_cur (State.add base init a) man flow in
-                man.exec (mk_add_var vsmash range) ~route:scalar flow >>% fun flow ->
-                man.exec (mk_add uninit range) ~route:scalar flow >>% fun flow ->
-                man.exec (mk_assign (strongify_var_expr esmash) rval range) ~route:scalar flow >>% fun flow ->
-                man.exec (mk_assign uninit elm range) ~route:scalar flow
+                set_env T_cur (State.add base init a) man flow >>% fun flow ->
+                man.exec (mk_add_var vsmash range)  flow >>% fun flow ->
+                man.exec (mk_add uninit range)  flow >>% fun flow ->
+                man.exec (mk_assign (strongify_var_expr esmash) rval range)  flow >>% fun flow ->
+                man.exec (mk_assign uninit elm range)  flow
               )
             ~felse:(fun flow ->
                 (* Case #2 *)
                 Post.return flow
-              ) ~route:scalar man flow
+              )  man flow
 
 
         | Init.Full ts ->
+          (* TODO: the same as case 4 below. And document case 4 which is case #0 actually *)
           (* Destroy existing incompatible smashes *)
-          fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-          let flow = set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow in
-          if not (STypeSet.mem s.styp ts) then
-            (* If this is the first time we access this type, we add
-               the corresponding smash *)
-            man.exec (mk_add_var vsmash range) ~route:scalar flow
-          else
-            (* If we have already a smash for this type, we update it
-               with a weak update *)
-            man.exec (mk_assign esmash rval range) ~route:scalar flow
+                fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
+                set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
+                if not (STypeSet.mem s.styp ts) then
+                  (* If this is the first time we access this type, we add
+                     the corresponding smash *)
+                  man.exec (mk_add_var vsmash range)  flow
+                else
+                  (* If we have already a smash for this type, we update it
+                     with a weak update *)
+                  man.exec (mk_assign esmash rval range)  flow
+
 
         | Init.Partial ts ->
           (* Destroy existing incompatible smashes *)
           fold_stypes (remove_smash base) (STypeSet.remove s.styp ts) range man flow >>% fun flow ->
-          let flow = set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow in
+          set_env T_cur (State.add base (Init.Partial (STypeSet.singleton s.styp)) a) man flow >>% fun flow ->
           if not (STypeSet.mem s.styp ts) then
             (* If this is the first time we access this type, we add
                the corresponding smash *)
-            man.exec (mk_add_var vsmash range) ~route:scalar flow
+            let () = debug "if %a %a" pp_styp s.styp (format STypeSet.print) ts in 
+            man.exec (mk_add_var vsmash range)  flow
           else
-            (* If we have already a smash for this type, we update it
-               with a weak update *)
-            man.exec (mk_assign esmash rval range) ~route:scalar flow >>% fun flow ->
-            (* To update where we are in the initialization, three cases are considered:
-
-               Case #1: fully initialized
-                  0           uninit = size - |elm|
-                  |------------------|------>
-                                  offset
-
-               Case #2: advance initialization
-                  0     uninit    size - |elm|
-                  |--------x----------|------>
-                         offset
-
-               Case #3: nop
-                  0  uninit      size - |elm|
-                  |----x------x------|------>
-                          offset
-            *)
             let uninit = mk_uninit_expr base ~mode range in
             eval_base_size base range man flow >>$ fun size flow ->
-            assume_num (eq uninit offset range)
+            assume_num (lt offset uninit range)
               ~fthen:(fun flow ->
-                  assume_num (eq offset (sub size elm range) range)
+                  (* Case #4, let's reduce uninit value to just before offset *)
+                  let init = Init.Partial (STypeSet.singleton s.styp) in
+                  set_env T_cur (State.add base init a) man flow >>% fun flow ->
+                  man.exec (mk_assign uninit offset range) flow 
+                )
+              ~felse:(fun flow -> 
+                  (* If we have already a smash for this type, we update it
+                     with a weak update *)
+                  man.exec (mk_assign esmash rval range)  flow >>% fun flow ->
+                  (* To update where we are in the initialization, three cases are considered:
+
+                     Case #1: fully initialized
+                        0           uninit = size - |elm|
+                        |------------------|------>
+                                        offset
+
+                     Case #2: advance initialization
+                        0     uninit    size - |elm|
+                        |--------x----------|------>
+                               offset
+
+                     Case #3: nop
+                        0  uninit      size - |elm|
+                        |----x------x------|------>
+                                offset
+                  *)
+                  assume_num (eq uninit offset range)
                     ~fthen:(fun flow ->
-                        (* Case #1 *)
-                        let init = Init.Full (STypeSet.singleton s.styp) in
-                        let flow = set_env T_cur (State.add base init a) man flow in
-                        man.exec (mk_remove uninit range) ~route:scalar flow
+                        assume_num (eq offset (sub size elm range) range)
+                          ~fthen:(fun flow ->
+                              (* Case #1 *)
+                              let () = debug "1" in 
+                              let init = Init.Full (STypeSet.singleton s.styp) in
+                              set_env T_cur (State.add base init a) man flow >>% fun flow ->
+                              man.exec (mk_remove uninit range)  flow
+                            )
+                          ~felse:(fun flow ->
+                              (* Case #2 *)
+                              let () = debug "2" in 
+                              let init = Init.Partial (STypeSet.singleton s.styp) in
+                              set_env T_cur (State.add base init a) man flow >>% fun flow ->
+                              man.exec (mk_assign uninit (add uninit elm range) range)  flow
+                            )  man flow
                       )
                     ~felse:(fun flow ->
-                        (* Case #2 *)
+                        (* Case #3 *)
+                        let () = debug "3 %a" pp_expr offset in 
                         let init = Init.Partial (STypeSet.singleton s.styp) in
-                        let flow = set_env T_cur (State.add base init a) man flow in
-                        man.exec (mk_assign uninit (add uninit elm range) range) ~route:scalar flow
-                      ) ~route:scalar man flow
+                        set_env T_cur (State.add base init a) man flow
+                      )
+                     man flow
                 )
-              ~felse:(fun flow ->
-                  (* Case #3 *)
-                  let init = Init.Partial (STypeSet.singleton s.styp) in
-                  let flow = set_env T_cur (State.add base init a) man flow in
-                  Post.return flow
-                ) ~route:scalar man flow
-
-
+               man flow 
+              
   (** {2 Exec entry point} *)
   (** ******************** *)
 
@@ -1107,10 +1176,13 @@ struct
       exec_forget e stmt.srange man flow |>
       OptionExt.return
 
-    | S_forget({ ekind = E_stub_quantified_formula(quants, e) })
-      when is_c_deref e ->
-      exec_forget_quant quants e stmt.srange man flow |>
-      OptionExt.return
+    | S_forget({ ekind = E_stub_quantified_formula(quants, e) }) ->
+      if is_c_type e.etyp then 
+        exec_forget_quant quants e stmt.srange man flow |>
+        OptionExt.return
+      else
+        let () = debug "skipping, not deref %a" pp_stmt stmt in
+        None
 
     | S_remove(e) when is_base_expr e ->
       exec_remove_base (expr_to_base e) stmt.srange man flow |>
@@ -1129,20 +1201,28 @@ struct
 
   (** Abstract evaluation of a dereference *)
   let eval_deref p range man flow =
+    let () = debug "eval_deref %a" pp_expr p in 
     eval_pointed_base_offset p range man flow >>$ fun (base,offset,mode) flow ->
-    if not (is_interesting_base base) || not (is_aligned offset (under_type p.etyp) man flow) then
-      man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
+    if not (is_interesting_base base) then
+      let () = debug "no interest" in
+      man.eval (mk_top (under_type p.etyp) range)  flow
+    else if not (Common.Quantified_offset.is_aligned offset (sizeof_type (under_type p.etyp) flow) man flow) then
+      let () = debug "not aligned here" in 
+      man.eval (mk_top (under_type p.etyp) range)  flow
     else
-      let a = get_env T_cur man flow in
+      let () = debug "okay" in 
+      get_env T_cur man flow >>$ fun a flow ->
       let s = mk_smash base (under_type p.etyp) in
       let init = State.find base a in
       (* Synthesize the smash if it is new and there are some existing constraints *)
       phi s range man flow >>% fun flow ->
+      let () = debug "post phi, init = %a" (format Init.print) init in 
       let esmash = mk_smash_expr s ~typ:(Some (under_type p.etyp)) ~mode range in
       match init with
-      | Init.Bot | Init.None ->  man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
+      | Init.Bot | Init.None ->
+        man.eval (mk_top (under_type p.etyp) range)  flow
 
-      | Init.Full ts -> man.eval esmash ~route:scalar flow
+      | Init.Full ts -> man.eval esmash  flow
 
       | Init.Partial ts ->
         (* When accessing a partially initialized base, two cases are possible
@@ -1158,15 +1238,18 @@ struct
                                  offset
         *)
         let uninit = mk_uninit_expr base ~mode range in
+        let () = debug "offset=%a >=? uninit=%a" pp_expr offset pp_expr uninit in 
         assume_num (ge offset uninit range)
           ~fthen:(fun flow ->
               (* Case #2 *)
-              man.eval (mk_top (under_type p.etyp) range) ~route:scalar flow
+              let () = debug "case #2, top" in 
+              man.eval (mk_top (under_type p.etyp) range)  flow
             )
           ~felse:(fun flow ->
               (* Case #1 *)
-              man.eval esmash ~route:scalar flow
-            ) ~route:scalar man flow
+              let () = debug "case #1, smash" in 
+              man.eval esmash flow
+            )  man flow
 
 
   (** {2 Quantified tests transfer functions} *)
@@ -1174,11 +1257,46 @@ struct
 
   (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) ? e ⟧ *)
   let assume_forall_compare i lo hi op base offset mode t e range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
+    let () = debug "assume_forall_compare on %a" pp_base base in 
     match State.find base a with
-    | Init.Bot | Init.None -> Post.return flow
+    | Init.Bot ->
+      let () = debug "bot" in 
+      Post.return flow
 
-    | Init.Partial ts ->
+    | Init.None ->
+      (* new case? *)
+      let () = debug "none" in 
+      let s = mk_smash base t in
+      phi s range man flow >>% fun flow ->
+      (* Check valuation range of the offset *)
+      let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
+      let elm = mk_z (sizeof_type t flow) range in
+      eval_base_size base range man flow >>$ fun size flow ->
+      man.exec (mk_breakpoint "bla" range) flow >>% fun flow ->
+      assume (log_and
+                (eq min zero range)
+                (eq max (sub size elm range) range)
+                range)
+        ~fthen:(fun flow ->
+            (* Case #1 *)
+            let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
+            get_env T_cur man flow >>$ fun a flow ->
+            set_env T_cur (State.add base (Init.Full (STypeSet.singleton s.styp)) a) man flow >>%
+            man.exec (mk_add smash range)  >>% fun flow ->
+            (* Add a cast if the type of the lvalue is different than the type of expression e *)
+            let smash = if compare_typ t e.etyp = 0 then smash else mk_c_cast smash e.etyp range in
+            man.exec (mk_assume (mk_binop smash op e ~etyp:T_bool range) range)  flow
+          )
+        ~felse:(fun flow ->
+            (* Case #2 *)
+            Post.return flow
+          )
+         man flow
+
+
+    | Init.Partial _ -> 
+      let () = debug "partial" in 
       (* When base is partially initialized, check these cases:
 
          Case #1: predicate on the entire initialized part
@@ -1192,7 +1310,7 @@ struct
       phi s range man flow >>% fun flow ->
       (* Check valuation range of the offset *)
       let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-      let elm = mk_z (sizeof_type t) range in
+      let elm = mk_z (sizeof_type t flow) range in
       let uninit = mk_uninit_expr base ~mode range in
       eval_base_size base range man flow >>$ fun size flow ->
       assume (log_and
@@ -1201,18 +1319,20 @@ struct
                 range)
         ~fthen:(fun flow ->
             (* Case #1 *)
+
             let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
             (* Add a cast if the type of the lvalue is different than the type of expression e *)
             let smash = if compare_typ t e.etyp = 0 then smash else mk_c_cast smash e.etyp range in
-            man.exec (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
+            man.exec (mk_assume (mk_binop smash op e ~etyp:T_bool range) range)  flow
           )
         ~felse:(fun flow ->
             (* Case #2 *)
             Post.return flow
-          ) ~route:scalar man flow
+          )  man flow
 
 
     | Init.Full ts ->
+      let () = debug "this full" in 
       (* When base is fully initialized, check these cases:
 
          Case #1: predicate on the entire memory block
@@ -1229,8 +1349,12 @@ struct
       phi s range man flow >>% fun flow ->
       (* Check valuation range of the offset *)
       let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-      let elm = mk_z (sizeof_type t) range in
+      let elm = mk_z (sizeof_type t flow) range in
       eval_base_size base range man flow >>$ fun size flow ->
+      let () = debug "full %a %a %a" pp_expr (log_and
+                                     (eq min zero range)
+                                     (eq max (sub size elm range) range)
+                                     range) pp_expr lo pp_expr hi in
       assume (log_and
                 (eq min zero range)
                 (eq max (sub size elm range) range)
@@ -1240,17 +1364,17 @@ struct
             let smash = mk_smash_expr s ~typ:(Some t) ~mode:(Some STRONG) range in
             (* Add a cast if the type of the lvalue is different than the type of expression e *)
             let smash = if compare_typ t e.etyp = 0 then smash else mk_c_cast smash e.etyp range in
-            man.exec (mk_assume (mk_binop smash op e ~etyp:T_bool range) range) ~route:scalar flow
+            man.exec (mk_assume (mk_binop smash op e ~etyp:T_bool range) range)  flow
           )
         ~felse:(fun flow ->
             (* Case #2 *)
             Post.return flow
-          ) ~route:scalar man flow
+          )  man flow
 
 
   (** 𝕊⟦ ∀i ∈ [lo,hi] : *(p + i) == *(q + i) ⟧ *)
   let assume_forall_eq2 i lo hi base1 offset1 mode1 t1 et1 base2 offset2 mode2 t2 et2 range man flow =
-    let a = get_env T_cur man flow in
+    get_env T_cur man flow >>$ fun a flow ->
     match State.find base1 a, State.find base2 a with
     | Init.Full ts1, Init.Full ts2 ->
       (* Add the smashes if not existent *)
@@ -1261,7 +1385,7 @@ struct
       (* Ensure that elements of a block that is entirely covered have values in the other block *)
       let ensure_included base offset t qet s other_base other_offset other_t other_qet other_s range man flow =
         let min, max = Common.Quantified_offset.bound offset [FORALL,i,S_interval(lo,hi)] in
-        let elm = mk_z (sizeof_type t) range in
+        let elm = mk_z (sizeof_type t flow) range in
         eval_base_size base range man flow >>$ fun size flow ->
         assume (log_and
                   (eq min zero range)
@@ -1272,11 +1396,11 @@ struct
               let smash = if compare_typ t qet = 0 then smash else mk_c_cast smash qet range in
               let other_smash = mk_smash_expr other_s ~typ:(Some other_t) ~mode:(Some WEAK) range in
               let other_smash = if compare_typ other_t other_qet = 0 then other_smash else mk_c_cast other_smash other_qet range in
-              man.exec (mk_assume (eq smash other_smash range) range) ~route:scalar flow
+              man.exec (mk_assume (eq smash other_smash range) range)  flow
             )
           ~felse:(fun flow ->
               Post.return flow
-            ) ~route:scalar man flow
+            )  man flow
       in
       ensure_included base1 offset1 t1 et1 s1 base2 offset2 t2 et2 s2 range man flow >>% fun flow ->
       ensure_included base2 offset2 t2 et2 s2 base1 offset1 t1 et1 s1 range man flow
@@ -1290,14 +1414,18 @@ struct
     Post.return flow
 
   let eval_forall_compare i lo hi op lval e range man flow =
-    man.eval e flow >>$ fun e flow ->
     eval_pointed_base_offset (mk_c_address_of lval range) range man flow >>$ fun (base,offset,mode) flow ->
-    let t = get_c_deref_type lval in
-    if not (is_interesting_base base) || not (is_aligned offset t man flow) then
+    let () = debug "eval_pbo (&%a) : %a = %a, %a" pp_expr lval pp_typ (etyp lval) pp_base base pp_expr offset in
+    (* let t = get_c_deref_type lval in *)
+    if not (is_interesting_base base)
+    (* || not (Common.Quantified_offset.is_aligned offset (sizeof_type t flow) man flow) *) then
+      let () = debug "uninteresting %a" pp_base base in 
       Eval.singleton (mk_top T_bool range) flow
     else
+      let () = debug "interesting case" in 
       Eval.join
-        (assume_forall_compare i lo hi op base offset mode lval.etyp e range man flow >>% fun flow -> Eval.singleton (mk_true range) flow)
+        (assume_forall_compare i lo hi op base offset mode lval.etyp e range man flow >>% fun flow ->
+         Eval.singleton (mk_true range) flow)
         (assume_exists_compare i lo hi op base offset mode lval.etyp e range man flow >>% fun flow -> Eval.singleton (mk_false range) flow)
 
 
@@ -1307,7 +1435,7 @@ struct
     let t1 = get_c_deref_type lval1 in
     let t2 = get_c_deref_type lval2 in
     if not (is_interesting_base base1) || not (is_interesting_base base2) ||
-       not (is_aligned offset1 t1 man flow) || not (is_aligned offset2 t2 man flow)
+       not (Common.Quantified_offset.is_aligned offset1 (sizeof_type t1 flow) man flow) || not (Common.Quantified_offset.is_aligned offset2 (sizeof_type t2 flow) man flow)
     then
       Eval.singleton (mk_top T_bool range) flow
     else
@@ -1325,11 +1453,12 @@ struct
   
     | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)})
       when is_comparison_op op &&
-           is_c_deref e1 &&
+           is_c_lval (remove_casts e1) &&
            is_c_int_type i.vtyp &&
            is_var_in_expr i e1 &&
            not (is_var_in_expr i e2) ->
-      eval_forall_compare i a b op e1 e2 exp.erange man flow |>
+      let () = debug "eval_forall_compare %a %a %a" pp_expr exp pp_expr a pp_expr b in 
+      eval_forall_compare i a b op (remove_casts e1) e2 exp.erange man flow |>
       OptionExt.return
 
     |  E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(O_eq, e1, e2)})
@@ -1340,8 +1469,22 @@ struct
            is_c_int_type i.vtyp &&
            is_var_in_expr i e1 &&
            is_var_in_expr i e2 ->
+      let () = debug "eval_forall_eq2" in 
       eval_forall_eq2 i a b e1 e2 exp.erange man flow |>
       OptionExt.return
+
+    | E_stub_quantified_formula([FORALL,i,S_interval(a,b)], { ekind = E_binop(op, e1, e2)}) ->
+      let () = debug "%a not handled %b %b %b %b %b@.%a %a %b"
+          pp_expr exp
+          (is_comparison_op op)
+          (is_c_deref e1)
+          (is_c_int_type i.vtyp)
+          (is_var_in_expr i e1)
+          (not (is_var_in_expr i e2))
+          pp_expr e1
+          pp_typ (etyp e1)
+          (is_c_lval e1)
+      in None
 
 
 
@@ -1353,14 +1496,6 @@ struct
 
   let ask query man flow = None
 
-
-  (** {2 Pretty printer} *)
-  (** ****************** *)
-
-  let print_state printer (a:t) =
-    pprint printer ~path:[Key "smash"] (pbox State.print a)
-
-  let print_expr man flow printer exp = ()
 
 end
 

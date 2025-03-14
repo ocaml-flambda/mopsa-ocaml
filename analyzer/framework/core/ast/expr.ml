@@ -105,7 +105,8 @@ let register_expr_pp pp = TypeExt.register_print pp expr_pp_chain
 
 let compare_expr e1 e2 = TypeExt.compare expr_compare_chain e1 e2
 
-let pp_expr fmt e = TypeExt.print expr_pp_chain fmt e
+let pp_expr fmt e =
+  Var.force_print_uniq_with_uid false (fun () -> TypeExt.print expr_pp_chain fmt e)
 
 let add_expr_translation semantic t e =
   { e with etrans = SemanticMap.add semantic t e.etrans }

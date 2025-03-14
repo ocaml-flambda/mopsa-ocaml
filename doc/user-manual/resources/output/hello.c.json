@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "time": 0.024172,
+  "mopsa_version": "1.0~pre1",
+  "mopsa_dev_version":
+    "git branch:fix/c/isnan commit:6ec207a4f commit-date:2021-06-15 13:33:01 +0200",
+  "files": [ "hello.c" ],
+  "alarms": [
+    {
+      "title": "Invalid memory access",
+      "messages":
+        "accessing 4 bytes at offsets [4,400] of variable 'a' of size 400 bytes",
+      "range": {
+        "start": { "file": "hello.c", "line": 5, "column": 4 },
+        "end": { "file": "hello.c", "line": 5, "column": 8 }
+      },
+      "callstacks": [
+        [
+          {
+            "function": "main",
+            "range": {
+              "start": { "file": "hello.c", "line": 2, "column": 4 },
+              "end": { "file": "hello.c", "line": 2, "column": 8 }
+            }
+          }
+        ]
+      ]
+    }
+  ],
+  "assumptions": []
+}

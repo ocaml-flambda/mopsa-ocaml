@@ -5,4 +5,5 @@
  (name formatted_io)
  (package mopsa)
  (libraries mopsa framework c_lang c_common)
+ (library_flags -linkall)
  (flags :standard -open C_lang.Lang -open C_common))

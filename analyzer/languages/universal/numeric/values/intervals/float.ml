@@ -72,6 +72,17 @@ struct
     | F_FLOAT128 -> I.extra
     | F_REAL -> I.real
 
+  (* Relative precision of float types.
+     If prec_level t1 >= prec_level t2, then t1 can represent all values
+     that t2 can, and there is no rounding error.
+   *)
+  let prec_level = function
+    | F_SINGLE -> 1
+    | F_DOUBLE -> 2
+    | F_LONG_DOUBLE -> 3
+    | F_FLOAT128 -> 4
+    | F_REAL -> 5
+
   let top = top_of_prec F_LONG_DOUBLE
 
   let is_bottom = I.is_bot
@@ -119,7 +130,9 @@ struct
     | O_minus -> I.neg a
     | O_plus  -> a
     | O_sqrt  -> I.sqrt (prec p) (round ()) a
-    | O_cast  -> I.round (prec p) (round()) a
+    | O_cast  ->
+       if prec_level p >= prec_level (prec_of_type t) then a
+       else I.round (prec p) (round()) a
     | O_filter_float_class c -> filter_class a c
     | _ -> top_of_prec p
 
@@ -145,6 +158,9 @@ struct
     | O_minus -> I.bwd_neg a r
     | O_plus  -> I.meet a r
     | O_sqrt  -> I.bwd_sqrt (prec p) (round ()) a r
+    | O_cast  ->
+       if prec_level p >= prec_level (prec_of_type t) then I.meet a r
+       else I.bwd_round (prec p) (round()) a r
     | _       -> a
 
   let backward_binop op t1 a1 t2 a2 tr r =

@@ -107,7 +107,7 @@ module Domain =
 
     let checks = []
 
-    let init _ _ flow = flow
+    let init _ _ flow = None
 
     let is_str_binop_fun = function
       (* FIXME: clean *)

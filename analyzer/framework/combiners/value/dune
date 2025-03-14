@@ -2,4 +2,5 @@
  (name value)
  (public_name mopsa.mopsa_analyzer.framework.combiners.value)
  (libraries core sig combiners_common lattices mopsa_utils)
+ (library_flags -linkall)
  (flags :standard -open Combiners_common))

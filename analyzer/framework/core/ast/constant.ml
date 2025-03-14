@@ -26,11 +26,14 @@ open Mopsa_utils
 
 type constant = ..
 
-type constant += C_top of typ
+type constant +=
+  | C_top of typ
+  | C_bool of bool
 
 let constant_compare_chain = TypeExt.mk_compare_chain (fun c1 c2 ->
     match c1, c2 with
     | C_top t1, C_top t2 -> compare_typ t1 t2
+    | C_bool b1, C_bool b2 -> Bool.compare b1 b2
     | _ -> compare c1 c2
   )
 
@@ -38,6 +41,7 @@ let constant_pp_chain = TypeExt.mk_print_chain (fun fmt c ->
     match c with
     | C_top T_any -> Format.fprintf fmt "⊤"
     | C_top t -> Format.fprintf fmt "⊤:%a" pp_typ t
+    | C_bool(b) -> Format.fprintf fmt "%a" Format.pp_print_bool b
     | _ -> Exceptions.panic "constant_pp_chain: unknown constant"
   )
 

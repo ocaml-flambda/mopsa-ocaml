@@ -2,6 +2,7 @@
  (name mopsa_analyzer)
  (public_name mopsa.mopsa_analyzer)
  (libraries framework mopsa universal stubs cfg repl c python cpython)
+ (library_flags -linkall)
  (modules mopsa_analyzer))
 
 (executable

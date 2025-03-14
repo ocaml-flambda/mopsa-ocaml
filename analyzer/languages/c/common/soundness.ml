@@ -32,6 +32,7 @@ type assumption_kind +=
   | A_ignore_undetermined_function_pointer of expr
   | A_ignore_modification_undetermined_pointer of expr
   | A_ignore_undetermined_exit_functions
+  | A_ignore_asm of string
 
 let () =
   register_assumption {
@@ -54,6 +55,9 @@ let () =
         | A_ignore_undetermined_exit_functions ->
           fprintf fmt "ignoring side-effect of undetermined exit functions"
 
+        | A_ignore_asm s ->
+           fprintf fmt "ignoring asm directive %s" s
+
         | a -> next fmt a
       );
     compare = (fun next a1 a2 ->
@@ -70,6 +74,8 @@ let () =
           compare_expr ptr1 ptr2
 
         | A_ignore_undetermined_exit_functions, A_ignore_undetermined_exit_functions -> 0
+
+        | A_ignore_asm s, A_ignore_asm s' -> compare s s'
 
         | _ -> next a1 a2
       );

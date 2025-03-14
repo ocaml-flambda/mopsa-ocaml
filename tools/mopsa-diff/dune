@@ -1,0 +1,3 @@
+(install
+ (files mopsa-diff)
+ (section bin))

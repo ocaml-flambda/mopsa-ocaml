@@ -45,6 +45,7 @@ let _ =
       "__builtin___sprintf_chk";
       "snprintf";
       "asprintf";
+      "vasprintf";
       "fscanf";
       "scanf";
       "sscanf";
@@ -97,8 +98,8 @@ let _ =
       "_mopsa_register_file_resource_at";
       "_mopsa_find_file_resource";
 
-      "error";
-      "error_at_line";
+      (* "error"; *)
+      (* "error_at_line"; *)
 
       "exit";
       "quick_exit";
@@ -120,6 +121,25 @@ let _ =
       "__builtin_islessequal";
       "__builtin_islessgreater";
       "__builtin_isunordered";
+
+      "__builtin_sadd_overflow";
+      "__builtin_saddl_overflow";
+      "__builtin_saddll_overflow";
+      "__builtin_uadd_overflow";
+      "__builtin_uaddl_overflow";
+      "__builtin_uaddll_overflow";
+      "__builtin_smul_overflow";
+      "__builtin_smull_overflow";
+      "__builtin_smulll_overflow";
+      "__builtin_umul_overflow";
+      "__builtin_umull_overflow";
+      "__builtin_umulll_overflow";
+
+      "__builtin___memcpy_chk";
+      "__builtin___memmove_chk";
+      "__builtin___memset_chk";
+      "__builtin___strcpy_chk"
+
     ]
 
 let is_builtin_function = Hashtbl.mem builtin_functions

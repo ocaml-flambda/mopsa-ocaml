@@ -57,12 +57,12 @@ struct
   let bottom = ()
   let top = ()
   let is_bottom _ = false
-  let subset _ _ _ ((),s) ((),s') = true,s,s'
-  let join _ _ _ ((),s) ((),s') = (),s,s'
-  let meet _ _ _ ((),s) ((),s') = (),s,s'
-  let widen _ _ _ ((),s) ((),s') = (),s,s',true
-  let merge _ _ _ = ()
-  let init _ _ flow = flow
+  let subset _ _ ((),s) ((),s') = true,s,s'
+  let join _ _ ((),s) ((),s') = (),s,s'
+  let meet _ _ ((),s) ((),s') = (),s,s'
+  let widen _ _ ((),s) ((),s') = (),s,s',true
+  let merge _ _ _ _ = ()
+  let init _ _ flow = None
   let exec _ _ _ flow = []
   let eval _ _ _ flow = []
   let ask _ _ _ _ = None
@@ -88,33 +88,31 @@ struct
 
   let is_bottom (s,p) = S.is_bottom s || P.is_bottom p
 
-  let subset man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let b1, s, s' = S.subset (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let b2, s, s' = P.subset (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let subset man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let b1, s, s' = S.subset (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let b2, s, s' = P.subset (snd_pair_man man) ctx (a2,s) (a2',s') in
     b1 && b2, s, s'
 
-  let join man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.join (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.join (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let join man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.join (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.join (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let meet man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s' = S.meet (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s' = P.meet (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let meet man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s' = S.meet (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s' = P.meet (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s'
 
-  let widen man sman ctx ((a1,a2),s) ((a1',a2'),s') =
-    let aa1, s, s', stable1 = S.widen (fst_pair_man man) sman ctx (a1,s) (a1',s') in
-    let aa2, s, s', stable2 = P.widen (snd_pair_man man) sman ctx (a2,s) (a2',s') in
+  let widen man ctx ((a1,a2),s) ((a1',a2'),s') =
+    let aa1, s, s', stable1 = S.widen (fst_pair_man man) ctx (a1,s) (a1',s') in
+    let aa2, s, s', stable2 = P.widen (snd_pair_man man) ctx (a2,s) (a2',s') in
     (aa1,aa2), s, s', stable1 && stable2
 
-  let merge (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
-    S.merge pre1 (a1, get_left_teffect te) (a1', get_left_teffect te'),
-    P.merge pre2 (a2, get_right_teffect te) (a2', get_right_teffect te')
+  let merge path (pre1,pre2) ((a1,a2), te) ((a1',a2'), te') =
+    S.merge (Ax_pair_left::path) pre1 (a1, te) (a1', te'),
+    P.merge (Ax_pair_right::path) pre2 (a2, te) (a2', te')
 
-  let init prog man flow =
-    S.init prog (fst_pair_man man) flow |>
-    P.init prog (snd_pair_man man)
+  let init prog man flow = broadcast_init S.init P.init prog man flow
 
   let exec targets =
     let f2 = P.exec targets in
@@ -156,7 +154,7 @@ struct
       let f1 = S.ask targets in
       (fun query man flow ->
          OptionExt.neutral2
-           (meet_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) query)
+           Cases.meet
            (f1 query (fst_pair_man man) flow)
            (f2 query (snd_pair_man man) flow))
 
@@ -216,8 +214,8 @@ struct
            Exceptions.panic "%a: check %a is unsound"
              pp_relative_range diag1.diag_range
              pp_check diag1.diag_check
-             (* Otherwise, this is fine! The second domain is not responsible for
-                 this check, so add it to the result *)
+         (* Otherwise, this is fine! The second domain is not responsible for
+             this check, so add it to the result *)
          else diag1
       )
       (fun diag2 ->
@@ -255,9 +253,9 @@ struct
       local state of every domain in all other post-states.
 
       2. When two domains change (independently) the state of a shared sub-abstraction.
-      In this case, we use effects to merge the two diverging states.
+      In this case, we use chages to merge the two diverging states.
   *)
-  let merge_inter_conflicts man pre (pointwise:('a,'r) cases option list) : ('a,'r option list) cases =
+  let merge_inter_conflicts man pre range (pointwise:('a,'r) cases option list) : ('a,'r option list) cases =
     let rec aux : type t. t id -> ('a,t) man -> ('a,'r) cases option list -> check list list -> ('a,'r option list) cases =
       fun id man pointwise checks ->
         match pointwise, id, checks with
@@ -300,29 +298,33 @@ struct
               Cases.return (None :: after_res) after_flow
 
             (* Both domains replied, so merge the results *)
-            | Result (res,effects,cleaners), Result(after_res,after_effects,after_cleaners) ->
+            | Result (res,changes,cleaners), Result(after_res,after_changes,after_cleaners) ->
               (* Merge only when the next domains provided some answers *)
               if after_res |> List.exists (function Some _ -> true | None -> false) then
                 (* Resolve the first conflict situation:
                    put the post-state of the current domain in the answer of the next domains *)
-                let fst_pair_man = fst_pair_man man in
-                let after_flow = Flow.set T_cur (
-                    let cur = Flow.get T_cur man.lattice flow in
-                    let after_cur = Flow.get T_cur man.lattice after_flow in
-                    fst_pair_man.set (fst_pair_man.get cur) after_cur
-                  ) man.lattice after_flow
+                let post =
+                  let fst_pair_man = fst_pair_man man in
+                  fst_pair_man.get T_cur flow >>$ fun env flow ->
+                  let partitions =
+                    ask_and_reduce man.ask (Sig.Abstraction.Partitioning.Q_partition_predicate range) flow
+                      ~bottom:(fun () -> mk_constant (C_bool true) range ~etyp:T_bool)
+                  in
+                  man.exec (mk_assume partitions dummy_range) after_flow >>%
+                  fst_pair_man.set T_cur env
                 in
+                Post.remove_duplicates man.lattice post >>% fun after_flow ->
                 (* Resolve the second conflict situation:
                    merge the post-states of any shared sub-abstraction *)
-                let flow = Flow.merge ~merge_report:(merge_report hdchecks (List.flatten tlchecks)) man.lattice pre (flow,effects) (after_flow,after_effects) in
-                let effects = meet_teffect effects after_effects in
+                let flow = Flow.merge ~merge_report:(merge_report hdchecks (List.flatten tlchecks)) man.lattice pre (flow,changes) (after_flow,after_changes) in
+                let changes = meet_change_map changes after_changes in
                 let cleaners = StmtSet.union cleaners after_cleaners in
-                Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
+                Cases.case (Result (Some res :: after_res, changes, cleaners)) flow
               else
                 (* Next domains returned no answer, so no merging *)
                 let report = merge_report hdchecks (List.flatten tlchecks) (Flow.get_report flow) (Flow.get_report after_flow) in
                 let flow = Flow.set_report report flow in
-                Cases.case (Result (Some res :: after_res, effects, cleaners)) flow
+                Cases.case (Result (Some res :: after_res, changes, cleaners)) flow
 
             | _ -> assert false
           end
@@ -343,17 +345,17 @@ struct
       (fun conj ->
          let rec iter = function
            | [] -> assert false
-           | [case,flow] -> Cases.get_case_effects case, Cases.get_case_cleaners case, flow
+           | [case,flow] -> Cases.get_case_changes case, Cases.get_case_cleaners case, flow
            | (case,flow)::tl ->
-             let effects',cleaners',flow' = iter tl in
-             let effects,cleaners = Cases.get_case_effects case, Cases.get_case_cleaners case in
-             let flow'' = Flow.merge man.lattice ~merge_report:meet_report pre (flow,effects) (flow',effects') in
-             meet_teffect effects effects', StmtSet.union cleaners cleaners', flow''
+             let changes',cleaners',flow' = iter tl in
+             let changes,cleaners = Cases.get_case_changes case, Cases.get_case_cleaners case in
+             let flow'' = Flow.merge man.lattice ~merge_report:meet_report pre (flow,changes) (flow',changes') in
+             meet_change_map changes changes', StmtSet.union cleaners cleaners', flow''
          in
-         let effects,cleaners,flow = iter conj in
+         let changes,cleaners,flow = iter conj in
          List.map
            (fun (case,_) ->
-              let case = Cases.set_case_effects effects case |>
+              let case = Cases.set_case_changes changes case |>
                          Cases.set_case_cleaners cleaners in
               case,flow
            ) conj
@@ -395,8 +397,13 @@ struct
 
 
   (** Apply transfer function [f] pointwise over all domains *)
-  let apply_pointwise f arg man flow =
+  let apply_pointwise f arg remove_duplicates man flow =
     let pointwise = f arg man flow in
+    let pointwise = List.map (function
+        | None -> None
+        | Some r -> Some (remove_duplicates man.lattice r)
+      ) pointwise
+    in
     if List.exists (function Some _ -> true | None -> false) pointwise
     then
       let ctx = get_pointwise_ctx pointwise ~default:(Flow.get_ctx flow) in
@@ -407,7 +414,7 @@ struct
   (** Replace missing pointwise results by calling the successor
       domain. Missing results are functions returning [None] or
       [NotHandled] cases. *)
-  let add_missing_pointwise_results fsuccessor arg pointwise man flow =
+  let add_missing_pointwise_results fsuccessor arg pointwise remove_duplicates man flow =
     (* Separate handled and not-handled cases *)
     let handled_pointwise, not_handled =
       List.fold_left
@@ -433,8 +440,9 @@ struct
     | Some cases ->
       (* Merge all cases in one before calling successor domain *)
       let successor_res =
-        Cases.remove_duplicates compare man.lattice cases >>= fun _ flow ->
-        fsuccessor arg flow
+        remove_duplicates man.lattice cases >>= fun _ flow ->
+        fsuccessor arg flow |>
+        remove_duplicates man.lattice
       in
       (* Put successor's result back in the pointwise results *)
       let pointwise' =
@@ -472,13 +480,13 @@ struct
     match case with
     | Empty -> Cases.empty flow
     | NotHandled -> Cases.not_handled flow
-    | Result((),effects,_) ->
+    | Result((),changes,_) ->
       (* Iterate over rules *)
       let rec iter = function
         | [] -> Post.return flow
         | rule::tl ->
           let module R = (val rule : EXEC_REDUCTION) in
-          match R.reduce stmt man rman pre flow effects with
+          match R.reduce stmt man rman pre flow changes with
           | None -> iter tl
           | Some post -> post
       in
@@ -489,13 +497,17 @@ struct
   let exec targets =
     let f = Pool.exec targets in
     (fun stmt man flow ->
-       apply_pointwise f stmt man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       simplify_pointwise_post |>
-       merge_intra_conflicts man flow |>
-       reduce_post stmt man flow)
+       with_change_tracker
+         (fun () ->
+            apply_pointwise f stmt Post.remove_duplicates man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.exec ~route:successor) stmt pointwise Post.remove_duplicates man flow |>
+            merge_inter_conflicts man flow stmt.srange |>
+            simplify_pointwise_post |>
+            merge_intra_conflicts man flow |>
+            reduce_post stmt man flow
+         )
+    )
 
 
   (** {2 Abstract evaluations} *)
@@ -539,13 +551,17 @@ struct
   let eval targets =
     let f = Pool.eval targets in
     (fun exp man flow ->
-       apply_pointwise f exp man flow |>
-       OptionExt.lift @@ fun pointwise ->
-       add_missing_pointwise_results (man.eval ~route:successor) exp pointwise man flow |>
-       merge_inter_conflicts man flow |>
-       reduce_pointwise_eval exp man flow |>
-       Eval.remove_duplicates man.lattice |>
-       merge_intra_conflicts man flow)
+       with_change_tracker
+         (fun () ->
+            apply_pointwise f exp Eval.remove_duplicates man flow |>
+            OptionExt.lift @@ fun pointwise ->
+            add_missing_pointwise_results (man.eval ~route:successor) exp pointwise Eval.remove_duplicates man flow |>
+            merge_inter_conflicts man flow exp.erange |>
+            reduce_pointwise_eval exp man flow |>
+            Eval.remove_duplicates man.lattice |>
+            merge_intra_conflicts man flow
+         )
+    )
 
 end
 

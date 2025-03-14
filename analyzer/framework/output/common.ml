@@ -33,10 +33,11 @@ let opt_show_safe_checks = ref false
 module type OUTPUT =
 sig
   val report : ('a,'b) man -> 'a flow -> time:float -> files:string list -> out:string option -> unit
-  val panic : exn -> btrace:string -> time:float -> files:string list -> out:string option -> unit
+  val panic : exn -> btrace:string -> time:float -> files:string list -> out:string option -> (unit -> unit) -> unit
   val help : ArgExt.arg list -> out:string option -> unit
   val print  : printer -> range:Location.range -> out:string option -> unit
   val list_domains : string list -> out:string option -> unit
+  val list_reductions : string list -> out:string option -> unit
   val list_hooks : string list -> out:string option -> unit
   val list_checks : check list -> out:string option -> unit
 end

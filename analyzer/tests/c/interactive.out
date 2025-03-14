@@ -1,0 +1,48 @@
+    3  int f(int x) {
+    4    char *s = "";
+    5    size_t b = strlen(s);
+ [1;38;5;118m►[0m [1;38;5;118m 6[0m  [1;38;5;118m  return b;[0m
+    7  }
+    8  
+    9  int main() {
+   10    char *s = NULL;
+   11    int x = 42;
+[1;38;5;45m𝕊[0m [1;38;5;45m⟦[0m return b; [1;38;5;45m⟧[0m
+ float-itv ∪ int-itv : 
+    offset⦃s⦄ : [0,0],
+    x : [3,3] ,
+ pointers : 
+    s : {  ""  }  
+    s:interactive.c:10.2-16 : { NULL },
+    s:interactive.c:4.2-14 : { "" }  
+ float-itv ∪ int-itv : 
+    x : [42,42]  
+ float-itv ∪ int-itv : 
+    x : [3,3]  
+ float-itv ∪ int-itv : 
+    offset⦃s⦄ : [0,0],
+    x : [3,3],
+    x : [42,42] ,
+ pointers : 
+    s : {  ""  },
+    s : {  NULL  }  
+ pointers : 
+    s : {  NULL  }  
+ float-itv ∪ int-itv : 
+    offset⦃s⦄ : [0,0] ,
+ pointers : 
+    s : {  ""  }  
+Raised by primitive operation at Interactive__Terminal.Make.pp_output_command in file "analyzer/framework/engines/interactive/terminal.ml", line 618, characters 47-83
+Called from Interactive__Terminal.Make.read_command in file "analyzer/framework/engines/interactive/terminal.ml", line 855, characters 6-54
+Called from Interactive__Engine.Make.interact in file "analyzer/framework/engines/interactive/engine.ml", line 228, characters 14-78
+Called from Interactive__Engine.Make.interact_or_apply_action in file "analyzer/framework/engines/interactive/engine.ml", line 286, characters 10-30
+Called from Core__Post.bind.(fun) in file "analyzer/framework/core/post.ml", line 53, characters 37-45
+Called from Core__Post.bind in file "analyzer/framework/core/post.ml", line 53, characters 2-46
+Called from Stdlib__List.fold_left in file "list.ml", line 121, characters 24-34
+Called from Universal_iterators__Intraproc.Domain.exec in file "analyzer/languages/universal/iterators/intraproc.ml", line 163, characters 19-98
+Called from Combiners_common__Common.cascade_stateless_call.(fun) in file "analyzer/framework/combiners/common/common.ml", line 230, characters 13-29
+Called from Combiners_common__Common.cascade_stateless_call.(fun) in file "analyzer/framework/combiners/common/common.ml", line 230, characters 13-29
+Called from Combiners_common__Common.cascade_call.(fun) in file "analyzer/framework/combiners/common/common.ml", line 187, characters 13-44
+Called from Combiners_common__Common.cascade_call.(fun) in file "analyzer/framework/combiners/common/common.ml", line 187, characters 13-44
+Called from Core__Cache.Make.exec in file "analyzer/framework/core/cache.ml", line 131, characters 19-34
+Called from Toplevel.Make.exec.(fun) in file "analyzer/framework/toplevel/toplevel.ml", line 235, characters 16-52

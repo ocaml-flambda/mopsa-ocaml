@@ -1,4 +1,6 @@
 #!/bin/bash
 
 MOPSADIR="$(cd "$(dirname "$0")" && pwd -P)/.."
-MOPSADB=${MOPSADB-`pwd`/mopsa.db} ${MOPSADIR}/bin/mopsa-wrappers/mopsa-wrapper $@
+TOOL="$(basename "$0")"
+
+MOPSADB=${MOPSADB-`pwd`/mopsa.db} ${MOPSADIR}/bin/build_wrapper.exe ${TOOL} "$@"

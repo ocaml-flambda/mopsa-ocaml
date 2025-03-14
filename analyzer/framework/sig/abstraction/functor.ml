@@ -52,16 +52,16 @@ struct
     module I = F.Functor(D)
     include I
 
-    (* Add stmt to the effects of the domain *)
+    (* Add stmt to the changes of the domain *)
     let exec stmt man flow =
-      I.exec stmt man flow |>
-      OptionExt.lift @@ fun res ->
-      Cases.map_effects (fun effects ->
-          man.set_effects (
-            man.get_effects effects |>
-            add_stmt_to_teffect stmt
-          ) effects
-        ) res
+      if is_change_tracker_enabled () then
+        I.exec stmt man flow |>
+        OptionExt.lift @@ fun res ->
+        Cases.map_changes (fun changes flow ->
+            man.add_change stmt [] flow changes
+          ) res
+      else
+        I.exec stmt man flow
 
     (* Remove duplicate evaluations *)
     let eval exp man flow =

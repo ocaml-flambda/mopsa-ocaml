@@ -1,0 +1,19 @@
+<div class="highlight">
+<pre><font color="#FF8700"><b>Unsound analysis</b></font>
+Analysis time: 1.417s
+...
+Checks summary: <b>714 total</b>, <font color="#00D700"><b>✔ 639 safe</b></font>, <font color="#FF8700"><b>⚠ 75 warnings</b></font>
+  Stub condition: 30 total, <font color="#00D700"><b>✔ 15 safe</b></font>, <font color="#FF8700"><b>⚠ 15 warnings</b></font>
+  Invalid memory access: 311 total, <font color="#00D700"><b>✔ 278 safe</b></font>, <font color="#FF8700"><b>⚠ 33 warnings</b></font>
+  Division by zero: 52 total, <font color="#00D700"><b>✔ 52 safe</b></font>
+  Integer overflow: 203 total, <font color="#00D700"><b>✔ 179 safe</b></font>, <font color="#FF8700"><b>⚠ 24 warnings</b></font>
+  Invalid shift: 8 total, <font color="#00D700"><b>✔ 8 safe</b></font>
+  Insufficient variadic arguments: 1 total, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+  Insufficient format arguments: 58 total, <font color="#00D700"><b>✔ 57 safe</b></font>, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+  Invalid type of format argument: 51 total, <font color="#00D700"><b>✔ 50 safe</b></font>, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+
+2 assumptions:
+  /home/mine/mopsa/public/mopsa-analyzer/share/mopsa/stubs/c/libc/getopt.c:120.5-34: ignoring modification of blocks pointed by undetermined pointer &apos;<b>&amp;*__longopts[r].flag</b>&apos;
+  /home/mine/mopsa/public/mopsa-analyzer/share/mopsa/stubs/c/libc/signal.c:44.3-50: signal ignores its callback handler
+</pre>
+</div>

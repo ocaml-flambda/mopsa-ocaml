@@ -91,14 +91,14 @@ sig
   (** [widen ctx a1 a2] computes an upper bound of [a1] and [a2] that
       ensures stabilization of ascending chains. *)
 
-  val merge : t -> t * effect -> t * effect -> t
-  (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
+  val merge : t -> t * change -> t * change -> t
+  (** [merge pre (post1, change1) (post2, change2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
       abstraction DAG (e.g., a reduced product).
 
-      The effects [effect1] and [effect2] represent a journal of internal statements
+      The changes [change1] and [change2] represent a journal of internal statements
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)

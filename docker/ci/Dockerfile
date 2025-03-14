@@ -3,18 +3,18 @@
 #
 ###############################################
 
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 
 
 # configuration: required packages
 ##
 
 ENV APT_DEPS build-essential opam clang git pkg-config libgmp-dev libmpfr-dev \
-             llvm-10-dev libclang-10-dev libclang-cpp10-dev clang-10  \
+             llvm-dev libclang-dev libclang-cpp-dev clang \
              python3-dev python3-setuptools python3-pip python3-requests \
-             rsync m4 curl wget
+             rsync m4 curl wget adduser less emacs-nox bash-completion
 
-ENV OPAM_DEPS apron zarith menhir yojson
+ENV OPAM_DEPS dune apron zarith menhir yojson arg-complete
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -29,8 +29,17 @@ ENV TERM xterm-256color
 RUN \
     apt-get update && \
     apt-get install --no-install-recommends -y $APT_DEPS && \
-    adduser --disabled-password --gecos 'Mopsa' mopsa
+    adduser --disabled-password --gecos 'Mopsa' mopsa && \
+    adduser mopsa sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
+# the multilanguage analysis currently requires python with version <= 3.8
+RUN \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa &&  \
+    apt update && \
+    apt install -y python3.8 python3.8-dev && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
 
 # log in as mopsa
 #
@@ -46,6 +55,8 @@ ENV LC_ALL C.UTF-8
 
 RUN \
     opam init --disable-sandboxing -y && \
+    eval $(opam env) && \
+    opam switch create 4.14.0 && \
     eval $(opam env) && \
     opam update -y && \
     opam install -y -j 8 $OPAM_DEPS

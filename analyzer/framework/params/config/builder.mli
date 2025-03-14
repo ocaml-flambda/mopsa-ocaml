@@ -22,7 +22,7 @@
 (** Build a domain from a configuration *) 
 
 open Syntax
-open Sig.Combiner.Stacked
+open Sig.Combiner.Domain
 
 (** Build a domain from a JSON configuration *)
-val from_json : domain -> (module STACKED_COMBINER)
+val from_json : domain -> (module DOMAIN_COMBINER)

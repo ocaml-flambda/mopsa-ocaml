@@ -25,6 +25,7 @@ open Mopsa
 open Sig.Abstraction.Stateless
 open Universal.Ast
 open Ast
+open Common
 
 
 
@@ -49,7 +50,7 @@ struct
   (** Initialization *)
   (** ============== *)
 
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
 
   (** Post-condition computation *)
@@ -83,7 +84,15 @@ struct
     let bb = to_c_block_object b in
     let bbl = List.map to_c_block_object bl in
     man.exec ~route:(Below name) (mk_fold bb bbl range) flow
-
+  
+  let expr_contains_call e =
+    exists_expr
+    (fun e ->
+       match ekind e with
+       | E_call _ -> true
+       | _ -> false)
+    (fun s -> false)
+    e
 
   let exec stmt man flow =
     match skind stmt with
@@ -139,6 +148,11 @@ struct
       man.exec (mk_assign lval rval stmt.srange) flow |>
       OptionExt.return
 
+    | S_c_asm s ->
+      Flow.add_local_assumption (Soundness.A_ignore_asm s) (srange stmt) flow |>
+      Post.return |>
+      OptionExt.return
+
     | _ -> None
 
 
@@ -188,7 +202,7 @@ struct
                                 is_c_num_type e.etyp ->
       begin
         man.eval e ~translate:"Universal" flow >>$ fun e flow ->
-        match c_expr_to_z e with
+        match c_expr_to_z e flow with
         | Some n ->
           if Z.(n = zero) then Eval.singleton one flow
                           else Eval.singleton zero flow
@@ -227,6 +241,16 @@ struct
     | E_c_cast(e,_) when is_c_type e.etyp &&
                          compare_typ exp.etyp e.etyp = 0 ->
       man.eval e flow |>
+      OptionExt.return
+
+    (* If binop expression contains a call, evaluate it before evaluating the binop expression *)
+    | E_binop(op, e1, e2)
+      when is_c_type e1.etyp &&
+           is_c_type e2.etyp &&
+           (expr_contains_call e1 || expr_contains_call e2) ->
+      man.eval e1 flow >>$? fun e1 flow ->
+      man.eval e2 flow >>$? fun e2 flow ->
+      man.eval (mk_binop e1 op e2 ~etyp:exp.etyp exp.erange) flow ~route:(Below name) |>
       OptionExt.return
 
     | _ -> None

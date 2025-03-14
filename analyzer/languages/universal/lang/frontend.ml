@@ -57,10 +57,51 @@ let builtin_functions =
 
 let from_extent (e: U.extent) : Location.range = e
 
+type uvar = {
+  uvar_range: range;
+  uvar_uid: int;
+  uvar_orig_name: string;
+  uvar_uniq_name: string;
+}
+
+type var_kind +=
+  | V_uvar of uvar
+
+let () = register_var {
+    print = (fun next fmt v ->
+        match vkind v with
+        | V_uvar var ->
+          if !Framework.Core.Ast.Var.print_uniq_with_uid then
+            Format.fprintf fmt "%s:%a" var.uvar_orig_name pp_relative_range var.uvar_range
+          else Format.fprintf fmt "%s" var.uvar_orig_name
+        | _ -> next fmt v
+      );
+
+    compare = (fun next v1 v2 ->
+        match vkind v1, vkind v2 with
+        | V_uvar var1, V_uvar var2 ->
+          Compare.compose [
+            (fun () -> Stdlib.compare var1.uvar_uid var2.uvar_uid);
+            (fun () -> Stdlib.compare var1.uvar_uniq_name var2.uvar_uniq_name)
+          ]
+
+        | _ -> next v1 v2
+      );
+  }
+       
+
 let from_var (v: string) (ext: U.extent) (var_ctx: var_context) =
   try
     let (id, typ) = MS.find v var_ctx in
-    mk_uniq_var v id typ
+    let uniq_name =  (v ^ ":" ^ string_of_int id) in 
+    mkv uniq_name
+      (V_uvar {
+          uvar_range = ext;
+          uvar_uid = id;
+          uvar_orig_name = v;
+          uvar_uniq_name = uniq_name
+        })
+      typ
   with
   | Not_found ->
     Exceptions.panic_at ext
@@ -90,10 +131,12 @@ let to_typ (t:typ) (e:expr) : expr =
   let orgt = etyp e in
   if compare_typ orgt t = 0 then e
   else
-    match orgt, t with
-    | (T_int | T_float _), (T_int | T_float _) ->
-       mk_unop O_cast e ~etyp:t range
-    | _ ->
+    match ekind e, orgt, t with
+    | _, (T_int | T_float _), (T_int | T_float _) ->
+      mk_unop O_cast e ~etyp:t range
+    | E_constant (C_top T_any), T_any, t ->
+      {e with ekind = E_constant (C_top t); etyp = t}
+    | _ -> 
       Exceptions.panic "cannot convert expression %a of type %a to type %a" pp_expr e pp_typ orgt pp_typ t
 
 let from_binop (t: typ) (b: U.binary_op) : operator =
@@ -111,6 +154,7 @@ let from_binop (t: typ) (b: U.binary_op) : operator =
   | T_int, AST_AND           -> O_log_and
   | T_int, AST_OR            -> O_log_or
   | T_string, AST_CONCAT        -> O_concat
+  | T_string, AST_PLUS        -> O_concat
   | T_string, AST_EQUAL         -> O_eq
   | T_float _, AST_PLUS          -> O_plus
   | T_float _, AST_MINUS         -> O_minus
@@ -216,9 +260,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     end
   | AST_binary (op, (e1, ext1), (e2, ext2)) ->
     begin
-      let e1 = from_expr e1 ext var_ctx fun_ctx in
+      let e1 = from_expr e1 ext1 var_ctx fun_ctx in
       let typ1 = etyp e1 in
-      let e2 = from_expr e2 ext var_ctx fun_ctx in
+      let e2 = from_expr e2 ext2 var_ctx fun_ctx in
       let typ2 = etyp e2 in
       let typ = unify_typ typ1 typ2 in
       let e1,e2 = to_typ typ e1, to_typ typ e2 in
@@ -246,7 +290,7 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
     mk_string s range
 
   | AST_char_const(c, _) ->
-    Exceptions.panic "char not implemented yet"
+    mk_int ~typ:T_int (int_of_char c) range
 
   | AST_array_const(a, _) ->
      mk_expr (E_array (List.map (fun (e, ext) -> from_expr e ext var_ctx fun_ctx) (Array.to_list a))) range
@@ -256,6 +300,9 @@ let rec from_expr (e: U.expr) (ext : U.extent) (var_ctx: var_context) (fun_ctx: 
 
   | AST_randf((l, _), (u, _)) ->
     mk_float_interval (float_of_string l) (float_of_string u) range
+
+  | AST_rand_string ->
+    mk_top T_any range
 
   | AST_array_access((e1, ext1), (e2, ext2)) ->
     begin
@@ -433,9 +480,15 @@ let var_ctx_init_of_declaration (dl : U_ast.declaration U.ext list) (var_ctx: va
   let var_ctx, init, gvars = List.fold_left (fun (var_ctx, init, gvars) ((((t, v), extv ), o), e) ->
       let new_var_ctx = add_var var_ctx v (from_typ t) in
       let vv = from_var v extv new_var_ctx in
+      let range = from_extent extv in 
+      let stmt_add = mk_add
+          (mk_var vv (tag_range range "initializer_var"))
+          (tag_range range "initializer") in
+      let init = stmt_add :: init in 
       match o with
       | Some (e, ext) ->
         let e = from_expr e ext var_ctx fun_ctx in
+        let e = to_typ (from_typ t) e in
         let range = from_extent ext in
         let stmt_init =
           mk_assign
@@ -485,7 +538,6 @@ let var_init_of_function (var_ctx: var_context) var_ctx_map (fun_ctx: fun_contex
 
 let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
   let typ = OptionExt.lift from_typ f.return_type in
-  let ret_var = mktmp ~typ:(OptionExt.default T_int typ) () in
   {
     fun_orig_name = f.funname;
     fun_uniq_name = f.funname;
@@ -494,7 +546,7 @@ let from_fundec (f: U.fundec) (var_ctx: var_context): T.fundec =
     fun_locvars = List.map (fun ((((_, v), _), _), ext) -> from_var v ext var_ctx) f.locvars;
     fun_body = mk_nop (from_extent (snd f.body));
     fun_return_type = typ;
-    fun_return_var = ret_var;
+    fun_return_var = None;
   }
 
 let fun_ctx_of_global (fl: U_ast.fundec U.ext list) (var_ctx: var_context) =
@@ -548,4 +600,5 @@ let () =
   register_frontend {
     lang = "universal";
     parse = parse_program;
+    on_panic = fun _ _ _ -> ();
   }

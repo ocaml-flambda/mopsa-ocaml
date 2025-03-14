@@ -6,4 +6,5 @@
 (library
  (name mopsa_universal_parser)
  (public_name mopsa.mopsa_universal_parser)
+ (library_flags -linkall)
  (libraries mopsa_utils))

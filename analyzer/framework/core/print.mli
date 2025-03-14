@@ -85,8 +85,7 @@ val mem_printed_expr : printer -> expr -> bool
 type print_selector =
   | Key    of string
   | Index  of int
-  | Head
-  | Tail
+  | Obj    of print_object
 
 type print_path = print_selector list
 (** Path of a print object *)
@@ -170,6 +169,12 @@ val pp_map :
 (** [pp_smap ~path:p fk fv printer l] prints a map from a list [l] of pairs of keys and values.
     Keys are boxed with function [fk] and values with function [fv]. *)
 
+val pp_mapi :
+  ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
+  (printer -> 'k -> unit) ->
+  (printer -> ('k * 'v) -> unit) ->
+  (printer -> ('k * 'v) list -> unit)
+  
 val pp_obj_map :
   ?path:print_path -> ?mopen:string -> ?msep:string -> ?mclose:string -> ?mbind:string ->
   (printer -> (print_object * print_object) list -> unit)

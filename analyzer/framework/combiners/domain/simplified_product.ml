@@ -81,10 +81,10 @@ struct
     if v1 == w1 && v2 == w2 then v else
       apply2 (D1.widen ctx) (D2.widen ctx) v w
 
-  let merge (p1,p2) (a1,e1) (a2,e2) =
+  let merge path (p1,p2) (a1,e1) (a2,e2) =
     apply2
-      (fun v1 w1 -> D1.merge p1 (v1,e1) (w1,e2))
-      (fun v2 w2 -> D2.merge p2 (v2,e1) (w2,e2))
+      (fun v1 w1 -> D1.merge path p1 (v1,e1) (w1,e2))
+      (fun v2 w2 -> D2.merge path p2 (v2,e1) (w2,e2))
       a1 a2
 
   let hdman (man:('a,t) Sig.Abstraction.Simplified.simplified_man) : (('a,D1.t) Sig.Abstraction.Simplified.simplified_man) = {
@@ -108,7 +108,7 @@ struct
       | Some r1, Some r2 -> if r1 == a1 && r2 == a2 then Some a else Some (r1,r2)
     in
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -128,7 +128,7 @@ struct
 
   let ask targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -148,7 +148,7 @@ struct
 
   let print_state targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->
@@ -168,7 +168,7 @@ struct
 
   let print_expr targets =
     match sat_targets ~targets ~domains:D1.domains,
-          sat_targets ~targets ~domains:D1.domains
+          sat_targets ~targets ~domains:D2.domains
     with
     | false, false -> raise Not_found
     | true, false ->

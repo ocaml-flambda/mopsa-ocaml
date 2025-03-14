@@ -33,7 +33,7 @@ struct
   let debug fmt = Debug.debug ~channel:name fmt
 
   module I = Values.Intervals.Integer.Value
-  module P = Values.Powerset.Value
+  module P = Values.Powersets.Standard.Value
   module B = ItvUtils.IntItv.B
 
 

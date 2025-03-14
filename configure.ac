@@ -169,6 +169,7 @@ if test "x$LLVMCONFIG" != "x"; then
     AC_SUBST([LLVMCONFIG])
   else
     AC_CHECK_TOOL(CLANG,clang$LLVMCONFIG_EXTRA)
+
     LLVM_MAJOR_VERSION=`$LLVMCONFIG --version | cut -f 1 -d .`
     AC_SUBST([LLVM_MAJOR_VERSION])
 
@@ -179,9 +180,19 @@ if test "x$LLVMCONFIG" != "x"; then
     fi
     AC_SUBST([LLVM_CCLIBS])
   fi
-
 fi
 
+if test "x$CLANG" = "x"; then
+  AC_CHECK_TOOL(CLANG,clang)
+fi
+
+if test "x$CLANG" = "x"; then
+  LLVMCONFIG=""
+  AC_MSG_WARN([clang not found. C analyzer will not be compiled.])
+else
+  CLANGDIR=$($CLANG -print-resource-dir)
+fi 
+AC_SUBST(CLANGRESOURCEDIR, "(echo \"$CLANGDIR\")")
 
 # Deactivation of C analysis
 AC_ARG_ENABLE(

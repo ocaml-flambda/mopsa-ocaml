@@ -33,18 +33,15 @@ let debug fmt = Debug.debug ~channel:"c.parser" fmt
 let parse_file
     (command:string)
     (file:string)
+    ?(target_options=Clang_parser.get_default_target_options ())
     (opts:string list)
-    (triple:string)
     (warn_all:bool)
     (enable_cache:bool)
     (keep_static:bool)
     (only_parse:bool)
     (ctx:Clang_to_C.context)
+    (forced_stub_list: string list)
   =
-  let target_options =
-    if triple = "" then Clang_parser.get_default_target_options ()
-    else { Clang_AST.empty_target_options with target_triple = triple }
-  in
   (* remove some options that are in the way *)
   let filtered_opts =
     List.filter (fun o -> not (List.mem o ["-MF"])) opts
@@ -54,41 +51,36 @@ let parse_file
   in
 
   debug "Parsing %s, command '%s', target '%s', argument list %a" file command
-target_options.target_triple (ListExt.fprint ListExt.printer_list (fun ch s -> Format.fprintf ch "'%s'" s)) opts;
+    target_options.target_triple (ListExt.fprint ListExt.printer_list (fun ch s -> Format.fprintf ch "'%s'" s)) opts;
 
   let r = Clang_parser_cache.parse command target_options enable_cache file (Array.of_list opts)
   in
 
-  List.iter
-    (fun d -> debug "Diagnostic returned: %s" (Clang_dump.string_of_diagnostic d))
-    r.parse_diag;
-
   let is_error =
     List.exists
-      (function Clang_AST.({diag_level = Level_Error | Level_Fatal}) -> true | _ -> false)
+      (function Clang_AST.({diag_level = Level_Fatal}) -> true | _ -> false)
        r.parse_diag
   in
 
   if not is_error then (
-    if warn_all then
-      List.iter (fun d ->
-          match d.Clang_AST.diag_level with
-          | Level_Warning ->
-            let pos = Location.mk_pos
-                d.diag_loc.loc_file
-                d.diag_loc.loc_line
-                d.diag_loc.loc_column
-            in
-            let range = Location.mk_orig_range pos pos in
-            Exceptions.warn_at range "%s" d.diag_message
-          | _ -> ()
-        ) r.parse_diag;
+    List.iter (fun d ->
+        if d.Clang_AST.diag_level = Level_Error ||
+           d.Clang_AST.diag_level = Level_Warning && warn_all
+        then
+          let pos = Location.mk_pos
+                      d.diag_loc.loc_file
+                      d.diag_loc.loc_line
+                      d.diag_loc.loc_column
+          in
+          let range = Location.mk_orig_range pos pos in
+          Exceptions.warn_at range "%s" d.diag_message
+      ) r.parse_diag;
     if only_parse then ()
     else
       Clang_to_C.add_translation_unit
         ctx (Filename.basename file)
         r.parse_decl r.parse_files r.parse_comments r.parse_macros
-        keep_static
+        keep_static forced_stub_list
   )
   else
     let errors =

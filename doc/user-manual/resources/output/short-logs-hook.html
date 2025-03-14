@@ -1,0 +1,30 @@
+<div class="highlight">
+  <pre><font color="#8AE234"><b>+</b></font> S [| x = (x + 1); |] in C/Scalar
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>+</b></font> E [| x : signed int |]&lt;Universal&gt;
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>+</b></font> E [| x : signed int |] in C/Scalar
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>o</b></font> E [| x : signed int |] = x : signed int ‖ Universal ⇝ num⦃x⦄ : int in C/Scalar done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>o</b></font> E [| x : signed int |]&lt;Universal&gt; = num⦃x⦄ : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>+</b></font> E [| (x + 1) : signed int |]&lt;Universal&gt;
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>+</b></font> E [| x : signed int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>+</b></font> E [| x : signed int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>|</b></font> <font color="#5FAFD7"><b>+</b></font> E [| x : signed int |] in C/Scalar
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>|</b></font> <font color="#5FAFD7"><b>o</b></font> E [| x : signed int |] = x : signed int ‖ Universal ⇝ num⦃x⦄ : int in C/Scalar done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>o</b></font> E [| x : signed int |] = x : signed int ‖ Universal ⇝ num⦃x⦄ : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>o</b></font> E [| x : signed int |] = x : signed int ‖ Universal ⇝ num⦃x⦄ : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>+</b></font> E [| 1 : signed int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>o</b></font> E [| 1 : signed int |] = 1 : signed int ‖ Universal ⇝ 1 : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>o</b></font> E [| (x + 1) : signed int |]&lt;Universal&gt; = (num⦃x⦄ + 1) : int ‖ Universal ⇝ (num⦃x⦄ + 1) : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>*</b></font> reaching a.c:3.4-13
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>+</b></font> S [| num⦃x⦄ = (num⦃x⦄ + 1); |] in Universal
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>+</b></font> E [| (num⦃x⦄ + 1) : int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>+</b></font> E [| num⦃x⦄ : int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>o</b></font> E [| num⦃x⦄ : int |] = num⦃x⦄ : int in Universal done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>+</b></font> E [| 1 : int |]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>|</b></font> <font color="#5F5F00"><b>o</b></font> E [| 1 : int |] = 1 : int ‖ Universal ⇝ 1 : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>o</b></font> E [| (num⦃x⦄ + 1) : int |] = (num⦃x⦄ + 1) : int ‖ Universal ⇝ (num⦃x⦄ + 1) : int done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>*</b></font> reaching a.c:3.4-13
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>+</b></font> S [| num⦃x⦄ = (num⦃x⦄ + 1); |] in below(universal.iterators.intraproc)
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>|</b></font> <font color="#00D787"><b>o</b></font> S [| num⦃x⦄ = (num⦃x⦄ + 1); |] in below(universal.iterators.intraproc) done [0.0001s, 1 case]
+<font color="#8AE234"><b>|</b></font> <font color="#005FD7"><b>o</b></font> S [| num⦃x⦄ = (num⦃x⦄ + 1); |] in Universal done [0.0002s, 1 case]
+<font color="#8AE234"><b>o</b></font> S [| x = (x + 1); |] in C/Scalar done [0.0004s, 1 case]</pre>
+</div>

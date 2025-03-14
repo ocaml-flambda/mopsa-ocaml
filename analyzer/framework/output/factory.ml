@@ -48,9 +48,9 @@ let report man flow ~time ~files =
   E.report man flow ~time ~files ~out:!opt_file;
   return_v
 
-let panic ~btrace exn ~time ~files =
+let panic ~btrace exn ~time ~files continuation =
   let module E = (val (get_output_engine ())) in
-  E.panic exn ~btrace ~time ~files ~out:!opt_file;
+  E.panic exn ~btrace ~time ~files ~out:!opt_file continuation;
   2
 
 let help (args:ArgExt.arg list) =
@@ -60,6 +60,10 @@ let help (args:ArgExt.arg list) =
 let list_domains (domains:string list) =
   let module E = (val (get_output_engine ())) in
   E.list_domains domains ~out:!opt_file
+
+let list_reductions (reductions: string list) =
+  let module E = (val (get_output_engine ())) in
+  E.list_reductions reductions ~out:!opt_file
 
 let list_checks (checks:check list) =
   let module E = (val (get_output_engine ())) in

@@ -110,7 +110,7 @@ struct
 
   let merge _ _ _ = assert false
 
-  let init prog man flow = set_env T_cur (Partitions.empty) man flow
+  let init prog man flow = set_env T_cur (Partitions.empty) man flow |> Option.some
 
   let exec stmt man flow =
     match skind stmt with

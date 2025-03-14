@@ -73,3 +73,4 @@ val register_typ_pp : typ TypeExt.print -> unit
 
 type typ += T_any (** Generic unknown type *)
          | T_addr (** Heap addresses type *)
+         | T_bool (** Boolean type *)

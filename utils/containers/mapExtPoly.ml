@@ -80,6 +80,8 @@ let empty_ = Empty
 
 let is_empty_ = function Empty -> true | _ -> false
 
+let is_singleton_ = function Node(Empty, _, _, Empty, _) -> true | _ -> false
+
 let rec add_ compare x data m = match m with
     Empty ->
     Node(Empty, x, data, Empty, 1)
@@ -355,6 +357,8 @@ let empty ~compare = { map = empty_; compare }
 
 let is_empty m = is_empty_ m.map
 
+let is_singleton m = is_singleton_ m.map
+
 let add x data m =
   let map = add_ m.compare x data m.map in
   if m.map == map then m else { m with map }
@@ -422,3 +426,5 @@ let fold2o f1 f2 f m1 m2 acc =
 let compare cmp m1 m2 = compare_ m1.compare cmp m1.map m2.map
 
 let of_list compare l = {map = of_list_ compare l; compare}
+
+let choose = min_binding

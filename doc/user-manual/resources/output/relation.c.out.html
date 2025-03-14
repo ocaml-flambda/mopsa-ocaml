@@ -1,0 +1,31 @@
+<div class="highlight">
+<pre><font color="#5555FF"><b>$</b></font> mopsa-c relation.c
+<font color="#00D700"><b>Analysis terminated successfully</b></font>
+Analysis time: 0.028s
+
+<font color="#FF8700"><b>⚠</b></font> Check #1:
+<b>resources/code/relation.c</b>: In function &apos;<b>main</b>&apos;:
+<b>resources/code/relation.c:5.4-7</b>: <font color="#FF8700"><b>warning</b></font>: <font color="#FF8700"><b>Integer overflow</b></font>
+
+  <b>5</b>:     <font color="#FF8700"><b>j--</b></font>;
+         <font color="#FF8700"><b>^^^</b></font>
+  &apos;<b>(j - 1)</b>&apos; has value [-2147483649,18] that is larger than the range of &apos;<b>signed int</b>&apos; = [-2147483648,2147483647]
+  Callstack:
+        from resources/code/relation.c:1.4-8: main
+
+
+<font color="#FF8700"><b>⚠</b></font> Check #3:
+<b>resources/code/relation.c</b>: In function &apos;<b>main</b>&apos;:
+<b>resources/code/relation.c:7.4-8</b>: <font color="#FF8700"><b>warning</b></font>: <font color="#FF8700"><b>Invalid memory access</b></font>
+
+  <b>7</b>:     <font color="#FF8700"><b>a[j]</b></font> = j;
+         <font color="#FF8700"><b>^^^^</b></font>
+  accessing 4 bytes at offsets [-8589934592,8589934588] of variable &apos;<b>a</b>&apos; of size 80 bytes
+  Callstack:
+        from resources/code/relation.c:1.4-8: main
+
+Checks summary: <b>4 total</b>, <font color="#00D700"><b>✔ 2 safe</b></font>, <font color="#FF8700"><b>⚠ 2 warnings</b></font>
+  Invalid memory access: 2 total, <font color="#00D700"><b>✔ 1 safe</b></font>, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+  Integer overflow: 2 total, <font color="#00D700"><b>✔ 1 safe</b></font>, <font color="#FF8700"><b>⚠ 1 warning</b></font>
+</pre>
+</div>

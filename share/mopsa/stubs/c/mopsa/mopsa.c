@@ -92,10 +92,10 @@
  *   end;
  *
  * predicate null_or_valid_bytes(p, n):
- *   if n > 0 then valid_bytes(p, n) end;
+ *   if p != NULL then valid_bytes(p, n) end;
  *
  * predicate null_or_valid_bytes_or_fail(p, n):
- *   if n > 0 then valid_bytes_or_fail(p, n) end;
+ *   if p != NULL then valid_bytes_or_fail(p, n) end;
  *
  * predicate in_bytes(r, x, n):
  *   exists _mopsa_size_t _i in [0, n]: r == x + _i;

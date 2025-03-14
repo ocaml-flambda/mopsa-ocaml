@@ -43,17 +43,10 @@ struct
   let semantics = SemanticSet.union D1.semantics D2.semantics
 
   let routing_table =
-    let t1 = DomainSet.fold
-        (fun d1 acc -> add_routes (Below d1) D2.domains acc)
-        D1.domains
-        (join_routing_table D1.routing_table D2.routing_table)
-    in
-    let t2 = SemanticSet.fold
-        (fun s1 acc -> add_routes (Semantic s1) D2.domains acc)
-        D1.semantics
-        t1
-    in
-    t2
+    let t = join_routing_table D1.routing_table D2.routing_table in
+    DomainSet.fold
+      (fun d1 acc -> add_routes (Below d1) D2.domains acc)
+      D1.domains t
 
   let checks = D1.checks @ D2.checks |> List.sort_uniq compare
 
@@ -62,96 +55,16 @@ struct
   (**************************************************************************)
 
   (** Initialization procedure *)
-  let init prog man flow =
-    D1.init prog man flow |>
-    D2.init prog man
+  let init prog man flow = broadcast_stateless_init D1.init D2.init prog man flow
 
   (** Execution of statements *)
-  let exec domains =
-    match sat_targets ~targets:domains ~domains:D1.domains,
-          sat_targets ~targets:domains ~domains:D2.domains
-    with
-    | false, false ->
-      (* Both domains don't satisfy the targets *)
-      raise Not_found
-
-    | true, false ->
-      (* Only [D1] satisfies the targets *)
-      D1.exec domains
-
-    | false, true ->
-      (* Only [D2] satisfies the targets *)
-      D2.exec domains
-
-    | true, true ->
-      (* Both [D1] and [D2] satisfy the targets*)
-      let f1 = D1.exec domains in
-      let f2 = D2.exec domains in
-      (fun stmt man flow ->
-         match f1 stmt man flow with
-         | Some post -> Some post
-
-         | None -> f2 stmt man flow
-      )
-
+  let exec targets = cascade_stateless_call targets D1.exec D1.domains D2.exec D2.domains
 
   (** Evaluation of expressions *)
-  let eval domains =
-    match sat_targets ~targets:domains ~domains:D1.domains,
-          sat_targets ~targets:domains ~domains:D2.domains
-    with
-    | false, false ->
-      (* Both domains don't satisfy the targets *)
-      raise Not_found
-
-    | true, false ->
-      (* Only [D1] satisfies the targets *)
-      D1.eval domains
-
-    | false, true ->
-      (* Only [D2] satisfies the targets *)
-      D2.eval domains
-
-    | true, true ->
-      (* Both [D1] and [D2] satisfy the targets*)
-      let f1 = D1.eval domains in
-      let f2 = D2.eval domains in
-      (fun exp man flow ->
-         match f1 exp man flow with
-         | Some evl -> Some evl
-
-         | None -> f2 exp man flow
-      )
-
+  let eval targets = cascade_stateless_call targets D1.eval D1.domains D2.eval D2.domains
 
   (** Query handler *)
-  let ask domains =
-    match sat_targets ~targets:domains ~domains:D1.domains,
-          sat_targets ~targets:domains ~domains:D2.domains
-    with
-    | false, false ->
-      (* Both domains don't satisfy the targets *)
-      raise Not_found
-
-    | true, false ->
-      (* Only [D1] satisfies the targets *)
-      D1.ask domains
-
-    | false, true ->
-      (* Only [D2] satisfies the targets *)
-      D2.ask domains
-
-    | true, true ->
-      (* Both [D1] and [D2] satisfy the targets*)
-      let f1 = D1.ask domains in
-      let f2 = D2.ask domains in
-      (fun q man flow ->
-         OptionExt.neutral2
-           (join_query ~ctx:(Some (Flow.get_ctx flow)) ~lattice:(Some man.lattice) q)
-           (f1 q man flow)
-           (f2 q man flow)
-      )
-
+  let ask targets = broadcast_stateless_call targets D1.ask D1.domains D2.ask D2.domains
 
   (** Pretty printer of expressions *)
   let print_expr targets =

@@ -1,0 +1,30 @@
+$ ./bin/mopsa -config=share/mopsa/configs/universal/sign.json analyzer/tests/universal/manual/signs/first_print_assume_assert.u -debug=sign
+[1;38;5;173m[sign 0.004][0m >0 * <0 = ≤0
+[1;38;5;173m[sign 0.004][0m >0 * <0 = ≤0
+analyzer/tests/universal/manual/signs/first_print_assume_assert.u:8.0-8
+  ⏵ cur ↦
+      sign:   x ⇀ >0,
+              y ⇀ <0,
+              z ⇀ ≥0
+      
+  |alarms| = 0
+analyzer/tests/universal/manual/signs/first_print_assume_assert.u:8.0-8
+  ⊥
+  |alarms| = 1
+analyzer/tests/universal/manual/signs/first_print_assume_assert.u:8.0-8
+  ⊥
+  |alarms| = 0
+[1;38;5;40mAnalysis terminated successfully[0m
+
+[1manalyzer/tests/universal/manual/signs/first_print_assume_assert.u[0m: In function '[1m<>[0m':
+[1manalyzer/tests/universal/manual/signs/first_print_assume_assert.u:7.7-16[0m: [1;38;5;5mAssertion fail[0m
+  
+  [1m7[0m: assert([1;38;5;9mx * y < 0[0m);
+            [1;38;5;9m^^^^^^^^^[0m  
+  Assertion '[1m((x * y) < 0)[0m' violated
+
+Summary of detected alarms:
+  Assertion fail: 1
+  Total: 1
+
+Time: 0.001s

@@ -29,8 +29,9 @@ Cbox_new(PyTypeObject *type, PyObject *args1, PyObject *kwds)
 }
 
 static int
-Cbox_init(Cbox *self, PyObject *args2, PyObject *kwds)
+Cbox_init(PyObject *s, PyObject *args2, PyObject *kwds)
 {
+    Cbox *self = (Cbox *)s;
     PyObject *c;
     int d;
     if(!PyArg_ParseTuple(args2, "Oi", &c, &d))
@@ -226,16 +227,16 @@ Counter_contains(PyObject* self, PyObject* args)
 }
 
 static int
-Counter_init(Counter *self, PyObject *args, PyObject *kwds)
+Counter_init(PyObject *s, PyObject *args, PyObject *kwds)
 {
-    PyObject *c;
-    if(!PyArg_ParseTuple(args, "O", &c))
-        return -1;
+  Counter *self = (Counter *)s;
+  PyObject *c;
+  if (!PyArg_ParseTuple(args, "O", &c))
+    return -1;
 
-    if(c && PyLong_Check(c))
-    {
-        self->counter = PyLong_AsSsize_t(c);
-        return 0;
+  if (c && PyLong_Check(c)) {
+    self->counter = PyLong_AsSsize_t(c);
+    return 0;
     }
     else
     {

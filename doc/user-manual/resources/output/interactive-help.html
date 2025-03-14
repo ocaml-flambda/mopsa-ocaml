@@ -1,0 +1,42 @@
+<div class="highlight">
+    <pre><font color="#2AA1B3"><b>mopsa</b></font> <font color="#00D700"><b>&gt;&gt;</b></font> h 
+Available commands:
+  b[reak] &lt;[file:]line&gt;     add a breakpoint at a line
+  b[reak] &lt;function&gt;        add a breakpoint at a function
+  b[reak] @name             add a named breakpoint (will break when the analysis executes an S_break name)
+  b[reak] #a[larm]          break at the next alarm (and go back at the statement generating the alarm
+  c[ontinue]                run until next breakpoint
+  n[ext]                    stop at next statement and skip function calls.
+  n[ext]i                   stop at next statement and skip nodes in the interpretation sub-tree
+  s[tep]                    step into function calls
+  s[tep]i                   step into interpretation sub-tree
+  f[inish]                  finish current function
+  b[ack]w[ard]                go backward to the calling site
+  e[nable] h[hook] &lt;h&gt;      enable a hook
+  d[isable] h[hook] &lt;h&gt;     disable a hook
+  s[et] d[ebug] &lt;d&gt;         set debug channels
+  u[nset] d[ebug]           unset debug channels
+  s[et] script &lt;file&gt;       store commands into a file
+                            To be used in combination with load script &lt;file&gt;
+  u[nset] script            do not store commands in file anymore
+  load script &lt;file&gt;        reads script command from &lt;file&gt;
+  help                      print this message
+The commands below support shell commands (`env | grep foo`, `mopsa_bt | tac`, ...):
+  p[rint]                   print the abstract state
+  p[rint] &lt;vars&gt;            print the value of selected variables
+                            For example, `p x,y:f,z:*` prints x in the current scope, y in the scope of f, and z in all scopes
+  p[rint] &lt;vars&gt; #&lt;f&gt;:&lt;l&gt;   print the value of selected variables at the given program location
+  e[nv]                     print the current abstract environment
+  e[nv] &lt;domain&gt;,...        print the current abstract environment of selected domains
+  state                   print the full abstract state (map from flow token to environment)
+  b[ack]t[race]             print the current call stack
+  t[race]                   print the analysis trace
+  w[here]                   show current program point
+  i[info] a[larms]          print the list of detected alarms
+  i[info] c[hecks]          print the list of performed checks
+  i[info] b[reakpoints]     print the list of registered breakpoints
+  i[info] t[okens]          print the list of flow tokens
+  i[info] v[ariables]       print the list of variables
+  i[info] c[on]t[e]x[t]     print the flow-insensitive context
+  mopsa_bt                  shows the current backtrace of the analyzer
+    </pre></div>

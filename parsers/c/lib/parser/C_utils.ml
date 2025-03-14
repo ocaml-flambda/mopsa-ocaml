@@ -123,9 +123,10 @@ let rec sizeof_type target t : Z.t =
      r.record_sizeof
   | T_enum e ->
      if not e.enum_defined then invalid_arg "sizeof_type: size of incomplete enum";
-     Z.of_int (sizeof_int target e.enum_integer_type)
+     Z.of_int (sizeof_int target (match e.enum_integer_type with | Some s -> s | None -> assert false))
   | T_vector v ->
      Z.mul (sizeof_type target (fst v.vector_type)) (Z.of_int v.vector_size)
+  | T_unknown_builtin _ -> Z.zero
 (** Size (in bytes) of a type. Raises an Invalid_argument if the size is not a constant. *)
 
 
@@ -148,6 +149,7 @@ let sizeof_expr target (range:C.range) (result_type:type_qual) (t:typ) : expr =
     | T_bitfield (t,_) -> invalid_arg "sizeof_expr: size of bitfield"
     | T_function _ | T_builtin_fn -> invalid_arg "sizeof_expr: size of function"
     | T_typedef t -> doit (fst t.typedef_def)
+    | T_unknown_builtin _ -> E_integer_literal (Z.zero), result_type, range
   in
   doit t
 (** Size (in bytes) of a type, as an expression. Handles variable-length ararys. *)
@@ -169,9 +171,10 @@ let rec alignof_type target t : Z.t =
      r.record_alignof
   | T_enum e ->
      if not e.enum_defined then invalid_arg "alignof_type: size of incomplete enum";
-     Z.of_int (alignof_int target e.enum_integer_type)
+     Z.of_int (alignof_int target (match e.enum_integer_type with | Some s -> s | None -> assert false))
   | T_vector v ->
      alignof_type target (fst v.vector_type)
+  | T_unknown_builtin _ -> Z.zero
 (** Alignment (in bytes) of a type. *)
 
 
@@ -187,6 +190,7 @@ let rec type_declarable = function
   | T_record r -> r.record_defined
   | T_enum e -> e.enum_defined
   | T_vector v -> type_declarable (fst v.vector_type)
+  | T_unknown_builtin _ -> true
 
 and type_qual_declarable (t,q) =
   type_declarable t
@@ -363,9 +367,9 @@ let rec type_compare cmp gray (target:C.target_info) (t1:typ) (t2:typ) =
        type_qual_compare cmp gray target t1.typedef_def t2.typedef_def
 
     | T_enum e1, _ when cmp.cmp_enum_as_int ->
-       (not e1.enum_defined) || type_compare cmp gray target (T_integer e1.enum_integer_type) t2
+       (not e1.enum_defined) || type_compare cmp gray target (T_integer (match e1.enum_integer_type with | Some s -> s | None -> assert false)) t2
     | _, T_enum e2 when cmp.cmp_enum_as_int ->
-       (not e2.enum_defined) || type_compare cmp gray target t1 (T_integer e2.enum_integer_type)
+       (not e2.enum_defined) || type_compare cmp gray target t1 (T_integer (match e2.enum_integer_type with | Some s -> s | None -> assert false))
     | T_enum e1, T_enum e2 ->
        (cmp.cmp_ignore_name || e1.enum_org_name = e2.enum_org_name) &&
        ((cmp.cmp_ignore_undefined && (not e1.enum_defined || not e2.enum_defined)) ||
@@ -404,6 +408,9 @@ let rec type_compare cmp gray (target:C.target_info) (t1:typ) (t2:typ) =
        type_qual_compare cmp gray target v1.vector_type v2.vector_type &&
        (cmp.cmp_ignore_vector_size || v1.vector_size = v2.vector_size) &&
        (cmp.cmp_ignore_vector_kind || v1.vector_kind = v2.vector_kind)
+
+    | T_unknown_builtin s1, T_unknown_builtin s2 ->
+       s1 = s2
 
     | _ -> false
 
@@ -510,6 +517,9 @@ let rec type_unify gray target (t1:typ) (t2:typ) =
        let kind = if v1.vector_kind = v2.vector_kind then v1.vector_kind else -1 in
        T_vector { vector_type = t; vector_size = size; vector_kind = kind; }
 
+    | T_unknown_builtin s1, T_unknown_builtin s2 when s1 = s2 ->
+       T_unknown_builtin s1
+
     | _ -> invalid_arg "type_unify: incompatible types"
 
 and type_qual_unify gray target (t1,q1) (t2,q2) =
@@ -535,8 +545,15 @@ and record_unify gray target r1 r2 =
     then invalid_arg (Printf.sprintf "record_unify: incompatible record names %s and %s" r1.record_org_name r2.record_org_name);
     if r1.record_kind <> r2.record_kind;
     then invalid_arg "record_unify: incompatible record kinds";
-    (match r1.record_defined, r2.record_defined with
+    (match r1.record_defined && r1.record_sizeof <> Z.zero,
+           r2.record_defined && r2.record_sizeof <> Z.zero with
      | true, false ->
+        for i=0 to Array.length r2.record_fields-1 do
+          let f1, f2 = r1.record_fields.(i), r2.record_fields.(i) in
+          if f1.field_org_name <> f2.field_org_name ||
+               not (type_qual_unifiable target f1.field_type f2.field_type)
+          then invalid_arg "record_unify: incompatible record layout"
+        done;
         r2.record_uid <- r1.record_uid;
         r2.record_unique_name <- r1.record_unique_name;
         r2.record_defined <- true;
@@ -545,6 +562,12 @@ and record_unify gray target r1 r2 =
         r2.record_fields <- r1.record_fields;
         r2.record_range <- r1.record_range
      | false, true ->
+        for i=0 to Array.length r1.record_fields-1 do
+          let f1, f2 = r1.record_fields.(i), r2.record_fields.(i) in
+          if f1.field_org_name <> f2.field_org_name ||
+               not (type_qual_unifiable target f1.field_type f2.field_type)
+          then invalid_arg "record_unify: incompatible record layout"
+        done;
         r1.record_uid <- r2.record_uid;
         r1.record_unique_name <- r2.record_unique_name;
         r1.record_defined <- true;
@@ -600,8 +623,19 @@ and enum_unify gray target e1 e2 =
       e1.enum_integer_type <- e2.enum_integer_type;
       e1.enum_range <- e2.enum_range
    | true, true ->
-      ignore (type_unify gray target (T_integer e1.enum_integer_type) (T_integer e2.enum_integer_type));
-      if not
+     let enum_integer_type =
+       match e1.enum_integer_type, e2.enum_integer_type with
+       | None, Some r -> Some r
+       | Some l, None -> Some l
+       | None, None -> None
+       | Some l, Some r ->
+         Some (match type_unify gray target (T_integer l) (T_integer r) with
+         | T_integer t -> t
+         | _ -> assert false)
+     in
+     e1.enum_integer_type <- enum_integer_type;
+     e2.enum_integer_type <- enum_integer_type;
+     if not
            (List.length e1.enum_values = List.length e2.enum_values &&
               List.for_all2
                 (fun v1 v2 ->
@@ -691,9 +725,9 @@ let rec zero_init range (t:typ) : init =
        else Array.to_list r.record_fields
      in
      I_init_list (List.map (fun f -> zero_init range (fst f.field_type)) l, None)
-  | T_enum e -> I_init_expr (expr_integer_cst range e.enum_integer_type Z.zero)
+  | T_enum e -> I_init_expr (expr_integer_cst range (match e.enum_integer_type with | Some s -> s | None -> assert false) Z.zero)
   | T_vector v ->  I_init_list ([], Some (zero_init range (fst v.vector_type)))
-
+  | T_unknown_builtin _ -> I_init_expr (expr_integer_cst range SIGNED_INT Z.zero)
 
 (** {2 Statement utilities} *)
 
@@ -781,14 +815,16 @@ let resolve_scope (b:block) : block =
        (* remember label scopes to fix gotos later *)
        Hashtbl.add labels label cur
 
-    | S_target (S_case (e,upd)) ->
-       expr ctx e;
+    | S_target (S_case (es,upd)) ->
+      List.iter (expr ctx) es;
        (* jump from switch point to current scope *)
        update upd swt cur
 
     | S_target (S_default upd) ->
        (* jump from switch point to current scope *)
        update upd swt cur
+
+    | S_asm _ -> ()
 
   and block (cur,brk,cnt,swt) b =
     List.fold_left

@@ -1,0 +1,14 @@
+{
+    "language": "universal",
+    "domain": {
+	      "switch": [
+	          // Iterators
+	          "universal.iterators.program",
+	          "universal.iterators.intraproc",
+	          "universal.iterators.loops",
+            "universal.iterators.interproc.inlining"
+
+            // Newly defined domain can be inserted here
+	      ]
+    }
+}

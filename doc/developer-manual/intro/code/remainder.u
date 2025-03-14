@@ -1,0 +1,17 @@
+int x;
+int y;
+int z;
+
+int remainder(int a, int b) {
+  int r;
+  r = a;
+  while (r >= b) {
+    r = r - b;
+  }
+  return r;
+}
+
+x = 10;
+y = rand(2, 5);
+z = remainder(x, y);
+print();

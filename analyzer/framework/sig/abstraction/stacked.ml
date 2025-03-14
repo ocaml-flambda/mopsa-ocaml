@@ -61,22 +61,22 @@ sig
   (** {2 Lattice operators} *)
   (** ********************* *)
 
-  val subset: ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> bool * 's * 's
+  val subset: ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> bool * 'a * 'a
 
-  val join  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
+  val join  : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a
 
-  val meet  : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's
+  val meet  : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a
 
-  val widen : ('a,t) man -> ('a,'s) stack_man -> 'a ctx -> t * 's -> t * 's -> t * 's * 's * bool
+  val widen : ('a,t) man -> 'a ctx -> t * 'a -> t * 'a -> t * 'a * 'a * bool
 
-  val merge : t -> t * effect -> t * effect -> t
-  (** [merge pre (post1, effect1) (post2, effect2)] synchronizes two divergent
+  val merge : t -> t * change -> t * change -> t
+  (** [merge pre (post1, change1) (post2, change2)] synchronizes two divergent
       post-conditions [post1] and [post2] using a common pre-condition [pre].
 
       Diverging post-conditions emerge after a fork-join trajectory in the
       abstraction DAG (e.g., a reduced product).
 
-      The effects [effect1] and [effect2] represent a journal of internal statements
+      The changes [change1] and [change2] represent a journal of internal statements
       executed during the the computation of the post-conditions over the
       two trajectories.
   *)
@@ -85,7 +85,7 @@ sig
   (** {2 Transfer functions} *)
   (** ********************** *)
 
-  val init : program -> ('a,t) man -> 'a flow -> 'a flow
+  val init : program -> ('a, t) man -> 'a flow -> 'a post option
   (** Initialization function *)
 
   val exec : stmt -> ('a,t) man -> 'a flow -> 'a post option
@@ -94,7 +94,7 @@ sig
   val eval : expr -> ('a,t) man -> 'a flow -> 'a eval option
   (** Evaluation of expressions *)
 
-  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> 'r option
+  val ask  : ('a,'r) query -> ('a,t) man -> 'a flow -> ('a, 'r) cases option
   (** Handler of queries *)
 
 
@@ -121,16 +121,16 @@ module Instrument(D:STACKED) : STACKED with type t = D.t =
 struct
   include D
 
-  (* Add stmt to the effects of the domain *)
+  (* Add stmt to the changes of the domain *)
   let exec stmt man flow =
-    D.exec stmt man flow |>
-    OptionExt.lift @@ fun res ->
-    Cases.map_effects (fun effects ->
-        man.set_effects (
-          man.get_effects effects |>
-          add_stmt_to_teffect stmt
-        ) effects
-      ) res
+    if is_change_tracker_enabled () then
+      D.exec stmt man flow |>
+      OptionExt.lift @@ fun res ->
+      Cases.map_changes (fun changes flow ->
+          man.add_change stmt [] flow changes
+        ) res
+    else
+      D.exec stmt man flow
 
   (* Remove duplicate evaluations *)
   let eval exp man flow =

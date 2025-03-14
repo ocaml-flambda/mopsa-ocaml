@@ -1,0 +1,6 @@
+(library
+ (name universal_partitioning)
+ (package mopsa)
+ (library_flags -linkall)
+ (libraries mopsa lang)
+ (flags :standard -open Lang))

@@ -60,7 +60,18 @@ struct
       key = "-c-entry";
       category = "C";
       doc = " name of the entry function to be analyzed";
-      spec = ArgExt.Set_string opt_entry_function;
+      spec = Set_string (opt_entry_function, ArgExt.empty);
+      default = "main";
+    }
+
+  let opt_check_memory = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-c-check-unreachable-memory";
+      category = "C";
+      doc = " check for unreachable allocated memory";
+      spec = Set opt_check_memory;
       default = "main";
     }
 
@@ -81,9 +92,33 @@ struct
       key = "-c-symbolic-args";
       category = "C";
       doc = " set the number of symbolic arguments given to main (syntax: min[:max])";
-      spec = ArgExt.String (fun s -> opt_symbolic_args := Some (parse_symbolic_args_spec s));
+      spec = String ((fun s -> opt_symbolic_args := Some (parse_symbolic_args_spec s)), ArgExt.empty);
       default = "";
     }
+
+  let opt_arg_max_size = ref None
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args-max-size";
+      category = "C";
+      doc = " set the maximum allocated size of all symbolic arguments";
+      spec = Int ((fun s -> opt_arg_max_size := Some s), ArgExt.empty);
+      default = "18446744073709551615";
+    }
+
+
+  let opt_arg_min_size = ref None
+
+  let () =
+    register_domain_option name {
+      key = "-c-symbolic-args-min-size";
+      category = "C";
+      doc = " set the maximum allocated size of all symbolic arguments";
+      spec = Int ((fun s -> opt_arg_min_size := Some s), ArgExt.empty);
+      default = "1"
+    }
+
 
 
   let checks = []
@@ -94,8 +129,13 @@ struct
 
   let init prog man flow =
     match prog.prog_kind with
-    | C_program p -> set_c_program p flow
-    | _ -> flow
+    | C_program p -> 
+      set_c_program p flow |>
+      set_c_target_info !Frontend.target_info |>
+      Post.return |>
+      Option.some
+
+    | _ -> None
 
 
   (** Computation of post-conditions *)
@@ -113,7 +153,14 @@ struct
         in
         if cvar.cvar_scope = Variable_extern then acc
         else
-          let stmt = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
+          let decl = mk_c_declaration v init cvar.cvar_scope cvar.cvar_range in
+          let stmt =
+            match cvar.cvar_before_stmts, cvar.cvar_after_stmts with
+            | [], [] -> decl
+            | before, [] -> mk_block (before @ [decl]) cvar.cvar_range
+            | [], after -> mk_block (decl::after) cvar.cvar_range
+            | before, after -> mk_block (before @ [decl] @ after) cvar.cvar_range
+          in
           acc >>% man.exec stmt
       ) (Post.return flow)
 
@@ -142,6 +189,24 @@ struct
       ) vars
     |> fst
 
+  let check_memory_allocation man range flow =
+    if not !opt_check_memory then flow else
+    (* debug "%a" (format @@ Flow.print man.lattice.print) flow; *)
+    let open Universal.Heap.Recency in
+    let dead_addrs =
+      let alive_addrs = ask_and_reduce man.ask Q_alive_addresses_aspset flow in
+      let all_addrs = ask_and_reduce man.ask Q_allocated_addresses_aspset flow in
+      debug "All addrs: %a@.Alive addrs %a" (format Pool.print) all_addrs (format Pool.print) alive_addrs;
+      Pool.diff all_addrs alive_addrs in
+    let interesting_dead_addrs =
+      Pool.filter (fun a ->
+          (* FIXME: we could also check the range... *)
+          match akind a with
+          | A_stub_resource m -> m = "Memory"
+          | _ -> false
+        ) dead_addrs in
+    (* FIXME add safe check otherwise *)
+    Pool.fold (fun addr flow -> Common.Alarms.raise_c_unreachable_memory addr range man flow) interesting_dead_addrs flow
 
   (** Execute exit functions using a loop *)
   let exec_exit_functions_with_loop a b buf range man flow =
@@ -180,6 +245,7 @@ struct
         | _ -> assert false
     in
     aux (Z.pred b) flow >>% fun flow ->
+    let flow = check_memory_allocation man range flow in
     Post.return (Flow.remove T_cur flow)
 
 
@@ -194,7 +260,7 @@ struct
         let evl = man.eval nb flow ~translate:"Universal" in
         Cases.fold_result
           (fun acc nb flow ->
-             man.ask (mk_int_interval_query nb) flow |>
+             ask_and_reduce man.ask (mk_int_interval_query nb) flow |>
              I.join_bot acc
           ) Bot.BOT evl
       in
@@ -299,7 +365,7 @@ struct
 
     (* Initialize its size to (|args| + 2)*sizeof(ptr) *)
     eval_bytes argv range man flow >>$ fun argv_bytes flow ->
-    let n = Z.mul (sizeof_type (T_c_pointer s8)) (Z.of_int (nargs + 2)) in
+    let n = Z.mul (sizeof_type (T_c_pointer s8) flow) (Z.of_int (nargs + 2)) in
     man.exec (mk_assign argv_bytes (mk_z n range) range) flow >>% fun flow ->
 
     (* Initialize argv[0] with the name of the program *)
@@ -307,7 +373,7 @@ struct
     eval_bytes arg range man flow >>$ fun arg0_bytes flow ->
     let program_name = "a.out" in
     let min = mk_int (String.length program_name + 1) range in
-    let max = mk_z (snd (rangeof (size_type ()))) range in
+    let max = mk_z (snd (rangeof (size_type flow) flow)) range in
     man.exec (mk_assume (mk_in arg0_bytes min max range) range) flow >>% fun flow ->
     init_concrete_arg arg program_name range man flow >>% fun flow ->
     let argv0 = mk_c_subscript_access argv (mk_zero range) range in
@@ -423,7 +489,7 @@ struct
       match hi with
       | None -> lo'
       | Some hi -> hi + 1 in
-    let int_max = rangeof s32 |> snd |> Z.to_int in
+    let int_max = rangeof s32 flow |> snd |> Z.to_int in
     if (lo' > hi') || (hi' > int_max - 1) then
       panic "incorrect argc value [%d,%d]" lo' hi'
     ;
@@ -439,7 +505,7 @@ struct
     eval_bytes argv range man flow >>$ fun argv_bytes flow ->
     let n =
       mul (add argc (mk_one range) range)
-          (mk_z (sizeof_type (T_c_pointer s8)) range)
+          (mk_z (sizeof_type (T_c_pointer s8) flow) range)
           range
     in
     man.exec (mk_assume (eq argv_bytes n range) range) flow >>% fun flow ->
@@ -448,8 +514,14 @@ struct
     alloc_symbolic_args lo' hi' range man flow >>$ fun (args,smash_arg) flow ->
 
     (* Initialize the size of arguments *)
-    let min_size = mk_one range in
-    let max_size = mk_z (rangeof (size_type ()) |> snd) range in
+    let min_size =
+      match !opt_arg_min_size with
+      | None -> mk_one range
+      | Some s -> mk_int s range in
+    let max_size =
+      match !opt_arg_max_size with
+      | None -> mk_z (rangeof (size_type flow) flow |> snd) range
+      | Some s -> mk_int s range in
     let init_size arg flow =
       eval_bytes arg range man flow >>$ fun bytes flow ->
       man.exec (mk_assume (mk_in bytes min_size max_size range) range) flow
@@ -482,7 +554,9 @@ struct
         cvar_uid = 0;
         cvar_orig_name = "#i";
         cvar_uniq_name = "#i";
-      }) (size_type ()) in
+        cvar_before_stmts = [];
+        cvar_after_stmts = [];
+      }) (size_type flow) in
     List.fold_left
       (fun acc arg -> acc >>% assume_valid_string arg qi range man)
       (Post.return flow) args
@@ -520,24 +594,23 @@ struct
     exec_entry_body main man flow
 
 
-
   let call_main main args functions man flow =
-    if List.length main.c_func_parameters = 2 then
+    (if List.length main.c_func_parameters = 2 then
       match !opt_symbolic_args, args with
-      | None, Some args   -> call_main_with_concrete_args main args man flow
+      | None, Some args   ->
+        call_main_with_concrete_args main args man flow
       | Some(lo,hi), None ->
         if lo = 0 && (hi = Some 0 || hi = None) then
           call_main_with_concrete_args main [] man flow
         else
           call_main_with_symbolic_args main lo hi man flow
       | None, None ->
-        let hi = rangeof s16 |> snd |> Z.to_int in
+        let hi = rangeof s16 flow |> snd |> Z.to_int in
         call_main_with_symbolic_args main 0 (Some (hi-2)) man flow
       | Some(lo,hi), Some args  -> panic "-c-symbolic-main-args used with concrete arguments"
     else
-      exec_entry_body main man flow >>% fun flow ->
+      exec_entry_body main man flow) >>% fun flow ->
       exec_exit_functions "exit" main.c_func_name_range man flow
-
 
   let exec stmt man flow =
     match skind stmt with
@@ -559,7 +632,7 @@ struct
       (* Special processing for main for initializing argc and argv*)
       if !opt_entry_function = "main" then
         call_main entry args c_functions man flow |>
-        OptionExt.return
+        OptionExt.return 
       else
       if List.length entry.c_func_parameters = 0 then
         (* Otherwise execute the body *)
@@ -567,7 +640,6 @@ struct
         OptionExt.return
       else
         panic "entry function %s with arguments not supported" entry.c_func_org_name
-
 
     | S_program ({ prog_kind = C_program{ c_globals; c_functions; c_stub_directives } }, _)
       when !Universal.Iterators.Unittest.unittest_flag ->
@@ -629,19 +701,20 @@ struct
   (** Handler of queries *)
   (** ================== *)
 
-  let ask : type r. ('a,r) query -> _ man -> _ flow -> r option = fun query man flow ->
+  let ask : type r. ('a,r) query -> _ man -> _ flow -> ('a, r) cases option = fun query man flow ->
+    let get_locals prog call =
+      let f = find_function call prog.c_functions in
+      f.c_func_local_vars @ f.c_func_parameters in
     let open Framework.Engines.Interactive in
     match query with
     (* Get the list of variables in the current scope *)
-    | Q_defined_variables ->
+    | Q_defined_variables None ->
       let prog = get_c_program flow in
       let cs = Flow.get_callstack flow in
       (* Get global variables *)
       let globals = List.map fst prog.c_globals in
       (* Get local variables of all functions in the callstack, following the same order *)
-      let locals = List.fold_right (fun call acc ->
-          let f = find_function call.Callstack.call_fun_orig_name prog.c_functions in
-          f.c_func_local_vars @ f.c_func_parameters @ acc
+      let locals = List.fold_right (fun call acc -> (get_locals prog call.Callstack.call_fun_orig_name) @ acc
                      ) cs []
       in
       let all_vars = globals @ locals in
@@ -660,8 +733,12 @@ struct
                     r.c_record_fields
              ))
         records;
-      Some all_vars
+      Some (Cases.singleton all_vars flow)
 
+    | Q_defined_variables (Some call) -> 
+      let prog = get_c_program flow in
+      Cases.singleton (get_locals prog call) flow 
+      |> OptionExt.return 
 
     (* Get the value of a variable *)
     | Framework.Engines.Interactive.Query.Q_debug_variable_value var ->
@@ -684,7 +761,7 @@ struct
         let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
-              let itv = man.ask (mk_int_interval_query ~fast:false ee) flow in
+              let itv = ask_and_reduce man.ask (mk_int_interval_query ~fast:false ee) flow in
               I.join_bot itv acc
             ) Bot.BOT evl
         in
@@ -698,7 +775,7 @@ struct
         let evl = man.eval e flow ~translate:"Universal" in
         let itv = Cases.fold_result
             (fun acc ee flow ->
-               let itv = man.ask (mk_float_interval_query ee) flow in
+               let itv = ask_and_reduce man.ask (mk_float_interval_query ee) flow in
                ItvUtils.FloatItvNan.join itv acc
             ) ItvUtils.FloatItvNan.bot evl
         in
@@ -813,7 +890,7 @@ struct
 
       (* All together! *)
       let vname = Format.asprintf "%a" pp_var var in
-      Some (get_var_value PointsToSet.empty vname (mk_var var range))
+      Some (Cases.singleton (get_var_value PointsToSet.empty vname (mk_var var range)) flow)
 
     | _ -> None
 

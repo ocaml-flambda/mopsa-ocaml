@@ -1,4 +1,5 @@
 (library
  (name python)
  (public_name mopsa.mopsa_analyzer.python)
+ (library_flags -linkall)
  (libraries python_common data_model desugar python_flows python_hooks python_libs python_objects python_packing types))

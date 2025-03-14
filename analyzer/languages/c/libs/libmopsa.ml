@@ -137,7 +137,7 @@ struct
     Format.fprintf fmt "%s = %a"
       display
       (Cases.print_result (fun fmt e flow ->
-           let itv = man.ask (mk_int_interval_query e) flow in
+           let itv = ask_and_reduce man.ask (mk_int_interval_query e) flow in
            pp_int_interval fmt itv
          )
       ) evl
@@ -148,7 +148,7 @@ struct
     Format.fprintf fmt "%s = %a"
       display
       (Cases.print_result (fun fmt e flow ->
-           let itv = man.ask (mk_float_interval_query e) flow in
+           let itv = ask_and_reduce man.ask (mk_float_interval_query e) flow in
            pp_float_interval fmt itv
          )
       ) evl
@@ -166,7 +166,7 @@ struct
              Format.fprintf fmt "&(%a%a)"
                pp_base base
                (Cases.print_result (fun fmt e flow ->
-                    let itv = man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
+                    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_int_interval_query e) flow in
                     (format Universal.Numeric.Values.Intervals.Integer.Value.print) fmt itv
                   )
                ) evl
@@ -231,7 +231,7 @@ struct
   (** {2 Transfer functions} *)
   (*==========================================================================*)
 
-  let init _ _ flow =  flow
+  let init _ _ flow = None
 
   let exec stmt man flow = None
 
@@ -321,10 +321,13 @@ struct
       OptionExt.return
 
     | E_c_builtin_call("_mopsa_assert_reachable", []) ->
+      let open Universal_iterators.Iterators.Unittest in
       let b = not (man.lattice.is_bottom (Flow.get T_cur man.lattice flow)) in
-      let cond = mk_bool b exp.erange in
-      let stmt = mk_assert cond exp.erange in
-      man.exec stmt flow >>%? fun flow ->
+      let flow = if b then
+        safe_assert_check exp.erange man flow
+      else
+        raise_assert_fail ~force:true (mk_bool b exp.erange) man flow
+      in
       Eval.singleton (mk_int 0 exp.erange) flow |>
       OptionExt.return
 

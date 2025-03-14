@@ -25,6 +25,10 @@
 #include <Python.h>
 #include <structmember.h>
 
+#if PY_VERSION_HEX < 0x030b0000 // Python 3.11
+#define Py_SET_TYPE(a,b) (Py_TYPE((a)) = (b))
+#endif
+
 // transfer function in cmodule.c
 PyObject *PyUnicode_GetItem(PyObject *list, Py_ssize_t index);
 
@@ -87,11 +91,16 @@ static inline void _noop(PyObject *op) {}
 
 #define _PyObject_GC_New _PyObject_New
 
+#define WARN(msg)                                                              \
+  do {                                                                         \
+    if (PyErr_WarnEx(PyExc_RuntimeWarning, msg, 1) < 0)                        \
+      return -1;                                                               \
+  } while (0)
 
 /* // stubs used by the analysis */
 typedef struct exc_data {
-    PyObject* exc_state;
-    char* exc_msg;
+  PyObject *exc_state;
+  const char *exc_msg;
 } exc_data;
 
 int _mopsa_pyerr_bind_cs_to(exc_data*);
@@ -132,3 +141,5 @@ PyAPI_FUNC(int) PyOS_vsnprintf(char *str, size_t size, const char  *format, va_l
 
 
 #endif
+
+static PyObject *type_error(const char *msg, PyObject *obj);

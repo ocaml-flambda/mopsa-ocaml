@@ -69,82 +69,102 @@ let opt_stubs_files = ref []
 let opt_ignored_translation_units = ref []
 (** List of translation units to ignore during linking *)
 
+let opt_save_preprocessed_file = ref ""
+(** Where to save the preprocessed file *)
+
+let opt_store_project = ref true
+(** Store project in memory for automated testcase reduction capabilities *)
+
 let () =
   register_language_option "c" {
     key = "-I";
     category = "C";
     doc = " add the directory to the search path for include files in C analysis";
-    spec = ArgExt.Set_string_list opt_include_dirs;
+    spec = String (ArgExt.set_string_list_lifter opt_include_dirs, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-ccopt";
     category = "C";
     doc = " pass the option to the Clang frontend";
-    spec = ArgExt.Set_string_list opt_clang;
+    spec = String (ArgExt.set_string_list_lifter opt_clang, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-make-target";
     category = "C";
     doc = " binary target to analyze; used only when the Makefile builds multiple targets.";
-    spec = ArgExt.Set_string opt_make_target;
+    spec = Set_string (opt_make_target, ArgExt.empty); (* FIXME BASH *)
     default = "";
   };
   register_language_option "c" {
     key = "-without-libc";
     category = "C";
     doc = " disable stubs of the standard C library.";
-    spec = ArgExt.Set opt_without_libc;
+    spec = Set opt_without_libc;
     default = "false";
   };
   register_language_option "c" {
     key = "-disable-parser-cache";
     category = "C";
     doc = " disable the cache of the Clang parser.";
-    spec = ArgExt.Clear opt_enable_cache;
+    spec = Clear opt_enable_cache;
     default = "unset";
   };
   register_language_option "c" {
     key = "-Wall";
     category = "C";
     doc = " display compiler warnings.";
-    spec = ArgExt.Set opt_warn_all;
+    spec = Set opt_warn_all;
     default = "unset";
   };
   register_language_option "c" {
     key = "-use-stub";
     category = "C";
     doc = " list of functions for which the stub is used instead of the declaration.";
-    spec = ArgExt.Set_string_list opt_use_stub;
+    spec = String (ArgExt.set_string_list_lifter opt_use_stub, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-library-only";
     category = "C";
     doc = " allow library-only targets in the .db files (used for multilanguage analysis)";
-    spec = ArgExt.Set opt_library_only;
+    spec = Set opt_library_only;
     default = "false";
   };
   register_language_option "c" {
     key = "-additional-stubs";
     category = "C";
     doc = " additional stubs file";
-    spec = ArgExt.Set_string_list opt_stubs_files;
+    spec = String (ArgExt.set_string_list_lifter opt_stubs_files, ArgExt.empty);
     default = "";
   };
   register_language_option "c" {
     key = "-target-triple";
     category = "C";
     doc = " target architecture to analyze, as a triple (host if left empty).";
-    spec = ArgExt.Set_string opt_target_triple;
+    spec = Set_string (opt_target_triple, ArgExt.empty); (* FIXME BASH completion *)
     default = "";
   };
   register_language_option "c" {
     key = "-c-ignore-translation-units";
     category = "C";
     doc = " list of translation units ignored during linking.";
-    spec = ArgExt.Set_string_list opt_ignored_translation_units;
+    spec = String (ArgExt.set_string_list_lifter opt_ignored_translation_units, ArgExt.empty);
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-c-preprocess-and-exit";
+    category = "C";
+    doc = " save the whole analyzed project into a single preprocessed file passed as argument to this option; then exit";
+    spec = ArgExt.Set_string (opt_save_preprocessed_file, ArgExt.empty);
+    default = "";
+  };
+  register_language_option "c" {
+    key = "-c-no-project-storage";
+    category = "C";
+    doc = " do not keep the full project in memory (used for automated testcase reduction, but may consume memory)";
+    spec = ArgExt.Clear opt_store_project;
     default = "";
   };
   ()
@@ -188,6 +208,11 @@ type ctx = {
 let input_files : string list ref = ref []
 (** List of input files *)
 
+let target_info = ref host_target_info
+(** Target information used for parsing *)
+
+let o_prj : Mopsa_c_parser.C_AST.project option ref = ref None
+(** Saved project *)
 
 let find_function_in_context ctx range (f: C_AST.func) =
   try StringMap.find f.func_unique_name ctx.ctx_fun
@@ -236,21 +261,34 @@ let is_ignored_translation_unit file =
        n >= n' && (String.equal file' (String.sub file (n - n') n'))
     ) !opt_ignored_translation_units
 
+(* Save prj into single preprocessed file at output_file. Returns the list of stub files that need to be used when analyzing the preprocessed file *)
+let save_preprocessed_file prj output_file = 
+  let outch = open_out output_file in 
+  let () = C_print.print_project ~verbose:false outch prj in
+  let () = close_out outch in
+  !opt_stubs_files @ List.filter
+    (fun f ->
+       Filename.check_suffix (Filename.dirname f) "share/mopsa/stubs/c/libc"
+    ) prj.proj_files 
+
+
 (** {2 Entry point} *)
 (** =============== *)
 
 let rec parse_program (files: string list) =
   let open Clang_parser in
   let open Clang_to_C in
+  if !opt_save_preprocessed_file <> "" then Clang_to_C.simplify := false;
 
   if files = [] then panic "no input file";
 
   (* let's initialize target from the option *)
   if !opt_target_triple <> "" then 
-    Ast.target_info := get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple });
-  let target = !Ast.target_info in
-  Mopsa_c_stubs_parser.Cst.target_info := target;
-  let ctx = Clang_to_C.create_context "project" target in
+    target_info :=
+      get_target_info ({ Clang_AST.empty_target_options with target_triple = !opt_target_triple })
+  ;
+  Mopsa_c_stubs_parser.Cst.target_info := !target_info;
+  let ctx = Clang_to_C.create_context "project" !target_info in
   let nb = List.length files in
   input_files := [];
   let () =
@@ -267,6 +305,29 @@ let rec parse_program (files: string list) =
       panic "Parsing error raised:@.%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@.") (fun fmt (range, msg) -> Format.fprintf fmt "%a: %s" pp_range range msg)) es in
   let () = parse_stubs ctx () in
   let prj = Clang_to_C.link_project ctx in
+  if !opt_store_project then o_prj := Some prj;
+  let () =
+    if !opt_save_preprocessed_file <> "" then
+      let stub_files = save_preprocessed_file prj !opt_save_preprocessed_file in
+      let ppl = Format.pp_print_list
+          ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
+          Format.pp_print_string in
+      let () = warn "Preprocessed file generated to %s." !opt_save_preprocessed_file in
+      let () =
+        if List.length stub_files > 0 then
+          warn "If you want to run Mopsa on this file, do not forget to keep libc stubs (%a), e.g@\n%a"
+            ppl stub_files
+            ppl (List.append
+                   (List.filter (fun a ->
+                        not @@ List.mem a files
+                        && not @@ String.starts_with ~prefix:"-make-target=" a
+                        && not @@ String.starts_with ~prefix:"-c-preprocess-and-exit=" a)
+                       (Array.to_list Sys.argv))
+                   (!opt_save_preprocessed_file::stub_files)
+                );
+      in
+      exit 0
+  in
   {
     prog_kind = from_project prj;
     prog_range = mk_program_range files;
@@ -340,6 +401,11 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   let opts' = ("-I" ^ (Paths.resolve_stub "c" "mopsa")) ::
               ("-include" ^ "mopsa.h") ::
               "-Wall" ::
+              (* recent versions of Clang promote warnings as errors
+                 -> we revert them to warnings
+               *)
+              "-Wno-error=incompatible-function-pointer-types" ::
+              "-Wno-error=implicit-function-declaration" ::
               "-Qunused-arguments"::
               (List.map (fun dir -> "-I" ^ dir) !opt_include_dirs) @
               opts @
@@ -349,7 +415,7 @@ and parse_file (cmd: string) ?nb ?(stub=false) (opts: string list) (file: string
   (* if adding a stub file, keep all static functions as they may be used
      by stub annotations
    *)
-  C_parser.parse_file cmd file opts' !opt_target_triple !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx
+  C_parser.parse_file cmd file opts' ~target_options:!target_info.target_options !opt_warn_all enable_cache stub (ignore || is_ignored_translation_unit file) ctx !opt_use_stub
 
 
 and parse_stubs ctx () =
@@ -462,17 +528,12 @@ and from_project prj =
 
 
 and find_target target targets =
-  let re = Str.regexp (".*" ^ target ^ "$") in
-  let search_targets r =
-    List.find (fun t ->
-        Str.string_match r t 0
-      ) targets in
   try
-    search_targets re
+    List.find (fun t -> String.equal (Filename.basename t) target) targets
   with Not_found ->
-    let re_permissive = Str.regexp (".*" ^ target ^ ".*") in
-    let t = search_targets re_permissive in
-    warn "permissive search selected target %s" t;
+    let re_permissive = Str.regexp ("^" ^ target ^ ".*") in
+    let t = List.find (fun t -> Str.string_match re_permissive (Filename.basename t) 0) targets in
+    warn "permissive search selected target %s (initial target: %s)" t target;
     t
 
 (** {2 functions} *)
@@ -529,9 +590,45 @@ and from_stmt ctx ((skind, range): C_AST.statement) : stmt =
     | C_AST.S_jump (C_AST.S_return (None, upd)) -> S_c_return (None,from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_return (Some e, upd)) -> S_c_return (Some (from_expr ctx e), from_scope_update ctx upd)
     | C_AST.S_jump (C_AST.S_switch (cond, body)) -> Ast.S_c_switch (from_expr ctx cond, from_block ctx end_range body)
-    | C_AST.S_target(C_AST.S_case(e,upd)) -> S_c_switch_case(from_expr ctx e, from_scope_update ctx upd)
+    | C_AST.S_target(C_AST.S_case(es,upd)) ->
+      let es' = List.map (from_expr ctx) es in
+      let try_bundle_into_range es =
+        (* we can safely assume List.length es > 0 *)
+        let efirst, estl = List.hd es, List.tl es in
+        let tfirst = etyp efirst in 
+        match ekind efirst with
+        | E_constant (C_int first) ->
+          let rec process op acc l = match l with
+            | [] ->
+              if Z.equal acc first then None
+              else
+                if (Z.(first <= acc)) then
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite first) (ItvUtils.IntBound.Finite acc) efirst.erange)
+                else 
+                  Some (mk_int_general_interval (ItvUtils.IntBound.Finite acc) (ItvUtils.IntBound.Finite first) efirst.erange)
+            | {ekind = E_constant (C_int h); etyp = th} ::tl when Z.(h = (op acc one)) && compare_typ th tfirst = 0 ->
+              process op h tl
+            | hd :: tl ->
+              let () = debug "first=%a, acc=%s, hd=%a, skipping" pp_expr efirst (Z.to_string acc) pp_expr hd in 
+              None
+          in
+          let oitv_increasing = process Z.add first estl in
+          if oitv_increasing = None then
+            process Z.sub first estl
+          else oitv_increasing
+        | _ -> None
+      in
+      begin match try_bundle_into_range es' with
+        | None ->
+          let () = debug "failed to bundle switch at range %a" pp_range srange in
+          S_c_switch_case(es', from_scope_update ctx upd)
+        | Some itv ->
+          let () = debug "bundled switch at range %a into %a" pp_range srange pp_expr itv in
+          S_c_switch_case([itv], from_scope_update ctx upd)
+      end 
     | C_AST.S_target(C_AST.S_default upd) -> S_c_switch_default (from_scope_update ctx upd)
     | C_AST.S_target(C_AST.S_label l) -> Ast.S_c_label l
+    | C_AST.S_asm a -> Ast.S_c_asm (C_print.string_of_statement (skind,range))
   in
   {skind; srange}
 
@@ -657,7 +754,7 @@ and from_character_kind : C_AST.character_kind -> Ast.c_character_kind = functio
   | Clang_AST.Char_UTF8 -> Ast.C_char_utf8
   | Clang_AST.Char_UTF16 -> Ast.C_char_utf16
   | Clang_AST.Char_UTF32 -> Ast.C_char_utf8
-
+  | Clang_AST.Char_Unevaluated -> Ast.C_char_unevaluated
 
 (** {2 Variables} *)
 (** ============= *)
@@ -674,6 +771,8 @@ and from_var ctx (v: C_AST.variable) : var =
             cvar_scope = from_var_scope ctx v.var_kind;
             cvar_range = from_range v.var_range;
             cvar_uid = v.var_uid;
+            cvar_before_stmts = List.map (from_stmt ctx) v.var_before_stmts;
+            cvar_after_stmts = List.map (from_stmt ctx) v.var_after_stmts;
           })
         (from_typ ctx v.var_type)
     in
@@ -802,7 +901,7 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
                    c_enum_val_value = v.enum_val_value;
                    c_enum_val_range = from_range v.enum_val_range;
                  }) e.enum_values;
-          c_enum_integer_type = from_integer_type e.enum_integer_type;
+          c_enum_integer_type = from_integer_type (OptionExt.none_to_exn e.enum_integer_type);
           c_enum_range = from_range e.enum_range;
         }
       in
@@ -814,8 +913,9 @@ and from_unqual_typ ctx (tc: C_AST.typ) : typ =
      (* translate vector into array type *)
      let t = from_typ ctx v.vector_type in
      (* size is in bytes, length is in units of t *)
-     let len = Z.div (Z.of_int v.vector_size) (sizeof_type t) in
+     let len = Z.div (Z.of_int v.vector_size) (sizeof_type_in_target t !target_info) in
      Ast.T_c_array (t, Ast.C_array_length_cst len)
+  | C_AST.T_unknown_builtin s -> Ast.T_c_unknown_builtin s
 
 and from_integer_type : C_AST.integer_type -> Ast.c_integer_type = function
   | C_AST.Char SIGNED -> Ast.C_signed_char
@@ -1118,9 +1218,77 @@ and from_stub_predicates com_map =
         ) acc
     ) com_map StringMap.empty
 
+let on_panic exn files time =
+  (* Provide automated testcase reduction hints if possible *)
+  match exn with
+  | Exceptions.Panic(msg, _) | Exceptions.PanicAtLocation(_, msg, _) | Exceptions.PanicAtFrame(_, _, msg, _) ->
+    (* we can simplify now that we're in the frontend *)
+    let multiple_files = List.length
+        (List.filter (fun s ->
+             not @@ (try
+               let _ = Str.search_forward (Str.regexp "share/mopsa/stubs/c/") s 0 in
+               true
+             with Not_found -> false)) files) > 1
+                         || List.exists (fun f -> Filename.extension f = ".db") files in
+    if multiple_files && not !opt_store_project then
+      Format.printf "@\nTo benefit from Mopsa's automated testcase reduction capabilities, please remove command-line option `-c-no-project-storage`@\n"
+    else
+      let mopsa_command, stub_files, file_to_reduce =
+        let mopsa_command = Format.asprintf "%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) (List.filter (fun s -> not @@ List.mem s files) (Array.to_list Sys.argv)) in
+        match multiple_files, List.find_opt (String.ends_with ~suffix:".i") files with
+        | false, None ->
+          (* single file: easy *)
+          mopsa_command, [], List.hd files
+        | true, None ->
+          (* multiple files, but no preprocessed one: to generate *)
+          if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
+            let () = Format.printf "@\n%a Do you want to try automated testcase reduction (using creduce/cvise) to find/report a minimal program that still crashes Mopsa? If yes, Mopsa will generate a preprocessed C file of your project. [Y/n]@."
+                (Debug.color_str Debug.magenta) "Mopsa encountered a fatal error."
+            in
+            let answer = input_line stdin in
+            if answer = "" || (String.lowercase_ascii answer).[0] = 'y' then
+              let preprocessed_file =
+                assert (!opt_make_target <> "");
+                !opt_make_target ^ ".i" in
+              let preprocessed_file =
+                if Sys.file_exists preprocessed_file then
+                  Filename.basename @@ Filename.temp_file ~temp_dir:(Sys.getcwd ()) "" ".i"
+                else
+                  preprocessed_file in
+              let stub_files = save_preprocessed_file (OptionExt.none_to_exn !o_prj) preprocessed_file in
+              mopsa_command, stub_files, preprocessed_file
+            else
+              exit 2
+          else
+            let () = Format.printf "@\n%a@\n"
+              (Debug.color_str Debug.magenta) "Hint: to get automated testcase reduction instructions, launch the analysis again in a TTY (without redirections, etc)." in
+            exit 2
+        | _, Some s ->
+          (* multiple files, including a preprocessed one: no preprocessing to generate again *)
+          mopsa_command, List.filter (fun s ->
+              try
+                let _ = Str.search_forward (Str.regexp "share/mopsa/stubs/c/") s 0 in
+                true
+              with Not_found -> false) files, s
+      in
+      (* Large timeout due to potential slowdown with large parallelization *)
+      let timeout = int_of_float (5. +. 4. *. time) in
+      Format.printf "@\n%a using the following command (you may need to generalize a bit the MOPSA_ERR_STRING):@\nMOPSA_ERR_STRING=\"%s\" MOPSA_COMMAND=\"%s\" MOPSA_STUBS=\"%a\" FILE_TO_REDUCE=%s bash -c 'cvise --timeout %d %s $FILE_TO_REDUCE'@\n"
+        (Debug.color_str Debug.magenta) "Hint: try automated testcase reduction using creduce or cvise"
+        (String.escaped msg)
+        mopsa_command
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Format.pp_print_string) stub_files
+        file_to_reduce
+        timeout
+        (!Paths.opt_share_dir ^ "/../../tools/reducer-oracle.sh")
+  | _ ->
+    ()
+
+
 (* Front-end registration *)
 let () =
   register_frontend {
     lang = "c";
     parse = parse_program;
+    on_panic = on_panic;
   }

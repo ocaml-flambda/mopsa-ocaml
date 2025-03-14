@@ -46,6 +46,11 @@ let get_lang_stubs_dir lang () =
 let resolve_stub lang stub =
   Filename.concat (get_lang_stubs_dir lang ()) stub
 
+let absolute_path path =
+  if Filename.is_relative path then
+    Filename.concat (Sys.getcwd ()) path
+  else
+    path
 
 (** Return the path of the configuration file *)
 let resolve_config_file config =

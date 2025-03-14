@@ -1,0 +1,6 @@
+(library
+ (name powersets)
+ (public_name mopsa.mopsa_analyzer.universal.numeric.values.powersets)
+ (libraries lang numeric_common mopsa_utils)
+ (library_flags -linkall)
+ (flags :standard -open Lang -open Numeric_common))

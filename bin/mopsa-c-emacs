@@ -4,7 +4,7 @@ COMMAND="(progn \
 (split-window-sensibly (selected-window)) \
 (other-window 1) \
 (setq compilation-scroll-output 'first-error) \
-(compile \"mopsa-c $@\") \
+(compile \"mopsa-c "$@"\") \
 (switch-to-buffer-other-window \"*compilation*\"))"
 
 emacs --no-splash --eval "${COMMAND}"

@@ -1,0 +1,58 @@
+<div class="highlight">
+  <pre>
+<b class="BOLD" style="color:#ff8700;">Analysis terminated successfully (with assumptions)</b>
+Analysis time: 0.960s
+
+<b class="BOLD" style="color:#ff8700;">⚠</b> Check #4:
+<b class="BOLD">./counter.c</b>: In function '<b class="BOLD">CounterIncr</b>':
+<b class="BOLD">./counter.c:19.2-18</b>: <b class="BOLD" style="color:#ff8700;">warning</b>: <b class="BOLD" style="color:#ff8700;">Integer overflow</b>
+
+  <b class="BOLD">19</b>:   <b class="BOLD" style="color:#ff8700;">self-&gt;count += i</b>;
+        <b class="BOLD" style="color:#ff8700;">^^^^^^^^^^^^^^^^</b>
+  '<b class="BOLD">(@Inst{c class counter.Counter}:kAbt598DpMv9uK!6On%fD[16]:s32 + i)</b>' has value [0,2147483648] that is larger than the range of '<b class="BOLD">signed int</b>' = [-2147483648,2147483647]
+  '<b class="BOLD">(self-&gt;count + i)</b>' has value [0,2147483648] that is larger than the range of '<b class="BOLD">signed int</b>' = [-2147483648,2147483647]
+  Callstack:
+  	from count.py:8.0-8: CounterIncr
+
+
+<b class="BOLD" style="color:#ff5555;">✗</b> Check #506:
+<b class="BOLD">count.py</b>: In function '<b class="BOLD">PyErr_SetString</b>':
+<b class="BOLD">count.py:7.0-14</b>: <b class="BOLD" style="color:#ff5555;">error</b>: <b class="BOLD" style="color:#ff5555;">OverflowError exception</b>
+
+  <b class="BOLD">7</b>: <b class="BOLD" style="color:#ff5555;">c.incr(2**p-1)</b>
+     <b class="BOLD" style="color:#ff5555;">^^^^^^^^^^^^^^</b>
+  Uncaught Python exception: OverflowError: signed integer is greater than maximum
+  Uncaught Python exception: OverflowError: Python int too large to convert to C long
+  Callstack:
+  	from /home/raphael/these/mopsa/share/mopsa/stubs/cpython/python_stubs.c:923.16-34: PyErr_SetString
+  	from ./counter.c:17.6-38::convert_single[0]: PyParseTuple_int_helper
+  	from count.py:7.0-14: CounterIncr
+  +1 other callstack
+
+
+<b class="BOLD" style="color:#ff8700;">⚠</b> Check #507:
+<b class="BOLD">count.py:7.0-14</b>: <b class="BOLD" style="color:#ff8700;">warning</b>: <b class="BOLD" style="color:#ff8700;">SystemError exception</b>
+
+  <b class="BOLD">7</b>: <b class="BOLD" style="color:#ff8700;">c.incr(2**p-1)</b>
+     <b class="BOLD" style="color:#ff8700;">^^^^^^^^^^^^^^</b>
+  Uncaught Python exception: SystemError: CounterIncr returned a result with an error set
+
+Checks summary: <b class="BOLD">574 total</b>, <b class="BOLD" style="color:#00d700;">✔ 571 safe</b>, <b class="BOLD" style="color:#ff5555;">✗ 1 error</b>, <b class="BOLD" style="color:#ff8700;">⚠ 2 warnings</b>
+  Stub condition: 4 total, <b class="BOLD" style="color:#00d700;">✔ 4 safe</b>
+  Invalid memory access: 194 total, <b class="BOLD" style="color:#00d700;">✔ 194 safe</b>
+  Integer overflow: 186 total, <b class="BOLD" style="color:#00d700;">✔ 185 safe</b>, <b class="BOLD" style="color:#ff8700;">⚠ 1 warning</b>
+  Invalid shift: 72 total, <b class="BOLD" style="color:#00d700;">✔ 72 safe</b>
+  AttributeError exception: 25 total, <b class="BOLD" style="color:#00d700;">✔ 25 safe</b>
+  IndexError exception: 3 total, <b class="BOLD" style="color:#00d700;">✔ 3 safe</b>
+  ModuleNotFoundError exception: 2 total, <b class="BOLD" style="color:#00d700;">✔ 2 safe</b>
+  NameError exception: 26 total, <b class="BOLD" style="color:#00d700;">✔ 26 safe</b>
+  OverflowError exception: 1 total, <b class="BOLD" style="color:#ff5555;">✗ 1 error</b>
+  SystemError exception: 5 total, <b class="BOLD" style="color:#00d700;">✔ 4 safe</b>, <b class="BOLD" style="color:#ff8700;">⚠ 1 warning</b>
+  TypeError exception: 30 total, <b class="BOLD" style="color:#00d700;">✔ 30 safe</b>
+  UnboundLocalError exception: 26 total, <b class="BOLD" style="color:#00d700;">✔ 26 safe</b>
+
+1 assumption:
+  ./counter.c:67.26-59: in C/Python analysis, unsupported fields: <b class="BOLD">tp_as_async, tp_hash, tp_clear ...</b>
+
+</pre>
+</div>

@@ -1,0 +1,12 @@
+(install
+ (files
+  mopsa
+  (glob_files mopsa-*)
+  (glob_files_rec mopsa-wrappers/**))
+ (section bin))
+
+(install
+ (section share_root)
+ (package mopsa)
+ (files
+  (mopsa-completion as bash_completion/completions/mopsa-completion)))
