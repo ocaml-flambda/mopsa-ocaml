@@ -38,6 +38,8 @@ depends: [
   "zarith" {>= "1.10"}
   "odoc" {with-doc}
   "arg-complete" {>= "0.2.1"}
+  "sexplib"
+  "ppx_sexp_conv"
 ]
 depopts: ["elina"]
 available: [!(arch = "x86_32") & !(os-family = "windows") & opam-version >= "2.1.0"]
