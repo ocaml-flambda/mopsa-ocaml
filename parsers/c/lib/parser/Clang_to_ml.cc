@@ -303,8 +303,8 @@ public:
  */
 
 
-#define check_null(ptr, fn)                                             \
-  if (!ptr) { std::cerr << "mlClangAST: null pointer for " #ptr " in " fn << std::endl; abort(); }
+#define check_null(ptr, fn)                                                    \
+  if (!ptr) { caml_failwith("mlClangAST: internal null pointer check failed"); }
 
 
 /* execute BODY to get RES and cache,
@@ -524,7 +524,7 @@ CAMLprim value MLLocationTranslator::TranslateSourceLocation(SourceLocation a, i
   CAMLparam0();
   CAMLlocal2(ret,tmp);
   unsigned raw = a.getRawEncoding();
-  PresumedLoc loc;  
+  PresumedLoc loc;
   CACHED(cacheLoc, ret, raw, {
       loc = src.getPresumedLoc(a);
       ret = caml_alloc_tuple(3);
@@ -655,7 +655,7 @@ CAMLprim value MLCommentTranslator::TranslateRawCommentOpt(const RawComment *x) 
     Store_field(ret, 0, TranslateRawComment(x));
     Store_field(ret, 1, Val_emptylist);
   }
-  
+
   CAMLreturn(ret);
 }
 
@@ -2865,7 +2865,7 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
       /* Clang >= 8 */
 
 #if CLANG_VERSION_MAJOR >= 8
-        
+
       GENERATE_NODE(ConstantExpr, ret, node, 1, {
           Store_field(ret, 0, TranslateExpr(x->getSubExpr()));
         });
@@ -4978,7 +4978,7 @@ CAMLprim value getMacroTable(SourceManager& src, Preprocessor &pp, MLLocationTra
   CAMLlocal4(ret,tmp1,tmp2,tmp3);
 
   ret = Val_false;
-  
+
   const IdentifierTable & tbl = pp.getIdentifierTable();
   for (auto& id : tbl) {
     const IdentifierInfo* i = id.getValue();
@@ -5010,7 +5010,7 @@ CAMLprim value getMacroTable(SourceManager& src, Preprocessor &pp, MLLocationTra
 }
 
 
- 
+
 /* Source list */
 /************** */
 
@@ -5034,7 +5034,7 @@ CAMLprim value getSources(SourceManager& src)
   CAMLreturn(head);
 }
 
- 
+
 
 /* Parsing */
 /* ******* */
@@ -5145,7 +5145,7 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
 
   // get disgnostics
   ci.getDiagnosticClient().EndSourceFile();
-    
+
   // return all info
   ret = caml_alloc_tuple(5);
   Store_field(ret, 0, tmp);
@@ -5153,6 +5153,6 @@ CAML_EXPORT value mlclang_parse(value command, value target, value name, value a
   Store_field(ret, 2, com.getRawCommentList(Context));
   Store_field(ret, 3, getMacroTable(src, pp, loc));
   Store_field(ret, 4, getSources(src));
-    
+
   CAMLreturn(ret);
 }
