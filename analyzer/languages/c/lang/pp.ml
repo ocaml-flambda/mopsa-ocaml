@@ -214,6 +214,7 @@ let () =
       | S_c_goto_stab s -> fprintf fmt "@[<v 4>goto_stab {@,%a@]@,};" pp_stmt s
       | S_c_asm s -> fprintf fmt "%s;" s
       | S_c_ext_call (f, es) -> fprintf fmt "external %s(%a)" f.c_func_org_name (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) es
+      | S_unimplemented_ffi_function f -> fprintf fmt "unimplemented_ffi_function %s" f
       | _ -> default fmt stmt
     );
   register_program_pp (fun default fmt prg ->
