@@ -428,10 +428,11 @@ type stmt_kind +=
       for now, we keep only a string representation to display warnings;
       see C_AST.asm_kind for a more usable representation when support is added
    *)
-  (* runtime external call *)
-  | S_c_ext_call of c_fundec * expr list
+   | S_c_ext_call of c_fundec * expr list
+   (* runtime external call *)
 
-
+  | S_unimplemented_ffi_function of string
+  (* missing runtime function *)
 
 
 
@@ -954,6 +955,8 @@ let mk_ffi_call f exprs range =
 let mk_c_ext_call f exprs range =
   mk_stmt (S_c_ext_call (f, exprs)) range
 
+let mk_unimplemented_ffi_function f range =
+  mk_stmt (S_unimplemented_ffi_function f) range
 
 
 

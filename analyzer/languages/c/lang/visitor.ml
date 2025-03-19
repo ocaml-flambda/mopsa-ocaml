@@ -260,6 +260,10 @@ let () =
         {exprs = es; stmts = []},
         (function {exprs;stmts = []} -> { stmt with skind = S_c_ext_call (f, exprs) }
           | _ -> assert false )
+      | S_unimplemented_ffi_function f ->
+        {exprs = []; stmts = []},
+        (function {exprs = [];stmts = []} -> { stmt with skind = S_unimplemented_ffi_function f }
+          | _ -> assert false )
 
       | _ -> default stmt
     );

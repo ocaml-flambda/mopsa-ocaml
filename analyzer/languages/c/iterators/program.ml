@@ -122,6 +122,7 @@ struct
   module StringSet = Set.Make(String)
   let ffitest_extfuns : Type_shapes.extfun_desc StringMap.t ref = ref (StringMap.empty)
   let ffitest_missing_funs : StringSet.t ref = ref (StringSet.empty)
+  let ffitest_unimplemented_funs : StringSet.t ref = ref (StringSet.empty)
 
 
 
@@ -305,7 +306,7 @@ struct
         exec_all_runtime_functions fs man (flow' :: flows) ((f.c_func_org_name, res) :: results) flow
 
 
-  let output_results skipped_functions results to_test =
+  let output_results skipped_functions unimplemented_functions results to_test =
     let pp_unknown_functions fmt set =
       Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
     in
@@ -315,17 +316,22 @@ struct
     let pp_missing_functions fmt map =
       Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) map [])
     in
+    let pp_unimplemented_functions fmt set =
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
+    in
     let results_map = StringMap.of_list results in
     let missing_functions = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
       if not (!Output.Text.opt_no_ffi_report) then
         Format.printf
-          "**Analyzed functions:**\n%a\n**Skipped functions:**@\n@[%a@]@\n\n**Missing:**@\n@[%a@]@\n\n"
+          "**Analyzed functions:**\n%a\n**Skipped C functions:**@\n@[%a@]@\n\n**Missing external functions:**@\n@[%a@]@\n\n**Unimplemented OCaml FFI functions:**@\n@[%a@]@\n\n"
           pp_runtime_analysis_results
           results
           pp_unknown_functions
           skipped_functions
           pp_missing_functions
           missing_functions
+          pp_unimplemented_functions
+          unimplemented_functions
 
   let exec_runtime_tests c_functions man flow =
     (* Determine the runtime functions to execute; we sort them by program order *)
@@ -335,7 +341,7 @@ struct
     exec_all_runtime_functions ffi_functions man [] [] flow >>$ fun results flow ->
     (* we output the results, the functions that were assumed to be missing,
        and compute the functions that should have been checked but were not. *)
-    output_results (!ffitest_missing_funs) results (!ffitest_extfuns);
+    output_results (!ffitest_missing_funs) (!ffitest_unimplemented_funs) results (!ffitest_extfuns);
     Post.return flow
 
 
@@ -826,6 +832,10 @@ struct
 
     | S_c_ext_call (f, exprs) ->
       ffitest_missing_funs := StringSet.add (f.c_func_org_name) (!ffitest_missing_funs);
+      man.exec ~route:(Below name) stmt flow |> OptionExt.return
+
+    | S_unimplemented_ffi_function f ->
+      ffitest_unimplemented_funs := StringSet.add f (!ffitest_unimplemented_funs);
       man.exec ~route:(Below name) stmt flow |> OptionExt.return
 
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)

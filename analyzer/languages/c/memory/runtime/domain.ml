@@ -473,6 +473,8 @@ and shapes_deref man flow e range =
       None
     | S_c_ext_call (f, args) ->
       exec_ext_call f args man flow |> OptionExt.return
+    | S_unimplemented_ffi_function f ->
+      None
     | S_assign ({ ekind= E_var (var, mode) }, e) ->
       exec_update var e man flow >>% (fun flow -> man.exec ~route:(Below name) stmt flow) |> OptionExt.return
     | S_ffi_init_with_shape (exp, sh) ->
@@ -681,8 +683,15 @@ and shapes_deref man flow e range =
 
 
   let eval_unimplemented range man flow =
-    let flow = raise_ffi_unimplemented range man flow in
-    Cases.empty flow
+    let callstack = Flow.get_callstack flow in
+    if Callstack.is_empty_callstack callstack then
+      let flow = raise_ffi_unimplemented range man flow in
+      Cases.singleton (mk_unit range) flow
+    else
+      let call = Callstack.callstack_top callstack in
+      man.exec (mk_unimplemented_ffi_function call.call_fun_orig_name call.call_range) flow >>% fun flow ->
+      let flow = raise_ffi_unimplemented range man flow in
+      Cases.empty flow
 
   let exec_pass_on_shape_var range pv i cv man flow =
     eval_ocaml_value_shape_of_var pv range man flow >>$ fun sh flow ->
