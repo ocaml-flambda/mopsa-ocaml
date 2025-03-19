@@ -537,11 +537,9 @@ and shapes_deref man flow e range =
     | Some ((_, Nbt Rooted), _) ->
       let flow = raise_ffi_double_root ~bottom:false vexp man flow in
       Post.return flow
-    | Some ((Nbt Untracked, _), _) ->
-      let flow = raise_ffi_inactive_value ~bottom:true vexp man flow in
-      Post.return flow
-    | Some ((Nbt Active, Nbt NotRooted), shapes) ->
-      let m' = Map.add var ((Nbt Active, Root.embed Rooted), shapes) m in
+    | Some ((Nbt s, Nbt NotRooted), shapes) ->
+      (* NOTE: Recent  change: Non-active values can be rooted. *)
+      let m' = Map.add var ((Nbt s, Root.embed Rooted), shapes) m in
       set_env T_cur (m', l) man flow >>% fun flow ->
       let flow = safe_ffi_roots_check range man flow in
       Post.return flow
