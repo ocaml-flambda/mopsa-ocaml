@@ -93,6 +93,7 @@ struct
     | FFI_VARIANT
     | FFI_BIGARRAY
     | FFI_ABSTRACT
+    | FFI_CUSTOM
     | FFI_ANY
 
 
@@ -108,7 +109,8 @@ struct
     | FFI_VARIANT   -> 8
     | FFI_BIGARRAY  -> 9
     | FFI_ABSTRACT  -> 10
-    | FFI_ANY       -> 11
+    | FFI_CUSTOM    -> 11
+    | FFI_ANY       -> 255
 
 
   let runtime_shape_of_integer (z: int) =
@@ -123,6 +125,7 @@ struct
       FFI_VARIANT;
       FFI_BIGARRAY;
       FFI_ABSTRACT;
+      FFI_CUSTOM;
       FFI_ANY;
     ]
 
@@ -138,6 +141,7 @@ struct
     | FFI_VARIANT   -> OCamlValue.join (OCamlValue.any_standard_block ()) (OCamlValue.immediate ())
     | FFI_BIGARRAY  -> OCamlValue.bigarray ()
     | FFI_ABSTRACT  -> OCamlValue.abstract ()
+    | FFI_CUSTOM    -> OCamlValue.custom_block ()
     | FFI_ANY       -> OCamlValue.any ()
 
   let shape_of_runtime_shape (id: int) : OCamlValue.t option =
