@@ -39,7 +39,7 @@ open Common.Points_to
 module Domain =
 struct
 
-  (** {2 Domain header *)
+  (** {2 Domain header} *)
   (** ================ *)
 
   include GenStatelessDomainId(struct
