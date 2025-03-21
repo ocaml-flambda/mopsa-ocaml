@@ -126,6 +126,7 @@ let _ =
       "_ffi_pass_on_shape";
       "_ffi_assert_shape_subset";
       "_ffi_assert_shape_compat";
+      "_ffi_malloc_ptr";
 
       "__builtin_isfinite";
       "__builtin_isnormal";
