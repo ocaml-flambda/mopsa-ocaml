@@ -599,16 +599,37 @@ and shapes_deref man flow e range =
     Eval.singleton (mk_unit range) flow
 
 
-  let eval_fresh_pointer range man flow =
+
+  let eval_alloc_runtime_addr range man flow =
     man.eval (mk_alloc_addr A_runtime_resource ~mode:STRONG range) flow >>$ fun addr flow ->
     match ekind addr with
-    | E_addr (a, _) ->
-      let val_var = (mk_ffi_var_expr a range) in
-      man.exec (mk_add val_var range) flow >>% fun flow ->
-      Cases.singleton (mk_c_address_of val_var range) flow
+    | E_addr (a, _) -> Cases.singleton a flow
     | _ ->
       let flow = raise_ffi_internal_error (Format.asprintf "failed to allocate a fresh address") range man flow in
       Cases.empty flow
+
+
+  let eval_malloc_ptr_type typ range man flow =
+    match typ with
+    | T_c_pointer t -> Cases.singleton t flow
+    | _ ->
+      let flow = raise_ffi_internal_error (Format.asprintf "failed to allocate a fresh address; pointer type must be provided") range man flow in
+      Cases.empty flow
+
+  let eval_alloc_var_of_type typ range man flow =
+    eval_alloc_runtime_addr range man flow >>$ fun a flow ->
+    let val_var = (mk_ffi_var_expr a ~typ range) in
+    man.exec (mk_add val_var range) flow >>% fun flow ->
+    Cases.singleton (mk_c_address_of val_var range) flow
+
+
+  let eval_fresh_value_pointer range man flow =
+    eval_alloc_var_of_type ffi_value_typ range man flow
+
+  (* TODO: consider adding a second kind of variables here.*)
+  let eval_malloc_pointer expr range man flow =
+    eval_malloc_ptr_type expr.etyp range man flow >>$ fun typ flow ->
+    eval_alloc_var_of_type typ range man flow
 
 
   let rec eval_ffi_primtive_args args man flow =
@@ -778,7 +799,9 @@ and shapes_deref man flow e range =
     | "_ffi_release_lock", [] ->
       eval_update_runtime_lock range false man flow
     | "_ffi_fresh_value_ptr", [] ->
-      eval_fresh_pointer range man flow
+      eval_fresh_value_pointer range man flow
+    | "_ffi_malloc_ptr", [e] ->
+      eval_malloc_pointer e range man flow
     | "_ffi_is_immediate", [e] ->
       eval_is_immediate e range man flow
     | "_ffi_unimplemented", [] ->
@@ -789,6 +812,7 @@ and shapes_deref man flow e range =
       eval_assert_shape_subset e1 e2 range man flow
     | "_ffi_assert_shape_compat", [e1; e2] ->
         eval_assert_shape_compat e1 e2 range man flow
+
     | _, _ ->
       let msg = Format.asprintf "unsupported ffi call %s(%a)" f (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ", ") pp_expr) args in
       let flow = raise_ffi_internal_error msg range man flow in
