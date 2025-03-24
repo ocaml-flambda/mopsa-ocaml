@@ -856,7 +856,19 @@ and shapes_deref man flow e range =
 
 
 
-  let print_expr man flow printer exp = ()
+  let rec print_expr man flow printer exp =
+    match ekind exp with
+    | E_var (v,_) ->
+      get_env T_cur man flow |>
+      Cases.iter_result (fun (m, l) flow ->
+        match Map.find_opt v m with
+        | None -> ()
+        | Some rts ->
+          pprint ~path:[Key "runtime"] printer (pbox Val.print rts)
+      )
+    | E_c_cast (e, _) ->
+      print_expr man flow printer e
+    | _ -> ()
 
 end
 
