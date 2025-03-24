@@ -203,11 +203,10 @@ and status_deref man flow e range =
       let flow = raise_ffi_internal_error (Format.asprintf "status(*%a) unsupported for this kind of expression" pp_expr e) e.erange man flow in
       Cases.empty flow
     | Some (Eval(v, _, _)) ->
-      (* NOTE: Thist state should be unreachable, because dereference is taken care of
-         by an earlier domain. However, in some corner cases we can actually still reach
-         this case. Since evaluation of [*e] has not succeeded, we simply return [T],
-         because we do not know the precise status. *)
-      Cases.singleton (TOP: Stat.t) flow
+      (* NOTE: This state can occur if we dereference a variable [v] at an offset.
+         In this case, we return the tracking status of the parent variable [v],
+         which is typically untracked. *)
+      status_var man flow v
     | Some Null | Some Invalid | Some Top ->
       Cases.singleton (Nbt Untracked: Stat.t) flow
     | Some (AddrOf ({ base_kind = Var v; }, _, _)) ->
@@ -424,6 +423,8 @@ and shapes_deref man flow e range =
     | Nbt Untracked -> Post.return flow
     (* we allow for now to pass active values to external functions *)
     | Nbt Active -> Post.return flow
+    (* NOTE: A more permissive checker would allow TOP here. *)
+    (* | TOP -> Post.return flow *)
     | _ ->
       let flow = raise_ffi_inactive_value arg man flow in Post.return flow
     end
