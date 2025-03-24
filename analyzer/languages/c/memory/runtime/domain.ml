@@ -507,7 +507,13 @@ and shapes_deref man flow e range =
 
   let eval_garbage_collect range man flow =
     get_env T_cur man flow >>$ fun (m, l) flow ->
-    let upd_set ((s, r), shapes) = if Stat.is_const s Active && not (Root.is_const r Rooted) then ((Stat.embed Stale, r), shapes) else ((s, r), shapes) in
+    let upd_set ((s, r), shapes) =
+        if
+          Stat.is_const s Active
+        && not (Root.is_const r Rooted)
+        && not (Shape.is_guaranteed_immediate shapes)
+        then ((Stat.embed Stale, r), shapes)
+        else ((s, r), shapes) in
     let m' = Map.map (fun s -> upd_set s) m in
     set_env T_cur (m', l) man flow >>% fun flow ->
     Eval.singleton (mk_unit range) flow
