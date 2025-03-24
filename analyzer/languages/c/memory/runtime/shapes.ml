@@ -278,6 +278,13 @@ struct
     not (is_bottom (meet value constr))
 
 
+  let is_guaranteed_immediate (sh : t) =
+    match sh with
+    | (Nbt (L sh)) ->
+      OCamlValue.subset sh (OCamlValue.immediate ())
+    | _ -> false
+
+
   let print printer (s: t) =
     match s with
     | TOP -> Print.pp_string printer Top.top_string
