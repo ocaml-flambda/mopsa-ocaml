@@ -437,7 +437,7 @@ and shapes_deref man flow e range =
     man.eval exp flow >>$ fun exp flow ->
     unwrap_expr_as_var exp man flow >>$ fun var flow ->
     mark_var_active var range man flow >>% fun flow ->
-    let sh = Shape.ocaml_value (OCamlValueExt.type_shape_to_shapes sh) in
+    let sh = Shape.ocaml_value (OCamlValueExt.value_shape_to_shapes sh) in
     eval_set_shape_var var sh range man flow
 
 
@@ -453,7 +453,7 @@ and shapes_deref man flow e range =
 
   let exec_assert_shape exp sh range man flow =
     unwrap_expr_as_var exp man flow >>$ fun v flow ->
-    let ss = OCamlValueExt.type_shape_to_shapes sh in
+    let ss = OCamlValueExt.value_shape_to_shapes sh in
     exec_assert_ocaml_shape_var v ss range man flow >>%  fun flow ->
     Post.return flow
 

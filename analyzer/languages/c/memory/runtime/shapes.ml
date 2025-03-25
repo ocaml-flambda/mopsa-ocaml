@@ -61,14 +61,14 @@ module OCamlValueExt (OCamlValue : OCamlValueShape) =
 struct
 
 
-  let rec type_shape_to_shapes (sh: type_shape) =
+  let rec value_shape_to_shapes (sh: value_shape) =
     match sh with
-    | Any -> OCamlValue.any ()
+    | Value -> OCamlValue.any ()
     | Imm -> OCamlValue.immediate ()
     | Block None -> OCamlValue.any_non_array_standard_block ()
-    | Block (Some (t, shs)) -> OCamlValue.fixed_size_standard_block ~tag:t ~fields: (List.map type_shape_to_shapes shs)
+    | Block (Some (t, shs)) -> OCamlValue.fixed_size_standard_block ~tag:t ~fields: (List.map value_shape_to_shapes shs)
     | String -> OCamlValue.string ()
-    | Array sh -> OCamlValue.array (type_shape_to_shapes sh)
+    | Array sh -> OCamlValue.array (value_shape_to_shapes sh)
     | Int64 -> OCamlValue.int64 ()
     | Int32 -> OCamlValue.int32 ()
     | Double -> OCamlValue.double ()
@@ -76,7 +76,7 @@ struct
     | Closure -> OCamlValue.closure ()
     | Obj -> OCamlValue.obj ()
     | FloatArray -> OCamlValue.floatarray ()
-    | Or (s1, s2) -> OCamlValue.join (type_shape_to_shapes s1) (type_shape_to_shapes s2)
+    | Or (s1, s2) -> OCamlValue.join (value_shape_to_shapes s1) (value_shape_to_shapes s2)
 
 
 

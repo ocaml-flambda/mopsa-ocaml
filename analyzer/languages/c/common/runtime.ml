@@ -376,13 +376,13 @@ let resolve_status var man flow = man.ask (Q_ffi_status var) flow
 
 (* We directly include the file to shadow all of its declarations,
    but keep the original file in sync with the external extraction. *)
-let compare_type_shape (s1: type_shape) (s2: type_shape) = Stdlib.compare s1 s2
+let compare_value_shape (s1: value_shape) (s2: value_shape) = Stdlib.compare s1 s2
 
 
 (* Shape Statement Extension *)
 type stmt_kind +=
-  | S_ffi_init_with_shape of expr * type_shape
-  | S_ffi_assert_shape of expr * type_shape
+  | S_ffi_init_with_shape of expr * value_shape
+  | S_ffi_assert_shape of expr * value_shape
 
 
 let mk_ffi_init_with_shape e sh range =
@@ -395,15 +395,15 @@ let mk_ffi_assert_shape e sh range =
 let () = register_stmt_compare (fun next s1 s2 ->
   match skind s1, skind s2 with
   | S_ffi_init_with_shape (v1, ts1), S_ffi_init_with_shape (v2, ts2) ->
-    Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
+    Compare.pair compare_expr compare_value_shape (v1, ts1) (v2, ts2)
   | S_ffi_assert_shape (v1, ts1), S_ffi_assert_shape (v2, ts2) ->
-    Compare.pair compare_expr compare_type_shape (v1, ts1) (v2, ts2)
+    Compare.pair compare_expr compare_value_shape (v1, ts1) (v2, ts2)
   | _, _ -> next s1 s2 )
 
 let () = register_stmt_pp (fun next fmt s ->
   match skind s with
-  | S_ffi_init_with_shape (e, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_expr e pp_shape sh
-  | S_ffi_assert_shape (e, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr e pp_shape sh
+  | S_ffi_init_with_shape (e, sh) -> Format.fprintf fmt "init(%a <- %a)" pp_expr e print_shapes sh
+  | S_ffi_assert_shape (e, sh) -> Format.fprintf fmt "assert(%a ∈ %a)" pp_expr e print_shapes sh
   | _ -> next fmt s
   )
 
