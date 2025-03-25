@@ -211,13 +211,13 @@ struct
   (** OCaml runtime function test machinery *)
   (** ===================================== *)
 
-  let type_shape_of_function (f: c_fundec) : Type_shapes.fn_type_shapes option =
+  let value_shape_of_function (f: c_fundec) : Type_shapes.fn_value_shapes option =
     match StringMap.find_opt f.c_func_org_name (!ffitest_extfuns) with
     | Some { shape = Some ty } -> Some ty
     (* a runtime function we should test of unknown shape *)
     | Some { shape = None } ->
-      let default_shape_args = List.map (fun _ -> Type_shapes.Any) (f.c_func_parameters) in
-      let default_shape_ret = Type_shapes.Any in
+      let default_shape_args = List.map (fun _ -> Type_shapes.Value) (f.c_func_parameters) in
+      let default_shape_ret = Type_shapes.Value in
       Some { arguments=default_shape_args; return=default_shape_ret }
     (* not a runtime function we should test *)
     | None -> None
@@ -250,7 +250,7 @@ struct
       Cases.singleton true flow
 
 
-  let exec_arity_check f (ty: Type_shapes.fn_type_shapes) range man flow =
+  let exec_arity_check f (ty: Type_shapes.fn_value_shapes) range man flow =
     let actual = List.length (f.c_func_parameters) in
     let expected = List.length (ty.arguments) in
     if actual != expected && expected <= 5  then
@@ -263,7 +263,7 @@ struct
       let flow = safe_ffi_arity_check range man flow in
       Post.return flow
 
-  let exec_virtual_runtime_function_test_exn (f: c_fundec) (ty: Type_shapes.fn_type_shapes) man flow =
+  let exec_virtual_runtime_function_test_exn (f: c_fundec) (ty: Type_shapes.fn_value_shapes) man flow =
     let range = f.c_func_name_range in
     let {Type_shapes.arguments = arg_shapes; return = ret_shape } = ty in
     let stmts, args = virtual_runtime_argument_array arg_shapes range in
@@ -290,7 +290,7 @@ struct
       Post.return flow
 
 
-  let rec exec_all_runtime_functions (fs: (c_fundec * Type_shapes.fn_type_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
+  let rec exec_all_runtime_functions (fs: (c_fundec * Type_shapes.fn_value_shapes) list) man (flows: 'a flow list) (results: (string * diagnostic_kind) list) (flow: 'a flow) =
     match fs with
     | [] ->
       (* eventually, we reverse the results to be again in program order *)
@@ -336,7 +336,7 @@ struct
   let exec_runtime_tests c_functions man flow =
     (* Determine the runtime functions to execute; we sort them by program order *)
     let c_functions = List.sort (fun f g -> compare_range f.c_func_range g.c_func_range) c_functions in
-    let ffi_functions = List.concat_map (fun f -> match type_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
+    let ffi_functions = List.concat_map (fun f -> match value_shape_of_function f with None -> [] | Some sh -> [(f, sh)]) c_functions in
     (* Execute all the runtime functions, yielding a list of results for each function *)
     exec_all_runtime_functions ffi_functions man [] [] flow >>$ fun results flow ->
     (* we output the results, the functions that were assumed to be missing,
