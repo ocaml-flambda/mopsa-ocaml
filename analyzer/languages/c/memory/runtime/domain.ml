@@ -709,6 +709,18 @@ and shapes_deref man flow e range =
       eval_set_shape_var v (Shape.ocaml_value ss) range man flow >>% fun flow ->
       Eval.singleton (mk_unit range) flow
 
+  let eval_add_shape ptr sh range man flow =
+    eval_deref_to_var ptr man flow >>$ fun var flow ->
+    match var with
+    | None ->
+      let flow = raise_ffi_shape_missing range pp_expr ptr man flow in
+      Cases.empty flow
+    | Some v ->
+      eval_ocaml_value_shape_of_var v range man flow >>$ fun ss1 flow ->
+      eval_ocaml_shape_of_runtime_enum_expr sh range man flow >>$ fun ss2 flow ->
+      eval_set_shape_var v (Shape.ocaml_value (OCamlValue.join ss1 ss2)) range man flow >>% fun flow ->
+      Eval.singleton (mk_unit range) flow
+
 
   let eval_unimplemented range man flow =
     let callstack = Flow.get_callstack flow in
@@ -799,6 +811,8 @@ and shapes_deref man flow e range =
       eval_assert_shape v sh range man flow
     | "_ffi_set_shape", [v; sh] ->
       eval_set_shape v sh range man flow
+    | "_ffi_add_shape", [v; sh] ->
+      eval_add_shape v sh range man flow
     | "_ffi_assert_locked", [] ->
       eval_assert_runtime_lock range man flow
     | "_ffi_acquire_lock", [] ->
