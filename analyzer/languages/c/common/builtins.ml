@@ -120,6 +120,7 @@ let _ =
       "_ffi_assert_locked";
       "_ffi_fresh_value_ptr";
       "_ffi_set_shape";
+      "_ffi_add_shape";
       "_ffi_assert_shape";
       "_ffi_is_immediate";
       "_ffi_unimplemented";
