@@ -696,8 +696,8 @@ and from_expr ctx ((ekind, tc , range) : C_AST.expr) : expr =
     (* atomic builtins are stubbed in .h header and should not be encountered
        here
      *)
-    | C_AST.E_atomic (op,ea,e2) ->
-       Ast.E_c_atomic (from_atomic_op op, Array.map (from_expr ctx) ea |> Array.to_list, from_expr ctx e2)
+    | C_AST.E_atomic (op,ea) ->
+       Ast.E_c_atomic (from_atomic_op op, Array.map (from_expr ctx) ea |> Array.to_list)
 
     (* vector builtins are not supported
        we display a warning but output an AST so that we can analyzer programs

@@ -2293,11 +2293,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
           Store_field(ret, 1, TranslateExpr(x->getIdx()));
         });
 
-      GENERATE_NODE_INDIRECT(AtomicExpr, ret, node, 3, {
+      GENERATE_NODE_INDIRECT(AtomicExpr, ret, node, 2, {
           Store_field(ret, 0, TranslateAtomicOp(x->getOp()));
-          // we iterate to getNumExprs()-1 because the last one is the memory order
-          Store_field_array(ret, 1, x->getNumSubExprs()-1, TranslateExpr(x->getSubExprs()[i]));
-          Store_field(ret, 2, TranslateExpr(x->getOrder()));
+          Store_field_array(ret, 1, x->getNumSubExprs(), TranslateExpr(x->getSubExprs()[i]));
         });
 
       /* keep before BinaryOperator; otherwise it would be matched by BinaryOperator instead */

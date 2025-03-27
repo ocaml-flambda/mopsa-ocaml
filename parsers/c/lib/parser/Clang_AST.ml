@@ -950,8 +950,7 @@ and array_subscript_expr = {
 
 and atomic_expr = {
     atomic_op: atomic_operation; (** Kind of atomic builtin operator. *)
-    atomic_exprs: expr array; (** primary pointer *)
-    atomic_order: expr; (** memory order *)
+    atomic_exprs: expr array; (** argument expressions and memory orders *)
   }
 (** Variadic atomic builtins. TODO: handle operators that have more that 2 arguments *)
 

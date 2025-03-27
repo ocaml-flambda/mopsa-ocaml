@@ -352,7 +352,7 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
       let before1, e1, after1 = simplify_expr ctx f call e1 in
       before1, (E_var_args e1, t, r), after1
 
-   | E_atomic (i,ea,e2) ->
+   | E_atomic (i,ea) ->
       let ea = Array.copy ea in
       let beforea, aftera = ref [], ref [] in
       for i=0 to Array.length ea-1 do
@@ -362,9 +362,7 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
         aftera := after@(!aftera);
         ea.(i) <- ee
       done;
-      let before2, e2, after2 = simplify_expr ctx f call e2 in
-      let before = (!beforea)@before2 and after = after2@(!aftera) in
-      before, (E_atomic (i,ea,e2), t, r), after
+      !beforea, (E_atomic (i,ea), t, r), !aftera
 
    | E_compound_literal i ->
       let before1, i, after1 = simplify_init ctx f call i in

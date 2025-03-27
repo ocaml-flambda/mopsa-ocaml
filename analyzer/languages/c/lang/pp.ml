@@ -269,7 +269,7 @@ let () =
       | E_c_var_args e -> fprintf fmt "__builtin_va_arg(%a)" pp_expr e
       | E_c_block_object e -> fprintf fmt "block_object(%a)" pp_expr e
       | E_c_predefined _ -> assert false
-      | E_c_atomic (op,el,e2) -> fprintf fmt "__atomic(%a,[%a],%a)" pp_atomic_op op (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el pp_expr e2
+      | E_c_atomic (op,el) -> fprintf fmt "__atomic%a(%a)" pp_atomic_op op (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) el
       | E_ffi_call (f, args) -> fprintf fmt "ffi %s(%a)" f (pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp_expr) args
       | _ -> default fmt expr
     );

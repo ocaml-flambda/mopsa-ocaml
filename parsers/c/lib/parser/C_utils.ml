@@ -862,7 +862,7 @@ let resolve_scope (b:block) : block =
     | E_var_args e1 -> expr ctx e1
 
     | E_call (e,el) -> expr ctx e; Array.iter (expr ctx) el
-    | E_atomic (_,el,e) -> Array.iter (expr ctx) el; expr ctx e
+    | E_atomic (_,el) -> Array.iter (expr ctx) el
 
     | E_character_literal _
     | E_integer_literal _
