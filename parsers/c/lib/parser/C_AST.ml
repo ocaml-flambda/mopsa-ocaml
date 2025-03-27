@@ -3,6 +3,8 @@
 (* This file is part of MOPSA, a Modular Open Platform for Static Analysis. *)
 (*                                                                          *)
 (* Copyright (C) 2017-2019 The MOPSA Project.                               *)
+(* Copyright (c) 2025 Jane Street Group LLC                                 *)
+(* opensource-contacts@janestreet.com                                       *)
 (*                                                                          *)
 (* This program is free software: you can redistribute it and/or modify     *)
 (* it under the terms of the GNU Lesser General Public License as published *)
