@@ -87,7 +87,7 @@ type comment_kind =
   | RCK_JavaDoc (** /** stuff */  *)
   | RCK_Qt (** /*! stuff */, also used by HeaderDoc *)
   | RCK_Merged 	(** Two or more documentation comments merged together. *)
-           
+
 type comment = {
     com_text: string; (** Raw comment text with comment markers. *)
     com_kind: comment_kind;
@@ -104,8 +104,8 @@ type macro = {
     macro_contents: string list; (** List of source tokens (as string) *)
     macro_loc: loc; (** Macro location *)
   }
-             
-             
+
+
 
 (** {2 AST} *)
 
@@ -949,8 +949,8 @@ and array_subscript_expr = {
 (** Array subscripting (normalized: we always put the array expression first and the index expression last, although the source may state '4[A]' and not 'A[4]') *)
 
 and atomic_expr = {
-    atomic_op: int; (** Kind of atomic builtin operator. TODO: use a variant. *)
-    atomic_ptr: expr; (** primary pointer *)
+    atomic_op: atomic_operation; (** Kind of atomic builtin operator. *)
+    atomic_exprs: expr array; (** primary pointer *)
     atomic_order: expr; (** memory order *)
   }
 (** Variadic atomic builtins. TODO: handle operators that have more that 2 arguments *)
@@ -1639,6 +1639,108 @@ and atomic_expr = {
    | TT_IsNothrowConstructible
    | TT_IsTriviallyConstructible
  (** (C++) Names for traits that operate specifically on types. *)
+
+ and atomic_operation =
+  (* C11 _Atomic operations for <stdatomic.h>. *)
+  | AO__c11_atomic_init
+  | AO__c11_atomic_load
+  | AO__c11_atomic_store
+  | AO__c11_atomic_exchange
+  | AO__c11_atomic_compare_exchange_strong
+  | AO__c11_atomic_compare_exchange_weak
+  | AO__c11_atomic_fetch_add
+  | AO__c11_atomic_fetch_sub
+  | AO__c11_atomic_fetch_and
+  | AO__c11_atomic_fetch_or
+  | AO__c11_atomic_fetch_xor
+  | AO__c11_atomic_fetch_nand
+  | AO__c11_atomic_fetch_max
+  | AO__c11_atomic_fetch_min
+
+  (* GNU atomic builtins. *)
+  | AO__atomic_load
+  | AO__atomic_load_n
+  | AO__atomic_store
+  | AO__atomic_store_n
+  | AO__atomic_exchange
+  | AO__atomic_exchange_n
+  | AO__atomic_compare_exchange
+  | AO__atomic_compare_exchange_n
+  | AO__atomic_fetch_add
+  | AO__atomic_fetch_sub
+  | AO__atomic_fetch_and
+  | AO__atomic_fetch_or
+  | AO__atomic_fetch_xor
+  | AO__atomic_fetch_nand
+  | AO__atomic_add_fetch
+  | AO__atomic_sub_fetch
+  | AO__atomic_and_fetch
+  | AO__atomic_or_fetch
+  | AO__atomic_xor_fetch
+  | AO__atomic_max_fetch
+  | AO__atomic_min_fetch
+  | AO__atomic_nand_fetch
+  | AO__atomic_test_and_set
+  | AO__atomic_clear
+
+  (* GNU atomic builtins with atomic scopes. *)
+  | AO__scoped_atomic_load
+  | AO__scoped_atomic_load_n
+  | AO__scoped_atomic_store
+  | AO__scoped_atomic_store_n
+  | AO__scoped_atomic_exchange
+  | AO__scoped_atomic_exchange_n
+  | AO__scoped_atomic_compare_exchange
+  | AO__scoped_atomic_compare_exchange_n
+  | AO__scoped_atomic_fetch_add
+  | AO__scoped_atomic_fetch_sub
+  | AO__scoped_atomic_fetch_and
+  | AO__scoped_atomic_fetch_or
+  | AO__scoped_atomic_fetch_xor
+  | AO__scoped_atomic_fetch_nand
+  | AO__scoped_atomic_fetch_min
+  | AO__scoped_atomic_fetch_max
+  | AO__scoped_atomic_add_fetch
+  | AO__scoped_atomic_sub_fetch
+  | AO__scoped_atomic_and_fetch
+  | AO__scoped_atomic_or_fetch
+  | AO__scoped_atomic_xor_fetch
+  | AO__scoped_atomic_nand_fetch
+  | AO__scoped_atomic_min_fetch
+  | AO__scoped_atomic_max_fetch
+
+  (* OpenCL 2.0 atomic builtins. *)
+  | AO__opencl_atomic_init
+  | AO__opencl_atomic_load
+  | AO__opencl_atomic_store
+  | AO__opencl_atomic_compare_exchange_weak
+  | AO__opencl_atomic_compare_exchange_strong
+  | AO__opencl_atomic_exchange
+  | AO__opencl_atomic_fetch_add
+  | AO__opencl_atomic_fetch_sub
+  | AO__opencl_atomic_fetch_and
+  | AO__opencl_atomic_fetch_or
+  | AO__opencl_atomic_fetch_xor
+  | AO__opencl_atomic_fetch_min
+  | AO__opencl_atomic_fetch_max
+
+  (* GCC does not support these they are a Clang extension. *)
+  | AO__atomic_fetch_max
+  | AO__atomic_fetch_min
+
+  (* HIP atomic builtins. *)
+  | AO__hip_atomic_load
+  | AO__hip_atomic_store
+  | AO__hip_atomic_compare_exchange_weak
+  | AO__hip_atomic_compare_exchange_strong
+  | AO__hip_atomic_exchange
+  | AO__hip_atomic_fetch_add
+  | AO__hip_atomic_fetch_sub
+  | AO__hip_atomic_fetch_and
+  | AO__hip_atomic_fetch_or
+  | AO__hip_atomic_fetch_xor
+  | AO__hip_atomic_fetch_min
+  | AO__hip_atomic_fetch_max
 
  and name_specifier =
    | Name_specifier_Identifier of string (** an identifier *)

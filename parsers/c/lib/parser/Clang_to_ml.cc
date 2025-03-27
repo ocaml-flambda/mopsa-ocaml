@@ -737,6 +737,7 @@ public:
   CAMLprim value TranslateDeclContextChild(const DeclContext * ctx);
   CAMLprim value TranslateExpr(const Expr * e);
   CAMLprim value TranslateTypeTrait(TypeTrait trait, const Expr * node);
+  CAMLprim value TranslateAtomicOp(AtomicExpr::AtomicOp op);
   CAMLprim value TranslateCXXConstructExpr(const CXXConstructExpr * node);
   CAMLprim value TranslateConstantIntegerExpr(const Expr * node);
   CAMLprim value TranslateOpaqueValueExpr(const OpaqueValueExpr * node);
@@ -2293,8 +2294,9 @@ CAMLprim value MLTreeBuilderVisitor::TranslateExpr(const Expr * node) {
         });
 
       GENERATE_NODE_INDIRECT(AtomicExpr, ret, node, 3, {
-          Store_field(ret, 0, Val_int(x->getOp()));
-          Store_field(ret, 1, TranslateExpr(x->getPtr()));
+          Store_field(ret, 0, TranslateAtomicOp(x->getOp()));
+          // we iterate to getNumExprs()-1 because the last one is the memory order
+          Store_field_array(ret, 1, x->getNumSubExprs()-1, TranslateExpr(x->getSubExprs()[i]));
           Store_field(ret, 2, TranslateExpr(x->getOrder()));
         });
 
@@ -3032,6 +3034,223 @@ CAMLprim value MLTreeBuilderVisitor::TranslateTypeTrait(TypeTrait trait, const E
   }
   return Val_int(r);
 }
+
+
+// see clang/Basic/Builtin.td for the definition of which atomics are available
+enum {
+// C11 _Atomic operations for <stdatomic.h>.
+MLTAG_AO__c11_atomic_init,
+MLTAG_AO__c11_atomic_load,
+MLTAG_AO__c11_atomic_store,
+MLTAG_AO__c11_atomic_exchange,
+MLTAG_AO__c11_atomic_compare_exchange_strong,
+MLTAG_AO__c11_atomic_compare_exchange_weak,
+MLTAG_AO__c11_atomic_fetch_add,
+MLTAG_AO__c11_atomic_fetch_sub,
+MLTAG_AO__c11_atomic_fetch_and,
+MLTAG_AO__c11_atomic_fetch_or,
+MLTAG_AO__c11_atomic_fetch_xor,
+MLTAG_AO__c11_atomic_fetch_nand,
+MLTAG_AO__c11_atomic_fetch_max,
+MLTAG_AO__c11_atomic_fetch_min,
+
+// GNU atomic builtins.
+MLTAG_AO__atomic_load,
+MLTAG_AO__atomic_load_n,
+MLTAG_AO__atomic_store,
+MLTAG_AO__atomic_store_n,
+MLTAG_AO__atomic_exchange,
+MLTAG_AO__atomic_exchange_n,
+MLTAG_AO__atomic_compare_exchange,
+MLTAG_AO__atomic_compare_exchange_n,
+MLTAG_AO__atomic_fetch_add,
+MLTAG_AO__atomic_fetch_sub,
+MLTAG_AO__atomic_fetch_and,
+MLTAG_AO__atomic_fetch_or,
+MLTAG_AO__atomic_fetch_xor,
+MLTAG_AO__atomic_fetch_nand,
+MLTAG_AO__atomic_add_fetch,
+MLTAG_AO__atomic_sub_fetch,
+MLTAG_AO__atomic_and_fetch,
+MLTAG_AO__atomic_or_fetch,
+MLTAG_AO__atomic_xor_fetch,
+MLTAG_AO__atomic_max_fetch,
+MLTAG_AO__atomic_min_fetch,
+MLTAG_AO__atomic_nand_fetch,
+MLTAG_AO__atomic_test_and_set,
+MLTAG_AO__atomic_clear,
+
+// GNU atomic builtins with atomic scopes.
+MLTAG_AO__scoped_atomic_load,
+MLTAG_AO__scoped_atomic_load_n,
+MLTAG_AO__scoped_atomic_store,
+MLTAG_AO__scoped_atomic_store_n,
+MLTAG_AO__scoped_atomic_exchange,
+MLTAG_AO__scoped_atomic_exchange_n,
+MLTAG_AO__scoped_atomic_compare_exchange,
+MLTAG_AO__scoped_atomic_compare_exchange_n,
+MLTAG_AO__scoped_atomic_fetch_add,
+MLTAG_AO__scoped_atomic_fetch_sub,
+MLTAG_AO__scoped_atomic_fetch_and,
+MLTAG_AO__scoped_atomic_fetch_or,
+MLTAG_AO__scoped_atomic_fetch_xor,
+MLTAG_AO__scoped_atomic_fetch_nand,
+MLTAG_AO__scoped_atomic_fetch_min,
+MLTAG_AO__scoped_atomic_fetch_max,
+MLTAG_AO__scoped_atomic_add_fetch,
+MLTAG_AO__scoped_atomic_sub_fetch,
+MLTAG_AO__scoped_atomic_and_fetch,
+MLTAG_AO__scoped_atomic_or_fetch,
+MLTAG_AO__scoped_atomic_xor_fetch,
+MLTAG_AO__scoped_atomic_nand_fetch,
+MLTAG_AO__scoped_atomic_min_fetch,
+MLTAG_AO__scoped_atomic_max_fetch,
+
+// OpenCL 2.0 atomic builtins.
+MLTAG_AO__opencl_atomic_init,
+MLTAG_AO__opencl_atomic_load,
+MLTAG_AO__opencl_atomic_store,
+MLTAG_AO__opencl_atomic_compare_exchange_weak,
+MLTAG_AO__opencl_atomic_compare_exchange_strong,
+MLTAG_AO__opencl_atomic_exchange,
+MLTAG_AO__opencl_atomic_fetch_add,
+MLTAG_AO__opencl_atomic_fetch_sub,
+MLTAG_AO__opencl_atomic_fetch_and,
+MLTAG_AO__opencl_atomic_fetch_or,
+MLTAG_AO__opencl_atomic_fetch_xor,
+MLTAG_AO__opencl_atomic_fetch_min,
+MLTAG_AO__opencl_atomic_fetch_max,
+
+// GCC does not support these, they are a Clang extension.
+MLTAG_AO__atomic_fetch_max,
+MLTAG_AO__atomic_fetch_min,
+
+// HIP atomic builtins.
+MLTAG_AO__hip_atomic_load,
+MLTAG_AO__hip_atomic_store,
+MLTAG_AO__hip_atomic_compare_exchange_weak,
+MLTAG_AO__hip_atomic_compare_exchange_strong,
+MLTAG_AO__hip_atomic_exchange,
+MLTAG_AO__hip_atomic_fetch_add,
+MLTAG_AO__hip_atomic_fetch_sub,
+MLTAG_AO__hip_atomic_fetch_and,
+MLTAG_AO__hip_atomic_fetch_or,
+MLTAG_AO__hip_atomic_fetch_xor,
+MLTAG_AO__hip_atomic_fetch_min,
+MLTAG_AO__hip_atomic_fetch_max,
+};
+
+
+/* AtomicOp -> atomic_op*/
+CAMLprim value MLTreeBuilderVisitor::TranslateAtomicOp(AtomicExpr::AtomicOp op){
+  int i = 0;
+  switch (op) {
+  // C11 _Atomic operations for <stdatomic.h>.
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_init);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_load);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_store);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_exchange);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_compare_exchange_strong);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_compare_exchange_weak);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_add);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_sub);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_and);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_or);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_xor);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_nand);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_max);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__c11_atomic_fetch_min);
+
+  // // GNU atomic builtins.
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_load);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_load_n);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_store);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_store_n);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_exchange);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_exchange_n);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_compare_exchange);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_compare_exchange_n);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_add);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_sub);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_and);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_or);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_xor);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_nand);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_add_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_sub_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_and_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_or_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_xor_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_max_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_min_fetch);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_nand_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_test_and_set);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_clear);
+
+  // // GNU atomic builtins with atomic scopes.
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_load);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_load_n);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_store);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_store_n);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_exchange);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_exchange_n);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_compare_exchange);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_compare_exchange_n);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_add);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_sub);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_and);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_or);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_xor);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_nand);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_min);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_fetch_max);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_add_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_sub_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_and_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_or_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_xor_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_nand_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_min_fetch);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__scoped_atomic_max_fetch);
+
+  // OpenCL 2.0 atomic builtins.
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_init);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_load);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_store);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_compare_exchange_weak);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_compare_exchange_strong);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_exchange);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_add);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_sub);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_and);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_or);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_xor);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_min);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__opencl_atomic_fetch_max);
+  // GCC does not support these, they are a Clang extension.
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_max);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__atomic_fetch_min);
+
+  // HIP atomic builtins.
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_load);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_store);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_compare_exchange_weak);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_compare_exchange_strong);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_exchange);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_add);
+  // GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_sub);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_and);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_or);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_xor);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_min);
+  GENERATE_CASE_PREFIX(i,AtomicExpr::AtomicOp::,,AO__hip_atomic_fetch_max);
+  default:
+    if (verbose_exn) std::cout << "unknown atomic operation: " << op << std::endl;
+    caml_failwith("mlClangAST: unknown atomic operation");
+  }
+  return Val_int(i);
+}
+
 
 
 CAMLprim value MLTreeBuilderVisitor::TranslateCXXConstructExpr(const CXXConstructExpr * x) {

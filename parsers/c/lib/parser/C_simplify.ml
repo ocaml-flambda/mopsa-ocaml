@@ -71,7 +71,7 @@ let make_temp ctx range ?(com:comment list=[]) (f:func option) (t:type_qual) : v
 
 (* integer promotion *)
 let int_promote target ((e,(t,q),r) as ee) =
-  match t with 
+  match t with
   | T_integer i ->
      if sizeof_int target i < sizeof_int target SIGNED_INT
      then E_cast (ee, IMPLICIT), (T_integer SIGNED_INT,q), r
@@ -116,7 +116,7 @@ let as_expr_stmt l t r : expr =
 (* encolse in a S_block if the block contains variable declaration to limit their scope *)
 let scope_temp range (s:statement list) : statement list =
   let b = make_block s in
-  if b.blk_local_vars = [] then s else [S_block b,range] 
+  if b.blk_local_vars = [] then s else [S_block b,range]
 
 (*****************************)
 (** Simplification functions *)
@@ -157,7 +157,7 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
          in
          before1@[create;cond], tmp_var, after1
 
-    (* e1 ? : e2 -> if (e1) tmp = e1; else tmp = e2; <tmp> 
+    (* e1 ? : e2 -> if (e1) tmp = e1; else tmp = e2; <tmp>
        the side-effects of e1 are executed only once
     *)
     | E_binary_conditional (e1,e2) ->
@@ -300,7 +300,7 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
       let e1c = E_cast (e1p, IMPLICIT), t, r in
       let inc = S_expression (E_assign (e1,e1c), t, r), r in
       before1, e1, after1@[inc]
-      
+
    | E_address_of e1 ->
       let before1, e1, after1 = simplify_expr ctx f call e1 in
       before1, (E_address_of e1, t, r), after1
@@ -320,6 +320,7 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
       let beforea, aftera = ref before1, ref after1 in
       for i=0 to Array.length ea-1 do
         let before, ee, after = simplify_expr ctx f call ea.(i) in
+        (* FIMXE: shouldn't this be the other way around? *)
         beforea := before@(!beforea);
         aftera := after@(!aftera);
         ea.(i) <- ee
@@ -351,11 +352,19 @@ let rec simplify_expr ctx f (call:bool) ((e,t,r):expr)
       let before1, e1, after1 = simplify_expr ctx f call e1 in
       before1, (E_var_args e1, t, r), after1
 
-   | E_atomic (i,e1,e2) ->
-      let before1, e1, after1 = simplify_expr ctx f call e1 in
+   | E_atomic (i,ea,e2) ->
+      let ea = Array.copy ea in
+      let beforea, aftera = ref [], ref [] in
+      for i=0 to Array.length ea-1 do
+        let before, ee, after = simplify_expr ctx f call ea.(i) in
+        (* FIMXE: shouldn't this be the other way around? *)
+        beforea := before@(!beforea);
+        aftera := after@(!aftera);
+        ea.(i) <- ee
+      done;
       let before2, e2, after2 = simplify_expr ctx f call e2 in
-      let before = before1@before2 and after = after2@after1 in
-      before, (E_atomic (i,e1,e2), t, r), after
+      let before = (!beforea)@before2 and after = after2@(!aftera) in
+      before, (E_atomic (i,ea,e2), t, r), after
 
    | E_compound_literal i ->
       let before1, i, after1 = simplify_init ctx f call i in

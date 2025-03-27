@@ -26,18 +26,18 @@
 
 open Clang_AST
 
-       
+
 
 (* for debugging: the second sync allows dumping the buffer contents as soon as possible instead of storing it *)
 let sync ch = ()
 (*let sync ch = Printf.printf "%s%!" (Buffer.contents ch); Buffer.clear ch*)
-                                                                      
+
 let bp_option none f ch a =
   sync ch;
   match a with
   | None -> Printf.bprintf ch "%s" none
   | Some x -> f ch x
-                             
+
 let bp_array f sep ch ee =
   for i=0 to Array.length ee-1 do
     sync ch;
@@ -55,7 +55,7 @@ let bp_list f sep ch ee =
       Printf.bprintf ch "%s%a" (if !first then "" else sep) f e;
       first := false
     ) ee
-                                    
+
 let lang_name = function
   | Lang_C -> "C"
   | Lang_CXX -> "C++"
@@ -140,7 +140,7 @@ let compound_assign_operator_name = function
   | BO_AndAssign -> "&="
   | BO_XorAssign -> "^="
   | BO_OrAssign -> "|="
-                     
+
 let unary_operator_name = function
   | UO_PostInc -> "post++"
   | UO_PostDec -> "post--"
@@ -158,7 +158,7 @@ let unary_operator_name = function
   | UO_Coawait -> "co_await"
 
 let storage_class_name = function
-  | SC_None -> "none" 
+  | SC_None -> "none"
   | SC_Extern -> "extern"
   | SC_Static -> "static"
   | SC_PrivateExtern -> "private_extern"
@@ -205,7 +205,7 @@ let unary_expr_or_type_name = function
 let array_type_trait_name = function
    | ATT_ArrayRank -> "__array_rank"
    | ATT_ArrayExtent -> "__array_extent"
-         
+
 let access_specifier_name = function
   | AS_public -> "public"
   | AS_protected -> "protected"
@@ -263,7 +263,7 @@ let overloaded_operator_name = function
   | OO_Subscript -> "[]"
   | OO_Conditional -> "?"
   | OO_Coawait -> "co_await"
-    
+
 let initialization_style_name = function
   | New_NoInit -> "no init"
   | New_CallInit -> "call init"
@@ -281,67 +281,158 @@ let storage_duration_name = function
   | SD_Dynamic -> "dynamic"
 
 let type_trait_name = function
-  | UTT_HasNothrowAssign -> "has_nothrow_assign"	
-  | UTT_HasNothrowMoveAssign -> "has_nothrow_move_assign"    
+  | UTT_HasNothrowAssign -> "has_nothrow_assign"
+  | UTT_HasNothrowMoveAssign -> "has_nothrow_move_assign"
   | UTT_HasNothrowCopy -> "has_nothrow_copy"
   | UTT_HasNothrowConstructor -> "has_nothrow_constructor"
-  | UTT_HasTrivialAssign -> "has_trivial_assign"     
+  | UTT_HasTrivialAssign -> "has_trivial_assign"
   | UTT_HasTrivialMoveAssign -> "has_trivial_move_assign"
   | UTT_HasTrivialCopy -> "has_trivial_copy"
   | UTT_HasTrivialDefaultConstructor -> "has_trivial_default_constructor"
   | UTT_HasTrivialMoveConstructor -> "has_trivial_move_constructor"
   | UTT_HasTrivialDestructor -> "has_trivial_destructor"
   | UTT_HasVirtualDestructor -> "has_virtual_destructor"
-  | UTT_IsAbstract -> "is_abstract"     
+  | UTT_IsAbstract -> "is_abstract"
   | UTT_IsArithmetic -> "is_arithmetic"
   | UTT_IsArray -> "is_array"
   | UTT_IsClass -> "is_class"
-  | UTT_IsCompleteType -> "is_complete_type"	
+  | UTT_IsCompleteType -> "is_complete_type"
   | UTT_IsCompound -> "is_compound"
   | UTT_IsConst -> "is_const"
-  | UTT_IsDestructible -> "is_destructible"	
+  | UTT_IsDestructible -> "is_destructible"
   | UTT_IsEmpty -> "is_empty"
   | UTT_IsEnum -> "is_enum"
-  | UTT_IsFinal -> "is_final" 	
-  | UTT_IsFloatingPoint -> "is_floating_point" 	
+  | UTT_IsFinal -> "is_final"
+  | UTT_IsFloatingPoint -> "is_floating_point"
   | UTT_IsFunction -> "is_function"
-  | UTT_IsFundamental -> "is_fundamental" 	
-  | UTT_IsIntegral -> "is_integral" 	
-  | UTT_IsInterfaceClass -> "is_interface_class" 	
-  | UTT_IsLiteral -> "is_literal" 	
-  | UTT_IsLvalueReference -> "is_lvalue_reference" 	
-  | UTT_IsMemberFunctionPointer -> "is_member_function_pointer" 	
-  | UTT_IsMemberObjectPointer -> "is_member_object_pointer" 	
-  | UTT_IsMemberPointer -> "is_member_pointer" 	
-  | UTT_IsNothrowDestructible -> "is_nothrow_destructible" 	
-  | UTT_IsObject -> "is_object"     
-  | UTT_IsPOD -> "is_pod" 	
-  | UTT_IsPointer -> "is_pointer" 	
-  | UTT_IsPolymorphic -> "is_polymrphic" 	
-  | UTT_IsReference -> "is_reference" 	
-  | UTT_IsRvalueReference -> "is_rvalue_reference" 	
-  | UTT_IsScalar -> "is_scalar" 	
-  | UTT_IsSealed -> "is_sealed" 	
-  | UTT_IsSigned -> "is_signed" 	
-  | UTT_IsStandardLayout -> "is_standard_layout" 	
-  | UTT_IsTrivial -> "is_trivial" 	
-  | UTT_IsTriviallyCopyable -> "is_trvially_copyable" 	
-  | UTT_IsUnion -> "is_union" 	
-  | UTT_IsUnsigned -> "is_unsigned" 	
-  | UTT_IsVoid -> "is_void" 	
-  | UTT_IsVolatile -> "is_volatile" 	
-  | BTT_IsBaseOf -> "is_baseof" 	
-  | BTT_IsConvertible -> "is_convertible" 	
-  | BTT_IsConvertibleTo -> "is_convertibleTo" 	
-  | BTT_IsSame -> "is_same" 	
-  | BTT_TypeCompatible -> "type_compatible" 	
-  | BTT_IsAssignable -> "is_assignable" 	
-  | BTT_IsNothrowAssignable -> "is_nothrow_assignable" 	
-  | BTT_IsTriviallyAssignable -> "is_trivially_assignable" 	
-  | TT_IsConstructible -> "is_constructible" 	
-  | TT_IsNothrowConstructible -> "is_nothrow_constructible" 	
-  | TT_IsTriviallyConstructible -> "is_trivially_constructible"     
-                                                                          
+  | UTT_IsFundamental -> "is_fundamental"
+  | UTT_IsIntegral -> "is_integral"
+  | UTT_IsInterfaceClass -> "is_interface_class"
+  | UTT_IsLiteral -> "is_literal"
+  | UTT_IsLvalueReference -> "is_lvalue_reference"
+  | UTT_IsMemberFunctionPointer -> "is_member_function_pointer"
+  | UTT_IsMemberObjectPointer -> "is_member_object_pointer"
+  | UTT_IsMemberPointer -> "is_member_pointer"
+  | UTT_IsNothrowDestructible -> "is_nothrow_destructible"
+  | UTT_IsObject -> "is_object"
+  | UTT_IsPOD -> "is_pod"
+  | UTT_IsPointer -> "is_pointer"
+  | UTT_IsPolymorphic -> "is_polymrphic"
+  | UTT_IsReference -> "is_reference"
+  | UTT_IsRvalueReference -> "is_rvalue_reference"
+  | UTT_IsScalar -> "is_scalar"
+  | UTT_IsSealed -> "is_sealed"
+  | UTT_IsSigned -> "is_signed"
+  | UTT_IsStandardLayout -> "is_standard_layout"
+  | UTT_IsTrivial -> "is_trivial"
+  | UTT_IsTriviallyCopyable -> "is_trvially_copyable"
+  | UTT_IsUnion -> "is_union"
+  | UTT_IsUnsigned -> "is_unsigned"
+  | UTT_IsVoid -> "is_void"
+  | UTT_IsVolatile -> "is_volatile"
+  | BTT_IsBaseOf -> "is_baseof"
+  | BTT_IsConvertible -> "is_convertible"
+  | BTT_IsConvertibleTo -> "is_convertibleTo"
+  | BTT_IsSame -> "is_same"
+  | BTT_TypeCompatible -> "type_compatible"
+  | BTT_IsAssignable -> "is_assignable"
+  | BTT_IsNothrowAssignable -> "is_nothrow_assignable"
+  | BTT_IsTriviallyAssignable -> "is_trivially_assignable"
+  | TT_IsConstructible -> "is_constructible"
+  | TT_IsNothrowConstructible -> "is_nothrow_constructible"
+  | TT_IsTriviallyConstructible -> "is_trivially_constructible"
+
+let atomic_operation_name = function
+  | AO__c11_atomic_init -> "__c11_atomic_init"
+  | AO__c11_atomic_load -> "__c11_atomic_load"
+  | AO__c11_atomic_store -> "__c11_atomic_store"
+  | AO__c11_atomic_exchange -> "__c11_atomic_exchange"
+  | AO__c11_atomic_compare_exchange_strong -> "__c11_atomic_compare_exchange_strong"
+  | AO__c11_atomic_compare_exchange_weak -> "__c11_atomic_compare_exchange_weak"
+  | AO__c11_atomic_fetch_add -> "__c11_atomic_fetch_add"
+  | AO__c11_atomic_fetch_sub -> "__c11_atomic_fetch_sub"
+  | AO__c11_atomic_fetch_and -> "__c11_atomic_fetch_and"
+  | AO__c11_atomic_fetch_or -> "__c11_atomic_fetch_or"
+  | AO__c11_atomic_fetch_xor -> "__c11_atomic_fetch_xor"
+  | AO__c11_atomic_fetch_nand -> "__c11_atomic_fetch_nand"
+  | AO__c11_atomic_fetch_max -> "__c11_atomic_fetch_max"
+  | AO__c11_atomic_fetch_min -> "__c11_atomic_fetch_min"
+  | AO__atomic_load -> "__atomic_load"
+  | AO__atomic_load_n -> "__atomic_load_n"
+  | AO__atomic_store -> "__atomic_store"
+  | AO__atomic_store_n -> "__atomic_store_n"
+  | AO__atomic_exchange -> "__atomic_exchange"
+  | AO__atomic_exchange_n -> "__atomic_exchange_n"
+  | AO__atomic_compare_exchange -> "__atomic_compare_exchange"
+  | AO__atomic_compare_exchange_n -> "__atomic_compare_exchange_n"
+  | AO__atomic_fetch_add -> "__atomic_fetch_add"
+  | AO__atomic_fetch_sub -> "__atomic_fetch_sub"
+  | AO__atomic_fetch_and -> "__atomic_fetch_and"
+  | AO__atomic_fetch_or -> "__atomic_fetch_or"
+  | AO__atomic_fetch_xor -> "__atomic_fetch_xor"
+  | AO__atomic_fetch_nand -> "__atomic_fetch_nand"
+  | AO__atomic_add_fetch -> "__atomic_add_fetch"
+  | AO__atomic_sub_fetch -> "__atomic_sub_fetch"
+  | AO__atomic_and_fetch -> "__atomic_and_fetch"
+  | AO__atomic_or_fetch -> "__atomic_or_fetch"
+  | AO__atomic_xor_fetch -> "__atomic_xor_fetch"
+  | AO__atomic_max_fetch -> "__atomic_max_fetch"
+  | AO__atomic_min_fetch -> "__atomic_min_fetch"
+  | AO__atomic_nand_fetch -> "__atomic_nand_fetch"
+  | AO__atomic_test_and_set -> "__atomic_test_and_set"
+  | AO__atomic_clear -> "__atomic_clear"
+  | AO__scoped_atomic_load -> "__scoped_atomic_load"
+  | AO__scoped_atomic_load_n -> "__scoped_atomic_load_n"
+  | AO__scoped_atomic_store -> "__scoped_atomic_store"
+  | AO__scoped_atomic_store_n -> "__scoped_atomic_store_n"
+  | AO__scoped_atomic_exchange -> "__scoped_atomic_exchange"
+  | AO__scoped_atomic_exchange_n -> "__scoped_atomic_exchange_n"
+  | AO__scoped_atomic_compare_exchange -> "__scoped_atomic_compare_exchange"
+  | AO__scoped_atomic_compare_exchange_n -> "__scoped_atomic_compare_exchange_n"
+  | AO__scoped_atomic_fetch_add -> "__scoped_atomic_fetch_add"
+  | AO__scoped_atomic_fetch_sub -> "__scoped_atomic_fetch_sub"
+  | AO__scoped_atomic_fetch_and -> "__scoped_atomic_fetch_and"
+  | AO__scoped_atomic_fetch_or -> "__scoped_atomic_fetch_or"
+  | AO__scoped_atomic_fetch_xor -> "__scoped_atomic_fetch_xor"
+  | AO__scoped_atomic_fetch_nand -> "__scoped_atomic_fetch_nand"
+  | AO__scoped_atomic_fetch_min -> "__scoped_atomic_fetch_min"
+  | AO__scoped_atomic_fetch_max -> "__scoped_atomic_fetch_max"
+  | AO__scoped_atomic_add_fetch -> "__scoped_atomic_add_fetch"
+  | AO__scoped_atomic_sub_fetch -> "__scoped_atomic_sub_fetch"
+  | AO__scoped_atomic_and_fetch -> "__scoped_atomic_and_fetch"
+  | AO__scoped_atomic_or_fetch -> "__scoped_atomic_or_fetch"
+  | AO__scoped_atomic_xor_fetch -> "__scoped_atomic_xor_fetch"
+  | AO__scoped_atomic_nand_fetch -> "__scoped_atomic_nand_fetch"
+  | AO__scoped_atomic_min_fetch -> "__scoped_atomic_min_fetch"
+  | AO__scoped_atomic_max_fetch -> "__scoped_atomic_max_fetch"
+  | AO__opencl_atomic_init -> "__opencl_atomic_init"
+  | AO__opencl_atomic_load -> "__opencl_atomic_load"
+  | AO__opencl_atomic_store -> "__opencl_atomic_store"
+  | AO__opencl_atomic_compare_exchange_weak -> "__opencl_atomic_compare_exchange_weak"
+  | AO__opencl_atomic_compare_exchange_strong -> "__opencl_atomic_compare_exchange_strong"
+  | AO__opencl_atomic_exchange -> "__opencl_atomic_exchange"
+  | AO__opencl_atomic_fetch_add -> "__opencl_atomic_fetch_add"
+  | AO__opencl_atomic_fetch_sub -> "__opencl_atomic_fetch_sub"
+  | AO__opencl_atomic_fetch_and -> "__opencl_atomic_fetch_and"
+  | AO__opencl_atomic_fetch_or -> "__opencl_atomic_fetch_or"
+  | AO__opencl_atomic_fetch_xor -> "__opencl_atomic_fetch_xor"
+  | AO__opencl_atomic_fetch_min -> "__opencl_atomic_fetch_min"
+  | AO__opencl_atomic_fetch_max -> "__opencl_atomic_fetch_max"
+  | AO__atomic_fetch_max -> "__atomic_fetch_max"
+  | AO__atomic_fetch_min -> "__atomic_fetch_min"
+  | AO__hip_atomic_load -> "__hip_atomic_load"
+  | AO__hip_atomic_store -> "__hip_atomic_store"
+  | AO__hip_atomic_compare_exchange_weak -> "__hip_atomic_compare_exchange_weak"
+  | AO__hip_atomic_compare_exchange_strong -> "__hip_atomic_compare_exchange_strong"
+  | AO__hip_atomic_exchange -> "__hip_atomic_exchange"
+  | AO__hip_atomic_fetch_add -> "__hip_atomic_fetch_add"
+  | AO__hip_atomic_fetch_sub -> "__hip_atomic_fetch_sub"
+  | AO__hip_atomic_fetch_and -> "__hip_atomic_fetch_and"
+  | AO__hip_atomic_fetch_or -> "__hip_atomic_fetch_or"
+  | AO__hip_atomic_fetch_xor -> "__hip_atomic_fetch_xor"
+  | AO__hip_atomic_fetch_min -> "__hip_atomic_fetch_min"
+  | AO__hip_atomic_fetch_max -> "__hip_atomic_fetch_max"
+
 let diag_level_name = function
   | Level_Ignored -> "ignored"
   | Level_Note -> "note"
@@ -362,7 +453,7 @@ let target_int_type_name = function
   | Target_UnsignedLong -> "unsigned long"
   | Target_SignedLongLong -> "long long"
   | Target_UnsignedLongLong -> "unsigned long long"
-                                   
+
 let target_real_type_name = function
   | Target_NoFloat -> "no-float"
   | Target_Float -> "float"
@@ -434,26 +525,26 @@ let decl_kind_name d =
 let type_kind_name t =
   match t with
   | DecayedType _ -> "DecayedType"
-  | ArrayType _ -> "ArrayType" 
+  | ArrayType _ -> "ArrayType"
   | AtomicType _ -> "AtomicType"
   | AttributedType _ -> "AttributedType"
   | BuiltinType _ -> "BuiltinType"
   | ComplexType _ -> "ComplexType"
   | FunctionProtoType _ -> "FunctionProtoType"
-  | FunctionNoProtoType _ -> "FunctionNoProtoType" 
+  | FunctionNoProtoType _ -> "FunctionNoProtoType"
   | ParenType _ -> "ParenType"
   | PointerType _ -> "PointerType"
-  | EnumType _ -> "EnumType" 
-  | RecordType _ -> "RecordType" 
-  | TypedefType _ -> "TypedefType" 
-  | ElaboratedType _ -> "ElaboratedType" 
-  | UnaryTransformType _ -> "UnaryTransformType" 
-  | TypeOfExprType _ -> "TypeOfExprType" 
-  | TypeOfType _ -> "TypeOfType" 
-  | DecltypeType _ -> "DecltypeType" 
-  | AutoType _ -> "AutoType" 
-  | DeducedTemplateSpecializationType _ -> "DeducedTemplateSpecializationType" 
-  | DependentSizedExtVectorType  _ -> "DependentSizedExtVectorType" 
+  | EnumType _ -> "EnumType"
+  | RecordType _ -> "RecordType"
+  | TypedefType _ -> "TypedefType"
+  | ElaboratedType _ -> "ElaboratedType"
+  | UnaryTransformType _ -> "UnaryTransformType"
+  | TypeOfExprType _ -> "TypeOfExprType"
+  | TypeOfType _ -> "TypeOfType"
+  | DecltypeType _ -> "DecltypeType"
+  | AutoType _ -> "AutoType"
+  | DeducedTemplateSpecializationType _ -> "DeducedTemplateSpecializationType"
+  | DependentSizedExtVectorType  _ -> "DependentSizedExtVectorType"
   | InjectedClassNameType _ -> "InjectedClassNameType"
   | MemberPointerType _ -> "MemberPointerType"
   | PackExpansionType _ -> "PackExpansionType"
@@ -462,13 +553,13 @@ let type_kind_name t =
   | SubstTemplateTypeParmPackType _ -> "SubstTemplateTypeParmPackType"
   | SubstTemplateTypeParmType _ -> "SubstTemplateTypeParmType"
   | TemplateSpecializationType _ -> "TemplateSpecializationType"
-  | TemplateTypeParmType _ -> "TemplateTypeParmType" 
-  | DependentNameType _ -> "DependentNameType" 
+  | TemplateTypeParmType _ -> "TemplateTypeParmType"
+  | DependentNameType _ -> "DependentNameType"
   | DependentTemplateSpecializationType _ -> "DependentTemplateSpecializationType"
   | UnresolvedUsingType _ -> "UnresolvedUsingType"
   | VectorType _ -> "VectorType"
   | UnknownType _ -> "UnknownType"
-                       
+
 let expr_kind_name e =
   match e with
   | ConditionalOperator _ -> "ConditionalOperator"
@@ -596,7 +687,7 @@ let string_of_range r =
       r.range_begin.loc_file r.range_begin.loc_line r.range_begin.loc_column
       r.range_end.loc_file r.range_end.loc_line r.range_end.loc_column
 
-        
+
 let string_of_diagnostic d =
   Printf.sprintf
     "%s: %s: %s" (string_of_loc d.diag_loc) (diag_level_name d.diag_level) d.diag_message
@@ -608,8 +699,8 @@ let string_of_target_EABI e =
   | Target_EABI_EABI4 -> "EABI4"
   | Target_EABI_EABI5 -> "EABI5"
   | Target_EABI_GNU -> "GNU"
-                     
-  
+
+
 let string_of_target_options o =
   let list = bp_list (fun b -> Printf.bprintf b "%s") "," in
   let b = Buffer.create 10 in
@@ -622,7 +713,7 @@ let string_of_target_options o =
     list o.target_features_as_written
     list o.target_features;
   Buffer.contents b
-             
+
 
 let string_of_target_info i =
   Printf.sprintf
@@ -651,7 +742,7 @@ let string_of_target_info i =
     i.target_double_width i.target_double_align
     i.target_long_double_width i.target_long_double_align
     i.target_float128_width i.target_float128_align
-    i.target_large_array_min_width i.target_large_array_align    
+    i.target_large_array_min_width i.target_large_array_align
     i.target_suitable_align
     i.target_big_endian i.target_TLS_supported
     i.target_has_int128 i.target_has_float128_type
@@ -672,7 +763,7 @@ let record_name e =
     | Some t -> "typedef:"^(name t.typedef_name)
     | None -> "<anon>"
 
-                
+
 (** raw (and ugly) AST dump, for debugging purpose;
     we hide internal functions inside a module
  *)
@@ -747,7 +838,7 @@ module P = struct
         (template_parameter_list indent2) b.var_template_param
         (bp_option "<none>" expr) b.var_template_requires_clause
         (List.length b.var_template_specializations)
-        (var_decl indent2) b.var_template_decl          
+        (var_decl indent2) b.var_template_decl
    | TemplateTemplateParmDecl b->
         p ch "%sTemplateTemplateParmDecl %a param=%a requires=%a pack=%B expansion=%B [%a]\b%a" indent
         name b.template_param_name
@@ -788,7 +879,7 @@ module P = struct
         name t.using_shwdow_using.using_name
         name_specifier_loc t.using_shwdow_using.using_qualifier
         t.using_shwdow_using.using_has_typename
-        (decl indent2) t.using_shadow_target      
+        (decl indent2) t.using_shadow_target
   | BindingDecl t ->
      p ch "%sBindingDecl %a %a binding=%a holding=%a" indent
        name t.binding_name
@@ -850,7 +941,7 @@ module P = struct
   and namespace_decl ch n =
     sync ch;
     p ch "name=%a anon=%B inline=%B" name n.namespace_name n.namespace_is_anonymous n.namespace_is_inline
-  and template_parameter_list indent ch t = 
+  and template_parameter_list indent ch t =
     sync ch;
     p ch "[%a]:%a" (bp_array (decl indent) ";")
       t.template_parameter_list_params (bp_option "<none>" expr) t.template_parameter_list_requires_clause
@@ -962,7 +1053,7 @@ module P = struct
     p ch "%sFriendDecl unsupported=%B template=[%a]" indent
       f.friend_is_unsupported (bp_array (template_parameter_list indent2) " ; ") f.friend_template;
     (match f.friend_decl with Some d -> p ch " decl\n%a" (decl indent2) d | None -> ());
-    (match f.friend_type with Some t -> p ch " type=%a\n" type_qual t | None -> ())     
+    (match f.friend_type with Some t -> p ch " type=%a\n" type_qual t | None -> ())
   and param_var_decl ch a =
     sync ch;
     p ch "%a %a" type_qual a.var_type name a.var_name
@@ -989,11 +1080,11 @@ module P = struct
            | Size_Variable None -> ()
            | Size_Incomplete -> ()
            | Size_Dependent -> ()
-         ) a.array_size 
-    | AtomicType a -> p ch "atomic(%a)" type_qual a   
-    | AttributedType a -> p ch "attributed(%a)" type_qual a 
+         ) a.array_size
+    | AtomicType a -> p ch "atomic(%a)" type_qual a
+    | AttributedType a -> p ch "attributed(%a)" type_qual a
     | BuiltinType b -> p ch "%s" (builtin_type_name b)
-    | ComplexType a -> p ch "complex(%a)" type_qual a 
+    | ComplexType a -> p ch "complex(%a)" type_qual a
     | FunctionProtoType f ->
        p ch "function %a(%a)%s -> %a : %a"
          qual f.proto_qual
@@ -1156,11 +1247,11 @@ module P = struct
        p ch "ArraySubscript(%a,%a)"
          expr e.subscript_base expr e.subscript_index
     | AtomicExpr a ->
-       p ch "AtmoicExp(%i,%a,%a)"
-         a.atomic_op expr a.atomic_ptr expr a.atomic_order
+       p ch "AtmoicExp(%s,%a,%a)"
+       (atomic_operation_name a.atomic_op) (bp_array expr ",") a.atomic_exprs expr a.atomic_order
     | CompoundAssignOperator t ->
        p ch "CompoundAssign(%a,%a,%s,%a,%a)"
-         expr t.compound_lval type_qual t.compound_comp_lval_type         
+         expr t.compound_lval type_qual t.compound_comp_lval_type
          (compound_assign_operator_name t.compound_op)
          expr t.compound_rval type_qual t.compound_comp_result_type
     | BinaryOperator (e1,op,e2) ->
@@ -1206,14 +1297,14 @@ module P = struct
        p ch "OffsetOf({%a},%s)"
          (bp_array offsetof ",") o (match i with None -> "<none>" | Some i -> Z.to_string i)
     | OpaqueValueExpr o -> p ch "OpaqueValue(%a)" (bp_option "<none>" expr) o.opaque_source
-    | ParenExpr e -> p ch "Paren(%a)" expr e      
-    | ParenListExpr e -> p ch "ParenList({%a})" (bp_array expr ",") e          
+    | ParenExpr e -> p ch "Paren(%a)" expr e
+    | ParenListExpr e -> p ch "ParenList({%a})" (bp_array expr ",") e
     | PredefinedExpr (i,s) -> p ch "Predefined(%s,%s)" (ident_type_name i) s
     | PseudoObjectExpr { pseudo_object_syntactic_form=e1; pseudo_object_semantic=e2; pseudo_object_result = i; } ->
        p ch "PseudoObject(%a,{%a},%s)"
          expr e1 (bp_array expr ",") e2
          (match i with None -> "<none>" | Some i -> string_of_int i)
-    | StmtExpr s -> p ch "Stmt({\n%a})" (bp_list (stmt "--") "") s          
+    | StmtExpr s -> p ch "Stmt({\n%a})" (bp_list (stmt "--") "") s
     | StringLiteral (s,k) -> p ch "String(%s,%s)" s (character_kind_name k)
     | UnaryExprOrTypeTraitExpr (op,t) -> p ch "UnaryType(%s,%a)" (unary_expr_or_type_name op) type_qual t
     | VAArgExpr e -> p ch "VAArgExpr(%a)" expr e
@@ -1372,8 +1463,8 @@ module P = struct
          l.lambda_is_mutable
          l.lambda_has_explicit_parameters
          l.lambda_has_explicit_result_type
-       
-    (*  Vectors *)                      
+
+    (*  Vectors *)
     | ConvertVectorExpr e -> p ch "ConvertVectorExpr(%a)" expr e
     | ExtVectorElementExpr (e,s) -> p ch "ExtVectorElementExpr(%a,%s)" expr e s
     | ShuffleVectorExpr l -> p ch "ShuffleVectorExpr(%a)" (bp_array expr ",") l
@@ -1477,24 +1568,23 @@ module P = struct
            p ch "%sCatch %a : %a\n%a" indent
              (bp_option "<none>" (fun ch o -> name ch  o.var_name)) h.catch_exception
              (bp_option "<none>" type_qual) h.catch_type
-             (stmt indent2) h.catch_handler             
+             (stmt indent2) h.catch_handler
          ) t.try_handlers
 
     (* Unknown *)
     | UnknownStmt (i,s) ->
        p ch "%sUnknownStmt %s(%i)\n" indent s i
 end
-             
 
-             
+
+
 let string_from_buffer f a =
   let buf = Buffer.create 128 in
   (try f buf a with Stack_overflow -> Buffer.add_string buf " *** STACK OVERFLOW ***");
   Buffer.contents buf
-                  
+
 let string_of_decl d = string_from_buffer (P.decl "") d
 let string_of_type d = string_from_buffer P.typ d
 let string_of_type_qual d = string_from_buffer P.type_qual d
 let string_of_expr d = string_from_buffer P.expr d
 let string_of_stmt d = string_from_buffer (P.stmt "") d
-                                    
