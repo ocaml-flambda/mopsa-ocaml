@@ -163,13 +163,11 @@ let () =
           | _ -> assert false
         )
 
-      | E_c_atomic(op, el, e2) ->
-        {exprs = el @ [e2]; stmts = []},
+      | E_c_atomic(op, el) ->
+        {exprs = el; stmts = []},
         (function
           | {exprs ; stmts = []} ->
-            let rev_exprs = List.rev exprs in
-            let last, rest = List.hd rev_exprs, List.rev (List.tl rev_exprs) in
-            {exp with ekind = E_c_atomic(op, rest, last)}
+            {exp with ekind = E_c_atomic(op, exprs)}
           | _ -> assert false
         )
 

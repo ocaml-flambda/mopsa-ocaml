@@ -546,7 +546,7 @@ and type_qual = typ * qualifier
 
    | E_var_args of expr (** __builtin_va_arg *)
 
-   | E_atomic of atomic_op (** operation *) * expr array * expr
+   | E_atomic of atomic_op (** operation *) * expr array
 
    (** vector instructions *)
 

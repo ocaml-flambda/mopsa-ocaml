@@ -512,11 +512,10 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
       bp buf "__builtin_va_arg(%a,%a)"
          (bp_paren (is_comma e1) (c_buf_expr indent)) e1 (c_buf_type indent "") (fst t)
 
-   | E_atomic (op,el,e2) ->
-      bp buf "__atomic_%s_TODO(%a,%a)"
+   | E_atomic (op,el) ->
+      bp buf "__atomic_%s(%a)"
          (c_atomic_op op)
          (bp_array (fun buf ee -> bp_paren (is_comma ee) (c_buf_expr indent) buf ee) ", ") el
-         (bp_paren (is_comma e2) (c_buf_expr indent)) e2
 
    | E_convert_vector e ->
       bp buf "__builtin_convertvector(%a,%a)"

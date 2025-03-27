@@ -1247,8 +1247,8 @@ module P = struct
        p ch "ArraySubscript(%a,%a)"
          expr e.subscript_base expr e.subscript_index
     | AtomicExpr a ->
-       p ch "AtmoicExp(%s,%a,%a)"
-       (atomic_operation_name a.atomic_op) (bp_array expr ",") a.atomic_exprs expr a.atomic_order
+       p ch "AtomicExp(%s,%a)"
+       (atomic_operation_name a.atomic_op) (bp_array expr ",") a.atomic_exprs
     | CompoundAssignOperator t ->
        p ch "CompoundAssign(%a,%a,%s,%a,%a)"
          expr t.compound_lval type_qual t.compound_comp_lval_type

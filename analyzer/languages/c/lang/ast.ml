@@ -443,7 +443,7 @@ type expr_kind +=
 
   | E_c_var_args of expr (** __builtin_va_arg *)
 
-  | E_c_atomic of c_atomic_op (** operation *) * expr list * expr
+  | E_c_atomic of c_atomic_op (** operation *) * expr list
 
   | E_c_block_object of expr
   (** Block objects are useful to distinguish between operations on
@@ -1244,10 +1244,10 @@ let () =
        | E_c_var_args(e1), E_c_var_args(e2) ->
          compare_expr e1 e2
 
-       | E_c_atomic(op1,el,ee1), E_c_atomic(op2,e2,ee2) ->
-         Compare.triple compare (Compare.list compare_expr) compare_expr
-           (op1,el,ee1)
-           (op2,e2,ee2)
+       | E_c_atomic(op1,el1), E_c_atomic(op2,el2) ->
+         Compare.pair compare (Compare.list compare_expr)
+           (op1,el1)
+           (op2,el2)
 
        | E_c_block_object(e1), E_c_block_object(e2) ->
          compare_expr e1 e2
