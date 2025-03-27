@@ -91,8 +91,6 @@ extern void _mopsa_assert_reachable();
 extern void _mopsa_assert_safe();
 extern void _mopsa_assert_unsafe();
 
-// stdatomic.h
-#include "atomic_stubs.h"
 
 // Memory
 extern void _mopsa_assert_valid_ptr(void *p);
