@@ -836,7 +836,7 @@ struct
 
     | S_unimplemented_ffi_function f ->
       ffitest_unimplemented_funs := StringSet.add f (!ffitest_unimplemented_funs);
-      man.exec ~route:(Below name) stmt flow |> OptionExt.return
+     OptionExt.return (Post.return flow)
 
     | S_program ({ prog_kind = C_program {c_globals; c_functions; c_stub_directives} }, args)
       when not !Universal.Iterators.Unittest.unittest_flag ->
