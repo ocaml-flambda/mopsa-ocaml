@@ -47,7 +47,7 @@ type comment = Clang_AST.comment
 
 type macro = Clang_AST.macro
 (** preprocessor macros *)
-                
+
 type character_kind = Clang_AST.character_kind
 
 type target_info = Clang_AST.target_info
@@ -381,6 +381,108 @@ and type_qual = typ * qualifier
  and asm_style = Clang_AST.asm_style
  and asm_output_constraint = Clang_AST.asm_output_constraint
 
+ and atomic_op =
+  (* C11 _Atomic operations for <stdatomic.h>. *)
+  | AO__c11_atomic_init
+  | AO__c11_atomic_load
+  | AO__c11_atomic_store
+  | AO__c11_atomic_exchange
+  | AO__c11_atomic_compare_exchange_strong
+  | AO__c11_atomic_compare_exchange_weak
+  | AO__c11_atomic_fetch_add
+  | AO__c11_atomic_fetch_sub
+  | AO__c11_atomic_fetch_and
+  | AO__c11_atomic_fetch_or
+  | AO__c11_atomic_fetch_xor
+  | AO__c11_atomic_fetch_nand
+  | AO__c11_atomic_fetch_max
+  | AO__c11_atomic_fetch_min
+
+  (* GNU atomic builtins. *)
+  | AO__atomic_load
+  | AO__atomic_load_n
+  | AO__atomic_store
+  | AO__atomic_store_n
+  | AO__atomic_exchange
+  | AO__atomic_exchange_n
+  | AO__atomic_compare_exchange
+  | AO__atomic_compare_exchange_n
+  | AO__atomic_fetch_add
+  | AO__atomic_fetch_sub
+  | AO__atomic_fetch_and
+  | AO__atomic_fetch_or
+  | AO__atomic_fetch_xor
+  | AO__atomic_fetch_nand
+  | AO__atomic_add_fetch
+  | AO__atomic_sub_fetch
+  | AO__atomic_and_fetch
+  | AO__atomic_or_fetch
+  | AO__atomic_xor_fetch
+  | AO__atomic_max_fetch
+  | AO__atomic_min_fetch
+  | AO__atomic_nand_fetch
+  | AO__atomic_test_and_set
+  | AO__atomic_clear
+
+  (* GNU atomic builtins with atomic scopes. *)
+  | AO__scoped_atomic_load
+  | AO__scoped_atomic_load_n
+  | AO__scoped_atomic_store
+  | AO__scoped_atomic_store_n
+  | AO__scoped_atomic_exchange
+  | AO__scoped_atomic_exchange_n
+  | AO__scoped_atomic_compare_exchange
+  | AO__scoped_atomic_compare_exchange_n
+  | AO__scoped_atomic_fetch_add
+  | AO__scoped_atomic_fetch_sub
+  | AO__scoped_atomic_fetch_and
+  | AO__scoped_atomic_fetch_or
+  | AO__scoped_atomic_fetch_xor
+  | AO__scoped_atomic_fetch_nand
+  | AO__scoped_atomic_fetch_min
+  | AO__scoped_atomic_fetch_max
+  | AO__scoped_atomic_add_fetch
+  | AO__scoped_atomic_sub_fetch
+  | AO__scoped_atomic_and_fetch
+  | AO__scoped_atomic_or_fetch
+  | AO__scoped_atomic_xor_fetch
+  | AO__scoped_atomic_nand_fetch
+  | AO__scoped_atomic_min_fetch
+  | AO__scoped_atomic_max_fetch
+
+  (* OpenCL 2.0 atomic builtins. *)
+  | AO__opencl_atomic_init
+  | AO__opencl_atomic_load
+  | AO__opencl_atomic_store
+  | AO__opencl_atomic_compare_exchange_weak
+  | AO__opencl_atomic_compare_exchange_strong
+  | AO__opencl_atomic_exchange
+  | AO__opencl_atomic_fetch_add
+  | AO__opencl_atomic_fetch_sub
+  | AO__opencl_atomic_fetch_and
+  | AO__opencl_atomic_fetch_or
+  | AO__opencl_atomic_fetch_xor
+  | AO__opencl_atomic_fetch_min
+  | AO__opencl_atomic_fetch_max
+
+  (* GCC does not support these they are a Clang extension. *)
+  | AO__atomic_fetch_max
+  | AO__atomic_fetch_min
+
+  (* HIP atomic builtins. *)
+  | AO__hip_atomic_load
+  | AO__hip_atomic_store
+  | AO__hip_atomic_compare_exchange_weak
+  | AO__hip_atomic_compare_exchange_strong
+  | AO__hip_atomic_exchange
+  | AO__hip_atomic_fetch_add
+  | AO__hip_atomic_fetch_sub
+  | AO__hip_atomic_fetch_and
+  | AO__hip_atomic_fetch_or
+  | AO__hip_atomic_fetch_xor
+  | AO__hip_atomic_fetch_min
+  | AO__hip_atomic_fetch_max
+
  and expr = expr_kind * type_qual * range
 
  and expr_kind =
@@ -444,7 +546,7 @@ and type_qual = typ * qualifier
 
    | E_var_args of expr (** __builtin_va_arg *)
 
-   | E_atomic of int (** operation *) * expr * expr
+   | E_atomic of atomic_op (** operation *) * expr array * expr
 
    (** vector instructions *)
 

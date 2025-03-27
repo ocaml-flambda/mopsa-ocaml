@@ -50,12 +50,12 @@ let bp = Printf.bprintf
 let bp_str = Buffer.add_string
 
 let bp_char = Buffer.add_char
-        
+
 let bp_option none f buf a =
   match a with
   | None -> bp_str buf none
   | Some x -> f buf x
-                
+
 let bp_array f sep buf ee =
   for i=0 to Array.length ee-1 do
     bp buf "%s%a" (if i=0 then "" else sep) f ee.(i)
@@ -72,13 +72,13 @@ let bp_list f sep buf ee =
 let bp_paren doit f buf a =
   if doit then bp buf "(%a)" f a
   else f buf a
-  
+
 let string_from_buffer f a =
   let buf = Buffer.create 128 in
   f buf a;
   Buffer.contents buf
 
-                  
+
 let inc_indent indent =
   indent^"    "
 (* add one level of interation (i.e., some spaces) *)
@@ -88,11 +88,11 @@ let bp_loc indent buf loc =
   if !print_loc
   then bp buf "%s/* %s */\n" indent (Clang_dump.string_of_loc loc.Clang_AST.range_begin)
 
-          
-           
+
+
 (** {2 C pretty-printing} *)
 
-           
+
 let string_of_signedness = function
   | SIGNED -> "signed"
   | UNSIGNED -> "unsigned"
@@ -119,7 +119,7 @@ let integer_suffix = function
   | UNSIGNED_LONG -> "UL"
   | SIGNED_LONG_LONG | SIGNED_INT128 -> "LL"
   | UNSIGNED_LONG_LONG | UNSIGNED_INT128 -> "ULL"
-                         
+
 let string_of_float_type = function
   | FLOAT -> "float"
   | DOUBLE -> "double"
@@ -175,7 +175,7 @@ let string_of_inc_direction = function
   | DEC -> "--"
 
 
-let rec prio_expr ((e,_,_):expr) =  
+let rec prio_expr ((e,_,_):expr) =
   match e with
   | E_cast (ee,IMPLICIT) when ignore_implicit_casts -> prio_expr ee
   | E_comma _ -> 0
@@ -204,8 +204,8 @@ let rec prio_expr ((e,_,_):expr) =
 let force_paren prio =
   prio == 10 || (prio >= 3 && prio <= 7)
 (* force the arguments of <<, >>, etc., to have parentheses, even when useless,
-   but this avoids compiler warnings *)                   
-                                   
+   but this avoids compiler warnings *)
+
 let is_comma ((e,_,_):expr) =
   match e with
   | E_comma _ -> true
@@ -235,7 +235,7 @@ and raw_buf_type buf = function
 (* raw (non-C) representation of a type, somewhat more clear than C sytnax *)
 
 
-           
+
 (* these internal functions print to a buffer and use a current indentation string *)
 
 let rec c_buf_type_qual indent (var:string) (buf:Buffer.t) (tq:type_qual) =
@@ -245,14 +245,14 @@ let rec c_buf_type_qual indent (var:string) (buf:Buffer.t) (tq:type_qual) =
 
 (* prints the base type without pointers and arrays *)
 and c_buf_type_base buf (t,q) = match t with
-  | T_void -> bp buf "%svoid" (string_of_qualifier q)          
+  | T_void -> bp buf "%svoid" (string_of_qualifier q)
   | T_bool -> bp buf "%s_Bool" (string_of_qualifier q)
   | T_integer i -> bp buf "%s%s" (string_of_qualifier q) (string_of_integer_type i)
   | T_float f -> bp buf "%s%s" (string_of_qualifier q) (string_of_float_type f)
   | T_builtin_fn -> bp buf "%s__builtin_fn" (string_of_qualifier q)
   | T_pointer tq -> c_buf_type_base buf tq
   | T_array (tq,l) -> c_buf_type_base buf tq
-  | T_bitfield (t,l) -> c_buf_type_base buf (t,q)                             
+  | T_bitfield (t,l) -> c_buf_type_base buf (t,q)
   | T_function None -> bp buf "%svoid" (string_of_qualifier q)
   | T_function (Some f) -> c_buf_type_base buf f.ftype_return
   | T_typedef t -> bp buf "%s%s" (string_of_qualifier q) t.typedef_unique_name
@@ -288,7 +288,7 @@ and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
        let inner' buf var = bp buf "(%a)(%a%s)" inner var (bp_list (c_buf_type_qual indent "") ", ") f.ftype_params variadic
        in
        c_buf_type_suffix buf var indent true inner' f.ftype_return
-       
+
     | T_typedef _ | T_enum _ | T_record _ ->
        inner buf var
 
@@ -298,12 +298,104 @@ and c_buf_type_suffix buf var indent inptr inner (t,q) = match t with
     | T_unknown_builtin _ ->
        inner buf var
 
-(* array length *)             
+ and c_atomic_op = function
+  | AO__c11_atomic_init -> "__c11_atomic_init"
+  | AO__c11_atomic_load -> "__c11_atomic_load"
+  | AO__c11_atomic_store -> "__c11_atomic_store"
+  | AO__c11_atomic_exchange -> "__c11_atomic_exchange"
+  | AO__c11_atomic_compare_exchange_strong -> "__c11_atomic_compare_exchange_strong"
+  | AO__c11_atomic_compare_exchange_weak -> "__c11_atomic_compare_exchange_weak"
+  | AO__c11_atomic_fetch_add -> "__c11_atomic_fetch_add"
+  | AO__c11_atomic_fetch_sub -> "__c11_atomic_fetch_sub"
+  | AO__c11_atomic_fetch_and -> "__c11_atomic_fetch_and"
+  | AO__c11_atomic_fetch_or -> "__c11_atomic_fetch_or"
+  | AO__c11_atomic_fetch_xor -> "__c11_atomic_fetch_xor"
+  | AO__c11_atomic_fetch_nand -> "__c11_atomic_fetch_nand"
+  | AO__c11_atomic_fetch_max -> "__c11_atomic_fetch_max"
+  | AO__c11_atomic_fetch_min -> "__c11_atomic_fetch_min"
+  | AO__atomic_load -> "__atomic_load"
+  | AO__atomic_load_n -> "__atomic_load_n"
+  | AO__atomic_store -> "__atomic_store"
+  | AO__atomic_store_n -> "__atomic_store_n"
+  | AO__atomic_exchange -> "__atomic_exchange"
+  | AO__atomic_exchange_n -> "__atomic_exchange_n"
+  | AO__atomic_compare_exchange -> "__atomic_compare_exchange"
+  | AO__atomic_compare_exchange_n -> "__atomic_compare_exchange_n"
+  | AO__atomic_fetch_add -> "__atomic_fetch_add"
+  | AO__atomic_fetch_sub -> "__atomic_fetch_sub"
+  | AO__atomic_fetch_and -> "__atomic_fetch_and"
+  | AO__atomic_fetch_or -> "__atomic_fetch_or"
+  | AO__atomic_fetch_xor -> "__atomic_fetch_xor"
+  | AO__atomic_fetch_nand -> "__atomic_fetch_nand"
+  | AO__atomic_add_fetch -> "__atomic_add_fetch"
+  | AO__atomic_sub_fetch -> "__atomic_sub_fetch"
+  | AO__atomic_and_fetch -> "__atomic_and_fetch"
+  | AO__atomic_or_fetch -> "__atomic_or_fetch"
+  | AO__atomic_xor_fetch -> "__atomic_xor_fetch"
+  | AO__atomic_max_fetch -> "__atomic_max_fetch"
+  | AO__atomic_min_fetch -> "__atomic_min_fetch"
+  | AO__atomic_nand_fetch -> "__atomic_nand_fetch"
+  | AO__atomic_test_and_set -> "__atomic_test_and_set"
+  | AO__atomic_clear -> "__atomic_clear"
+  | AO__scoped_atomic_load -> "__scoped_atomic_load"
+  | AO__scoped_atomic_load_n -> "__scoped_atomic_load_n"
+  | AO__scoped_atomic_store -> "__scoped_atomic_store"
+  | AO__scoped_atomic_store_n -> "__scoped_atomic_store_n"
+  | AO__scoped_atomic_exchange -> "__scoped_atomic_exchange"
+  | AO__scoped_atomic_exchange_n -> "__scoped_atomic_exchange_n"
+  | AO__scoped_atomic_compare_exchange -> "__scoped_atomic_compare_exchange"
+  | AO__scoped_atomic_compare_exchange_n -> "__scoped_atomic_compare_exchange_n"
+  | AO__scoped_atomic_fetch_add -> "__scoped_atomic_fetch_add"
+  | AO__scoped_atomic_fetch_sub -> "__scoped_atomic_fetch_sub"
+  | AO__scoped_atomic_fetch_and -> "__scoped_atomic_fetch_and"
+  | AO__scoped_atomic_fetch_or -> "__scoped_atomic_fetch_or"
+  | AO__scoped_atomic_fetch_xor -> "__scoped_atomic_fetch_xor"
+  | AO__scoped_atomic_fetch_nand -> "__scoped_atomic_fetch_nand"
+  | AO__scoped_atomic_fetch_min -> "__scoped_atomic_fetch_min"
+  | AO__scoped_atomic_fetch_max -> "__scoped_atomic_fetch_max"
+  | AO__scoped_atomic_add_fetch -> "__scoped_atomic_add_fetch"
+  | AO__scoped_atomic_sub_fetch -> "__scoped_atomic_sub_fetch"
+  | AO__scoped_atomic_and_fetch -> "__scoped_atomic_and_fetch"
+  | AO__scoped_atomic_or_fetch -> "__scoped_atomic_or_fetch"
+  | AO__scoped_atomic_xor_fetch -> "__scoped_atomic_xor_fetch"
+  | AO__scoped_atomic_nand_fetch -> "__scoped_atomic_nand_fetch"
+  | AO__scoped_atomic_min_fetch -> "__scoped_atomic_min_fetch"
+  | AO__scoped_atomic_max_fetch -> "__scoped_atomic_max_fetch"
+  | AO__opencl_atomic_init -> "__opencl_atomic_init"
+  | AO__opencl_atomic_load -> "__opencl_atomic_load"
+  | AO__opencl_atomic_store -> "__opencl_atomic_store"
+  | AO__opencl_atomic_compare_exchange_weak -> "__opencl_atomic_compare_exchange_weak"
+  | AO__opencl_atomic_compare_exchange_strong -> "__opencl_atomic_compare_exchange_strong"
+  | AO__opencl_atomic_exchange -> "__opencl_atomic_exchange"
+  | AO__opencl_atomic_fetch_add -> "__opencl_atomic_fetch_add"
+  | AO__opencl_atomic_fetch_sub -> "__opencl_atomic_fetch_sub"
+  | AO__opencl_atomic_fetch_and -> "__opencl_atomic_fetch_and"
+  | AO__opencl_atomic_fetch_or -> "__opencl_atomic_fetch_or"
+  | AO__opencl_atomic_fetch_xor -> "__opencl_atomic_fetch_xor"
+  | AO__opencl_atomic_fetch_min -> "__opencl_atomic_fetch_min"
+  | AO__opencl_atomic_fetch_max -> "__opencl_atomic_fetch_max"
+  | AO__atomic_fetch_max -> "__atomic_fetch_max"
+  | AO__atomic_fetch_min -> "__atomic_fetch_min"
+  | AO__hip_atomic_load -> "__hip_atomic_load"
+  | AO__hip_atomic_store -> "__hip_atomic_store"
+  | AO__hip_atomic_compare_exchange_weak -> "__hip_atomic_compare_exchange_weak"
+  | AO__hip_atomic_compare_exchange_strong -> "__hip_atomic_compare_exchange_strong"
+  | AO__hip_atomic_exchange -> "__hip_atomic_exchange"
+  | AO__hip_atomic_fetch_add -> "__hip_atomic_fetch_add"
+  | AO__hip_atomic_fetch_sub -> "__hip_atomic_fetch_sub"
+  | AO__hip_atomic_fetch_and -> "__hip_atomic_fetch_and"
+  | AO__hip_atomic_fetch_or -> "__hip_atomic_fetch_or"
+  | AO__hip_atomic_fetch_xor -> "__hip_atomic_fetch_xor"
+  | AO__hip_atomic_fetch_min -> "__hip_atomic_fetch_min"
+  | AO__hip_atomic_fetch_max -> "__hip_atomic_fetch_max"
+
+
+(* array length *)
 and len indent buf = function
   | No_length -> ()
   | Length_cst c -> Z.bprint buf c
   | Length_expr e -> c_buf_expr indent buf e
-  
+
 and c_buf_type indent (var:string) (buf:Buffer.t) (t:typ) =
   c_buf_type_qual indent var buf (t,no_qual)
 
@@ -322,7 +414,7 @@ and c_buf_expr_binary_right prio indent buf pre e1 mid e2 post =
   bp buf "%s%a%s%a%s"
      pre (bp_paren (force_paren prio || prio_expr e1 <= prio) (c_buf_expr indent)) e1
      mid (bp_paren (force_paren prio || prio_expr e2 <  prio) (c_buf_expr indent)) e2 post
-                    
+
 and c_buf_expr indent buf ((e,t,_) as ee:expr) =
   let prio = prio_expr ee in
   match e with
@@ -344,16 +436,16 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 
   | E_member_access (e1,_,n) ->
      c_buf_expr_unary prio indent buf "" e1 ("."^n)
-                      
+
   | E_arrow_access (e1,_,n) ->
      c_buf_expr_unary prio indent buf "" e1 ("->"^n)
-                      
+
   | E_compound_assign (e1,_,op,e2,_) ->
      c_buf_expr_binary_right prio indent buf "" e1 (" "^(string_of_binary_arithmetic op)^"= ") e2 ""
 
   | E_binary (op,e1,e2) ->
      c_buf_expr_binary_left prio indent buf "" e1 (" "^(string_of_binary_operator op)^" ") e2 ""
-                       
+
   | E_assign (e1,e2) ->
      c_buf_expr_binary_right prio indent buf "" e1 " = " e2 ""
 
@@ -362,7 +454,7 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 
   | E_unary (op,e1) ->
      c_buf_expr_unary prio indent buf ((string_of_unary_operator op)^" ") e1 ""
-      
+
   | E_increment (op,dir,e1) ->
      let inc = string_of_inc_direction op in
      let pre,post = if dir = PRE then inc,"" else "",inc in
@@ -376,12 +468,12 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
 
    | E_cast (e1,IMPLICIT) when ignore_implicit_casts ->
       c_buf_expr indent buf e1
-                                   
+
    | E_cast (e1,ex) ->
       bp buf "(%a)%a"
          (c_buf_type_qual indent "") t
          (bp_paren (prio_expr e1 < prio) (c_buf_expr indent)) e1
-                                   
+
    | E_call (e1,el) ->
       bp buf "%a(%a)"
          (bp_paren (prio_expr e1 < prio) (c_buf_expr indent)) e1
@@ -391,15 +483,15 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
       if c >= Z.of_int 32 && c < Z.of_int 127
       then bp buf "'%a'" c_buf_char_literal (Char.chr (Z.to_int c))
       else Z.bprint buf c
-                    
+
    | E_integer_literal c ->
       Z.bprint buf c;
       bp_str buf (integer_suffix (as_int_type t))
-                             
+
    | E_float_literal s ->
       bp_str buf s;
       bp_str buf (float_suffix (as_float_type t))
-                            
+
    | E_string_literal (s,_) ->
       bp buf "\"%a\""c_buf_string_literal s
 
@@ -420,10 +512,10 @@ and c_buf_expr indent buf ((e,t,_) as ee:expr) =
       bp buf "__builtin_va_arg(%a,%a)"
          (bp_paren (is_comma e1) (c_buf_expr indent)) e1 (c_buf_type indent "") (fst t)
 
-   | E_atomic (i,e1,e2) ->
-      bp buf "__atomic_%i_TODO(%a,%a)"
-         i
-         (bp_paren (is_comma e1) (c_buf_expr indent)) e1
+   | E_atomic (op,el,e2) ->
+      bp buf "__atomic_%s_TODO(%a,%a)"
+         (c_atomic_op op)
+         (bp_array (fun buf ee -> bp_paren (is_comma ee) (c_buf_expr indent) buf ee) ", ") el
          (bp_paren (is_comma e2) (c_buf_expr indent)) e2
 
    | E_convert_vector e ->
@@ -491,7 +583,7 @@ and c_buf_for_init indent buf b =
   | [S_local_declaration v,_] -> c_buf_var_decl_inner indent buf v
   | [S_expression e,_] -> c_buf_expr indent buf e
   | _ -> c_buf_expr indent buf (E_statement b, (T_void, no_qual), empty_range)
-            
+
 and c_buf_statement indent buf ((s,r):statement) =
   let indent2 = inc_indent indent in
   match s with
@@ -500,10 +592,10 @@ and c_buf_statement indent buf ((s,r):statement) =
 
   | S_expression e ->
      bp buf "%s%a;\n" indent (c_buf_expr indent2) e
-        
+
   | S_block l ->
      bp buf "%s{\n%a%a%s}\n" indent (c_buf_statement_list indent2) l.blk_stmts (c_buf_scope indent2) l indent
-        
+
   | S_if (e1,b1, { blk_stmts=[] } ) ->
      bp buf "%sif (%a) %a"
         indent (c_buf_expr_bool indent2) e1
@@ -520,7 +612,7 @@ and c_buf_statement indent buf ((s,r):statement) =
      bp buf "%swhile (%a) %a"
         indent (c_buf_expr_bool indent2) e1
         (c_buf_block indent) b1
-        
+
   | S_do_while (b1,e1) ->
      bp buf "%sdo %a%swhile (%a);\n"
         indent (c_buf_block indent) b1
@@ -540,13 +632,13 @@ and c_buf_statement indent buf ((s,r):statement) =
   | S_jump (S_return (e1, u)) ->
      bp buf "%sreturn %a;%a\n"
         indent (bp_option "" (c_buf_expr indent2)) e1 c_buf_update u
-        
+
   | S_jump (S_switch (e1,b1)) ->
      bp buf "%sswitch (%a) {\n%a%a%s}\n" indent
         (c_buf_expr indent2) e1 (c_buf_statement_list indent) b1.blk_stmts (c_buf_scope indent) b1 indent
-        
+
   | S_target (S_label s) -> bp buf "%s%s:;\n" indent s
-                               
+
   | S_target (S_case ([e1], u)) ->
      bp buf "%scase %a:;%a\n"
         indent (c_buf_expr indent2) e1 c_buf_update u
@@ -591,7 +683,7 @@ and c_buf_statement indent buf ((s,r):statement) =
 and c_buf_com indent buf v =
   if !print_comments
   then List.iter (fun c -> bp buf "%s%s\n" indent c.Clang_AST.com_text) v
-                          
+
 and c_buf_var_decl_inner indent buf v =
   let indent2 = inc_indent indent in
   bp buf "%s%a"
@@ -635,7 +727,7 @@ and c_buf_func_decl indent buf f =
 
 and c_buf_func_proto indent buf f =
   c_buf_func_decl indent buf { f with func_body = None; }
-  
+
 let c_buf_enum_decl indent buf e =
   let indent2 = inc_indent indent in
   let f buf v =
@@ -729,7 +821,7 @@ let print_types_ordered
     let rec explore t = match t with
       | T_typedef t -> typedef t
       | T_void | T_bool | T_integer _ | T_float _ | T_complex _ -> ()
-      | T_pointer (t,_) -> explore t 
+      | T_pointer (t,_) -> explore t
       | T_array ((t,_),_) ->
          (* array elements must have a complete type even in typedefs *)
          explore t;
@@ -740,7 +832,7 @@ let print_types_ordered
            | _ -> ()
          in
          def t
-      | T_bitfield (t,_) -> explore t 
+      | T_bitfield (t,_) -> explore t
       | T_function None -> ()
       | T_function (Some f) ->
          explore (fst f.ftype_return);
@@ -756,7 +848,7 @@ let print_types_ordered
       Hashtbl.add gray t.typedef_uid ();
       if not (List.mem t.typedef_org_name td_omit) then (
         explore (fst t.typedef_def);
-        output_string ch (string_of_typedef t);        
+        output_string ch (string_of_typedef t);
       );
       Hashtbl.add black t.typedef_uid ()
     )
@@ -764,9 +856,9 @@ let print_types_ordered
     let rec explore mustdef t = match t with
       | T_typedef t -> explore mustdef (fst t.typedef_def)
       | T_void | T_bool | T_integer _ | T_float _ | T_complex _ -> ()
-      | T_pointer (t,_) -> explore false t 
+      | T_pointer (t,_) -> explore false t
       | T_array ((t,_),_) -> explore mustdef t
-      | T_bitfield (t,_) -> explore mustdef t 
+      | T_bitfield (t,_) -> explore mustdef t
       | T_function None -> ()
       | T_function (Some f) ->
          explore true (fst f.ftype_return);

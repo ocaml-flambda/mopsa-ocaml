@@ -360,7 +360,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       let range = e.C.enum_range in
       (* integer type *)
       let itype = match e.C.enum_integer_type with
-      | None -> None 
+      | None -> None
       | Some tq ->
         Some (
           match type_qual range tq with
@@ -840,7 +840,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
               process b []
             | _ ->
               error range "range case statement extension currently supports constant integers" (Format.asprintf "%s" (Clang_dump.string_of_expr (OptionExt.none_to_exn s.C.case_end)));
-          in 
+          in
           (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
           (stmt func s.C.case_stmt)
 
@@ -850,9 +850,9 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
          let rec aux acc s = match s.C.stmt_kind with
            | C.CaseStmt s -> aux (s.C.case_value :: acc) s.C.case_stmt
            | _ -> List.rev acc, s in
-         aux [] s in 
+         aux [] s in
        let other_values, statements = process s.C.case_stmt in
-       let values = s.C.case_value :: other_values in 
+       let values = s.C.case_value :: other_values in
        (S_target (S_case (List.map (expr func) values, empty_scope())), range)::
          (stmt func statements)
       end
@@ -973,6 +973,108 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
     if not (type_qual_compatible ctx.ctx_target t1 t2) then
       error range "incompatible types" (Printf.sprintf "%s and %s" (string_of_type_qual t1) (string_of_type_qual t2))
 
+
+  and atomic_op = function
+   (* C11 _Atomic operations for <stdatomic.h>. *)
+    | C.AO__c11_atomic_init -> AO__c11_atomic_init
+    | C.AO__c11_atomic_load -> AO__c11_atomic_load
+    | C.AO__c11_atomic_store -> AO__c11_atomic_store
+    | C.AO__c11_atomic_exchange -> AO__c11_atomic_exchange
+    | C.AO__c11_atomic_compare_exchange_strong -> AO__c11_atomic_compare_exchange_strong
+    | C.AO__c11_atomic_compare_exchange_weak -> AO__c11_atomic_compare_exchange_weak
+    | C.AO__c11_atomic_fetch_add -> AO__c11_atomic_fetch_add
+    | C.AO__c11_atomic_fetch_sub -> AO__c11_atomic_fetch_sub
+    | C.AO__c11_atomic_fetch_and -> AO__c11_atomic_fetch_and
+    | C.AO__c11_atomic_fetch_or -> AO__c11_atomic_fetch_or
+    | C.AO__c11_atomic_fetch_xor -> AO__c11_atomic_fetch_xor
+    | C.AO__c11_atomic_fetch_nand -> AO__c11_atomic_fetch_nand
+    | C.AO__c11_atomic_fetch_max -> AO__c11_atomic_fetch_max
+    | C.AO__c11_atomic_fetch_min -> AO__c11_atomic_fetch_min
+
+    (* GNU atomic builtins. *)
+    | C.AO__atomic_load -> AO__atomic_load
+    | C.AO__atomic_load_n -> AO__atomic_load_n
+    | C.AO__atomic_store -> AO__atomic_store
+    | C.AO__atomic_store_n -> AO__atomic_store_n
+    | C.AO__atomic_exchange -> AO__atomic_exchange
+    | C.AO__atomic_exchange_n -> AO__atomic_exchange_n
+    | C.AO__atomic_compare_exchange -> AO__atomic_compare_exchange
+    | C.AO__atomic_compare_exchange_n -> AO__atomic_compare_exchange_n
+    | C.AO__atomic_fetch_add -> AO__atomic_fetch_add
+    | C.AO__atomic_fetch_sub -> AO__atomic_fetch_sub
+    | C.AO__atomic_fetch_and -> AO__atomic_fetch_and
+    | C.AO__atomic_fetch_or -> AO__atomic_fetch_or
+    | C.AO__atomic_fetch_xor -> AO__atomic_fetch_xor
+    | C.AO__atomic_fetch_nand -> AO__atomic_fetch_nand
+    | C.AO__atomic_add_fetch -> AO__atomic_add_fetch
+    | C.AO__atomic_sub_fetch -> AO__atomic_sub_fetch
+    | C.AO__atomic_and_fetch -> AO__atomic_and_fetch
+    | C.AO__atomic_or_fetch -> AO__atomic_or_fetch
+    | C.AO__atomic_xor_fetch -> AO__atomic_xor_fetch
+    | C.AO__atomic_max_fetch -> AO__atomic_max_fetch
+    | C.AO__atomic_min_fetch -> AO__atomic_min_fetch
+    | C.AO__atomic_nand_fetch -> AO__atomic_nand_fetch
+    | C.AO__atomic_test_and_set -> AO__atomic_test_and_set
+    | C.AO__atomic_clear -> AO__atomic_clear
+
+    (* GNU atomic builtins with atomic scopes. *)
+    | C.AO__scoped_atomic_load -> AO__scoped_atomic_load
+    | C.AO__scoped_atomic_load_n -> AO__scoped_atomic_load_n
+    | C.AO__scoped_atomic_store -> AO__scoped_atomic_store
+    | C.AO__scoped_atomic_store_n -> AO__scoped_atomic_store_n
+    | C.AO__scoped_atomic_exchange -> AO__scoped_atomic_exchange
+    | C.AO__scoped_atomic_exchange_n -> AO__scoped_atomic_exchange_n
+    | C.AO__scoped_atomic_compare_exchange -> AO__scoped_atomic_compare_exchange
+    | C.AO__scoped_atomic_compare_exchange_n -> AO__scoped_atomic_compare_exchange_n
+    | C.AO__scoped_atomic_fetch_add -> AO__scoped_atomic_fetch_add
+    | C.AO__scoped_atomic_fetch_sub -> AO__scoped_atomic_fetch_sub
+    | C.AO__scoped_atomic_fetch_and -> AO__scoped_atomic_fetch_and
+    | C.AO__scoped_atomic_fetch_or -> AO__scoped_atomic_fetch_or
+    | C.AO__scoped_atomic_fetch_xor -> AO__scoped_atomic_fetch_xor
+    | C.AO__scoped_atomic_fetch_nand -> AO__scoped_atomic_fetch_nand
+    | C.AO__scoped_atomic_fetch_min -> AO__scoped_atomic_fetch_min
+    | C.AO__scoped_atomic_fetch_max -> AO__scoped_atomic_fetch_max
+    | C.AO__scoped_atomic_add_fetch -> AO__scoped_atomic_add_fetch
+    | C.AO__scoped_atomic_sub_fetch -> AO__scoped_atomic_sub_fetch
+    | C.AO__scoped_atomic_and_fetch -> AO__scoped_atomic_and_fetch
+    | C.AO__scoped_atomic_or_fetch -> AO__scoped_atomic_or_fetch
+    | C.AO__scoped_atomic_xor_fetch -> AO__scoped_atomic_xor_fetch
+    | C.AO__scoped_atomic_nand_fetch -> AO__scoped_atomic_nand_fetch
+    | C.AO__scoped_atomic_min_fetch -> AO__scoped_atomic_min_fetch
+    | C.AO__scoped_atomic_max_fetch -> AO__scoped_atomic_max_fetch
+
+    (* OpenCL 2.0 atomic builtins. *)
+    | C.AO__opencl_atomic_init -> AO__opencl_atomic_init
+    | C.AO__opencl_atomic_load -> AO__opencl_atomic_load
+    | C.AO__opencl_atomic_store -> AO__opencl_atomic_store
+    | C.AO__opencl_atomic_compare_exchange_weak -> AO__opencl_atomic_compare_exchange_weak
+    | C.AO__opencl_atomic_compare_exchange_strong -> AO__opencl_atomic_compare_exchange_strong
+    | C.AO__opencl_atomic_exchange -> AO__opencl_atomic_exchange
+    | C.AO__opencl_atomic_fetch_add -> AO__opencl_atomic_fetch_add
+    | C.AO__opencl_atomic_fetch_sub -> AO__opencl_atomic_fetch_sub
+    | C.AO__opencl_atomic_fetch_and -> AO__opencl_atomic_fetch_and
+    | C.AO__opencl_atomic_fetch_or -> AO__opencl_atomic_fetch_or
+    | C.AO__opencl_atomic_fetch_xor -> AO__opencl_atomic_fetch_xor
+    | C.AO__opencl_atomic_fetch_min -> AO__opencl_atomic_fetch_min
+    | C.AO__opencl_atomic_fetch_max -> AO__opencl_atomic_fetch_max
+
+    (* GCC does not support these they are a Clang extension. *)
+    | C.AO__atomic_fetch_max -> AO__atomic_fetch_max
+    | C.AO__atomic_fetch_min -> AO__atomic_fetch_min
+
+    (* HIP atomic builtins. *)
+    | C.AO__hip_atomic_load -> AO__hip_atomic_load
+    | C.AO__hip_atomic_store -> AO__hip_atomic_store
+    | C.AO__hip_atomic_compare_exchange_weak -> AO__hip_atomic_compare_exchange_weak
+    | C.AO__hip_atomic_compare_exchange_strong -> AO__hip_atomic_compare_exchange_strong
+    | C.AO__hip_atomic_exchange -> AO__hip_atomic_exchange
+    | C.AO__hip_atomic_fetch_add -> AO__hip_atomic_fetch_add
+    | C.AO__hip_atomic_fetch_sub -> AO__hip_atomic_fetch_sub
+    | C.AO__hip_atomic_fetch_and -> AO__hip_atomic_fetch_and
+    | C.AO__hip_atomic_fetch_or -> AO__hip_atomic_fetch_or
+    | C.AO__hip_atomic_fetch_xor -> AO__hip_atomic_fetch_xor
+    | C.AO__hip_atomic_fetch_min -> AO__hip_atomic_fetch_min
+    | C.AO__hip_atomic_fetch_max -> AO__hip_atomic_fetch_max
 
   and expr (func:func option) e =
     let range = e.C.expr_range in
@@ -1151,7 +1253,7 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
 
    | C.AtomicExpr e ->
       (* TODO: update when the AtomicExpr Clang node is handled better *)
-      E_atomic (e.C.atomic_op, expr func e.C.atomic_ptr, expr func e.C.atomic_order),
+      E_atomic (atomic_op e.C.atomic_op, Array.map (expr func) e.C.atomic_exprs, expr func e.C.atomic_order),
       typ, range
 
    | C.FullExpr e | C.ConstantExpr e ->
