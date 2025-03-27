@@ -12,6 +12,7 @@
                     "c.iterators.switch",
                     "c.iterators.loops",
                     "c.iterators.intraproc",
+                    "c.iterators.atomics",
                     // // // Stubs
                     // // "stubs.iterators.body",
                     // // // C Libraries

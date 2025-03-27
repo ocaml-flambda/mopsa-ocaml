@@ -1252,7 +1252,6 @@ let add_translation_unit (ctx:context) (tu_name:string) (decl:C.decl) (files: st
       E_var_args (expr func e), typ, range
 
    | C.AtomicExpr e ->
-      (* TODO: update when the AtomicExpr Clang node is handled better *)
       E_atomic (atomic_op e.C.atomic_op, Array.map (expr func) e.C.atomic_exprs),
       typ, range
 
