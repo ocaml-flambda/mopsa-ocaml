@@ -189,7 +189,7 @@ struct
                (fun diag acc ->
                   match diag.diag_kind with
                   | Error | Warning    -> AlarmSet.union diag.diag_alarms acc
-                  | Safe | Unreachable -> acc
+                  | Safe | Unreachable | Info | Unimplemented -> acc
                ) report acc
           ) AlarmSet.empty cases
       in

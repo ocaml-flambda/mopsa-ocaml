@@ -376,7 +376,6 @@ struct
   let check_float_valid cexp ?(nexp=c2num cexp) range man flow =
     let typ = cexp.etyp in
     let prec = get_c_float_precision typ in
-    let itv = ask_and_reduce man.ask (Universal.Numeric.Common.mk_float_interval_query ~prec nexp) flow in
     let flow', nexp' =
     if !opt_float_invalid_operation then
       (* This interval query is duplicated, because it can fail and is not necessary if [opt_float_invalid_operation] is false. *)
