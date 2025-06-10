@@ -187,7 +187,7 @@ let pp_diagnostic out n diag callstacks kinds =
     | c::_ -> Some c.call_fun_orig_name
     | _ -> None in
   let len = CallstackSet.cardinal callstacks in
-  print out "@.%a Check%s:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.@."
+  print out "```@.%a Check%s:%a@,@[<v 2>%a: %a: %a%a%a%a@]@.```@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (if len <= 1 then Format.asprintf " #%d" (n+1) else Format.asprintf "s #%d-#%d" (n+1) (n+len))
     (fun fmt -> function
@@ -310,20 +310,19 @@ let print_checks_summary checks_map total safe error warning info unimplemented 
     if n = 1 then fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n singluar)) n
     else fprintf fmt ", %a" (Debug.color (color_of_diag diag) (fun fmt n -> fprintf fmt "%s %d %s" (icon_of_diag diag) n plural)) n
   in
-  print out "@[<v2>Checks summary: %a%a%a%a%a%a (selectivity: %.2f%%)@,%a@]@.@."
+  print out "@[<v2>## Statistics\n\n**Summary:** %a%a%a%a%a%a@,%a@]@.@."
     (Debug.bold (fun fmt total -> fprintf fmt "%d total" total)) total
-    (pp Safe "safe" "safe") safe
+    (pp Safe "check passed" "checks passed") safe
     (pp Error "error" "errors") error
     (pp Warning "warning" "warnings") warning
     (pp Info "info" "info") info
     (pp Unimplemented "unimplemented" "unimplemented") unimplemented
-    (float_of_int (100 * safe) /. (float_of_int @@ safe + error + warning))
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@,")
        (fun fmt (check,(safe,error,warning,info, unimplemented)) ->
-          fprintf fmt "%a: %d total%a%a%a%a%a"
+          fprintf fmt "- %a: %d total%a%a%a%a%a"
             pp_check check
             (safe+error+warning)
-            (pp Safe "safe" "safe") safe
+            (pp Safe "check passed" "checks passed") safe
             (pp Error "error" "errors") error
             (pp Warning "warning" "warnings") warning
             (pp Info "info" "info") info
@@ -333,10 +332,7 @@ let print_checks_summary checks_map total safe error warning info unimplemented 
 
 let report man flow ~time ~files ~out =
   let rep = Flow.get_report flow in
-  if is_sound_report rep
-  then print out "%a@." (Debug.color_str Debug.green) "Analysis terminated successfully"
-  else print out "%a@." (Debug.color_str Debug.orange) "Analysis terminated successfully (with assumptions)";
-
+  print out "## Issues Found@.";
   if !opt_display_lastflow then
     print out "Last flow =@[@\n%a@]@\n"
       (* "Context = @[@\n%a@]@\n" *)
@@ -351,6 +347,7 @@ let report man flow ~time ~files ~out =
 
   let total, safe, error, warning, info, unimplemented, checks_map = construct_checks_summary ~print:(not (!opt_no_detailed_checks)) rep out in
 
+  print out "@.";
   if not (!opt_no_analysis_summary) then print_checks_summary checks_map total safe error warning info unimplemented out;
   if not (is_sound_report rep) then
     let nb = AssumptionSet.cardinal rep.report_assumptions in

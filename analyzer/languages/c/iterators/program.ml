@@ -307,23 +307,25 @@ struct
 
 
   let output_results skipped_functions unimplemented_functions results to_test =
+    let pp_markdown_function fmt name = Format.fprintf fmt "`%s`" name in
     let pp_unknown_functions fmt set =
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) pp_markdown_function fmt (StringSet.elements set)
     in
     let pp_runtime_analysis_results fmt results =
-      List.iter (fun (f, res) -> Format.fprintf fmt "%s (%s)\n" f (Output.Text.icon_of_diag res)) results
+      List.iter (fun (f, res) -> Format.fprintf fmt "- %a (%s)\n" pp_markdown_function f (Output.Text.icon_of_diag res)) results
     in
     let pp_missing_functions fmt map =
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringMap.fold (fun name _ names -> name :: names) map [])
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) pp_markdown_function fmt (StringMap.fold (fun name _ names -> name :: names) map [])
     in
     let pp_unimplemented_functions fmt set =
-      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) Format.pp_print_string fmt (StringSet.elements set)
+      Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt ","; Format.pp_print_space fmt ()) pp_markdown_function fmt (StringSet.elements set)
     in
     let results_map = StringMap.of_list results in
     let missing_functions = StringMap.filter (fun name _ -> not (StringMap.mem name results_map)) to_test in
       if not (!Output.Text.opt_no_ffi_report) then
-        Format.printf
-          "**Analyzed functions:**\n%a\n**Skipped C functions:**@\n@[%a@]@\n\n**Missing external functions:**@\n@[%a@]@\n\n**Unimplemented OCaml FFI functions:**@\n@[%a@]@\n\n"
+        (Format.printf "Analysis completed successfully.\n\n";
+          Format.printf
+          "**Analyzed functions:**\n%a\n**Skipped C functions:**@\n\n@[%a@]@\n\n**Missing external functions:**@\n@[%a@]@\n\n**Unimplemented OCaml FFI functions:**@\n@[%a@]@\n\n"
           pp_runtime_analysis_results
           results
           pp_unknown_functions
@@ -331,7 +333,7 @@ struct
           pp_missing_functions
           missing_functions
           pp_unimplemented_functions
-          unimplemented_functions
+          unimplemented_functions)
 
   let exec_runtime_tests c_functions man flow =
     (* Determine the runtime functions to execute; we sort them by program order *)
