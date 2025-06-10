@@ -789,7 +789,7 @@ let report_to_alarms report =
          (fun check diag acc ->
             match diag.diag_kind with
             | Error | Warning    -> AlarmSet.elements diag.diag_alarms @ acc
-            | Safe | Unreachable -> acc
+            | Safe | Unreachable | Info | Unimplemented -> acc
          ) checks acc
     ) report.report_diagnostics []
 
