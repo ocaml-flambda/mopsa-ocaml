@@ -291,11 +291,6 @@ let raise_ffi_shape_number_error range pp_term term man flow =
 let raise_ffi_arity_mismatch range ~expected ~actual man flow =
   let cs = Flow.get_callstack flow in
   let alarm = mk_alarm (A_ffi_arity_mismatch (expected, actual)) cs range in
-  if expected = 1 && actual = 0 then
-    (* probably the unit case, we only info about it *)
-    let diag = mk_info_diagnostic alarm in
-    Flow.add_diagnostic diag flow
-  else
     Flow.raise_alarm alarm ~bottom:true man.lattice flow
 
 let raise_ffi_void_return range man flow =
