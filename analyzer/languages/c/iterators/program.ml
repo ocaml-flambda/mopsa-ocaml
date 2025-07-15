@@ -253,7 +253,10 @@ struct
   let exec_arity_check f (ty: Type_shapes.fn_value_shapes) range man flow =
     let actual = List.length (f.c_func_parameters) in
     let expected = List.length (ty.arguments) in
-    if actual != expected && expected <= 5  then
+    if actual != expected && actual = 0 then
+      (* Taking zero arguments is fine. *)
+      Post.return flow
+    else if actual != expected && expected <= 5  then
       let flow = raise_ffi_arity_mismatch range ~actual ~expected man flow in
       Post.return flow
     else if expected > 5 && actual != 2 then
