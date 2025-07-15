@@ -193,7 +193,7 @@ let pp_diagnostic out n diag callstacks kinds =
     (fun fmt -> function
        | None -> ()
        | Some f ->
-         fprintf fmt "@,%a: In function '%a':"
+         fprintf fmt "%a: In function '%a':"
            (Debug.bold pp_print_string) file_name
            (Debug.bold pp_print_string) f
     ) fun_name
