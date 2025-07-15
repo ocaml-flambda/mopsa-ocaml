@@ -187,7 +187,7 @@ let pp_diagnostic out n diag callstacks kinds =
     | c::_ -> Some c.call_fun_orig_name
     | _ -> None in
   let len = CallstackSet.cardinal callstacks in
-  print out "```@.%a Check%s:@?%a@,@[<v 2>%a: %a: %a%a%a%a@]@.```@."
+  print out "```@.%a Check%s:@.%a@,@[<v 2>%a: %a: %a%a%a%a@]@.```@."
     (Debug.color_str (color_of_diag diag.diag_kind)) (icon_of_diag diag.diag_kind)
     (if len <= 1 then Format.asprintf " #%d" (n+1) else Format.asprintf "s #%d-#%d" (n+1) (n+len))
     (fun fmt -> function
